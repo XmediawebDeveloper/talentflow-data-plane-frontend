@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { gsap, useGSAP, withMotion } from "@/lib/gsap";
 import { Sparkles, ClipboardCheck, Video, Users, Check, X } from "lucide-react";
 
 /* ------------------------------------------------------------------ *
@@ -18,12 +19,12 @@ function PreviewFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-mkt-surface p-4 shadow-[0_20px_50px_-30px_rgba(8,19,46,0.45)] dark:border-white/10 sm:p-5">
-      <p className="border-b border-slate-100 pb-3 text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-2xs">
+    <div className="flex h-full flex-col rounded-[20px] border border-slate-900/[0.08] bg-mkt-surface p-4 shadow-[0_30px_60px_-36px_rgba(15,60,153,0.35)] dark:border-white/10 sm:p-6">
+      <p className="border-b border-slate-100 pb-3 text-xs font-semibold text-slate-500 dark:border-white/10 dark:text-slate-400">
         {label}
       </p>
-      <div className="flex-1 py-4">{children}</div>
-      <p className="border-t border-slate-100 pt-3 text-2xs font-medium tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-2xs">
+      <div className="flex-1 py-3 sm:py-4">{children}</div>
+      <p className="border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
         {footer}
       </p>
     </div>
@@ -39,7 +40,7 @@ function ScoringPreview() {
   ];
 
   return (
-    <PreviewFrame label="Score breakdown · Ananya Rao" footer="Every score carries its reasoning">
+    <PreviewFrame label="Ananya Rao, score breakdown" footer="Every score carries its reasoning">
       <ul className="space-y-3">
         {criteria.map((row) => (
           <li key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
@@ -47,7 +48,8 @@ function ScoringPreview() {
             <span className="flex items-center gap-3">
               <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10 sm:block">
                 <span
-                  className={`block h-full rounded-full ${
+                  data-fill
+                  className={`block h-full origin-left rounded-full ${
                     row.value >= 80 ? "bg-mkt-cyan" : row.value >= 60 ? "bg-mkt-amber" : "bg-slate-400"
                   }`}
                   style={{ width: `${row.value}%` }}
@@ -62,7 +64,7 @@ function ScoringPreview() {
       </ul>
       <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-mkt-cyan/10 px-2.5 py-1 text-xs font-medium text-mkt-cyan-ink">
         <Check className="h-3.5 w-3.5" />
-        Strong match · shortlist
+        Strong match, shortlisted
       </p>
     </PreviewFrame>
   );
@@ -76,7 +78,7 @@ function AssessmentPreview() {
   ];
 
   return (
-    <PreviewFrame label="Question 3 of 12 · React" footer="Graded the moment it is submitted">
+    <PreviewFrame label="React quiz, question 3 of 12" footer="Graded the moment it is submitted">
       <p className="text-sm font-medium text-mkt-ink">
         What does useMemo do in a React component?
       </p>
@@ -110,7 +112,7 @@ function InterviewPreview() {
   ];
 
   return (
-    <PreviewFrame label="Interview · Krish Menon" footer="Recorded, transcribed, scored">
+    <PreviewFrame label="Krish Menon, AI interview" footer="Recorded, transcribed, scored">
       <ul className="space-y-3">
         {transcript.map((line) => (
           <li key={line.time} className="flex gap-3">
@@ -128,7 +130,7 @@ function InterviewPreview() {
           { label: "Sentiment", value: "+0.62" },
         ].map((metric) => (
           <div key={metric.label}>
-            <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+            <dt className="text-xs text-slate-500 dark:text-slate-400">
               {metric.label}
             </dt>
             <dd className="mt-0.5 text-sm font-semibold tabular-nums text-mkt-ink">
@@ -148,7 +150,7 @@ function CollaborationPreview() {
   ];
 
   return (
-    <PreviewFrame label="Hiring panel · Senior React Engineer" footer="One record, every reviewer">
+    <PreviewFrame label="Hiring panel, Senior React Engineer" footer="One record, every reviewer">
       <ul className="space-y-3">
         {thread.map((entry) => (
           <li key={entry.initials} className="flex items-start gap-3">
@@ -159,7 +161,7 @@ function CollaborationPreview() {
               <span className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-mkt-ink">{entry.name}</span>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.12em] ${
+                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                     entry.verdict === "Advance"
                       ? "bg-mkt-cyan/12 text-mkt-cyan-ink"
                       : "bg-mkt-amber/12 text-mkt-amber-ink"
@@ -227,6 +229,37 @@ const FEATURES = [
 export function FeatureShowcase() {
   const [activeId, setActiveId] = useState(FEATURES[0].id);
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+  const panelRef = useRef<HTMLDivElement>(null);
+  const firstRender = useRef(true);
+
+  // The artefact assembles itself: panel rises, its rows arrive in order and
+  // score bars fill. First time on scroll-in, then on every stage switch.
+  useGSAP(
+    () => {
+      const panel = panelRef.current!;
+      const first = firstRender.current;
+      firstRender.current = false;
+      withMotion(() => {
+        const tl = gsap.timeline({
+          scrollTrigger: first ? { trigger: panel, start: "top 80%", once: true } : undefined,
+        });
+        if (!first) tl.fromTo(panel, { y: 12, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.4, ease: "power3.out" });
+        tl.fromTo(
+          panel.querySelectorAll("li, dl > div"),
+          { y: 10, autoAlpha: 0 },
+          { y: 0, autoAlpha: 1, duration: 0.45, stagger: 0.06, ease: "power3.out" },
+          first ? 0 : 0.1
+        );
+        tl.fromTo(
+          panel.querySelectorAll("[data-fill]"),
+          { scaleX: 0 },
+          { scaleX: 1, duration: 0.9, stagger: 0.08, ease: "power3.out" },
+          "<0.1"
+        );
+      });
+    },
+    { dependencies: [activeId] }
+  );
 
   const activeIndex = FEATURES.findIndex((feature) => feature.id === activeId);
   const active = FEATURES[activeIndex] ?? FEATURES[0];
@@ -239,7 +272,7 @@ export function FeatureShowcase() {
   };
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)] lg:gap-10">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)] lg:gap-10">
       {/* Stage list — the section's spine. Below lg it becomes a scrolling
           strip that bleeds into the gutter, so a clipped card reads as more. */}
       <div
@@ -275,7 +308,7 @@ export function FeatureShowcase() {
               aria-controls={`feature-panel-${feature.id}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setActiveId(feature.id)}
-              className={`group relative shrink-0 snap-start rounded-xl px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid lg:w-full lg:rounded-none lg:border-b lg:border-slate-200/80 lg:px-0 lg:py-5 lg:dark:border-white/10 ${
+              className={`group relative shrink-0 snap-start rounded-xl px-3 py-2.5 text-left sm:px-4 sm:py-3 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid lg:w-full lg:rounded-none lg:border-b lg:border-slate-200/80 lg:px-0 lg:py-5 lg:dark:border-white/10 ${
                 selected
                   ? "bg-mkt-accent-solid/[0.06] lg:bg-transparent"
                   : "hover:bg-slate-100/70 lg:hover:bg-transparent dark:hover:bg-white/[0.04]"
@@ -288,22 +321,22 @@ export function FeatureShowcase() {
                   selected ? "opacity-100" : "opacity-0"
                 }`}
               />
-              <span className="flex items-center gap-3 lg:pl-5">
+              <span className="flex items-center gap-2.5 sm:gap-3 lg:pl-5">
                 <span
-                  className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg transition-colors ${
+                  className={`grid h-8 w-8 shrink-0 sm:h-9 sm:w-9 place-items-center rounded-lg transition-[background-color,color,scale] duration-300 group-hover:scale-110 ${
                     selected
                       ? "bg-mkt-accent-solid text-white"
                       : "bg-mkt-accent-solid/8 text-mkt-accent dark:bg-white/10"
                   }`}
                 >
-                  <Icon className="h-4.5 w-4.5" />
+                  <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {feature.stage}
                   </span>
                   <span
-                    className={`block whitespace-nowrap text-base font-bold tracking-[-0.02em] lg:text-lg ${
+                    className={`block whitespace-nowrap text-sm font-bold sm:text-base tracking-[-0.02em] lg:text-lg ${
                       selected ? "text-mkt-ink" : "text-slate-600 dark:text-slate-300"
                     }`}
                   >
@@ -330,9 +363,10 @@ export function FeatureShowcase() {
         role="tabpanel"
         id={`feature-panel-${active.id}`}
         aria-labelledby={`feature-tab-${active.id}`}
-        className="min-h-[300px] sm:min-h-[320px]"
+        ref={panelRef}
+        className="min-h-[260px] sm:min-h-[320px]"
       >
-        <p className="mb-4 text-sm leading-relaxed text-slate-600 dark:text-slate-400 lg:hidden">
+        <p className="mb-3 text-[13px] leading-relaxed sm:mb-4 sm:text-sm text-slate-600 dark:text-slate-400 lg:hidden">
           {active.description}
         </p>
         <ActivePreview key={active.id} />

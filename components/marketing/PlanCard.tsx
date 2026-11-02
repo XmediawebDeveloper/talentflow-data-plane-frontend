@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { Check } from "lucide-react";
+import { ArrowRight, Check } from "lucide-react";
+import { gsap, useGSAP, withMotion } from "@/lib/gsap";
+import { DISPLAY } from "./fonts";
 import {
   planAvailability,
   planCheckoutHref,
@@ -14,11 +16,23 @@ import {
 const VISIBLE_FEATURES = 4;
 
 /**
- * The pricing page's plan card — badge, price, quotas, features and the same
- * signup link — drawn in the landing page's palette.
+ * One plan: price, quotas, features and the signup link. Shared by the landing
+ * page and the pricing page so the two always show the same thing.
+ *
+ * A featured plan is set in inverse (ink background) — the one card on the row
+ * that reads as the recommendation. The price rolls when the billing period
+ * changes, so the eye sees which numbers moved.
  */
-export function PlanCard({ plan, isYearly }: { plan: MarketingPlan; isYearly: boolean }) {
+export function PlanCard({
+  plan,
+  isYearly,
+}: {
+  plan: MarketingPlan;
+  isYearly: boolean;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const priceRef = useRef<HTMLDivElement>(null);
+  const firstRender = useRef(true);
 
   const price = planPrice(plan, isYearly);
   const quotas = planQuotaRows(plan, isYearly);
@@ -29,106 +43,124 @@ export function PlanCard({ plan, isYearly }: { plan: MarketingPlan; isYearly: bo
   const shownFeatures = expanded ? plan.features : plan.features.slice(0, VISIBLE_FEATURES);
   const hiddenCount = plan.features.length - shownFeatures.length;
 
-  const badge = plan.isTrial ? "Free trial" : plan.tier || plan.name;
-  const highlighted = plan.isTrial || plan.featured;
+  const inverse = plan.featured && !plan.isTrial;
+  const primaryCta = plan.isTrial || plan.featured;
+  const label = plan.isTrial ? "Free trial" : plan.featured ? "Recommended" : plan.tier || null;
+
+  useGSAP(
+    () => {
+      if (firstRender.current) {
+        firstRender.current = false;
+        return;
+      }
+      withMotion(() => {
+        gsap.fromTo(
+          priceRef.current!.children,
+          { yPercent: 35, autoAlpha: 0 },
+          { yPercent: 0, autoAlpha: 1, duration: 0.4, stagger: 0.04, ease: "power3.out" }
+        );
+      });
+    },
+    { dependencies: [isYearly] }
+  );
+
+  const tone = inverse
+    ? {
+        card: "bg-mkt-ink text-mkt-canvas border-transparent shadow-[0_30px_60px_-30px_rgba(8,19,46,0.55)]",
+        title: "text-mkt-canvas",
+        body: "text-mkt-canvas/70",
+        muted: "text-mkt-canvas/55",
+        rule: "border-mkt-canvas/15",
+        check: "text-mkt-cyan",
+        label: "bg-mkt-canvas/15 text-mkt-canvas",
+        link: "text-mkt-canvas hover:text-mkt-canvas/80",
+      }
+    : {
+        card: "bg-mkt-surface text-mkt-ink border-slate-900/[0.08] dark:border-white/10",
+        title: "text-mkt-ink",
+        body: "text-slate-600 dark:text-slate-400",
+        muted: "text-slate-500 dark:text-slate-400",
+        rule: "border-slate-900/[0.07] dark:border-white/10",
+        check: "text-mkt-cyan",
+        label: plan.isTrial
+          ? "bg-mkt-amber/15 text-mkt-amber-ink"
+          : "bg-slate-900/[0.05] text-slate-600 dark:bg-white/10 dark:text-slate-300",
+        link: "text-mkt-accent hover:underline",
+      };
+
+  const ctaBase =
+    "mt-5 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-semibold sm:mt-7 sm:h-11 transition-[scale,background-color,border-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-surface active:scale-[0.98] group/cta gap-2";
+  const ctaPrimary = inverse
+    ? "bg-mkt-canvas text-mkt-ink hover:bg-mkt-canvas/90"
+    : "bg-mkt-accent-solid text-white hover:bg-mkt-accent-solid-hover";
+  const ctaSecondary = inverse
+    ? "border border-mkt-canvas/25 text-mkt-canvas hover:border-mkt-canvas/50"
+    : "border border-slate-900/15 text-mkt-ink hover:border-slate-900/30 dark:border-white/15 dark:hover:border-white/30";
 
   return (
     <article
-      // Amber is the hover state for every card, featured or not — a response
-      // to the pointer rather than permanent decoration. The dark: twin is
-      // needed because dark:border-white/10 below would otherwise hold the
-      // resting colour through the hover.
-      className={`relative flex h-full flex-col rounded-2xl border p-6 pt-8 transition-colors hover:border-mkt-amber dark:hover:border-mkt-amber sm:p-7 sm:pt-9 ${
-        /* At rest every card shares the same neutral border; the featured one
-           is marked by its badge and lift instead. */
-        highlighted
-          ? "border-slate-200/80 bg-mkt-surface shadow-[0_18px_44px_-26px_rgba(237,136,28,0.65)] dark:border-white/10 dark:bg-white/[0.05]"
-          : "border-slate-200/80 bg-mkt-surface dark:border-white/10 dark:bg-white/[0.03]"
-      }`}
+      className={`relative flex h-full flex-col rounded-[20px] border p-5 transition-[translate,box-shadow] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] hover:-translate-y-1.5 hover:shadow-[0_28px_56px_-30px_rgba(15,60,153,0.5)] sm:p-7 ${tone.card}`}
     >
-      <span
-        className={`absolute -top-3 left-6 inline-flex items-center rounded-full px-3 py-1 text-2xs font-semibold uppercase tracking-[0.14em] ${
-          highlighted ? "bg-mkt-amber text-mkt-ink" : "bg-mkt-accent-solid text-white"
-        }`}
-      >
-        {badge}
-      </span>
-
-      <h3 className="text-xl font-bold tracking-[-0.02em] text-mkt-ink">
-        {plan.name}
-      </h3>
-      {plan.description && (
-        <p className="mt-2 min-h-[2.5rem] text-sm text-slate-600 dark:text-slate-400">
-          {plan.description}
-        </p>
-      )}
-
-      <p className="mt-5 flex items-baseline gap-1.5 text-3xl font-extrabold tabular-nums tracking-[-0.02em] text-mkt-ink">
-        {price.amount}
-        {price.period && (
-          <span className="text-sm font-normal text-slate-500 dark:text-slate-400">
-            {price.period}
+      <div className="flex min-h-7 items-center justify-between gap-3">
+        <h3 className={`${DISPLAY} text-base font-bold tracking-[-0.01em] sm:text-lg ${tone.title}`}>{plan.name}</h3>
+        {label && label !== plan.name && (
+          <span className={`inline-block shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold first-letter:uppercase ${tone.label}`}>
+            {label.toLowerCase()}
           </span>
         )}
-      </p>
-      {price.wasAmount && (
-        <p className="mt-1.5 flex items-center gap-2 text-sm">
-          <span className="tabular-nums text-slate-400 line-through dark:text-slate-500">
-            {price.wasAmount}
-          </span>
-          {price.savePercent !== null && (
-            <span className="rounded bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-500/15 dark:text-green-300">
-              Save {price.savePercent}%
-            </span>
-          )}
-        </p>
-      )}
-      {price.unavailableNote && (
-        <p className="mt-2 text-sm text-mkt-amber-ink">{price.unavailableNote}</p>
+      </div>
+      {plan.description && (
+        <p className={`mt-1.5 min-h-[2.5rem] text-[13px] leading-relaxed sm:mt-2 sm:text-sm ${tone.body}`}>{plan.description}</p>
       )}
 
+      <div ref={priceRef} className="mt-4 min-h-[3.75rem] sm:mt-6 sm:min-h-[4.25rem]">
+        <p className={`${DISPLAY} flex flex-wrap items-baseline gap-x-1.5 text-[1.75rem] font-extrabold sm:text-[2.1rem] leading-none tracking-[-0.03em] tabular-nums ${tone.title}`}>
+          {price.amount}
+          {price.period && <span className={`text-sm font-medium tracking-normal ${tone.muted}`}>{price.period}</span>}
+        </p>
+        {price.wasAmount ? (
+          <p className="mt-2 flex items-center gap-2 text-sm">
+            <span className={`tabular-nums line-through ${tone.muted}`}>{price.wasAmount}</span>
+            {price.savePercent !== null && (
+              <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300">
+                Save {price.savePercent}%
+              </span>
+            )}
+          </p>
+        ) : price.unavailableNote ? (
+          <p className="mt-2 text-sm text-mkt-amber-ink">{price.unavailableNote}</p>
+        ) : null}
+      </div>
+
       {quotas.length > 0 && (
-        <dl className="mt-6 space-y-2 border-y border-slate-100 py-4 text-sm dark:border-white/10">
+        <dl className={`mt-4 space-y-2 border-y py-3.5 text-[13px] sm:mt-6 sm:space-y-2.5 sm:py-4 sm:text-sm ${tone.rule}`}>
           {quotas.map((row) => (
             <div key={row.label} className="flex items-center justify-between gap-3">
-              <dt className="text-slate-500 dark:text-slate-400">{row.label}</dt>
-              <dd className="font-semibold tabular-nums text-mkt-ink">
-                {row.value}
-              </dd>
+              <dt className={tone.muted}>{row.label}</dt>
+              <dd className={`font-semibold tabular-nums ${tone.title}`}>{row.value}</dd>
             </div>
           ))}
         </dl>
       )}
 
       {plan.features.length > 0 && (
-        <div className="mt-6">
-          <ul className="space-y-2.5">
+        <div className="mt-4 sm:mt-6">
+          <ul className="space-y-2 sm:space-y-2.5">
             {shownFeatures.map((feature) => (
-              <li
-                key={feature}
-                className="flex items-start gap-2.5 text-sm text-slate-600 dark:text-slate-300"
-              >
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-mkt-cyan" />
+              <li key={feature} className={`flex items-start gap-2 text-[13px] sm:gap-2.5 sm:text-sm ${tone.body}`}>
+                <Check className={`mt-0.5 h-4 w-4 shrink-0 ${tone.check}`} strokeWidth={2.5} />
                 {feature}
               </li>
             ))}
           </ul>
-          {hiddenCount > 0 && (
+          {(hiddenCount > 0 || (expanded && plan.features.length > VISIBLE_FEATURES)) && (
             <button
               type="button"
-              onClick={() => setExpanded(true)}
-              className="mt-2.5 pl-6 text-sm font-medium text-mkt-accent hover:underline"
+              onClick={() => setExpanded((open) => !open)}
+              aria-expanded={expanded}
+              className={`mt-2.5 rounded pl-6 text-[13px] font-medium sm:mt-3 sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${tone.link}`}
             >
-              +{hiddenCount} more {hiddenCount === 1 ? "feature" : "features"}
-            </button>
-          )}
-          {expanded && plan.features.length > VISIBLE_FEATURES && (
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="mt-2.5 pl-6 text-sm font-medium text-slate-500 hover:underline dark:text-slate-400"
-            >
-              Show less
+              {expanded ? "Show fewer" : `Show ${hiddenCount} more ${hiddenCount === 1 ? "feature" : "features"}`}
             </button>
           )}
         </div>
@@ -140,31 +172,45 @@ export function PlanCard({ plan, isYearly }: { plan: MarketingPlan; isYearly: bo
         <button
           type="button"
           disabled
-          className="mt-6 h-11 w-full cursor-not-allowed rounded-xl bg-slate-200 text-sm font-semibold text-slate-500 dark:bg-white/10 dark:text-slate-500"
+          className="mt-5 h-10 w-full cursor-not-allowed sm:mt-7 sm:h-11 rounded-full bg-slate-900/[0.06] text-sm font-semibold text-slate-500 dark:bg-white/10"
         >
           Not available
         </button>
       ) : price.contactSales ? (
-        <Link
-          href="/contact"
-          prefetch={false}
-          className="mt-6 inline-flex h-11 items-center justify-center rounded-xl border border-slate-300 px-5 text-sm font-semibold text-mkt-ink transition-colors hover:border-mkt-accent/40 hover:text-mkt-accent dark:border-white/15 dark:hover:border-white/30"
-        >
+        <Link href="/contact" prefetch={false} className={`${ctaBase} ${ctaSecondary}`}>
           Contact sales
         </Link>
       ) : (
         <Link
+          // Opens the sign-up page with this plan and billing period selected.
           href={planCheckoutHref(plan, isYearly)}
           prefetch={false}
-          className={`mt-6 inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold transition-colors ${
-            highlighted
-              ? "bg-mkt-accent-solid text-white hover:bg-mkt-accent-solid-hover"
-              : "border border-slate-300 text-mkt-ink hover:border-mkt-accent/40 hover:text-mkt-accent dark:border-white/15 dark:hover:border-white/30"
-          }`}
+          className={`${ctaBase} ${primaryCta ? ctaPrimary : ctaSecondary}`}
         >
           {plan.isTrial ? "Start free trial" : "Get started"}
+          <ArrowRight className="h-4 w-4 transition-transform duration-300 ease-out group-hover/cta:translate-x-1" />
         </Link>
       )}
     </article>
+  );
+}
+
+/**
+ * Plan list layout. On phones the cards sit in a sideways swipe rail (each
+ * ~84% wide so the next one peeks in) instead of a very tall stack; from
+ * `sm` up it is a normal grid. Add the grid's column classes alongside.
+ */
+export const PLAN_RAIL =
+  "-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scroll-px-4 px-4 pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:mx-0 sm:grid sm:snap-none sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0";
+export const PLAN_RAIL_ITEM = "h-full w-[84%] shrink-0 snap-start sm:w-auto";
+
+/** Phone-only hint under the rail. */
+export function SwipeHint({ count }: { count: number }) {
+  if (count < 2) return null;
+  return (
+    <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 sm:hidden">
+      Swipe to compare all {count} plans
+      <ArrowRight className="h-3.5 w-3.5" />
+    </p>
   );
 }
