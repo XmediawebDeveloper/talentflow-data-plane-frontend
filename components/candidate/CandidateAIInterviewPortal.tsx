@@ -4106,7 +4106,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream, onPhase) => {
-            // Primary enrollment: capture ~12 s of the candidate reading the
+            // Primary enrollment: capture ~15 s of the candidate reading the
             // prompt and send raw 16 kHz PCM to the server, which computes an
             // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
             // baseline every interview turn is later checked against server-side.
@@ -4114,7 +4114,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             // If server voice-ID is disabled (feature flag off), fall back to
             // the local MFCC baseline so behavior is unchanged in that case.
             try {
-              const cap = await recordPcm16(stream, 12000);
+              const cap = await recordPcm16(stream, 15000);
               if (!cap) return false; // nothing recorded at all
               // Capture is over — the upload + server voiceprint check that
               // follows can take seconds; tell the panel so it stops saying
