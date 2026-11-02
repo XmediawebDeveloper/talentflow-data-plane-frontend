@@ -1789,8 +1789,10 @@ function CurrentPlanContent() {
       console.log('Calling API:', apiUrl);
       console.log('Request body:', requestBody);
 
+      // Above the backend's 120s Control Plane apply timeout (the trial->paid
+      // migration runs inside this call), so the browser never gives up first.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
 
       let response;
       let data;
