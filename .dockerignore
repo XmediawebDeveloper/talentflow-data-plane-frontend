@@ -6,6 +6,7 @@ node_modules/
 # Secrets — runtime env comes from env_file, build-time from CI build args
 .env
 .env.*
+next-public.env
 
 # Tests / dev artifacts
 e2e/
@@ -19,4 +20,5 @@ middleware.ts.bak
 Dockerfile
 docker-compose*.yml
 .dockerignore
+.gitlab/
 README.md
