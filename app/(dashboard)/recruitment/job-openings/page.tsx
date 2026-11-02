@@ -1016,7 +1016,7 @@ export default function JobOpeningsPage() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-bold uppercase tracking-wide text-red-600">Active in</p>
-                  <p className="text-sm text-gray-700">
+                  <p className="tf-body">
                     {deleteWarningJobs
                       ? 'Each job description is linked to the active modules listed under it.'
                       : 'This job description is linked to the following active modules.'}
@@ -1028,7 +1028,7 @@ export default function JobOpeningsPage() {
                 <ul className="mt-3 space-y-3 max-h-64 overflow-y-auto">
                   {deleteWarningJobs.map((job, jobIndex) => (
                     <li key={jobIndex} className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 [overflow-wrap:anywhere]">{job.title}</p>
+                      <p className="tf-cell-name [overflow-wrap:anywhere]">{job.title}</p>
                       {renderUsageChips(job.usageDetails)}
                     </li>
                   ))}
@@ -1045,12 +1045,12 @@ export default function JobOpeningsPage() {
                   <Info className="w-4 h-4 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-gray-700">
+                  <p className="tf-body">
                     {deleteWarningJobs
                       ? <><span className="font-bold text-brand-blue">These {deleteWarningJobs.length} job descriptions</span> are linked to the active modules above.</>
                       : <><span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.</>}
                   </p>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 tf-card-desc">
                     Deleting it could affect existing data and processes.
                   </p>
                 </div>
@@ -1063,10 +1063,10 @@ export default function JobOpeningsPage() {
                   <ShieldCheck className="w-6 h-6 text-brand-blue" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-gray-700">
+                  <p className="tf-body">
                     <span className="font-bold text-brand-blue">We recommend disabling</span> {deleteWarningJobs ? 'them' : 'the job description'} instead.
                   </p>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 tf-card-desc">
                     This will stop new applications while keeping existing data safe.
                   </p>
                 </div>

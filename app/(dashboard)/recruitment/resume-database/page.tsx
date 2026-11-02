@@ -229,7 +229,7 @@ export default function ResumeDatabasePage() {
                 <Lock className="h-5 w-5" />
               </span>
               <h1 className="text-lg font-semibold text-gray-900">Access Restricted</h1>
-              <p className="max-w-md text-sm text-gray-600">
+              <p className="max-w-md tf-card-desc">
                 You don&apos;t have permission to view the resume database. Ask your administrator
                 for access to My Resumes or the Shared Database.
               </p>

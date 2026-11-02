@@ -355,7 +355,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('location-education')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-cell-name">
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Location & Education</span>
                       {(tempFilters.location || (tempFilters.education && tempFilters.education !== 'Any')) && (
@@ -401,7 +401,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('company-notice')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-cell-name">
                       <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Company & Notice Period</span>
                       {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
@@ -444,7 +444,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('dates')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-cell-name">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Date Filters</span>
                       {(tempFilters.uploadDateRange?.start || tempFilters.uploadDateRange?.end) && (
@@ -484,7 +484,7 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('upload-source')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-cell-name">
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Uploaded By & Source</span>
                       {(tempFilters.uploadedBy || tempFilters.sourceType) && (
@@ -594,7 +594,7 @@ export default function SearchFilterBarCompact({
       {/* Active Filter Chips */}
       {activeFilterCount > 0 && (
         <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
-          <span className="text-sm text-gray-500 mr-1">Active filters:</span>
+          <span className="tf-body-muted mr-1">Active filters:</span>
           {getActiveFilterChips().map((chip) => (
             <div
               key={chip.key}

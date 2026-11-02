@@ -730,7 +730,7 @@ export default function ResumeScoringStatusPanel({
               <div className="bg-white rounded-lg px-4 py-3 border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-gray-600 mb-1">Average Score</div>
+                    <div className="tf-meta-strong mb-1">Average Score</div>
                     <div className={`text-2xl font-bold ${getScoreColor(avgScore)}`}>
                       {completedCount > 0 ? `${avgScore}%` : '--'}
                     </div>
@@ -742,7 +742,7 @@ export default function ResumeScoringStatusPanel({
               <div className="bg-white rounded-lg px-4 py-3 border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-gray-600 mb-1">Time Elapsed</div>
+                    <div className="tf-meta-strong mb-1">Time Elapsed</div>
                     <div className="text-2xl font-bold text-gray-900">{formatTime(elapsedTime)}</div>
                   </div>
                   <Clock className="w-8 h-8 text-gray-800 opacity-30" />
@@ -752,7 +752,7 @@ export default function ResumeScoringStatusPanel({
               <div className="bg-white rounded-lg px-4 py-3 border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>
-                    <div className="text-xs text-gray-600 mb-1">Failed</div>
+                    <div className="tf-meta-strong mb-1">Failed</div>
                     <div className="text-2xl font-bold text-destructive">{errorCount}</div>
                   </div>
                   <XCircle className="w-8 h-8 text-destructive opacity-30" />
@@ -835,7 +835,7 @@ export default function ResumeScoringStatusPanel({
                           </button>
                         )}
                       </div>
-                      <div className="text-sm text-gray-600 mt-1">
+                      <div className="tf-card-desc mt-1">
                         {resume.status === 'completed' && resume.score && (
                           <span>
                             AI Analysis Complete - Score: <span className={`font-semibold ${getScoreColor(resume.score)}`}>{formatOverallScore(resume.overallRating10, resume.score)}</span>
@@ -858,7 +858,7 @@ export default function ResumeScoringStatusPanel({
                         <div className={`text-3xl font-bold ${getScoreColor(resume.score)}`}>
                           {formatOverallScore(resume.overallRating10, resume.score)}
                         </div>
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="tf-meta-strong mt-1">
                           {resume.score >= 85 ? 'Excellent' : resume.score >= 70 ? 'Good' : 'Moderate'}
                         </div>
                       </div>
@@ -907,7 +907,7 @@ export default function ResumeScoringStatusPanel({
                                   {attempt.status}
                                 </span>
                               </div>
-                              <div className="text-xs text-gray-600">
+                              <div className="tf-meta-strong">
                                 {attempt.timestamp.toLocaleString('en-US', {
                                   month: 'short',
                                   day: 'numeric',
@@ -917,7 +917,7 @@ export default function ResumeScoringStatusPanel({
                                 })}
                               </div>
                               {attempt.errorReason && (
-                                <div className="flex items-start gap-1 text-xs text-destructive mt-2">
+                                <div className="flex items-start gap-1 tf-error mt-2">
                                   <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                   <span>{attempt.errorReason}</span>
                                 </div>
@@ -941,7 +941,7 @@ export default function ResumeScoringStatusPanel({
           {/* Footer */}
           <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
+              <div className="flex items-center gap-2 tf-card-desc">
                 {remainingResumes > 0 ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin text-gray-800" />
@@ -959,7 +959,7 @@ export default function ResumeScoringStatusPanel({
                   </>
                 )}
               </div>
-              <div className="text-sm text-gray-500">
+              <div className="tf-body-muted">
                 AI-powered resume analysis
               </div>
             </div>

@@ -451,7 +451,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 <h1 className="text-2xl font-semibold text-gray-900">{job.title}</h1>
                 {getStatusBadge(job.status)}
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 tf-body-muted">
                 {job.department && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-4 h-4" />
@@ -532,7 +532,7 @@ ${job.certifications?.join(', ') || 'N/A'}
               <>
                 {/* Job Description */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
+                  <h2 className="tf-section-title mb-4">Job Description</h2>
                   <div className="markdown-content text-gray-700 leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description || ''}</ReactMarkdown>
                   </div>
@@ -540,7 +540,7 @@ ${job.certifications?.join(', ') || 'N/A'}
 
                 {/* Requirements */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
+                  <h2 className="tf-section-title mb-4">Requirements</h2>
 
                   {/* Experience */}
                   <div className="mb-6">
@@ -611,33 +611,33 @@ ${job.certifications?.join(', ') || 'N/A'}
 
                 {/* Job Details Grid */}
                 <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Details</h2>
+                  <h2 className="tf-section-title mb-4">Job Details</h2>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <Briefcase className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Employment Type</p>
+                        <p className="tf-meta">Employment Type</p>
                         <p className="text-sm font-medium text-gray-900">{job.employment_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <MapPin className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Remote Type</p>
+                        <p className="tf-meta">Remote Type</p>
                         <p className="text-sm font-medium text-gray-900">{job.remote_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <TrendingUp className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Job Level</p>
+                        <p className="tf-meta">Job Level</p>
                         <p className="text-sm font-medium text-gray-900">{job.job_level || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <Building2 className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Industry</p>
+                        <p className="tf-meta">Industry</p>
                         <p className="text-sm font-medium text-gray-900">{job.industry_type || 'Not specified'}</p>
                       </div>
                     </div>
@@ -645,7 +645,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                       <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg col-span-2">
                         <DollarSign className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-xs text-gray-500">Salary Range</p>
+                          <p className="tf-meta">Salary Range</p>
                           <p className="text-sm font-medium text-gray-900">
                             {formatSalaryRange({
                               min: job.salary_min,
@@ -665,7 +665,7 @@ ${job.certifications?.join(', ') || 'N/A'}
             {activeTab === 'scored-resumes' && (
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Scored Resumes</h2>
+                  <h2 className="tf-section-title">Scored Resumes</h2>
                   <Button
                     variant="primary"
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
@@ -704,7 +704,7 @@ ${job.certifications?.join(', ') || 'N/A'}
           <div className="col-span-3 space-y-6">
             {/* Quick Actions */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
+              <h3 className="tf-subsection-title mb-4">Quick Actions</h3>
               <div className="space-y-2">
                 {/* Status Change Actions */}
                 {job.status === 'draft' && (
@@ -797,14 +797,14 @@ ${job.certifications?.join(', ') || 'N/A'}
 
             {/* Applicant Statistics */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Applicant Statistics</h3>
+              <h3 className="tf-subsection-title mb-4">Applicant Statistics</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
                       <Users className="w-4 h-4 text-gray-800" />
                     </div>
-                    <span className="text-sm text-gray-600">Total Applicants</span>
+                    <span className="tf-card-desc">Total Applicants</span>
                   </div>
                   <span className="text-lg font-semibold text-gray-900">{job.applicants_count || 0}</span>
                 </div>
@@ -813,7 +813,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
                       <UserCheck className="w-4 h-4 text-success" />
                     </div>
-                    <span className="text-sm text-gray-600">Shortlisted</span>
+                    <span className="tf-card-desc">Shortlisted</span>
                   </div>
                   <span className="text-lg font-semibold text-gray-900">0</span>
                 </div>
@@ -822,7 +822,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
                       <ClipboardList className="w-4 h-4 text-gray-800" />
                     </div>
-                    <span className="text-sm text-gray-600">Scored</span>
+                    <span className="tf-card-desc">Scored</span>
                   </div>
                   <span className="text-lg font-semibold text-gray-900">{job.scored_resumes_count || 0}</span>
                 </div>
@@ -831,7 +831,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <div className="w-8 h-8 bg-warning-subtle rounded-lg flex items-center justify-center">
                       <BarChart3 className="w-4 h-4 text-warning" />
                     </div>
-                    <span className="text-sm text-gray-600">Assessments</span>
+                    <span className="tf-card-desc">Assessments</span>
                   </div>
                   <span className="text-lg font-semibold text-gray-900">{job.assessments_count || 0}</span>
                 </div>
@@ -840,7 +840,7 @@ ${job.certifications?.join(', ') || 'N/A'}
 
             {/* Recent Activity */}
             <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
+              <h3 className="tf-subsection-title mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 {recentActivity.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3">
@@ -854,7 +854,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{activity.action}</p>
-                      <p className="text-xs text-gray-500">{activity.user} • {activity.time}</p>
+                      <p className="tf-meta">{activity.user} • {activity.time}</p>
                     </div>
                   </div>
                 ))}

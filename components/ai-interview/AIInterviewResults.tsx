@@ -1001,7 +1001,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div>
               {/* JD ID, then the job title — one line. The subtitle that
                   repeated the title underneath is gone. */}
-              <h1 className="flex flex-wrap items-center gap-3 text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
+              <h1 className="flex flex-wrap items-center gap-3 tf-page-title">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
@@ -1027,7 +1027,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               {/* Which versions the list covers — follows the Job Version and
                   Interview Version filters in More Filters. */}
               {!hideVersionDetails && (
-                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 tf-body-muted">
                   <span>{jobVersionFilter ? `Showing JD V${jobVersionFilter}` : 'Showing all JD versions'}</span>
                   <span className="text-gray-300 dark:text-slate-600" aria-hidden>|</span>
                   <span>{interviewVersionFilter ? `Showing Interview V${interviewVersionFilter}` : 'Showing all Interview versions'}</span>
@@ -1695,7 +1695,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 truncate">
+                        <p className="tf-meta truncate">
                           {session.candidate_email || '—'}
                         </p>
                       </div>
@@ -1707,7 +1707,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     </div>
 
                     {((col('inviteSource') && inviteSourceLabel(session)) || (col('interviewVersion') && rowInterviewVersion(session) != null)) && (
-                      <div className="flex items-center justify-between gap-2 text-xs text-gray-600">
+                      <div className="flex items-center justify-between gap-2 tf-meta-strong">
                         {col('inviteSource') && inviteSourceLabel(session) ? (
                           <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
                         ) : <span />}
@@ -1846,7 +1846,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         </Badge>
                       </div>
                       {session.candidate_email && (
-                        <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{session.candidate_email}</p>
+                        <p className="tf-meta [overflow-wrap:anywhere]">{session.candidate_email}</p>
                       )}
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
                         {col('score') && (
@@ -1870,7 +1870,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           into a ~45px column at 320px. Download beside it, as
                           in the table; Create / Send lives in the toolbar's Actions. */}
                       {(session.completed_at || session.started_at) && (
-                        <p className="mt-2 text-xs text-gray-500 [overflow-wrap:anywhere]">
+                        <p className="mt-2 tf-meta [overflow-wrap:anywhere]">
                           {session.completed_at
                             ? <>Completed {formatIST(session.completed_at)}</>
                             : <>Started {formatIST(session.started_at!)}</>}
@@ -1906,7 +1906,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     wider tracking, dark mode. */}
                 <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left tf-th">
                       {/* Embedded in Job Details, Select All already lives in
                           the toolbar above (the reference pattern) — this
                           header checkbox would duplicate it, so it's empty
@@ -1922,16 +1922,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         />
                       )}
                     </th>
-                    {col('candidate') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>}
-                    {col('timeline') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Timeline</th>}
-                    {col('status') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Status</th>}
-                    {col('score') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Result</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Proctoring Risk</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Invite Source</th>}
-                    {col('cid') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">CID</th>}
-                    {col('jobVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Interview Version</th>}
+                    {col('candidate') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Candidate</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Timeline</th>}
+                    {col('status') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Result</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Proctoring Risk</th>}
+                    {col('inviteSource') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Invite Source</th>}
+                    {col('cid') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">CID</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Interview Version</th>}
                     {/* Job Details: no ⋮ in the row, so the column only needs
                         the View / Download pair — w-px + px-3 shrink it to that. */}
                     <th className={`text-right ${portaled ? 'w-px px-3' : 'px-4'} py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col`}>Actions</th>
@@ -1979,7 +1979,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                 <p className="font-medium text-gray-900 truncate" title={showName(session.candidate_name) || 'Unknown'}>
                                   {showName(session.candidate_name) || 'Unknown'}
                                 </p>
-                                <p className="text-xs text-gray-500 truncate" title={session.candidate_email || undefined}>
+                                <p className="tf-meta truncate" title={session.candidate_email || undefined}>
                                   {session.candidate_email || '—'}
                                 </p>
                               </div>
@@ -2186,14 +2186,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="text-sm text-gray-600">
+              <span className="tf-card-desc">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates
               </span>
               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}

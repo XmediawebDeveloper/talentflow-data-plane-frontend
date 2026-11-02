@@ -49,7 +49,7 @@ export default function TmpCodingPickerPreview() {
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 space-y-8">
       <a className="text-sm text-brand-blue underline" href="/tmp-coding-picker-preview/loading">Open the “Preparing your assessment” loading screen</a>
-      <p className="text-sm text-gray-600">
+      <p className="tf-card-desc">
         Temporary preview — real components, sample data. Nothing is saved or run.
       </p>
 

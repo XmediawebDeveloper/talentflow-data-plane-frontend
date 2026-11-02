@@ -138,7 +138,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-gray-900 mb-2">Job Applicants</h1>
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               Managing applicants for: <span className="text-gray-800">{jobTitle}</span>
             </p>
           </div>
@@ -162,7 +162,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <TrendingUp className="w-4 h-4 text-success" />
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.total}</div>
-            <div className="text-sm text-gray-600">Total Applicants</div>
+            <div className="tf-card-desc">Total Applicants</div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -173,7 +173,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">85+</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.exactMatch}</div>
-            <div className="text-sm text-gray-600">Exact Match</div>
+            <div className="tf-card-desc">Exact Match</div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -184,7 +184,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">70-84</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.partialMatch}</div>
-            <div className="text-sm text-gray-600">Partial Match</div>
+            <div className="tf-card-desc">Partial Match</div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -195,7 +195,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">Active</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.shortlisted}</div>
-            <div className="text-sm text-gray-600">Shortlisted</div>
+            <div className="tf-card-desc">Shortlisted</div>
           </div>
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -206,7 +206,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-warning-subtle text-warning rounded text-xs">Pending</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.interview}</div>
-            <div className="text-sm text-gray-600">Interviews</div>
+            <div className="tf-card-desc">Interviews</div>
           </div>
         </div>
       </div>
@@ -313,7 +313,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                               <StatusIcon className="w-3 h-3" />
                               {applicant.status}
                             </div>
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="tf-meta flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               Applied {applicant.appliedDate}
                             </span>
@@ -321,7 +321,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6 text-sm text-gray-600">
+                      <div className="flex items-center gap-6 tf-card-desc">
                         <div className="flex items-center gap-2">
                           <Mail className="w-4 h-4 text-gray-400" />
                           <span>{applicant.email}</span>
@@ -336,7 +336,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6 text-sm text-gray-700 mt-3">
+                      <div className="flex items-center gap-6 tf-body mt-3">
                         <div className="flex items-center gap-2">
                           <Briefcase className="w-4 h-4 text-gray-400" />
                           <span>{applicant.experience}</span>
@@ -363,7 +363,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                         <div className={`inline-flex items-center justify-center w-16 h-16 rounded-full ${getScoreColor(applicant.score)}`}>
                           <span className="text-xl">{applicant.score}</span>
                         </div>
-                        <div className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                        <div className="tf-meta mt-2 flex items-center gap-1">
                           <Star className="w-3 h-3" />
                           Match Score
                         </div>
@@ -409,7 +409,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-16 text-center">
           <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-gray-900 mb-2">No applicants found</h3>
-          <p className="text-sm text-gray-500">
+          <p className="tf-body-muted">
             {searchQuery || statusFilter !== 'all' || scoreFilter !== 'all'
               ? 'Try adjusting your filters'
               : 'No applicants have applied for this job yet'}

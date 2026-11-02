@@ -62,10 +62,10 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
               <AlertTriangle className="w-4 h-4 text-brand-cyan" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+              <h2 className="tf-section-title">
                 Resume Update Detected
               </h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">
+              <p className="tf-meta mt-0.5">
                 {items.length === 1
                   ? 'This candidate already exists. Choose how to handle this update.'
                   : `${items.length} candidates already exist. Choose how to handle these updates.`}
@@ -92,7 +92,7 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{item.candidateName || 'Unknown'}</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500 truncate flex items-center gap-1">
+                    <div className="tf-meta truncate flex items-center gap-1">
                       <FileText className="w-3 h-3 flex-shrink-0" />
                       {item.fileName}
                     </div>
@@ -131,10 +131,10 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
                     <h5 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base">Discard New Resume{items.length > 1 ? 's' : ''}</h5>
                     {selectedAction === 'discard' && <Check className="w-5 h-5 text-brand-blue" />}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     Keep existing resume{items.length > 1 ? 's' : ''} unchanged. {items.length > 1 ? 'New uploads' : 'The new upload'} will be deleted.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-2 flex flex-wrap gap-4 tf-meta">
                     <span>Old resume: <span className="text-gray-700 dark:text-slate-300">Unchanged</span></span>
                     <span>New resume: <span className="text-red-600">Deleted</span></span>
                     <span>Storage: <span className="text-gray-700 dark:text-slate-300">No impact</span></span>
@@ -163,10 +163,10 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
                     <h5 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base">Overwrite Existing Resume{items.length > 1 ? 's' : ''}</h5>
                     {selectedAction === 'overwrite' && <Check className="w-5 h-5 text-brand-orange" />}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     Replace {items.length > 1 ? 'old resumes' : 'the old resume'} with {items.length > 1 ? 'new ones' : 'the new one'}. Original{items.length > 1 ? 's' : ''} will be permanently deleted.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-2 flex flex-wrap gap-4 tf-meta">
                     <span>Old resume: <span className="text-red-600">Deleted</span></span>
                     <span>New resume: <span className="text-green-600">Saved</span></span>
                     <span>Consumes: <span className="text-orange-600">{items.length} upload unit{items.length !== 1 ? 's' : ''}</span></span>
@@ -198,10 +198,10 @@ export default function BulkVersionResolutionModal({ items, onClose, onResolved 
                     </div>
                     {selectedAction === 'version' && <Check className="w-5 h-5 text-green-500" />}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     Keep both old and new resumes. {items.length > 1 ? 'New resumes are' : 'The new resume is'} stored as versioned update{items.length > 1 ? 's' : ''}.
                   </p>
-                  <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-2 flex flex-wrap gap-4 tf-meta">
                     <span>Old resume: <span className="text-green-600">Kept</span></span>
                     <span>New resume: <span className="text-green-600">Saved as new version</span></span>
                     <span>Consumes: <span className="text-orange-600">{items.length} upload unit{items.length !== 1 ? 's' : ''}</span></span>

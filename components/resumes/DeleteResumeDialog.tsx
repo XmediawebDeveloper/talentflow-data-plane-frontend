@@ -42,7 +42,7 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
               <AlertDialogTitle className="text-2xl font-bold text-gray-900">
                 {single ? 'Delete Resume' : `Delete ${count} Resumes`}
               </AlertDialogTitle>
-              <p className="mt-1 text-sm text-gray-500">This action is permanent and cannot be undone.</p>
+              <p className="mt-1 tf-body-muted">This action is permanent and cannot be undone.</p>
             </div>
           </div>
           <AlertDialogDescription asChild>
@@ -83,14 +83,14 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                   <HelpCircle className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="break-words text-sm font-semibold text-gray-900">
+                  <p className="break-words tf-cell-name">
                     {single ? (
                       <>Are you sure you want to delete &ldquo;{names[0] ?? ''}&rdquo;?</>
                     ) : (
                       <>Are you sure you want to delete {count} resumes?</>
                     )}
                   </p>
-                  <p className="mt-0.5 text-sm text-gray-500">This action cannot be reversed.</p>
+                  <p className="mt-0.5 tf-body-muted">This action cannot be reversed.</p>
                 </div>
               </div>
             </div>

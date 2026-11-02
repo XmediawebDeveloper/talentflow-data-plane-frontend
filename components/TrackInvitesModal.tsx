@@ -400,7 +400,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   <span className="hidden sm:inline">Assessment - Invite Status Tracking</span>
                   <span className="sm:hidden">Invite Status</span>
                 </h2>
-                <p className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
                   {jobVersion != null && jobVersion > 0 && (
@@ -468,7 +468,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
         {!isLoading && invitations.length > 0 && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-            <p className="text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
+            <p className="tf-meta">{resultsLabel}</p>
             {/* Completion rate — the AI tracker's badge, in place of the old card. */}
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
               <TrendingUp className="w-3.5 h-3.5" />
@@ -613,18 +613,18 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <table className="w-max min-w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">CID</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Status</th>
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Timeline</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">CID</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Candidate</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Status</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Timeline</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Tech Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Coding Score</th>
+                        <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap tf-sticky-col">Actions</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -643,12 +643,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                   long email would otherwise set the column width. */}
                               <div className="min-w-0 max-w-[220px]">
                                 <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
-                                <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
+                                <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
                             </div>
                           </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
-                            <p className="text-sm text-gray-700 dark:text-slate-300 truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
+                            <p className="tf-body truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
                           </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             {/* Badges stay on one line — the row height is set by
@@ -772,7 +772,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {/* Footer — stacks on phones; First/Last drop out below sm, matching the
             Assessments and AI Interviews trackers. */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
             {/* The filtered count, not the raw total — the number has to agree
                 with the rows actually on screen. */}
             {resultsLabel}
@@ -781,7 +781,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -802,7 +802,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <button onClick={() => setPage(() => Math.max(1, currentPage - 1))} disabled={currentPage === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button onClick={() => setPage(() => Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className={pageBtn}>

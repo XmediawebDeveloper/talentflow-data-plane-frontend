@@ -2747,7 +2747,7 @@ export default function ResumeScoringPage({
                     {jdCodeOf(selectedHistoryItem) && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
+                    <h1 className="tf-page-title [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
                     {/* Disabled / Archived — same badge as the job list row. */}
                     {detailsJobLocked && (() => {
                       const tone = getStatusConfig(detailsJobStatus);
@@ -2847,7 +2847,7 @@ export default function ResumeScoringPage({
                       View Job Detail
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatIST(selectedHistoryItem.scoredAt)}
@@ -3561,7 +3561,7 @@ export default function ResumeScoringPage({
                   <Search className="w-5 h-5 text-brand-blue" />
                 </div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2 tracking-tight">No Scored Candidates</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Score resumes against jobs to see them here.</p>
+                <p className="tf-card-desc">Score resumes against jobs to see them here.</p>
               </div>
               </>
             ) : (
@@ -4187,7 +4187,7 @@ export default function ResumeScoringPage({
                   className="mt-3 pt-3 sm:pl-6 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
                 >
                   {!globalLoaded ? (
-                    <div className="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-2 py-3 tf-body-muted">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading candidates...
                     </div>
@@ -4218,7 +4218,7 @@ export default function ResumeScoringPage({
                         </div>
                       )}
                       {panelRows.length === 0 ? (
-                        <p className="py-3 text-sm text-gray-500 dark:text-slate-400">
+                        <p className="py-3 tf-body-muted">
                           {matchFilter ? `No ${matchFilter} candidates for this job.` : 'No scored candidates for this job yet.'}
                         </p>
                       ) : (
@@ -4368,7 +4368,7 @@ export default function ResumeScoringPage({
                             icon-less meta line: label in the form-label weight,
                             value a shade lighter (JobOpeningSummary's
                             MetaLabelValue). */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-card-desc mb-2">
                           {item.scoredResumes?.[0]?.scoredBy && (
                             <span className="flex items-center gap-1">
                               <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
@@ -4569,16 +4569,16 @@ export default function ResumeScoringPage({
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
+                        <span className="tf-card-desc">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                        <div className="flex items-center gap-2 tf-body-muted">
                           <Calendar className="w-4 h-4 text-brand-cyan" />
                           {formatIST(item.scoredAt)}
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
-                        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                        <span className="tf-cell-name tabular-nums">
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
@@ -4656,15 +4656,15 @@ export default function ResumeScoringPage({
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job ID</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored By</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Date &amp; Time</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Exact Match</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Partial Match</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">No Match</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Job ID</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Scored By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Date &amp; Time</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Scored</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Exact Match</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Partial Match</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">No Match</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -5087,7 +5087,7 @@ export default function ResumeScoringPage({
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-base sm:text-lg truncate font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate">
+                    <p className="tf-body-muted truncate">
                       {historyModalItem.jobTitle}
                       {jdCodeOf(historyModalItem) && ` (${jdCodeOf(historyModalItem)})`}
                     </p>
@@ -5138,7 +5138,7 @@ export default function ResumeScoringPage({
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Total Resumes Scored</div>
+                      <div className="tf-meta leading-tight">Total Resumes Scored</div>
                       <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
                     </div>
                   </div>
@@ -5147,7 +5147,7 @@ export default function ResumeScoringPage({
                       <CheckCircle className="w-4 h-4 text-success" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Exact Match</div>
+                      <div className="tf-meta leading-tight">Exact Match</div>
                       <div className="text-xl font-bold text-success">{summary.exact}</div>
                     </div>
                   </div>
@@ -5156,7 +5156,7 @@ export default function ResumeScoringPage({
                       <PieChart className="w-4 h-4 text-orange-500" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Partial Match</div>
+                      <div className="tf-meta leading-tight">Partial Match</div>
                       <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
                     </div>
                   </div>
@@ -5165,7 +5165,7 @@ export default function ResumeScoringPage({
                       <XCircle className="w-4 h-4 text-destructive" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">No Match</div>
+                      <div className="tf-meta leading-tight">No Match</div>
                       <div className="text-xl font-bold text-destructive">{summary.noMatch}</div>
                     </div>
                   </div>
@@ -5329,19 +5329,19 @@ export default function ResumeScoringPage({
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 z-10 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr className="text-left bg-white dark:bg-slate-900">
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Version</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Scored By</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Version</th>
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Scored By</th>
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
                               Date
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
                               Resumes Scored
                             </th>
-                            <th colSpan={3} className="py-1.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th colSpan={3} className="py-1.5 px-3 tf-th text-center border-b border-gray-200 dark:border-slate-700">Status</th>
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
                               Average Score
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right">Action</th>
+                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom text-right">Action</th>
                           </tr>
                           <tr className="text-left bg-white dark:bg-slate-900">
                             <th className="py-1.5 px-3 font-semibold text-success text-xs">Exact</th>
@@ -5450,7 +5450,7 @@ export default function ResumeScoringPage({
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                         <PieChart className="w-4 h-4" />
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Match Breakdown</span>
+                      <span className="tf-cell-name truncate">Match Breakdown</span>
                     </div>
                     <FilterSelect
                       value={breakdownVersion}
@@ -5492,7 +5492,7 @@ export default function ResumeScoringPage({
                       )}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                         <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{breakdownTotal}</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Resumes<br />Scored</span>
+                        <span className="tf-meta mt-1 leading-tight">Resumes<br />Scored</span>
                       </div>
                     </div>
                     {/* Legend: names in the left half, values in the right
@@ -5507,7 +5507,7 @@ export default function ResumeScoringPage({
                           </span>
                           <span className="flex items-baseline gap-1.5 pl-3 pr-1">
                             <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{row.value}</span>
-                            <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({breakdownPct(row.value)}%)</span>
+                            <span className="tabular-nums tf-meta">({breakdownPct(row.value)}%)</span>
                           </span>
                         </li>
                       ))}
@@ -5519,7 +5519,7 @@ export default function ResumeScoringPage({
               <div className="px-4 sm:px-6 pb-4">
                 <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                  <p className="tf-card-desc">
                     Match status is based on the comparison of candidate resumes with the job description.
                   </p>
                 </div>
@@ -5571,7 +5571,7 @@ export default function ResumeScoringPage({
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+        <label className="block tf-label mb-2">
           Select Job Description
         </label>
 

@@ -278,27 +278,27 @@ export default function AssessmentInviteTable({
           <table className="w-max min-w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Candidate</th>
+                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
+                <th className="text-left py-3 px-4 tf-th">Candidate</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
                     sm and md, shifting every heading after Timeline off its
                     column. */}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 hidden md:table-cell">Timeline</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Status</th>
+                <th className="text-left py-3 px-4 tf-th hidden md:table-cell">Timeline</th>
+                <th className="text-left py-3 px-4 tf-th">Status</th>
                 {/* Tech / Coding Score columns are conditional on the
                     assessment having that round enabled — same rule as
                     the Results page. Showing a "Coding Score" column
                     for a JD without a coding round produced a
                     permanent "—" column that confused recruiters. */}
                 {techEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Tech Score</th>
+                  <th className="text-center py-3 px-4 tf-th">Tech Score</th>
                 )}
                 {codingEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Coding Score</th>
+                  <th className="text-center py-3 px-4 tf-th">Coding Score</th>
                 )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 whitespace-nowrap">Invite Source</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">CID</th>
+                <th className="text-left py-3 px-4 tf-th whitespace-nowrap">Invite Source</th>
+                <th className="text-left py-3 px-4 tf-th">CID</th>
                 {/* Job scope only: with invites from several
                     assessments in one table, the row has to say which
                     job version its assessment belongs to - that is the
@@ -314,12 +314,12 @@ export default function AssessmentInviteTable({
                     relationship they are: this assessment version, on
                     that job version. */}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Job Version</th>
+                  <th className="text-left py-3 px-4 tf-th">Job Version</th>
                 )}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Assessment Version</th>
+                  <th className="text-left py-3 px-4 tf-th">Assessment Version</th>
                 )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
+                <th className="text-left py-3 px-4 tf-th tf-sticky-col">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -382,7 +382,7 @@ export default function AssessmentInviteTable({
                             column width for the whole table. */}
                         <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
+                          <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
                       </div>
                     </td>
@@ -478,7 +478,7 @@ export default function AssessmentInviteTable({
                     })()}
                     {/* Invite Source — how this candidate was actually
                         invited, from the invitation's own resume_id. */}
-                    <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                    <td className="py-3 px-4 align-top tf-td whitespace-nowrap">
                       <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                     </td>
                     <td className="py-3 px-4 align-top">

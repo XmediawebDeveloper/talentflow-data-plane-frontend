@@ -525,7 +525,7 @@ export default function BulkScoringProgressModal({
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="text-sm text-gray-600 dark:text-slate-400">
+                  <span className="tf-card-desc">
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>
@@ -921,19 +921,19 @@ export default function BulkScoringProgressModal({
                     <tr>
                       {showJobIdTitleColumns && (
                         <>
-                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
-                          <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
+                          <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
+                          <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
                         </>
                       )}
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                      {showScoreColumn && <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
-                      {showJobColumns && <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
-                      <th className="text-center py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
-                      <th className="text-left py-3 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
+                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
+                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                      {showScoreColumn && <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
+                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
+                      {showJobColumns && <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
+                      <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
+                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
+                      <th className="text-left py-3 px-3 tf-th bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -966,12 +966,12 @@ export default function BulkScoringProgressModal({
                           <div className="flex flex-col gap-1">
                             <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
                             {item.email && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[200px]" title={item.email}>{item.email}</div>
+                              <div className="tf-meta truncate max-w-[200px]" title={item.email}>{item.email}</div>
                             )}
                             {/* The job title doubles as a caption ONLY for a table
                                 that spans several jobs and has no job columns. */}
                             {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
-                              <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+                              <div className="flex items-center gap-1.5 tf-meta">
                                 <Target className="w-3 h-3 flex-shrink-0" />
                                 <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                               </div>
@@ -986,7 +986,7 @@ export default function BulkScoringProgressModal({
                               {item.status}
                             </span>
                             {item.status === 'Failed' && (
-                              <div className="flex items-start gap-1 text-xs text-destructive mt-1 max-w-[280px] whitespace-normal break-words">
+                              <div className="flex items-start gap-1 tf-error mt-1 max-w-[280px] whitespace-normal break-words">
                                 <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                 <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                               </div>
@@ -1036,7 +1036,7 @@ export default function BulkScoringProgressModal({
                         {/* 7. Scored By / Date — who, then when (date · time). */}
                         <td className="py-3 px-3 whitespace-nowrap">
                           {scoredAt ? (
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                            <div className="tf-body">
                               {showScoredByColumn && (
                                 <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{item.scoredBy || '-'}</div>
                               )}
@@ -1045,7 +1045,7 @@ export default function BulkScoringProgressModal({
                                 {showScoredByColumn ? <> &middot; {scoredAt.time}</> : null}
                               </div>
                               {!showScoredByColumn && (
-                                <div className="text-xs text-gray-500 dark:text-slate-500">{scoredAt.time}</div>
+                                <div className="tf-meta">{scoredAt.time}</div>
                               )}
                             </div>
                           ) : (
@@ -1105,7 +1105,7 @@ export default function BulkScoringProgressModal({
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <div className="min-w-0 flex-1">
                         {showJobColumns && (
-                          <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+                          <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                             {/* One job: the header names it, so only the version. */}
                             {showJobIdTitleColumns && (
                               <>
@@ -1129,10 +1129,10 @@ export default function BulkScoringProgressModal({
                       <div className="min-w-0">
                         <div className="font-medium text-gray-900 dark:text-slate-50 text-sm [overflow-wrap:anywhere]">{item.candidateName}</div>
                         {item.email && (
-                          <div className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{item.email}</div>
+                          <div className="tf-meta [overflow-wrap:anywhere]">{item.email}</div>
                         )}
                         {item.jobTitle && !filterByJobId && !showJobColumns && !scopedToJobTitle && (
-                          <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-slate-500 mt-0.5">
+                          <div className="flex items-center gap-1 tf-meta mt-0.5">
                             <Target className="w-3 h-3 flex-shrink-0" />
                             <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                           </div>
@@ -1140,7 +1140,7 @@ export default function BulkScoringProgressModal({
                       </div>
                     </div>
                     {item.status === 'Failed' && (
-                      <div className="flex items-start gap-1 text-xs text-destructive mb-2">
+                      <div className="flex items-start gap-1 tf-error mb-2">
                         <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                         <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                       </div>

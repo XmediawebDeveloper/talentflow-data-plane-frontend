@@ -242,7 +242,7 @@ export default function ReportsExports() {
         {/* Header */}
         <div className="mb-6">
           <h1 className="text-gray-900 mb-2">Reports & Exports</h1>
-          <p className="text-sm text-gray-600">
+          <p className="tf-card-desc">
             Generate and download comprehensive reports across all recruitment activities
           </p>
         </div>
@@ -252,7 +252,7 @@ export default function ReportsExports() {
           <div className="grid grid-cols-4 gap-4 mb-4">
             {/* Date Range */}
             <div>
-              <label className="block text-sm text-gray-700 mb-2">Date From</label>
+              <label className="block tf-body mb-2">Date From</label>
               <DateField
                 value={dateRange.from}
                 onChange={(v) => setDateRange({ ...dateRange, from: v })}
@@ -261,7 +261,7 @@ export default function ReportsExports() {
             </div>
 
             <div>
-              <label className="block text-sm text-gray-700 mb-2">Date To</label>
+              <label className="block tf-body mb-2">Date To</label>
               <DateField
                 value={dateRange.to}
                 onChange={(v) => setDateRange({ ...dateRange, to: v })}
@@ -271,7 +271,7 @@ export default function ReportsExports() {
 
             {/* Format Selection */}
             <div>
-              <label className="block text-sm text-gray-700 mb-2">Export Format</label>
+              <label className="block tf-body mb-2">Export Format</label>
               <FilterSelect
                 value={selectedFormat}
                 onChange={(v) => setSelectedFormat(v as any)}
@@ -349,7 +349,7 @@ export default function ReportsExports() {
                       </div>
                       <div>
                         <h2 className="text-gray-900">{category.name}</h2>
-                        <p className="text-sm text-gray-600">
+                        <p className="tf-card-desc">
                           {category.reports.length} report{category.reports.length !== 1 ? 's' : ''} available
                         </p>
                       </div>
@@ -403,10 +403,10 @@ export default function ReportsExports() {
                             <h3 className={`text-sm mb-1 ${isSelected ? 'text-gray-800' : 'text-gray-900'}`}>
                               {report.name}
                             </h3>
-                            <p className="text-sm text-gray-600 mb-3">
+                            <p className="tf-card-desc mb-3">
                               {report.description}
                             </p>
-                            <div className="flex items-center gap-4 text-xs text-gray-500">
+                            <div className="flex items-center gap-4 tf-meta">
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3.5 h-3.5" />
                                 Last: {report.lastGenerated}
@@ -445,7 +445,7 @@ export default function ReportsExports() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-gray-900 mb-1">Scheduled Reports</h2>
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 Automated report generation and email delivery
               </p>
             </div>
@@ -466,7 +466,7 @@ export default function ReportsExports() {
                   <Mail className="w-5 h-5 text-gray-800" />
                   <div>
                     <div className="text-sm text-gray-900">Weekly Recruitment Summary</div>
-                    <div className="text-xs text-gray-500">Every Monday at 9:00 AM • Excel format</div>
+                    <div className="tf-meta">Every Monday at 9:00 AM • Excel format</div>
                   </div>
                 </div>
                 <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">Active</span>
@@ -479,7 +479,7 @@ export default function ReportsExports() {
                   <Mail className="w-5 h-5 text-gray-800" />
                   <div>
                     <div className="text-sm text-gray-900">Monthly Assessment Analytics</div>
-                    <div className="text-xs text-gray-500">1st of every month • PDF format</div>
+                    <div className="tf-meta">1st of every month • PDF format</div>
                   </div>
                 </div>
                 <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">Active</span>

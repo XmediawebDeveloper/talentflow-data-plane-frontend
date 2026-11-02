@@ -1211,7 +1211,7 @@ export default function TeamChatPage() {
                       <h2 className="truncate text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
                       {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Muted" />}
                     </div>
-                    <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+                    <p className="truncate tf-meta">
                       {connectionStatus === 'closed' && (
                         <span className="mr-1 inline-flex items-center gap-1 text-brand-orange-deep" title="Live updates paused — checking for new messages every few seconds">
                           <Loader2 className="h-3 w-3 animate-spin" /> Reconnecting… ·
@@ -1299,7 +1299,7 @@ export default function TeamChatPage() {
                                 <div key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-gray-50 sm:px-3 dark:hover:bg-slate-800/60">
                                   <div className="min-w-0 flex-1">
                                     <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
-                                    <p className="mt-0.5 line-clamp-2 break-words text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{m.content}</p>
+                                    <p className="mt-0.5 line-clamp-2 break-words tf-body max-sm:text-[13px]">{m.content}</p>
                                   </div>
                                   {/* Time, with Unpin under it */}
                                   <div className="flex shrink-0 flex-col items-end gap-1">
@@ -1402,7 +1402,7 @@ export default function TeamChatPage() {
 
               {selectedChannel.description && (
                 <div className="shrink-0 border-b border-gray-100 px-4 py-2 sm:px-5 dark:border-slate-700/60">
-                  <p className="truncate text-xs text-gray-500 dark:text-slate-400" title={selectedChannel.description}>
+                  <p className="truncate tf-meta" title={selectedChannel.description}>
                     {selectedChannel.description}
                   </p>
                 </div>
@@ -1430,7 +1430,7 @@ export default function TeamChatPage() {
                       <MessageCircle className="h-6 w-6 text-brand-blue" />
                     </div>
                     <p className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
-                    <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
+                    <p className="mt-1 tf-body-muted max-sm:text-[13px]">
                       {selectedChannel.type === 'channel'
                         ? `Start the conversation in #${selectedChannel.name}.`
                         : `Say hello to ${selectedChannel.name}.`}
@@ -1642,7 +1642,7 @@ export default function TeamChatPage() {
                     conversation doesn't jump when it appears. */}
                 <div aria-live="polite" className="pointer-events-none absolute bottom-full left-3 mb-2 sm:left-4">
                   {typingNames.length > 0 && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs text-gray-500 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 tf-meta shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
                       <span className="flex items-center gap-0.5" aria-hidden>
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-blue/60 [animation-delay:-0.3s]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-blue/60 [animation-delay:-0.15s]" />
@@ -1753,7 +1753,7 @@ export default function TeamChatPage() {
                   <MessageCircle className="h-6 w-6 text-brand-blue" />
                 </div>
                 <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
-                <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
+                <p className="mt-1 tf-body-muted max-sm:text-[13px]">
                   {channels.length === 0
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message to start the conversation.'}
@@ -1783,8 +1783,8 @@ export default function TeamChatPage() {
           <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-200 lg:flex xl:w-72 dark:border-slate-700">
             <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 dark:border-slate-700">
               <div className="min-w-0">
-                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Members</h3>
-                <p className="text-xs text-gray-500">
+                <h3 className="tf-card-title max-sm:text-sm">Members</h3>
+                <p className="tf-meta">
                   {selectedChannel.member_count} total · {onlineMembersCount} online
                 </p>
               </div>
@@ -1815,7 +1815,7 @@ export default function TeamChatPage() {
                       {member.name}
                       {member.user_id === currentUser?.id && <span className="font-normal text-gray-400"> (You)</span>}
                     </p>
-                    <p className="truncate text-xs capitalize text-gray-500">{member.role?.replace(/_/g, ' ') || 'Member'}</p>
+                    <p className="truncate tf-meta capitalize">{member.role?.replace(/_/g, ' ') || 'Member'}</p>
                   </div>
                 </div>
               ))}
@@ -1919,7 +1919,7 @@ export default function TeamChatPage() {
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
                       <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
-                      <p className="text-xs text-gray-500">No teammates available</p>
+                      <p className="tf-meta">No teammates available</p>
                     </div>
                   ) : (
                     <div className="max-h-44 overflow-y-auto rounded-xl border border-gray-200 bg-white">
@@ -1947,7 +1947,7 @@ export default function TeamChatPage() {
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
                           </button>
                         );
@@ -1986,7 +1986,7 @@ export default function TeamChatPage() {
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
                     <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                    <p className="text-sm max-sm:text-[13px] text-gray-500">No teammates left to add.</p>
+                    <p className="tf-body-muted max-sm:text-[13px]">No teammates left to add.</p>
                   </div>
                 ) : (
                   <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white">
@@ -2015,7 +2015,7 @@ export default function TeamChatPage() {
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
                           </button>
                         );
@@ -2068,7 +2068,7 @@ export default function TeamChatPage() {
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="lg" />
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
                             <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-600 sm:inline-flex">
                               {user.role?.replace(/_/g, ' ') || 'User'}

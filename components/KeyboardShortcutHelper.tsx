@@ -95,7 +95,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
                           key={index}
                           className="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-gray-50 transition-colors"
                         >
-                          <span className="text-sm text-gray-700">{shortcut.description}</span>
+                          <span className="tf-body">{shortcut.description}</span>
                           <div className="flex items-center gap-1">
                             {shortcut.keys.map((key, keyIndex) => (
                               <div key={keyIndex} className="flex items-center gap-1">
@@ -117,7 +117,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
 
               {/* Footer */}
               <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <p className="text-xs text-gray-600 text-center">
+                <p className="tf-meta-strong text-center">
                   Press <kbd className="px-2 py-0.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded shadow-sm">Esc</kbd> to close
                 </p>
               </div>

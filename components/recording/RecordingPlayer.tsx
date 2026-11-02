@@ -528,14 +528,14 @@ function VideoPane({
 }) {
   if (source.loading || source.available === null) {
     return (
-      <div className="h-64 rounded-xl bg-slate-100 flex items-center justify-center text-sm text-gray-500 gap-2">
+      <div className="h-64 rounded-xl bg-slate-100 flex items-center justify-center tf-body-muted gap-2">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading {label.toLowerCase()}…
       </div>
     );
   }
   if (source.available === false || !source.url) {
     return (
-      <div className="h-64 rounded-xl bg-slate-50 border border-dashed border-gray-200 flex flex-col items-center justify-center text-sm text-gray-500 gap-2">
+      <div className="h-64 rounded-xl bg-slate-50 border border-dashed border-gray-200 flex flex-col items-center justify-center tf-body-muted gap-2">
         <Video className="w-6 h-6 text-gray-400" />
         {label} not available
       </div>
@@ -594,7 +594,7 @@ export function RecordingPlayer({
 
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-      <span className="text-xs text-gray-500">{label}</span>
+      <span className="tf-meta">{label}</span>
       <span className="text-sm font-medium text-gray-900">{value}</span>
     </div>
   );

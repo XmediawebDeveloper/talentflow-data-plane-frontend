@@ -203,10 +203,10 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">
+              <h3 className="tf-section-title">
                 {singleTeamUsage.team_name || 'Team'} Usage
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 {singleTeamUsage.reporting_scope} - Last {selectedDays} days
               </p>
             </div>
@@ -239,10 +239,10 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
             <BarChart3 className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">
+            <h3 className="tf-section-title">
               {isTenantAdmin ? 'All Teams Usage' : 'My Teams Usage'}
             </h3>
-            <p className="text-sm text-gray-600">
+            <p className="tf-card-desc">
               {reportingScope === 'all_teams' ? 'Tenant-wide team usage' : 'Your team usage summary'} - Last {selectedDays} days
             </p>
           </div>
@@ -371,12 +371,12 @@ function TeamUsageCard({
                         </div>
                         <div>
                           <p className="text-sm font-medium text-gray-900">{typeInfo.label}</p>
-                          <p className="text-xs text-gray-500">{usage?.consumption_count || 0} actions</p>
+                          <p className="tf-meta">{usage?.consumption_count || 0} actions</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-xl font-bold text-gray-900">{formatUnits(unitType, usage?.total_consumed || 0)}</p>
-                        <p className="text-xs text-gray-500">units</p>
+                        <p className="tf-meta">units</p>
                       </div>
                     </div>
                   );
@@ -420,7 +420,7 @@ function TeamUsageCard({
         ) : (
           <div className="text-center py-6">
             <BarChart3 className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <p className="text-sm text-gray-500">No usage recorded for this period</p>
+            <p className="tf-body-muted">No usage recorded for this period</p>
           </div>
         )}
       </div>

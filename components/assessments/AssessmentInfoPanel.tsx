@@ -78,14 +78,14 @@ return (
         </div>
         <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
       </div>
-      <p className="text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+      <p className="tf-card-desc">Metadata extracted from the job description used to generate this assessment</p>
     </div>
 
     {!hasData ? (
       <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
         <Info className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
         <p className="text-gray-600 mb-1">No metadata available</p>
-        <p className="text-sm text-gray-500">Assessment info will appear once the JD analysis is complete</p>
+        <p className="tf-body-muted">Assessment info will appear once the JD analysis is complete</p>
       </div>
     ) : (
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
@@ -187,7 +187,7 @@ return (
             <div className="flex items-center gap-2 mb-3">
               <Star className="w-4 h-4 text-brand-blue" />
               <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
-              <span className="text-xs text-gray-500">(Required skills extracted from JD)</span>
+              <span className="tf-meta">(Required skills extracted from JD)</span>
             </div>
             <div className="flex flex-wrap gap-2">
               {skillDepth.map((skill: any, idx: number) => {
@@ -218,7 +218,7 @@ return (
           <div className="flex items-center gap-2 mb-3">
             <Star className="w-4 h-4 text-brand-cyan" />
             <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
-            <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
+            <span className="tf-meta">(Preferred skills extracted from JD)</span>
           </div>
           {niceToHaveSkills.length > 0 ? (
             <div className="flex flex-wrap gap-2">

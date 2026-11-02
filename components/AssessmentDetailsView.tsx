@@ -132,7 +132,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
-        <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <span className="tf-card-desc whitespace-nowrap">Go to</span>
         <input
           type="number"
           min={1}
@@ -1663,7 +1663,7 @@ export default function AssessmentDetailsView({
                     does not touch the API value. */}
                 {/* Same size/weight as the Job Details title (and the app's
                     page-title standard, 18px phone / 20px tablet+). */}
-                <h1 className="min-w-0 max-w-full font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate">
+                <h1 className="min-w-0 max-w-full tf-page-title truncate">
                   {assessment.jd_title || stripVersionFromTitle(assessment.title)}
                 </h1>
                 {assessment.status && (
@@ -1680,7 +1680,7 @@ export default function AssessmentDetailsView({
               </div>
 
               {/* Row 2: Duration + Created Date + Created By + Last Updated */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
                 {/* No per-icon colour. The four icons inherit the row's own
                     `text-gray-600 dark:text-slate-400` through currentColor, so
                     they read as one quiet line of facts instead of four tinted
@@ -1783,7 +1783,7 @@ export default function AssessmentDetailsView({
 
                         <div className="max-h-72 overflow-y-auto py-1">
                           {sortedJobVersions.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                            <div className="px-3 py-3 tf-meta">
                               No versions available
                             </div>
                           ) : (
@@ -1840,7 +1840,7 @@ export default function AssessmentDetailsView({
                                       ) : null}
                                     </span>
                                     {/* The version number carries the row. */}
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 tabular-nums flex-shrink-0">
+                                    <span className="tf-cell-name tabular-nums flex-shrink-0">
                                       V{version.version_number ?? 1}
                                     </span>
                                     {/* CURRENT = the newest version of the job,
@@ -1953,7 +1953,7 @@ export default function AssessmentDetailsView({
 
                         <div className="max-h-72 overflow-y-auto py-1">
                         {assessmentVersionsLoading ? (
-                          <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                          <div className="px-3 py-3 flex items-center gap-2 tf-meta">
                             <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
                             Loading assessment versions…
                           </div>
@@ -2363,7 +2363,7 @@ export default function AssessmentDetailsView({
                           <Clock className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                          <div className="text-xs text-gray-600 mb-1">Total Duration</div>
+                          <div className="tf-meta-strong mb-1">Total Duration</div>
                           <div className="text-xl font-semibold text-gray-900 tracking-tight">{formattedDuration}</div>
                         </div>
                       </div>
@@ -2465,7 +2465,7 @@ export default function AssessmentDetailsView({
                                   {/* One step down from the title in both size and
                                       ink, so the card has a hierarchy rather than
                                       two lines of equal weight. */}
-                                  <p className="text-xs text-gray-600 leading-relaxed">
+                                  <p className="tf-meta-strong leading-relaxed">
                                     {section.type === 'hr' && 'Evaluates communication skills, cultural fit, and behavioral competencies.'}
                                     {section.type === 'technical' && 'Tests domain knowledge, technical concepts, and problem-solving abilities.'}
                                     {section.type === 'coding' && 'Assesses programming skills through hands-on coding challenges.'}
@@ -2539,7 +2539,7 @@ export default function AssessmentDetailsView({
                         ) : (
                           <div className="bg-slate-50 rounded-xl border-2 border-dashed border-brand-blue/20 p-6 text-center">
                             <FileText className="w-10 h-10 text-brand-blue/40 mx-auto mb-2" />
-                            <p className="text-gray-600 text-sm">No sections configured</p>
+                            <p className="tf-card-desc">No sections configured</p>
                           </div>
                         )}
                       </div>
@@ -2596,14 +2596,14 @@ export default function AssessmentDetailsView({
                           </div>
                           <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
                         </div>
-                        <p className="text-sm text-gray-600">Metadata extracted from the job description used to generate this assessment</p>
+                        <p className="tf-card-desc">Metadata extracted from the job description used to generate this assessment</p>
                       </div>
 
                       {!hasData ? (
                         <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                           <Info className="w-8 h-8 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-2 sm:mb-3" />
                           <p className="text-gray-600 mb-1">No metadata available</p>
-                          <p className="text-sm text-gray-500">Assessment info will appear once the JD analysis is complete</p>
+                          <p className="tf-body-muted">Assessment info will appear once the JD analysis is complete</p>
                         </div>
                       ) : (
                         <div className="@container p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
@@ -2707,7 +2707,7 @@ export default function AssessmentDetailsView({
                               <div className="flex flex-wrap items-center gap-2 mb-3">
                                 <Star className="w-4 h-4 text-brand-blue" />
                                 <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
-                                <span className="text-xs text-gray-500">(Required skills extracted from JD)</span>
+                                <span className="tf-meta">(Required skills extracted from JD)</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 {skillDepth.map((skill: any, idx: number) => {
@@ -2738,7 +2738,7 @@ export default function AssessmentDetailsView({
                             <div className="flex flex-wrap items-center gap-2 mb-3">
                               <Star className="w-4 h-4 text-brand-cyan" />
                               <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
-                              <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
+                              <span className="tf-meta">(Preferred skills extracted from JD)</span>
                             </div>
                             {niceToHaveSkills.length > 0 ? (
                               <div className="flex flex-wrap gap-2">
@@ -2785,8 +2785,8 @@ export default function AssessmentDetailsView({
                     {analyticsData.completed === 0 ? (
                       <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02]">
                         <TrendingUp className="w-10 h-10 text-brand-blue/30 mx-auto mb-2" />
-                        <p className="text-gray-600 text-sm mb-1">No performance data available yet</p>
-                        <p className="text-xs text-gray-500">Data will appear after candidates complete the assessment</p>
+                        <p className="tf-card-desc mb-1">No performance data available yet</p>
+                        <p className="tf-meta">Data will appear after candidates complete the assessment</p>
                       </div>
                     ) : (
                       <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'lg:grid-cols-2' : ''} gap-4 sm:gap-5`}>
@@ -2807,7 +2807,7 @@ export default function AssessmentDetailsView({
                                     {/* Passed (≥70%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                                        <span className="tf-body">Passed (≥70%)</span>
                                         <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -2821,7 +2821,7 @@ export default function AssessmentDetailsView({
                                     {/* Average (50-69%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Average (50-69%)</span>
+                                        <span className="tf-body">Average (50-69%)</span>
                                         <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -2835,7 +2835,7 @@ export default function AssessmentDetailsView({
                                     {/* Below Average (<50%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                                        <span className="tf-body">Below Average (&lt;50%)</span>
                                         <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -2869,7 +2869,7 @@ export default function AssessmentDetailsView({
                                     {/* Passed (≥70%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Passed (≥70%)</span>
+                                        <span className="tf-body">Passed (≥70%)</span>
                                         <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -2883,7 +2883,7 @@ export default function AssessmentDetailsView({
                                     {/* Average (50-69%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Average (50-69%)</span>
+                                        <span className="tf-body">Average (50-69%)</span>
                                         <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -2897,7 +2897,7 @@ export default function AssessmentDetailsView({
                                     {/* Below Average (<50%) */}
                                     <div>
                                       <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
+                                        <span className="tf-body">Below Average (&lt;50%)</span>
                                         <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
@@ -3121,7 +3121,7 @@ export default function AssessmentDetailsView({
             {/* The popup's footer, less its Close button — a tab has nothing
                 to close. */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0 rounded-b-xl">
-              <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+              <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
                 {inviteResultsLabel}
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -3223,8 +3223,8 @@ export default function AssessmentDetailsView({
             ) : activityFeed.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="text-gray-600 mb-1 text-sm">No activity recorded yet</p>
-                <p className="text-sm text-gray-500">Activity will appear here as candidates take the assessment</p>
+                <p className="tf-card-desc mb-1">No activity recorded yet</p>
+                <p className="tf-body-muted">Activity will appear here as candidates take the assessment</p>
               </div>
             ) : (() => {
               const totalPages = Math.max(1, Math.ceil(activityFeed.length / ACTIVITY_PAGE_SIZE));
@@ -3322,37 +3322,37 @@ export default function AssessmentDetailsView({
                                     <>
                                       <span className="font-medium text-gray-900 text-sm">{info.label}</span>
                                       {activity.actor_name && (
-                                        <span className="text-gray-500 ml-1 sm:ml-2 text-sm [overflow-wrap:anywhere]">by {activity.actor_name}</span>
+                                        <span className="tf-body-muted ml-1 sm:ml-2 [overflow-wrap:anywhere]">by {activity.actor_name}</span>
                                       )}
                                     </>
                                   ) : (
                                     <>
                                       <span className="font-medium text-gray-900 text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
-                                      <span className="text-gray-500 ml-1 sm:ml-2 text-sm">{info.label}</span>
+                                      <span className="tf-body-muted ml-1 sm:ml-2">{info.label}</span>
                                     </>
                                   )}
                                 </div>
-                                <span className="text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
+                                <span className="tf-body-muted sm:shrink-0">{formattedDate}</span>
                               </div>
                               {activity._lifecycle ? (
                                 activity.actor_email && (
-                                  <p className="text-sm text-gray-600 mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
+                                  <p className="tf-card-desc mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
                                 )
                               ) : (
-                                <p className="text-sm text-gray-600 mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
+                                <p className="tf-card-desc mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
                               )}
                               {showScores && (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                   {assessment.technical_enabled && activity.technical_score != null && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-xs text-gray-600">Tech:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.technical_score)}%</span>
+                                      <span className="tf-meta-strong">Tech:</span>
+                                      <span className="tf-cell-name">{formatScore(activity.technical_score)}%</span>
                                     </div>
                                   )}
                                   {assessment.coding_enabled && activity.coding_score != null && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="text-xs text-gray-600">Coding:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.coding_score)}%</span>
+                                      <span className="tf-meta-strong">Coding:</span>
+                                      <span className="tf-cell-name">{formatScore(activity.coding_score)}%</span>
                                     </div>
                                   )}
                                   {activity.passed != null && (
@@ -3371,7 +3371,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {activityFeed.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-sm text-gray-600">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 tf-card-desc">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, activityFeed.length)} of {activityFeed.length}
                       </span>
@@ -3398,7 +3398,7 @@ export default function AssessmentDetailsView({
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
               </div>
-              <p className="text-sm text-gray-600">Complete timeline of all changes made to this assessment</p>
+              <p className="tf-card-desc">Complete timeline of all changes made to this assessment</p>
             </div>
 
             {versionsLoading ? (
@@ -3431,8 +3431,8 @@ export default function AssessmentDetailsView({
             ) : versionHistory.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="text-gray-600 mb-1 text-sm">No version history available</p>
-                <p className="text-sm text-gray-500">Version history will appear when the assessment is edited</p>
+                <p className="tf-card-desc mb-1">No version history available</p>
+                <p className="tf-body-muted">Version history will appear when the assessment is edited</p>
               </div>
             ) : (
               <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
@@ -3458,19 +3458,19 @@ export default function AssessmentDetailsView({
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-600 mb-2 sm:mb-3">
+                          <p className="tf-card-desc mb-2 sm:mb-3">
                             {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
                           </p>
 
                           {/* User & Date Info */}
-                          <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-700 mb-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 tf-body mb-1 flex-wrap">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span className="font-medium min-w-0 [overflow-wrap:anywhere]">{version.changed_by_name || 'Unknown User'}</span>
                             <span className="text-gray-400">•</span>
                             <span className="text-gray-600">Lead Recruiter</span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-600 mb-3 sm:mb-4 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 tf-card-desc mb-3 sm:mb-4 flex-wrap">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span>Published on {versionDate} IST (UTC+5:30)</span>
                           </div>
@@ -3481,7 +3481,7 @@ export default function AssessmentDetailsView({
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
                             <ul className="space-y-1.5 sm:space-y-2">
-                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="tf-body flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Assessment type: {[
                                   version.hr_enabled && 'HR',
@@ -3489,17 +3489,17 @@ export default function AssessmentDetailsView({
                                   version.coding_enabled && 'Coding'
                                 ].filter(Boolean).join(', ')}</span>
                               </li>
-                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="tf-body flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Duration set to {assessment.duration_minutes || 60} min</span>
                               </li>
                               {assessment.title && (
-                                <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                                <li className="tf-body flex items-start gap-1.5 sm:gap-2">
                                   <span className="text-brand-blue mt-0.5">•</span>
                                   <span className="min-w-0 [overflow-wrap:anywhere]">Linked to job posting: {stripVersionFromTitle(assessment.title)}</span>
                                 </li>
                               )}
-                              <li className="text-sm text-gray-700 flex items-start gap-1.5 sm:gap-2">
+                              <li className="tf-body flex items-start gap-1.5 sm:gap-2">
                                 <span className="text-brand-blue mt-0.5">•</span>
                                 <span>Proctoring {assessment.proctoring_enabled ? 'enabled' : 'disabled'} with AI monitoring</span>
                               </li>
@@ -3541,7 +3541,7 @@ export default function AssessmentDetailsView({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 {selectedJobVersionNumber != null
                   ? `Every assessment version created for Job V${selectedJobVersionNumber} (V1 is the original; V2 onwards are duplicates, up to 5).`
                   : 'All versions of this assessment (V1 is the original; V2 onwards are duplicates, up to 5).'}
@@ -3572,8 +3572,8 @@ export default function AssessmentDetailsView({
             ) : siblingRows.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Layers className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="text-gray-600 mb-1 text-sm">No additional versions yet</p>
-                <p className="text-sm text-gray-500">Duplicate this assessment to create additional versions</p>
+                <p className="tf-card-desc mb-1">No additional versions yet</p>
+                <p className="tf-body-muted">Duplicate this assessment to create additional versions</p>
               </div>
             ) : (
               <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
@@ -3626,7 +3626,7 @@ export default function AssessmentDetailsView({
                             </div>
                           </div>
 
-                          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-700 mt-2">
+                          <div className="grid grid-cols-1 @md:grid-cols-2 gap-x-4 gap-y-1 tf-body mt-2">
                             <div className="flex items-center gap-1.5 min-w-0">
                               <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
                               <span className="shrink-0">Created by</span>
@@ -3728,7 +3728,7 @@ export default function AssessmentDetailsView({
           {!assessment.jd_id ? (
             <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
               <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No linked job description found</p>
+              <p className="tf-body-muted">No linked job description found</p>
             </div>
           ) : jdError ? (
             <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">

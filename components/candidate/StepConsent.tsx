@@ -261,7 +261,7 @@ export default function StepConsent({
                   <p className="text-xs font-semibold uppercase tracking-wider text-brand-blue">You&apos;re interviewing for</p>
                   <h1 className="mt-1 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">{title}</h1>
                   {metaItems.length > 0 && (
-                    <div className="mt-2 flex flex-wrap items-center gap-y-1 text-sm text-gray-500">
+                    <div className="mt-2 flex flex-wrap items-center gap-y-1 tf-body-muted">
                       {metaItems.map((item, i) => (
                         <span key={item.text} className="flex items-center min-w-0">
                           {i > 0 && <span aria-hidden className="mx-2.5 h-1 w-1 rounded-full bg-gray-300 flex-shrink-0" />}
@@ -284,10 +284,10 @@ export default function StepConsent({
                     </span>
                     <div className="min-w-0">
                       {candidateName && (
-                        <p className="text-sm font-semibold text-gray-900 truncate" title={candidateName}>{candidateName}</p>
+                        <p className="tf-cell-name truncate" title={candidateName}>{candidateName}</p>
                       )}
                       {candidateEmail && (
-                        <p className="text-xs text-gray-500 break-all" title={candidateEmail}>{candidateEmail}</p>
+                        <p className="tf-meta break-all" title={candidateEmail}>{candidateEmail}</p>
                       )}
                     </div>
                   </div>
@@ -395,7 +395,7 @@ export default function StepConsent({
                   <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue flex-shrink-0">
                     <Icon className="w-4 h-4" />
                   </span>
-                  <span className="text-sm text-gray-600 leading-snug pt-1.5">{text}</span>
+                  <span className="tf-card-desc leading-snug pt-1.5">{text}</span>
                 </div>
               ))}
             </div>
@@ -413,7 +413,7 @@ export default function StepConsent({
                 </span>
                 <div>
                   <p className="font-semibold text-gray-900 mb-1">Mobile Verification Required</p>
-                  <p className="text-sm text-gray-600 leading-relaxed">
+                  <p className="tf-card-desc leading-relaxed">
                     At any point during the interview, you may be asked to scan a QR code with your{' '}
                     <strong>mobile phone</strong> to briefly verify your physical environment — have your
                     phone within reach. No app installation is required; it opens directly in your phone&apos;s
@@ -430,7 +430,7 @@ export default function StepConsent({
                       }}
                       className="mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
                     />
-                    <span className="text-sm text-gray-700">
+                    <span className="tf-body">
                       I have read and understood the mobile verification requirement above.
                     </span>
                   </label>
@@ -466,7 +466,7 @@ export default function StepConsent({
                 >
                   {consentAccepted && <CheckCircle className="w-3.5 h-3.5 text-white" />}
                 </div>
-                <div className="text-sm text-gray-700 leading-relaxed min-w-0">
+                <div className="tf-body leading-relaxed min-w-0">
                   I accept the{' '}
                   <button
                     type="button"
@@ -477,7 +477,7 @@ export default function StepConsent({
                     consent and terms
                   </button>
                   {' '}for AI Interview
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="tf-meta mt-1">
                     Checking this box selects all consents. You may click &ldquo;consent and terms&rdquo; to review the full privacy policy and terms.
                   </p>
                 </div>
@@ -512,7 +512,7 @@ export default function StepConsent({
             {/* Why Proceed is still disabled — a disabled button alone
                 doesn't say what's missing. */}
             {!submitting && (!consentAccepted || mobileAckPending) && (
-              <p className="mt-2 text-center text-xs text-gray-500">
+              <p className="mt-2 text-center tf-meta">
                 {!consentAccepted
                   ? 'Accept the consent and terms above to continue.'
                   : 'Confirm the mobile verification notice above to continue.'}
@@ -536,7 +536,7 @@ export default function StepConsent({
             <div className="flex items-start justify-between gap-4 px-5 sm:px-7 pt-6 pb-4 flex-shrink-0">
               <div className="min-w-0">
                 <h2 id="consent-modal-title" className="text-2xl sm:text-3xl font-bold tracking-tight text-gray-900">Privacy &amp; Consent</h2>
-                <p className="mt-1 text-sm text-gray-500">Please review the information below before starting your AI interview.</p>
+                <p className="mt-1 tf-body-muted">Please review the information below before starting your AI interview.</p>
               </div>
               <button
                 type="button"
@@ -560,8 +560,8 @@ export default function StepConsent({
                       <Icon className="w-5 h-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900">{title}</p>
-                      <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">{desc}</p>
+                      <p className="tf-cell-name">{title}</p>
+                      <p className="mt-0.5 tf-body-muted leading-relaxed">{desc}</p>
                     </div>
                   </li>
                 ))}
@@ -571,7 +571,7 @@ export default function StepConsent({
                   details (policy, rights, retention). */}
               <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 sm:p-5">
                 <h3 className="text-lg font-bold text-gray-900">Learn More</h3>
-                <p className="mt-0.5 text-sm text-gray-500">Read detailed information about your privacy, rights and data retention.</p>
+                <p className="mt-0.5 tf-body-muted">Read detailed information about your privacy, rights and data retention.</p>
                 <div className="mt-4 space-y-3">
                   {LEARN_MORE_ITEMS.map(({ key, icon: Icon, title, desc }) => {
                     const open = openLearnMore === key;
@@ -587,13 +587,13 @@ export default function StepConsent({
                             <Icon className="w-5 h-5" />
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-gray-900">{title}</p>
-                            <p className="mt-0.5 text-sm text-gray-500 leading-relaxed">{desc}</p>
+                            <p className="tf-cell-name">{title}</p>
+                            <p className="mt-0.5 tf-body-muted leading-relaxed">{desc}</p>
                           </div>
                           <ChevronRight className={`w-5 h-5 text-brand-blue flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
                         </button>
                         {open && (
-                          <div className="px-4 pb-4 sm:pl-[4.75rem] text-sm text-gray-600 space-y-2">
+                          <div className="px-4 pb-4 sm:pl-[4.75rem] tf-card-desc space-y-2">
                             {key === 'privacy' && (
                               <>
                                 <p>Your data is encrypted in transit and at rest. It is never sold or shared with third parties beyond what&apos;s needed for this recruitment process.</p>

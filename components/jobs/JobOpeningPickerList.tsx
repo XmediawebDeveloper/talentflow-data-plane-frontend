@@ -375,7 +375,7 @@ export default function JobOpeningPickerList({
     <div>
       {/* Job Search */}
       <div className="mb-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
+        <label className="block tf-label mb-2">Search Jobs</label>
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
           <input
@@ -398,7 +398,7 @@ export default function JobOpeningPickerList({
             "1 selected · Clear Selection" pair drops to the next line,
             instead of squeezing the heading into a word-per-line column. */}
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 mb-3">
-          <label className="min-w-0 text-sm font-medium text-gray-700 dark:text-slate-300">
+          <label className="min-w-0 tf-label">
             Select a Job Opening
             {/* The published-job count — the Job Openings page's own
                 derivation, via getPublishedJobs. No total beside it and

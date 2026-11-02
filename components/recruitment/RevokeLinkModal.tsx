@@ -68,7 +68,7 @@ export default function RevokeLinkModal({
             </div>
             <ul className="mt-3 space-y-2.5">
               {effects.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-start gap-3 text-sm text-gray-700 dark:text-slate-300">
+                <li key={text} className="flex items-start gap-3 tf-body">
                   <span className="w-9 h-9 shrink-0 rounded-full bg-destructive-subtle flex items-center justify-center">
                     <Icon className="w-4 h-4 text-destructive" />
                   </span>

@@ -140,8 +140,8 @@ export default function IntegrationsPage() {
                 <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                 Connected apps
               </div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Integrations</h1>
-              <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400">Connect TalentFlow with your favorite tools and services.</p>
+              <h1 className="tf-page-title">Integrations</h1>
+              <p className="mt-2 max-w-2xl tf-card-desc">Connect TalentFlow with your favorite tools and services.</p>
             </div>
           </div>
         </section>
@@ -170,8 +170,8 @@ export default function IntegrationsPage() {
               <span className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <LinkIcon className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No integrations found</h3>
-              <p className="text-sm text-gray-500 dark:text-slate-500">No integrations available in this category.</p>
+              <h3 className="tf-card-title mb-1">No integrations found</h3>
+              <p className="tf-body-muted">No integrations available in this category.</p>
             </div>
           ) : (
             filteredIntegrations.map((integration) => (
@@ -193,7 +193,7 @@ export default function IntegrationsPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">{integration.description}</p>
+                      <p className="tf-body-muted mt-1">{integration.description}</p>
                       {integration.category && (
                         <span className="inline-block mt-2 px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-full text-xs font-semibold">
                           {integration.category}
@@ -245,8 +245,8 @@ export default function IntegrationsPage() {
 
         {/* Request Integration */}
         <div className="mt-6 sm:mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 text-center ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5">Need a different integration?</h3>
-          <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
+          <h3 className="tf-card-title mb-1.5">Need a different integration?</h3>
+          <p className="tf-body-muted mb-4">
             Let us know what tools you&apos;d like to connect with TalentFlow.
           </p>
           <Button variant="secondary">

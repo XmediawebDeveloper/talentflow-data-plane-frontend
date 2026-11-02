@@ -113,11 +113,11 @@ export default function JobInterviewVersionPicker({
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+        <span className="tf-cell-name">
           {multiple ? 'Select Interview Versions' : 'Select Interview Version'}
         </span>
         {job?.jd_short_id && <JobIdBadge>{job.jd_short_id}</JobIdBadge>}
-        {job && (job.jd_title || job.position) && <span className="min-w-0 text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title || job.position}</span>}
+        {job && (job.jd_title || job.position) && <span className="min-w-0 tf-card-desc truncate">{job.jd_title || job.position}</span>}
         {job && !spansJobVersions && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">
             V{jobVersionNumber ?? job.jd_version ?? 1}
@@ -131,7 +131,7 @@ export default function JobInterviewVersionPicker({
           <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
             {allVersions.length === 0 ? 'No AI interview for this job yet' : 'No active interview version for this job'}
           </div>
-          <div className="text-xs text-gray-500 dark:text-slate-400">
+          <div className="tf-meta">
             {allVersions.length === 0
               ? 'Create an interview for this job from AI Interviews, then invite candidates here.'
               : 'Publish an interview version for this job from AI Interviews, then invite candidates here.'}
@@ -223,7 +223,7 @@ export default function JobInterviewVersionPicker({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
                     {/* Created date with its time. */}
                     {c.created_at && (
                       <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatIST(c.created_at)}</span>
@@ -281,7 +281,7 @@ export default function JobInterviewVersionPicker({
                 ? 'You’re about to use the selected interview versions to invite candidates.'
                 : 'You’re about to use this interview version to invite candidates.'}
             </div>
-            <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
+            <div className="tf-meta-strong mt-0.5">
               {multiple
                 ? 'Each candidate you invite receives every interview version you select.'
                 : 'Once selected, this version will be used for the candidate invitation.'}

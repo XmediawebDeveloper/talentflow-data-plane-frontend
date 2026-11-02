@@ -70,7 +70,7 @@ export default function PlanChangeAcceptPage() {
 
           {/* Content */}
           <div className="px-5 sm:px-7 py-6 sm:py-8">
-            <p className="text-gray-700 text-sm leading-relaxed">{message || 'Processing your acceptance...'}</p>
+            <p className="tf-body leading-relaxed">{message || 'Processing your acceptance...'}</p>
 
             {status !== 'loading' && (
               <div className="mt-5 sm:mt-6">
@@ -87,7 +87,7 @@ export default function PlanChangeAcceptPage() {
         </div>
 
         <div className="mt-4 text-center">
-          <p className="text-gray-500 text-xs">TalentFlow &mdash; Plan Change Acceptance</p>
+          <p className="tf-meta">TalentFlow &mdash; Plan Change Acceptance</p>
         </div>
       </div>
     </div>

@@ -1446,7 +1446,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <FileText className="w-4 h-4 text-brand-blue" />
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">Add New Question</h3>
+              <h3 className="tf-section-title min-w-0 truncate">Add New Question</h3>
             </div>
             <Button variant="secondary" size="sm" type="button" onClick={closeAddHRQuizModal} className="px-2 flex-shrink-0" aria-label="Close">
               <X className="w-5 h-5" />
@@ -1455,7 +1455,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
           <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-4 sm:px-6 py-4">
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-gray-700">Question Text *</label>
+              <label className="mb-1.5 block tf-label">Question Text *</label>
               <input
                 type="text"
                 value={newHRQuestion.question_text}
@@ -1466,7 +1466,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-gray-700">Answer Type</label>
+              <label className="mb-2 block tf-label">Answer Type</label>
               <div className="flex flex-col gap-2 sm:flex-row">
                 <button
                   type="button"
@@ -3517,7 +3517,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0 mt-0.5" />
             <div>
               <div className="text-sm text-brand-blue font-medium mb-1">AI-Powered Assessment Generation</div>
-              <div className="text-sm text-gray-700">
+              <div className="tf-body">
                 Automatically generate questions based on the JD, adjusting difficulty, topics, and time allocation based on your configuration. <strong>Each candidate receives a unique, freshly generated question set</strong> to ensure fairness and prevent question sharing.
               </div>
             </div>
@@ -3527,7 +3527,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <div className="p-4 sm:p-6 border-b border-gray-100">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                 <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Select Job Description</h2>
+                  <h2 className="tf-section-title">Select Job Description</h2>
                 </div>
                 <Button
                   variant="primary"
@@ -3588,7 +3588,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 {/* Search Jobs — the Apply to Job dialog's own field, down to
                     the label, the icon and what it searches. */}
                 <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Search Jobs</label>
+                  <label className="block tf-label mb-2">Search Jobs</label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -4431,7 +4431,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
         <div className="space-y-1.5 max-h-72 overflow-y-auto">
           {hrQuestionBank.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
+            <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center tf-body-muted">
               No HR questions found. Add one to start building this section.
             </div>
           ) : hrQuestionBank.map((q, idx) => {
@@ -4506,7 +4506,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               not carry an empty row. */}
           {section.name === 'Coding' && codingEnabledSource && (
             <div className="flex justify-end mb-3">
-              <span className="text-xs text-gray-500">
+              <span className="tf-meta">
                 {codingEnabledSource === 'auto' ? 'Auto-enabled (coding required)' : 'Manually enabled'}
               </span>
             </div>
@@ -4543,7 +4543,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </Button>
                 </div>
                 {chosen.length === 0 ? (
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     No language selected yet — pick at least one for the coding round.
                   </p>
                 ) : (
@@ -4595,10 +4595,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 className="flex-1 min-w-0 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
               />
               <div className="flex items-center gap-1 flex-shrink-0">
-                <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
+                <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center tf-body select-none">
                   {section.percentage}
                 </span>
-                <span className="text-sm text-gray-600">%</span>
+                <span className="tf-card-desc">%</span>
               </div>
             </div>
           </div>
@@ -4785,7 +4785,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     {enabledSectionsCount} of 3 enabled
                   </span>
                 </div>
-                <p className="text-sm text-gray-500 mb-3 sm:mb-4">
+                <p className="tf-body-muted mb-3 sm:mb-4">
                   Choose which rounds to include in this assessment. Disabled rounds will not appear below.
                 </p>
 
@@ -4826,7 +4826,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                             <span className="text-sm sm:text-base font-medium text-gray-900 whitespace-nowrap">Technical Round</span>
                           </div>
-                          <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
+                          <p className="hidden sm:block tf-meta mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -4842,7 +4842,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     {/* Phones: the same line under the whole header row, at the
                         card's full width, instead of squeezed between the icon
                         and the toggle. */}
-                    <p className="sm:hidden mt-2 text-xs text-gray-500 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
+                    <p className="sm:hidden mt-2 tf-meta leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                     {(() => {
                       const technicalSection = sections.find(s => s.name === 'Technical');
                       if (!technicalSection?.enabled || !expandedRounds.has('Technical')) return null;
@@ -4905,7 +4905,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                                   message and they are listed in full in the
                                   section below (`renderPercentageSectionCard`),
                                   where they wrap rather than truncate. */}
-                              <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">
+                              <p className="hidden sm:block tf-meta mt-0.5 leading-snug">
                                 {codingDescription}
                               </p>
                             </div>
@@ -4923,7 +4923,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         {/* Phones: full width under the header row, as the
                             Technical round's line. */}
                         <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">{codingChip}</div>
-                        <p className="sm:hidden mt-1.5 text-xs text-gray-500 leading-snug">{codingDescription}</p>
+                        <p className="sm:hidden mt-1.5 tf-meta leading-snug">{codingDescription}</p>
                         {(() => {
                           const codingSection = sections.find(s => s.name === 'Coding');
                           if (!codingSection?.enabled || !expandedRounds.has('Coding')) return null;
@@ -4961,7 +4961,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <Clock className="w-4 h-4 text-brand-blue flex-shrink-0" />
                             <h4 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Total Assessment Distribution</h4>
                           </div>
-                          <span className="text-sm text-gray-500 flex-shrink-0">
+                          <span className="tf-body-muted flex-shrink-0">
                             Total:{' '}
                             <span className={`font-bold ${isPercentageValid ? 'text-success' : 'text-destructive'}`}>
                               {totalPercentage}%
@@ -4982,7 +4982,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         </div>
                         <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
                           {distribution.map(section => (
-                            <span key={section.name} className="inline-flex items-center gap-2 text-sm text-gray-600">
+                            <span key={section.name} className="inline-flex items-center gap-2 tf-card-desc">
                               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${barColor(section.name)}`} />
                               {/* "Technical round", not "Technical Section" —
                                   the round is what the recruiter switched on
@@ -5027,7 +5027,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <span className="text-sm sm:text-base font-medium text-gray-900 whitespace-nowrap">HR Round</span>
                             <span className="max-sm:hidden contents">{hrChips}</span>
                           </div>
-                          <p className="hidden sm:block text-xs text-gray-500 mt-0.5 leading-snug">
+                          <p className="hidden sm:block tf-meta mt-0.5 leading-snug">
                             {hrDescription}
                           </p>
                         </div>
@@ -5052,7 +5052,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     {/* Phones: full width under the header row, as the other
                         rounds' lines. */}
                     <div className="sm:hidden mt-2 flex flex-wrap gap-1.5">{hrChips}</div>
-                    <p className="sm:hidden mt-1.5 text-xs text-gray-500 leading-snug">{hrDescription}</p>
+                    <p className="sm:hidden mt-1.5 tf-meta leading-snug">{hrDescription}</p>
                     {hrEnabled && expandedRounds.has('HR') && (
                       <div className="mt-3">{renderHRSectionCard()}</div>
                     )}
@@ -5085,7 +5085,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             {proctoringEnabled ? 'Enabled' : 'Disabled'}
                           </span>
                         </div>
-                        <p className="text-sm text-gray-600 mb-3">
+                        <p className="tf-card-desc mb-3">
                           {proctoringEnabled
                             ? 'Advanced security monitoring will be active for this assessment including webcam, screen recording, and AI cheating prevention.'
                             : 'Standard mode without advanced monitoring. Suitable for low-stakes assessments.'
@@ -5278,7 +5278,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         </Button>
                       )}
                     </div>
-                    <p className="mt-1.5 text-xs text-gray-500 leading-snug">
+                    <p className="mt-1.5 tf-meta leading-snug">
                       Based on the job description, the following details are detected:
                     </p>
 
@@ -5292,7 +5292,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${fact.tile}`}>
                               <fact.Icon className={`w-4 h-4 ${fact.iconColor}`} />
                             </div>
-                            <span className="min-w-0 flex-1 text-xs text-gray-600 truncate">{fact.label}</span>
+                            <span className="min-w-0 flex-1 tf-meta-strong truncate">{fact.label}</span>
                             {/* The value as a chip, so the detected figure is
                                 the thing the eye lands on down the right
                                 edge. On a skills row that chip is also the way
@@ -5341,7 +5341,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                   <div className="min-w-0">
                     <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Duration</h4>
-                    <span className="text-xs text-gray-500 block">Fixed at 30 minutes</span>
+                    <span className="tf-meta block">Fixed at 30 minutes</span>
                   </div>
                 </div>
 
@@ -5358,11 +5358,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     the panel's padding rather than cutting it edge to edge. */}
                 <div className="mt-3 max-sm:mt-2.5 grid grid-cols-[1.3fr_1fr] bg-slate-50 rounded-xl p-3 sm:p-4">
                   <div className="min-w-0 pr-3">
-                    <div className="text-xs text-gray-500 mb-1">Total Duration</div>
+                    <div className="tf-meta mb-1">Total Duration</div>
                     <div className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">{duration} min</div>
                   </div>
                   <div className="min-w-0 pl-4 border-l border-gray-200">
-                    <div className="text-xs text-gray-500 mb-1">Sections</div>
+                    <div className="tf-meta mb-1">Sections</div>
                     <div className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">{enabledSectionsCount}</div>
                   </div>
                 </div>
@@ -5404,7 +5404,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       {/* What the round IS on the left, what it COMES TO on the
                           right: "Technical … 65%". */}
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs text-gray-600 truncate">{row.name}</div>
+                        <div className="tf-meta-strong truncate">{row.name}</div>
                       </div>
                       <div className="flex-shrink-0 text-right">
                         <div className="text-xs font-bold text-gray-500">{row.percentage}%</div>
@@ -5844,7 +5844,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <div className="text-center">
             <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue animate-spin mx-auto mb-4" />
             <h3 className="text-sm sm:text-base text-gray-900 mb-2 tracking-tight">Saving Assessment Definition...</h3>
-            <p className="text-sm text-gray-600">Configuring your assessment parameters</p>
+            <p className="tf-card-desc">Configuring your assessment parameters</p>
           </div>
         </div>
       );
@@ -5935,7 +5935,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <BarChart className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue flex-shrink-0" />
               <div>
                 <h3 className="text-sm sm:text-base text-brand-blue mb-2 font-semibold tracking-tight">Evaluation & Scoring Logic</h3>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   How candidates will be evaluated when taking this assessment
                 </p>
               </div>
@@ -5952,7 +5952,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     Scored
                   </span>
                 </div>
-                <p className="text-xs text-gray-600 mb-2">
+                <p className="tf-meta-strong mb-2">
                   Each question scored 0-10. <strong>Pass requires:</strong>
                 </p>
                 <div className="text-xs text-gray-700 space-y-1">
@@ -6002,7 +6002,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 </div>
 
                 <div className="mb-3 sm:mb-4">
-                  <div className="text-sm text-gray-700 mb-2">Topics Covered:</div>
+                  <div className="tf-body mb-2">Topics Covered:</div>
                   <div className="flex flex-wrap gap-2">
                     {/* HR topics come back as `{text, type, time}` objects from the
                         backend (the HR Question Bank shape), while Technical/Coding
@@ -6019,7 +6019,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
                 {/* Note: Questions NOT generated yet */}
                 <div className="bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-3 sm:p-4">
-                  <div className="text-sm text-gray-700">
+                  <div className="tf-body">
                     <strong>Questions will be generated dynamically</strong> when candidates are assigned to this assessment based on the configured topics and difficulty level.
                   </div>
                 </div>
@@ -6029,7 +6029,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
           {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-            <div className="text-sm text-gray-600">
+            <div className="tf-card-desc">
               Status: <span className={`font-medium ${generatedAssessment?.status === 'Active' ? 'text-success' : 'text-warning'}`}>
                 {generatedAssessment?.status === 'Active' ? 'Published' : 'Draft'}
               </span>

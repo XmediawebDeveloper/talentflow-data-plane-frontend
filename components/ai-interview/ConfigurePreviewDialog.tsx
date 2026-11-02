@@ -59,9 +59,9 @@ export default function ConfigurePreviewDialog({
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 {config?.jd_short_id && <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>}
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">{title}</h2>
+                <h2 className="tf-section-title truncate">{title}</h2>
               </div>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Configure Details</p>
+              <p className="tf-meta mt-0.5">Configure Details</p>
             </div>
           </div>
           {!cancelInFooter && (

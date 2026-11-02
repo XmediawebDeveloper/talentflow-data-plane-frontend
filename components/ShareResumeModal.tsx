@@ -104,7 +104,7 @@ Best regards`;
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                  <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                  <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                 </div>
               </div>
             </div>
@@ -112,7 +112,7 @@ Best regards`;
             <div className="space-y-4">
               {/* What goes out with the email, and the eye to read it first. */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                <label className="block tf-label mb-1">Attachment</label>
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                     <FileText className="w-4 h-4 text-brand-blue" />
@@ -121,7 +121,7 @@ Best regards`;
                     <div className="text-sm font-medium text-gray-900 truncate" title={fileName}>
                       {fileName}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="tf-meta">
                       {resume.name}
                       {fileType && <> &middot; {fileType}</>}
                       {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
@@ -141,7 +141,7 @@ Best regards`;
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block tf-label mb-1">
                   Recipient Email <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -154,7 +154,7 @@ Best regards`;
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block tf-label mb-1">Subject</label>
                 <input
                   type="text"
                   value={shareSubject}
@@ -165,7 +165,7 @@ Best regards`;
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <label className="block tf-label mb-1">Message</label>
                 <textarea
                   value={shareMessage}
                   onChange={(e) => setShareMessage(e.target.value)}

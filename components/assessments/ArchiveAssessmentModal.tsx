@@ -82,7 +82,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
             </div>
             <ul className="mt-2.5 space-y-2">
               {ARCHIVE_EFFECTS.map((effect) => (
-                <li key={effect} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                <li key={effect} className="flex items-start gap-2.5 tf-body">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-brand-orange-deep dark:text-orange-300 mt-0.5" />
                   <span className="min-w-0">{effect}</span>
                 </li>
@@ -103,7 +103,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
                 {target.title}
               </p>
               {metaParts.length > 0 && (
-                <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+                <p className="mt-1 tf-body-muted">
                   {metaParts.map((part, i) => (
                     <span key={part}>
                       {i > 0 && <span className="mx-1.5 text-gray-300 dark:text-slate-600">|</span>}
@@ -117,7 +117,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
         </div>
 
         <div className="px-4 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
-          <p className="text-sm text-gray-700 dark:text-slate-300">
+          <p className="tf-body">
             Are you sure you want to archive this assessment?
           </p>
           <div className="flex gap-3 justify-end">

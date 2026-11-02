@@ -361,7 +361,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                     {/* Existing */}
                     <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col">
                       <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="text-base font-semibold text-gray-900">Existing Resume</h3>
+                        <h3 className="tf-card-title">Existing Resume</h3>
                       </div>
                       <div className="px-5 py-2 flex-1">
                         <DetailRow label="Candidate" value={existing.candidate_name} />
@@ -421,7 +421,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                 sentence spilled a few words onto a second row. */}
             <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
               <Info className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-700 dark:text-slate-300">
+              <p className="tf-body">
                 <span className="font-semibold">Note:</span> Exact duplicates are blocked automatically — existing records stay unchanged.
               </p>
             </div>
@@ -463,7 +463,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
                 Resume Update Detected
               </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <p className="tf-card-desc">
                 This candidate already exists in the system. Choose how to handle this update.
               </p>
             </div>
@@ -499,7 +499,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-slate-50">{currentDuplicate.existingResume.candidate_name}</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-500">{currentDuplicate.existingResume.email}</p>
+                <p className="tf-body-muted">{currentDuplicate.existingResume.email}</p>
               </div>
             </div>
           </div>
@@ -533,7 +533,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col">
                   <div className="px-5 py-3.5 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-gray-700 dark:text-slate-300" />
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Existing Resume</h3>
+                    <h3 className="tf-card-title">Existing Resume</h3>
                   </div>
                   <div className="px-5 py-1 flex-1 divide-y divide-gray-100 dark:divide-slate-800">
                     <DetailRow icon={User} label="Candidate" value={existing.candidate_name} />
@@ -627,10 +627,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                       <Check className="w-5 h-5 text-blue-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     Keep existing resume unchanged. New resume will be deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                     <span>• Old resume: <span className="text-gray-700 dark:text-slate-300">Unchanged</span></span>
                     <span>• New resume: <span className="text-red-600">Deleted</span></span>
                     <span>• Storage: <span className="text-gray-700 dark:text-slate-300">No impact</span></span>
@@ -661,10 +661,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                       <Check className="w-5 h-5 text-orange-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-card-desc mt-1">
                     Replace old resume with new one. Original will be permanently deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                     <span>• Old resume: <span className="text-red-600">Deleted</span></span>
                     <span>• New resume: <span className="text-green-600">Saved</span></span>
                     <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -726,10 +726,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                      <p className="tf-card-desc mt-1">
                         Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
                       </p>
-                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                      <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                         <span>• Old resume: <span className="text-green-600">Kept</span></span>
                         <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
                         <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -743,7 +743,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
           {/* Note */}
           <div className="mt-6 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-            <p className="text-xs text-gray-600 dark:text-slate-400">
+            <p className="tf-meta-strong">
               <span className="font-medium">Note:</span> All actions are fully audit logged.
               Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
             </p>

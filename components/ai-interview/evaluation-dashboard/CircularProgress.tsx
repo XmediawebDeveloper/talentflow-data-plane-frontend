@@ -38,8 +38,8 @@ export function CircularProgress({ value, max, size = 200, strokeWidth = 12 }: C
         <div className="text-5xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>
           {Math.round(value)}
         </div>
-        <div className="text-sm text-gray-500 mt-1">out of {max}</div>
-        <div className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>
+        <div className="tf-body-muted mt-1">out of {max}</div>
+        <div className="tf-meta mt-1" style={{ fontFamily: 'var(--font-mono)' }}>
           {Math.round(percentage)}%
         </div>
       </div>

@@ -377,7 +377,7 @@ export default function AssessmentPicker({
             />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <span className="tf-card-desc">View:</span>
             {/* The Job Openings page's All / AI Generated / Manual segmented
                 toggle: tinted track, the active option a white chip. */}
             <div className={SEGMENT_TOGGLE}>
@@ -429,7 +429,7 @@ export default function AssessmentPicker({
               <table className="w-full table-auto text-sm">
                 <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left tf-th" aria-label="Select" />
                     <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>
@@ -630,7 +630,7 @@ export default function AssessmentPicker({
                       <div key={key} className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                          <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
+                          <span className="tf-cell-name truncate">{value}</span>
                         </div>
                         <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                       </div>

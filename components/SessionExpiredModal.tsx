@@ -51,7 +51,7 @@ export default function SessionExpiredModal() {
             Session Expired
           </h3>
 
-          <p id="session-expired-desc" className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+          <p id="session-expired-desc" className="tf-body-muted leading-relaxed">
             Your session has expired due to inactivity for security reasons.
             <br />
             Please log in again to continue.
@@ -63,7 +63,7 @@ export default function SessionExpiredModal() {
               <p className="text-sm font-semibold text-brand-blue dark:text-brand-blue">
                 Your data is safe and secure.
               </p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
+              <p className="tf-body-muted mt-0.5">
                 For your security, we&apos;ve automatically signed you out.
               </p>
             </div>

@@ -96,19 +96,6 @@
   .tf-scrollbar-active { scrollbar-color: var(--sb-thumb-hover) transparent !important; }
 }
 
-/* ── Bina speaking mouth animation ─────────────────────────────────── */
-@keyframes linda-talk {
-  0%   { transform: scaleY(0.05); }
-  10%  { transform: scaleY(0.8);  }
-  20%  { transform: scaleY(0.2);  }
-  35%  { transform: scaleY(1);    }
-  50%  { transform: scaleY(0.3);  }
-  65%  { transform: scaleY(0.9);  }
-  75%  { transform: scaleY(0.1);  }
-  88%  { transform: scaleY(0.7);  }
-  100% { transform: scaleY(0.05); }
-}
-
 /* ── Wizard step indicator: the pulse around the CURRENT step ────────
    Its own keyframes rather than `animate-ping` with an inline duration
    override, so the ring runs identically on every page of a flow no matter
@@ -245,78 +232,6 @@ html.tf-app-shell body {
   --sb-thumb-hover: rgba(148, 163, 184, 0.4);
 }
 
-/* Apply auto-hide scrollbar to ALL scrollable descendants inside main content area.
-   Pages define their own overflow-y-auto containers, so we target them via parent wrapper. */
-.scrollbar-auto-hide-area,
-.scrollbar-auto-hide-area [style*="overflow"],
-.scrollbar-auto-hide-area .overflow-y-auto,
-.scrollbar-auto-hide-area .overflow-auto {
-  scrollbar-gutter: stable;
-  scrollbar-width: thin;
-  scrollbar-color: transparent transparent;
-}
-.scrollbar-auto-hide-area:hover,
-.scrollbar-auto-hide-area:active,
-.scrollbar-auto-hide-area .overflow-y-auto:hover,
-.scrollbar-auto-hide-area .overflow-y-auto:active,
-.scrollbar-auto-hide-area .overflow-auto:hover,
-.scrollbar-auto-hide-area .overflow-auto:active {
-  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
-}
-/* Webkit for area descendants */
-.scrollbar-auto-hide-area::-webkit-scrollbar,
-.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar,
-.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-.scrollbar-auto-hide-area::-webkit-scrollbar-track,
-.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-track,
-.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-track {
-  background: transparent;
-}
-.scrollbar-auto-hide-area::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 999px;
-}
-.scrollbar-auto-hide-area:hover::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area:active::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-y-auto:hover::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-y-auto:active::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-auto:hover::-webkit-scrollbar-thumb,
-.scrollbar-auto-hide-area .overflow-auto:active::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.5);
-}
-.scrollbar-auto-hide-area::-webkit-scrollbar-thumb:hover,
-.scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb:hover,
-.scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(107, 114, 128, 0.7);
-}
-/* Dark mode for area descendants */
-.dark .scrollbar-auto-hide-area:hover,
-.dark .scrollbar-auto-hide-area:active,
-.dark .scrollbar-auto-hide-area .overflow-y-auto:hover,
-.dark .scrollbar-auto-hide-area .overflow-y-auto:active,
-.dark .scrollbar-auto-hide-area .overflow-auto:hover,
-.dark .scrollbar-auto-hide-area .overflow-auto:active {
-  scrollbar-color: rgba(156, 163, 175, 0.3) transparent;
-}
-.dark .scrollbar-auto-hide-area:hover::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide-area:active::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide-area .overflow-y-auto:hover::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide-area .overflow-y-auto:active::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide-area .overflow-auto:hover::-webkit-scrollbar-thumb,
-.dark .scrollbar-auto-hide-area .overflow-auto:active::-webkit-scrollbar-thumb {
-  background: rgba(156, 163, 175, 0.3);
-}
-.dark .scrollbar-auto-hide-area::-webkit-scrollbar-thumb:hover,
-.dark .scrollbar-auto-hide-area .overflow-y-auto::-webkit-scrollbar-thumb:hover,
-.dark .scrollbar-auto-hide-area .overflow-auto::-webkit-scrollbar-thumb:hover {
-  background: rgba(156, 163, 175, 0.5);
-}
-
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -324,11 +239,9 @@ html.tf-app-shell body {
   /* Grey Theme Colors */
   --primary: #374151;
   --primary-hover: #1f2937;
-  --primary-light: #6b7280;
   --primary-foreground: #ffffff;
 
   --secondary: #9ca3af;
-  --secondary-hover: #6b7280;
   --secondary-foreground: #374151;
 
   /* `accent` is the hover/focus surface that `accent-foreground` is drawn on —
@@ -341,7 +254,6 @@ html.tf-app-shell body {
      why a hovered menu item read as unreadable dark-on-dark. White gives
      7.56:1. Change one of these two and you must change the other. */
   --accent: #4b5563;
-  --accent-light: #e5e7eb;
   --accent-foreground: #ffffff;
 
   --surface: #f9fafb;
@@ -356,13 +268,8 @@ html.tf-app-shell body {
   --text-muted: #9ca3af;
 
   --sidebar-bg: #1f2937;
-  --sidebar-hover: #374151;
   --sidebar-active: #4b5563;
   --sidebar-text: #f9fafb;
-  --sidebar-text-muted: #9ca3af;
-
-  --header-bg: #ffffff;
-  --header-border: #e5e7eb;
 
   /* Component tokens */
   --popover: #ffffff;
@@ -521,23 +428,18 @@ html.tf-app-shell body {
    so this migration changes where the color is DEFINED, not what it
    RENDERS AS — every one is byte-identical to the literal it replaced. ── */
 :root {
-  --raw-000000: #000000;
   --raw-003399: #003399;
   --raw-020614: #020614;
   --raw-020617: #020617;
-  --raw-050505: #050505;
   --raw-059669: #059669;
-  --raw-060d1a: #060d1a;
   --raw-06b6d4: #06b6d4;
   --raw-079cc4: #079cc4;
   --raw-099ab6: #099ab6;
   --raw-0a1020: #0a1020;
   --raw-0e3b98: #0e3b98;
-  --raw-0f0f12: #0f0f12;
   --raw-0f1117: #0f1117;
   --raw-0f172a: #0f172a;
   --raw-0f1929: #0f1929;
-  --raw-0f1a2e: #0f1a2e;
   --raw-0f3c99: #0f3c99;
   --raw-10b981: #10b981;
   --raw-111111: #111111;
@@ -547,27 +449,19 @@ html.tf-app-shell body {
   --raw-15803d: #15803d;
   --raw-166534: #166534;
   --raw-16a34a: #16a34a;
-  --raw-1a1a1e: #1a1a1e;
   --raw-1a1f2e: #1a1f2e;
-  --raw-1c0e06: #1c0e06;
   --raw-1d4ed8: #1d4ed8;
   --raw-1e1b4b: #1e1b4b;
-  --raw-1e2535: #1e2535;
   --raw-1e293b: #1e293b;
   --raw-1f2937: #1f2937;
-  --raw-200808: #200808;
   --raw-22c55e: #22c55e;
   --raw-2563eb: #2563eb;
-  --raw-2a1508: #2a1508;
-  --raw-2a2a2e: #2a2a2e;
   --raw-334155: #334155;
   --raw-34d399: #34d399;
   --raw-374151: #374151;
-  --raw-3a3a3f: #3a3a3f;
   --raw-3b82f6: #3b82f6;
   --raw-4338ca: #4338ca;
   --raw-475569: #475569;
-  --raw-4a2808: #4a2808;
   --raw-4b5563: #4b5563;
   --raw-4f46e5: #4f46e5;
   --raw-581c87: #581c87;
@@ -584,7 +478,6 @@ html.tf-app-shell body {
   --raw-764ba2: #764ba2;
   --raw-7ba1f4: #7ba1f4;
   --raw-7c3aed: #7c3aed;
-  --raw-7dd3fc: #7dd3fc;
   --raw-818cf8: #818cf8;
   --raw-86efac: #86efac;
   --raw-8b5cf6: #8b5cf6;
@@ -599,16 +492,12 @@ html.tf-app-shell body {
   --raw-a78bfa: #a78bfa;
   --raw-b45309: #b45309;
   --raw-b4c8f5: #b4c8f5;
-  --raw-b84444: #b84444;
-  --raw-b91c1c: #b91c1c;
   --raw-b9caf6: #b9caf6;
   --raw-bbf7d0: #bbf7d0;
   --raw-c4b5fd: #c4b5fd;
   --raw-c7d6f8: #c7d6f8;
-  --raw-c98d5a: #c98d5a;
   --raw-cbd5e1: #cbd5e1;
   --raw-cccccc: #cccccc;
-  --raw-cce0ff: #cce0ff;
   --raw-cfdcfa: #cfdcfa;
   --raw-d1d5db: #d1d5db;
   --raw-d97706: #d97706;
@@ -621,9 +510,7 @@ html.tf-app-shell body {
   --raw-e1ebed: #e1ebed;
   --raw-e2e8f0: #e2e8f0;
   --raw-e5e7eb: #e5e7eb;
-  --raw-e6e0ff: #e6e0ff;
   --raw-e7ecf5: #e7ecf5;
-  --raw-e8ad7c: #e8ad7c;
   --raw-ec4899: #ec4899;
   --raw-ed881c: #ed881c;
   --raw-ede9fe: #ede9fe;
@@ -633,7 +520,6 @@ html.tf-app-shell body {
   --raw-ef4444: #ef4444;
   --raw-eff3f9: #eff3f9;
   --raw-f093fb: #f093fb;
-  --raw-f0f0f0: #f0f0f0;
   --raw-f0fdf4: #f0fdf4;
   --raw-f1f5f9: #f1f5f9;
   --raw-f3f4f6: #f3f4f6;
@@ -642,7 +528,6 @@ html.tf-app-shell body {
   --raw-f59e0b: #f59e0b;
   --raw-f7f9ff: #f7f9ff;
   --raw-f87171: #f87171;
-  --raw-f8f9fc: #f8f9fc;
   --raw-f8fafc: #f8fafc;
   --raw-f97316: #f97316;
   --raw-f9a8d4: #f9a8d4;
@@ -651,13 +536,9 @@ html.tf-app-shell body {
   --raw-fbbf24: #fbbf24;
   --raw-fca5a5: #fca5a5;
   --raw-fcd34d: #fcd34d;
-  --raw-fce0c0: #fce0c0;
   --raw-fce7f3: #fce7f3;
   --raw-fecaca: #fecaca;
   --raw-fef2f2: #fef2f2;
-  --raw-fff5e6: #fff5e6;
-  --raw-fff5e8: #fff5e8;
-  --raw-fff8f0: #fff8f0;
   --raw-ffffff: #ffffff;
 }
 
@@ -956,14 +837,17 @@ html.tf-app-shell body {
      ONE SIZE PER ROLE — the same kind of element is the same size on every
      page. Shared components already encode these; hand-rolled markup must
      match them. Responsive pairs are part of the standard, not drift.
+     The .tf-* role classes below the theme ("Type scale — role classes")
+     carry each row as one class.
        Page title (h1)            text-lg sm:text-xl font-semibold  (PageHeader)
        Page description           text-sm
        Popup title / subtitle     text-base sm:text-lg / text-xs sm:text-sm (AppModal)
+       Section heading (h2)       text-base sm:text-lg font-semibold
        Section / card title       text-base font-semibold  (CardTitle, SectionContainer)
        Eyebrow / group heading    text-xs font-semibold uppercase tracking-wider
        Body, table cell, input,
          button, tab              text-sm
-       Table header (th)          text-xs font-semibold uppercase tracking-wider
+       Table header (th)          text-xs font-semibold, Capitalized Case
        Form label                 text-sm font-medium
        Helper / meta / 2nd line   text-xs  (email under a name, dates, counts, hints)
        Badge, chip, pill          text-xs  (inside dense tables: text-2xs)
@@ -979,6 +863,98 @@ html.tf-app-shell body {
      to an undefined variable and silently dropped the declaration. */
 }
 
+/* ── Type scale — role classes ───────────────────────────────────────────
+   One class per text role (the table in @theme above): size, line height,
+   weight, tracking and colour together, so a heading or a label reads the
+   same on every page. Built only from the theme's text-* steps; titles step
+   up once, at sm (640px); everything else is one size at every width.
+   In the components layer, so a utility on the same element still wins
+   (e.g. `tf-card-title text-white` on a filled header).
+
+   Ink tokens: light → dark (the slate pair the markup already uses). */
+:root {
+  --tf-type-strong: #111827;   /* gray-900  · titles, names            */
+  --tf-type-body: #374151;     /* gray-700  · body, cells, labels      */
+  --tf-type-soft: #4b5563;     /* gray-600  · descriptions, th         */
+  --tf-type-meta: #6b7280;     /* gray-500  · meta, hints, eyebrows    */
+  --tf-type-faint: #9ca3af;    /* gray-400  · placeholder, disabled    */
+  --tf-type-th: #4b5563;       /* gray-600  · table headers            */
+}
+.dark {
+  --tf-type-strong: #f8fafc;   /* slate-50  */
+  --tf-type-body: #cbd5e1;     /* slate-300 */
+  --tf-type-soft: #94a3b8;     /* slate-400 */
+  --tf-type-meta: #94a3b8;     /* slate-400 */
+  --tf-type-faint: #64748b;    /* slate-500 */
+  --tf-type-th: #cbd5e1;       /* slate-300 — the app-wide header pair */
+}
+
+@layer components {
+  /* Page */
+  .tf-page-title {
+    font-size: var(--text-lg); line-height: var(--text-lg--line-height);
+    font-weight: 600; letter-spacing: -0.025em; color: var(--tf-type-strong);
+  }
+  .tf-page-desc { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-soft); }
+  .tf-section-title {
+    font-size: var(--text-base); line-height: var(--text-base--line-height);
+    font-weight: 600; color: var(--tf-type-strong);
+  }
+  .tf-card-title { font-size: var(--text-base); line-height: var(--text-base--line-height); font-weight: 600; color: var(--tf-type-strong); }
+  .tf-subsection-title { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 600; color: var(--tf-type-strong); }
+  .tf-eyebrow {
+    font-size: var(--text-xs); line-height: var(--text-xs--line-height);
+    font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--tf-type-meta);
+  }
+
+  /* Text */
+  .tf-body { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-body); }
+  .tf-body-long { font-size: var(--text-sm); line-height: 1.5rem; font-weight: 400; color: var(--tf-type-body); }
+  .tf-body-muted { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-meta); }
+  .tf-meta { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; color: var(--tf-type-meta); }
+  .tf-meta-strong { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; color: var(--tf-type-soft); }
+  .tf-mono { font-family: var(--font-mono); font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; }
+
+  /* Tables */
+  .tf-th { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 600; color: var(--tf-type-th); }
+  .tf-td { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-body); }
+  .tf-cell-name { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 600; color: var(--tf-type-strong); }
+  .tf-chip-dense { font-size: var(--text-2xs); line-height: var(--text-2xs--line-height); font-weight: 600; }
+
+  /* Forms and controls */
+  .tf-label { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; color: var(--tf-type-body); }
+  .tf-label-compact { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 600; color: var(--tf-type-soft); }
+  .tf-hint { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; color: var(--tf-type-meta); }
+  .tf-error { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; color: var(--destructive); }
+  .tf-control-text { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; }
+  .tf-control-text-sm { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; }
+
+  /* Popups and cards */
+  .tf-popup-title {
+    font-size: var(--text-base); line-height: var(--text-base--line-height);
+    font-weight: 600; color: var(--tf-type-strong);
+  }
+  .tf-popup-desc { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; color: var(--tf-type-meta); }
+  .tf-card-desc { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-soft); }
+  .tf-stat-value {
+    font-size: var(--text-2xl); line-height: var(--text-2xl--line-height);
+    font-weight: 700; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; color: var(--tf-type-strong);
+  }
+  .tf-stat-label { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; color: var(--tf-type-meta); }
+  .tf-empty-title { font-size: var(--text-base); line-height: var(--text-base--line-height); font-weight: 600; color: var(--tf-type-strong); }
+  .tf-empty-text { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; color: var(--tf-type-meta); }
+
+  /* Titles step up once, at sm (640px); stat values at lg (1024px). */
+  @media (width >= 40rem) {
+    .tf-page-title { font-size: var(--text-xl); line-height: var(--text-xl--line-height); }
+    .tf-section-title, .tf-popup-title { font-size: var(--text-lg); line-height: var(--text-lg--line-height); }
+    .tf-popup-desc { font-size: var(--text-sm); line-height: var(--text-sm--line-height); }
+  }
+  @media (width >= 64rem) {
+    .tf-stat-value { font-size: var(--text-3xl); line-height: var(--text-3xl--line-height); }
+  }
+}
+
 .dark {
   --background: #111827;
   --foreground: #f9fafb;
@@ -986,11 +962,9 @@ html.tf-app-shell body {
   /* Grey Theme Colors - Dark Mode */
   --primary: #9ca3af;
   --primary-hover: #d1d5db;
-  --primary-light: #6b7280;
   --primary-foreground: #111827;
 
   --secondary: #6b7280;
-  --secondary-hover: #9ca3af;
   --secondary-foreground: #f9fafb;
 
   /* Dark theme keeps the same dark-bar-with-light-text shape. This was
@@ -998,7 +972,6 @@ html.tf-app-shell body {
      9.9:1. (Also feeds the .dark peer-checked rule further down, which wants
      a dark fill and was getting a light one.) */
   --accent: #374151;
-  --accent-light: #374151;
   --accent-foreground: #f9fafb;
 
   --surface: #1f2937;
@@ -1013,13 +986,8 @@ html.tf-app-shell body {
   --text-muted: #9ca3af;
 
   --sidebar-bg: #111827;
-  --sidebar-hover: #1f2937;
   --sidebar-active: #374151;
   --sidebar-text: #f9fafb;
-  --sidebar-text-muted: #9ca3af;
-
-  --header-bg: #1f2937;
-  --header-border: #374151;
 
   /* Component tokens - Dark Mode */
   --popover: #1f2937;
@@ -1109,18 +1077,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Animations */
-@keyframes slideUp {
-  from {
-    transform: translateY(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -1128,10 +1084,6 @@ body {
   to {
     opacity: 1;
   }
-}
-
-.animate-slideUp {
-  animation: slideUp 0.3s ease-out forwards;
 }
 
 .animate-fadeIn {
@@ -1274,23 +1226,6 @@ button:has(.menu-item-label):focus-visible {
    the same ring around the button after every click. */
 [aria-haspopup="menu"]:focus-visible {
   outline: none;
-}
-
-/* Skip to content link for screen readers */
-.skip-to-content {
-  position: absolute;
-  left: -9999px;
-  z-index: 999;
-  padding: 1rem;
-  background: #374151;
-  color: white;
-  text-decoration: none;
-}
-
-.skip-to-content:focus {
-  left: 50%;
-  transform: translateX(-50%);
-  top: 0;
 }
 
 /* ============================================
@@ -1570,14 +1505,10 @@ button:has(.menu-item-label):focus-visible {
 .dark .to-gray-50    { --tw-gradient-to: #111827; }
 .dark .to-gray-100   { --tw-gradient-to: #1f2937; }
 .dark .via-white     { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
-.dark .via-gray-50   { --tw-gradient-via: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
-.dark .via-gray-100  { --tw-gradient-via: #1f2937; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to); }
 
 /* Opacity-modifier gradient variants (e.g. to-gray-100/30, to-gray-100/50) */
 .dark .to-gray-100\/30  { --tw-gradient-to: rgba(31, 41, 55, 0.3); }
 .dark .to-gray-100\/50  { --tw-gradient-to: rgba(31, 41, 55, 0.5); }
-.dark .from-gray-100\/30 { --tw-gradient-from: rgba(31, 41, 55, 0.3); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
-.dark .from-gray-100\/50 { --tw-gradient-from: rgba(31, 41, 55, 0.5); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
 
 /* Slate color family (used in some gradients) */
 .dark .from-slate-50 { --tw-gradient-from: #111827; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
@@ -1653,7 +1584,6 @@ button:has(.menu-item-label):focus-visible {
 .dark .border-amber-200  { border-color: rgba(245, 158, 11, 0.35); }
 .dark .border-amber-300  { border-color: rgba(245, 158, 11, 0.5); }
 .dark .border-indigo-200 { border-color: rgba(99, 102, 241, 0.35); }
-.dark .border-pink-200   { border-color: rgba(236, 72, 153, 0.35); }
 
 /* ── Hover border colors ─────────────────────────────────── */
 .dark .hover\:border-gray-200:hover { border-color: var(--border-dark); }
@@ -1692,8 +1622,6 @@ button:has(.menu-item-label):focus-visible {
 .dark .focus\:ring-purple-400:focus  { --tw-ring-color: rgba(168, 85, 247, 0.5); }
 .dark .focus\:ring-blue-300:focus    { --tw-ring-color: rgba(59, 130, 246, 0.4); }
 .dark .focus\:ring-green-300:focus   { --tw-ring-color: rgba(34, 197, 94, 0.4); }
-.dark .focus\:border-purple-300:focus { border-color: rgba(168, 85, 247, 0.6); }
-.dark .focus\:border-blue-300:focus   { border-color: rgba(59, 130, 246, 0.6); }
 .dark .focus\:ring-gray-400:focus    { --tw-ring-color: var(--text-muted); }
 
 /* ── Emerald color family (used in AI interview skill tags) ─ */
@@ -1910,7 +1838,6 @@ button:has(.menu-item-label):focus-visible {
 .dark .border-slate-200\/80 { border-color: rgba(55, 65, 81, 0.8); }
 .dark .border-gray-200\/80  { border-color: rgba(55, 65, 81, 0.8); }
 .dark .border-red-100    { border-color: rgba(239, 68, 68, 0.3); }
-.dark .border-green-100  { border-color: rgba(34, 197, 94, 0.3); }
 .dark .border-amber-100  { border-color: rgba(245, 158, 11, 0.3); }
 .dark .border-blue-100   { border-color: rgba(59, 130, 246, 0.3); }
 .dark .border-indigo-100 { border-color: rgba(99, 102, 241, 0.3); }
@@ -1996,8 +1923,6 @@ button:has(.menu-item-label):focus-visible {
 .dark .border-slate-200\/90 { border-color: rgba(55, 65, 81, 0.9); }
 .dark .border-orange-100    { border-color: rgba(249, 115, 22, 0.3); }
 .dark .border-teal-200      { border-color: rgba(20, 184, 166, 0.35); }
-.dark .border-red-200\/70     { border-color: rgba(239, 68, 68, 0.3); }
-.dark .border-green-200\/70   { border-color: rgba(34, 197, 94, 0.3); }
 .dark .border-emerald-200\/70 { border-color: rgba(16, 185, 129, 0.3); }
 .dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.35); }
 .dark .border-amber-200\/80   { border-color: rgba(245, 158, 11, 0.35); }
@@ -2110,56 +2035,10 @@ button:has(.menu-item-label):focus-visible {
    ============================================================ */
 
 /* ── Modal building blocks ───────────────────────────────────
-   Use together on hand-rolled modals so behavior is consistent:
-     <div class="modal-overlay">              ← full-viewport scrim
-       <div class="modal-shell max-w-xl">     ← centered card, viewport-bounded
-         <div class="modal-header">…</div>    ← sticky top, border below
-         <div class="modal-body">…</div>      ← scrollable middle
-         <div class="modal-footer">…</div>    ← sticky bottom, border above
-       </div>
-     </div>
+   For hand-rolled modals:
+     <div class="modal-body">…</div>      ← scrollable middle
+     <div class="modal-footer">…</div>    ← bottom bar, border above
 */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background-color: rgba(17, 24, 39, 0.55);
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-}
-@media (min-width: 640px) {
-  .modal-overlay { padding: 1.5rem; }
-}
-
-.modal-shell {
-  width: 100%;
-  max-height: calc(100dvh - 2rem);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  background-color: var(--card);
-  color: var(--card-foreground);
-  border-radius: 0.75rem;
-  border: 1px solid var(--border);
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-}
-@media (min-width: 640px) {
-  .modal-shell { max-height: calc(100dvh - 3rem); }
-}
-
-.modal-header {
-  flex-shrink: 0;
-  padding: 1rem 1rem;
-  border-bottom: 1px solid var(--border);
-  background-color: var(--card);
-}
-@media (min-width: 640px) {
-  .modal-header { padding: 1.25rem 1.5rem; }
-}
 
 .modal-body {
   flex: 1 1 auto;
@@ -2243,14 +2122,6 @@ button:has(.menu-item-label):focus-visible {
   .table-responsive td { padding: 0.5rem 0.625rem; }
 }
 
-/* ── Form rhythm ─────────────────────────────────────────────
-   Optional helper for consistent label/input spacing. Apply to
-   any form group to standardize vertical rhythm. */
-.form-field { display: flex; flex-direction: column; gap: 0.375rem; }
-.form-field > label { font-size: 0.875rem; font-weight: 500; color: var(--text-primary); }
-.form-field > .help { font-size: 0.75rem; color: var(--text-muted); }
-.form-field > .error { font-size: 0.75rem; color: var(--destructive); }
-
 /* ── Container query: stack modal footer buttons full-width on tiny screens */
 @media (max-width: 380px) {
   .modal-footer > button,
@@ -2319,49 +2190,6 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   [data-disabled] {
     cursor: not-allowed;
   }
-}
-
-/* ── Sticky page header utility ─────────────────────────────
-   Apply to a long detail page's title/breadcrumb wrapper so it
-   pins to the top of the scrollable dashboard main area while
-   the content below scrolls. Backdrop blur prevents text-bleed. */
-.page-header-sticky {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background-color: rgba(var(--background-rgb, 255, 255, 255), 0.85);
-  -webkit-backdrop-filter: saturate(180%) blur(8px);
-  backdrop-filter: saturate(180%) blur(8px);
-  border-bottom: 1px solid var(--border);
-}
-/* Fallback for browsers without backdrop-filter */
-@supports not ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
-  .page-header-sticky { background-color: var(--background); }
-}
-
-/* ── Section divider with consistent spacing ───────────────── */
-.section-divider {
-  border-top: 1px solid var(--border);
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
-}
-@media (min-width: 640px) {
-  .section-divider {
-    margin-top: 2rem;
-    padding-top: 2rem;
-  }
-}
-
-/* ── Card hover lift utility ───────────────────────────────── */
-.card-hover {
-  transition: box-shadow 150ms ease, border-color 150ms ease, transform 150ms ease;
-}
-.card-hover:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -2px rgba(0, 0, 0, 0.06);
-  border-color: var(--border-dark);
-}
-.dark .card-hover:hover {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
 }
 
 /* Compact glass surface for dashboard/header cards. */

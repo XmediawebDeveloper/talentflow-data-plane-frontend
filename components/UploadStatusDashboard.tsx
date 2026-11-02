@@ -263,7 +263,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               </Button>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload Details</h2>
-                <p className="text-sm text-gray-600 truncate">
+                <p className="tf-card-desc truncate">
                   {fileName} • {formatDate(uploadDate)}
                 </p>
               </div>
@@ -370,7 +370,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
           {/* Active Filter Indicator */}
           {activeFilter && (
             <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-white border border-gray-200 rounded-lg">
-              <span className="text-xs text-gray-500">Filtering by:</span>
+              <span className="tf-meta">Filtering by:</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                 activeFilter === 'completed' ? 'bg-success-subtle text-success' :
                 activeFilter === 'duplicated' ? 'bg-warning-subtle text-warning' :
@@ -473,7 +473,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
@@ -532,7 +532,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
                             <div className="text-xs text-warning mt-1 truncate">
@@ -596,7 +596,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
                             <div className="text-xs text-purple-700 mt-1 truncate">
@@ -654,11 +654,11 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.errorMessage && (
-                            <div className="text-xs text-destructive mt-1">{item.errorMessage}</div>
+                            <div className="tf-error mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-destructive px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="tf-error px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -697,7 +697,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
@@ -720,7 +720,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     </div>
                     <div className="min-w-0">
                       <h4 className="text-sm sm:text-base text-gray-900 font-medium">Retry Failed or Pending Uploads</h4>
-                      <p className="text-sm text-gray-600 mt-0.5">
+                      <p className="tf-card-desc mt-0.5">
                         {errors.length > 0 && pending.length > 0
                           ? `${errors.length} failed and ${pending.length} pending upload${pending.length > 1 ? 's' : ''}`
                           : errors.length > 0
@@ -868,7 +868,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 bg-white">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0">
-            <p className="text-sm text-gray-600 text-center sm:text-left">
+            <p className="tf-card-desc text-center sm:text-left">
               Showing detailed status for <span className="text-gray-900">{totalProcessed}</span> file{totalProcessed !== 1 ? 's' : ''}
             </p>
           </div>
