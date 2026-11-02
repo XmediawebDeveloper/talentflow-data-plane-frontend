@@ -834,6 +834,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
       {body}
 
       <ExportFormatModal
+        tone="plain"
         open={showExport}
         onClose={() => setShowExport(false)}
         title="Export Teams History"
