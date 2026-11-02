@@ -243,7 +243,7 @@ export const bulkInviteService = {
 
   async results(
     jobId: string,
-    params?: { status?: BulkInviteItemStatus; search?: string; page?: number; page_size?: number },
+    params?: { status?: BulkInviteItemStatus | 'remaining'; search?: string; page?: number; page_size?: number },
     signal?: AbortSignal,
   ): Promise<BulkInviteResultsPage> {
     try {
