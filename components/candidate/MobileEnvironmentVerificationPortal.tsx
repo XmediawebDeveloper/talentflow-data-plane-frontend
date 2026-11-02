@@ -107,6 +107,17 @@ const ALIGN_OUTER_MIN_DENSITY = 0.45;
 // alignment) leaves the candidate stuck until the 3-min link expires and a
 // timed_out proctor event gets logged against them.
 const ALIGN_FALLBACK_MS = 15000;
+
+// Back camera at HD. Without width/height the browser picked 640x480
+// (confirmed 2026-11-02 on a real upload), where a floating extension
+// button on the laptop screen was only ~12px and the vision model missed
+// it. `ideal` (not `exact`) so phones that can't do 1080p fall back to
+// their best mode instead of failing getUserMedia.
+const CAMERA_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+};
 // Per-check debug log cadence (in alignment ticks; 3 × 300ms ≈ 1s).
 const ALIGN_DEBUG_LOG_EVERY_TICKS = 3;
 
@@ -763,13 +774,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     // these specific constraints, rather than failing permission entirely.
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
+        video: CAMERA_VIDEO_CONSTRAINTS,
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          video: CAMERA_VIDEO_CONSTRAINTS,
           audio: true,
         });
       } catch {
@@ -1119,7 +1130,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the aligning/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl landscape:max-w-none landscape:w-[98vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      {/* NOTE: when hidden, emit ONLY `hidden` — never alongside
+          `landscape:flex`. The landscape variant is a later media-query rule
+          that overrides `hidden` (display:none), so in landscape the stale
+          black preview + "Recording · 1s" + pan text stayed on screen above
+          the Submit / success cards (reported 2026-11-02, Android landscape). */}
+      <div className={(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan')
+        ? 'w-full max-w-2xl landscape:max-w-none landscape:w-[98vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5'
+        : 'hidden'}>
         <div className="relative landscape:inline-block">
           <video
             ref={videoRef}
