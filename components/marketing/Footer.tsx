@@ -1,6 +1,11 @@
-import Link from "next/link";
+"use client";
 
-export function Footer() {
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { SiteFooter } from "./SiteFooter";
+import { REDESIGNED_ROUTES } from "./fonts";
+
+function ClassicFooter() {
   return (
     <footer className="bg-gray-900 text-white py-12 transition-colors duration-300 border-t border-gray-800">
       <div className="container mx-auto max-w-[1440px] px-4 md:px-8">
@@ -158,4 +163,10 @@ export function Footer() {
       </div>
     </footer>
   );
+}
+
+/** Landing and pricing use the redesigned footer; every other marketing page keeps the classic one. */
+export function Footer() {
+  const pathname = usePathname();
+  return REDESIGNED_ROUTES.has(pathname) ? <SiteFooter /> : <ClassicFooter />;
 }
