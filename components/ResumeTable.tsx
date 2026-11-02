@@ -15,6 +15,7 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { EmptyState } from './ui/empty-state';
+import { ResumeArchivedBadge } from './ui/resume-archived-badge';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -788,11 +789,8 @@ export default function ResumeTable({
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </div>
                       )}
-                      {resume.isArchived && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
-                          <Archive className="w-3 h-3" />
-                          Archived
-                        </span>
+                      {resume.isArchived && !isArchivedFolder && (
+                        <ResumeArchivedBadge label="Archived" />
                       )}
                     </div>
                   </div>
@@ -978,15 +976,6 @@ export default function ResumeTable({
                                readable at the top of the overlay however little
                                room the menu was given. */
                             className="fixed w-52 flex flex-col bg-white rounded-lg shadow-lg border border-gray-200 z-[9999] overflow-hidden"
-                            /* Tells TableScrollbars.tsx this is an open popover
-                               sitting over `.tf-table-shell`. Without it, that
-                               file's occlusion probe (sampled at the shell's
-                               right edge, which this end-aligned menu covers)
-                               reads the menu's top as the bottom of the visible
-                               table and drags the custom horizontal scrollbar
-                               up onto the first row(s) instead of standing the
-                               bar down the way it does for every other popup. */
-                            data-tf-popover
                             style={{
                               // Measured before paint by the layout effect;
                               // until then the panel sits at the origin with
@@ -1156,10 +1145,8 @@ export default function ResumeTable({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <div className="font-medium text-gray-900 truncate">{resume.name}</div>
-                  {resume.isArchived && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
-                      <Archive className="w-3 h-3" />
-                    </span>
+                  {resume.isArchived && !isArchivedFolder && (
+                    <ResumeArchivedBadge iconOnly />
                   )}
                 </div>
                 <div className="tf-body-muted truncate">{resume.title}</div>
