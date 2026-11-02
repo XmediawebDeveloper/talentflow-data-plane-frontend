@@ -339,11 +339,14 @@ const REVEAL_LEAD_MS = 550;
 // audio duration. Prior only — replaced by the previous turn's MEASURED rate
 // (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
 // to voice, language and AI_TTS_SPEED instead of trusting a constant.
-// 12 rather than the ~14 of a normal-rate voice because the backend ships
-// AI_TTS_SPEED = 0.85 (Bina speaks ~15% slower). Deliberately conservative:
-// undershooting makes the caption trail slightly, overshooting makes it outrun
-// the voice — the exact symptom this system exists to prevent.
-const DEFAULT_REVEAL_CPS = 12;
+// The prior only paces the FIRST turn — the long intro, whose audio arrives over
+// ~9 s, so its error builds up before audio_end. Measured at AI_TTS_SPEED 0.85
+// (staging 2026-11-02, ai-458fd0bb): intro 890 chars / 52.6 s = 16.9 cps. The
+// old 12 left the caption ~48 chars behind at audio_end, which then typed in a
+// visible burst on "…for the <role> role. In this position" every interview.
+// Kept a little under the measurement: a slight lag catches up gently, running
+// ahead would freeze the caption until the voice catches up.
+const DEFAULT_REVEAL_CPS = 16;
 // Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
@@ -566,7 +569,7 @@ interface LiveAIBubbleProps {
 // visibly instead of popping it in. Text is written straight to the DOM node,
 // so no React render per letter.
 const TYPE_TRAIL_MS = 220;          // normal lag behind the reveal target
-const TYPE_MAX_CPS = 120;           // fastest visible typing for a backlog
+const TYPE_MAX_CPS = 45;            // backlog catch-up: ~2.5x Bina's pace, reads as quick typing, not a fast-forward
 const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
 
 const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
