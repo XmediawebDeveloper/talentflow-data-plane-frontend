@@ -2,6 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import { BarChart3, Briefcase, CheckCircle, ChevronRight, MapPin, Sparkles, Wand2, X, type LucideIcon } from 'lucide-react';
+import { EXPERIENCE_LEVEL_ONLY_NOTE, EXPERIENCE_YEARS_NOT_STATED } from '@/lib/utils/jobExperience';
 import { STEP2_CARD_CLASS, STEP2_SECTION_TONES, Step2SectionHeader } from '@/components/jobs/Step2Section';
 
 /*
@@ -160,6 +161,10 @@ export interface ExtractedDataSummaryProps {
   experience?: string | null;
   /** Line under Experience (its Required / Preferred label). */
   experienceNote?: string;
+  /** The JD's level name ("Senior Level") when it has a level but NO years
+   *  stored. Shown in place of "Not specified", flagged as level-only, so the
+   *  tile agrees with the header badge instead of contradicting it. */
+  experienceLevelOnly?: string | null;
   /** Industry label; the tile is shown only when there is one. */
   industry?: string | null;
   industryNote?: string;
@@ -198,6 +203,7 @@ export default function ExtractedDataSummary({
   showRequirementBadges = true,
   experience,
   experienceNote,
+  experienceLevelOnly,
   industry,
   industryNote,
   location,
@@ -252,10 +258,22 @@ export default function ExtractedDataSummary({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
           <div className={SUMMARY_TILE}>
             <h4 className={SUMMARY_FIELD_LABEL}>Experience</h4>
-            {experience
-              ? <p className={SUMMARY_FIELD_VALUE}>{experience}</p>
-              : <p className={SUMMARY_EMPTY_VALUE}>Not specified</p>}
-            {experience && experienceNote && <p className={SUMMARY_NOTE}>{experienceNote}</p>}
+            {experience ? (
+              <>
+                <p className={SUMMARY_FIELD_VALUE}>{experience}</p>
+                {experience.includes(EXPERIENCE_YEARS_NOT_STATED) && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{EXPERIENCE_LEVEL_ONLY_NOTE}</p>
+                )}
+              </>
+            ) : experienceLevelOnly ? (
+              <>
+                <p className={SUMMARY_FIELD_VALUE}>{experienceLevelOnly}</p>
+                <p className="text-xs text-amber-700 dark:text-amber-400 mt-1">{EXPERIENCE_LEVEL_ONLY_NOTE}</p>
+              </>
+            ) : (
+              <p className={SUMMARY_EMPTY_VALUE}>Not specified</p>
+            )}
+            {(experience || experienceLevelOnly) && experienceNote && <p className={SUMMARY_NOTE}>{experienceNote}</p>}
             {scoring && (
               <p className={SUMMARY_NOTE}>
                 Evaluate Job Hopping: {scoring.jobHoppingEnabled === null || scoring.jobHoppingEnabled === undefined

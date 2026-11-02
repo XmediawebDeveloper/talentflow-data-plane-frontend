@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { ArrowLeft, Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList, Search } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
@@ -226,12 +227,20 @@ export default function ResumeScoringJDSelection() {
                             {formatEmploymentType(jd.employment_type)}
                           </span>
                         )}
-                        {jd.experience_min != null && (
-                          <span className="flex items-center gap-1">
-                            <TrendingUp className="w-3 h-3" />
-                            {jd.experience_min}{jd.experience_max ? `-${jd.experience_max}` : '+'} years
-                          </span>
-                        )}
+                        {(() => {
+                          const exp = formatJdExperience({
+                            jobLevel: (jd as { job_level?: string | null }).job_level
+                              || (jd as { experience_level?: string | null }).experience_level,
+                            experienceMin: jd.experience_min,
+                            experienceMax: jd.experience_max,
+                          });
+                          return exp ? (
+                            <span className="flex items-center gap-1">
+                              <TrendingUp className="w-3 h-3" />
+                              {exp}
+                            </span>
+                          ) : null;
+                        })()}
                         {applicants > 0 && (
                           <span className="flex items-center gap-1">
                             <User className="w-3 h-3" />

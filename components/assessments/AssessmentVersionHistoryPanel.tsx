@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
-import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
+import { isStandardExperienceLevel, formatJdExperience } from '@/lib/utils/jobExperience';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import { ASSESSMENT_JOB_LOCK_MESSAGE } from '@/lib/utils/assessmentJobLock';
 
@@ -470,7 +470,11 @@ export const formatJobVersionExperience = (detail?: {
 
   const min = detail.experience_min ?? null;
   const max = detail.experience_max ?? null;
-  if (min === null && max === null) return undefined;
+  if (min === null && max === null) {
+    // A level with no stored years: say so, rather than showing nothing (or the
+    // level label's own default band) - the shared wording from formatJdExperience.
+    return formatJdExperience({ jobLevel: customLevel });
+  }
   if ((min ?? 0) === 0 && (max ?? 0) === 0) return 'Fresher';
   if (min !== null && max !== null) {
     return min === max ? `${min} Years` : `${min}–${max} Years`;

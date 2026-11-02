@@ -31,6 +31,13 @@ interface BulkInviteProgressContextType {
   /** Apply a fresher snapshot (a panel that polls on its own hands them in). */
   sync: (job: BulkInviteJob) => void;
   dismiss: (jobId: string) => void;
+  /** Runs whose own invite popup is open right now. The floating card leaves
+   *  these out: it is only for sends that carry on in the background. */
+  inPopupIds: ReadonlySet<string>;
+  /** The invite popup showing this run opened (true) or closed (false). On
+   *  close, a run that already finished in front of the recruiter is dismissed
+   *  - nothing left to follow - while one still sending moves to the card. */
+  setInPopup: (jobId: string, open: boolean) => void;
   /** The job id a results view should open, if any, and who sets it. */
   openResultsFor: string | null;
   setOpenResultsFor: (jobId: string | null) => void;
@@ -117,6 +124,21 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     setJobs((prev) => prev.map((j) => (j.job_id === jobId ? { ...j, dismissed: true } : j)));
   }, []);
 
+  const [inPopupIds, setInPopupIds] = useState<ReadonlySet<string>>(() => new Set());
+  const setInPopup = useCallback((jobId: string, open: boolean) => {
+    setInPopupIds((prev) => {
+      if (prev.has(jobId) === open) return prev;
+      const next = new Set(prev);
+      if (open) next.add(jobId); else next.delete(jobId);
+      return next;
+    });
+    if (!open) {
+      setJobs((prev) => prev.map((j) => (
+        j.job_id === jobId && !isBulkInviteActive(j) ? { ...j, dismissed: true } : j
+      )));
+    }
+  }, []);
+
   const activeJobs = useMemo(() => jobs.filter(isBulkInviteActive), [jobs]);
 
   /* One poll loop for every active run, whichever page is open. A page's own
@@ -160,8 +182,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   }, [activeIds, upsert]);
 
   const value = useMemo<BulkInviteProgressContextType>(() => ({
-    jobs, activeJobs, track, sync, dismiss, openResultsFor, setOpenResultsFor,
-  }), [jobs, activeJobs, track, sync, dismiss, openResultsFor]);
+    jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor, setOpenResultsFor,
+  }), [jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor]);
 
   return <BulkInviteProgressContext.Provider value={value}>{children}</BulkInviteProgressContext.Provider>;
 }

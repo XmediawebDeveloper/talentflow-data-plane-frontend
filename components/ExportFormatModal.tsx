@@ -1,6 +1,6 @@
 'use client';
 
-import AppModal from '@/components/ui/app-modal';
+import AppModal, { type AppModalTone } from '@/components/ui/app-modal';
 import { useEffect, useState } from 'react';
 import { Download, FileDown, FileSpreadsheet, FileText, FileType2, Info, ScrollText } from 'lucide-react';
 import { toast } from 'sonner';
@@ -37,6 +37,8 @@ interface ExportFormatModalProps {
   defaultFormat?: ExportFileFormat;
   /** Formats offered, in order. 'pdf' / 'txt' are opt-in — the caller's onExport must write them. */
   formats?: ExportFileFormat[];
+  /** Header style (AppModal tone) — `plain` on pages with white popup headers (Teams). */
+  tone?: AppModalTone;
 }
 
 const FORMATS: { value: ExportFileFormat; label: string; hint: string; icon: typeof FileText; iconWrap: string; iconColor: string }[] = [
@@ -92,6 +94,7 @@ export default function ExportFormatModal({
   onExport,
   defaultFormat = 'csv',
   formats = ['csv', 'xlsx'],
+  tone,
 }: ExportFormatModalProps) {
   const [format, setFormat] = useState<ExportFileFormat>(defaultFormat);
   const [exporting, setExporting] = useState(false);
@@ -155,6 +158,7 @@ export default function ExportFormatModal({
     <AppModal
       open={open}
       onCancel={onClose}
+      tone={tone}
       cancelDisabled={exporting}
       size="md"
       icon={<FileDown />}

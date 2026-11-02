@@ -13,71 +13,14 @@ import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
 import BillingReports from '@/components/subscription/BillingReports';
-import InvoiceDetailModal from '@/components/subscription/InvoiceDetailModal';
+import { useRouter } from 'next/navigation';
+import {
+  normalizeBillingInvoice, invoicePageUrl, type BillingInvoice,
+} from '@/lib/utils/billingInvoices';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
-
-interface LineItem {
-  description: string;
-  quantity: number;
-  unit_price: number;
-  amount?: number;
-  total?: number;
-  unit?: string;
-}
-
-interface InvoiceMetadata {
-  reason?: string;
-  source?: string;
-  purchase_type?: string;
-  total_credits?: number;
-  payment_method?: string;
-  payment_reference?: string;
-  razorpay_order_id?: string;
-  razorpay_payment_id?: string;
-  to_plan_name?: string;
-  from_plan_name?: string;
-  subscription_id?: number | null;
-  new_plan_id?: number | null;
-  previous_plan_id?: number | null;
-  [key: string]: unknown;
-}
-
-interface BillingInvoice {
-  id: number;
-  invoice_number: string;
-  invoice_type: string;
-  tenant_id: string;
-  amount_inr: number;
-  tax_amount_inr: number;
-  discount_amount_inr: number;
-  total_amount_inr: number;
-  status: string;
-  issue_date: string;
-  due_date: string;
-  paid_at?: string | null;
-  line_items: LineItem[];
-  metadata: InvoiceMetadata;
-  payment_method?: string | null;
-  payment_status?: string | null;
-  razorpay_payment_id?: string | null;
-  razorpay_order_id?: string | null;
-  payment_amount?: number | null;
-  payment_currency?: string | null;
-  subscription_start_date?: string;
-  subscription_end_date?: string;
-  next_billing_date?: string;
-  billing_interval?: string;
-  created_at: string;
-  reason?: string;
-  plan_name?: string;
-  plan_type?: string;
-  previous_plan_id?: number | null;
-  new_plan_id?: number | null;
-  subscription_id?: number | null;
-}
 
 interface BillingStats {
   total_invoices: number;
@@ -101,18 +44,6 @@ interface AddonTransaction {
   created_at?: string;
 }
 
-function normalizeBillingInvoice(inv: BillingInvoice): BillingInvoice {
-  const status = (inv.status || '').toUpperCase();
-  const normalizedDueDate =
-    status === 'PAID' && inv.billing_interval && (inv.next_billing_date || inv.subscription_end_date)
-      ? (inv.next_billing_date || inv.subscription_end_date || inv.due_date)
-      : inv.due_date;
-
-  return normalizedDueDate === inv.due_date
-    ? inv
-    : { ...inv, due_date: normalizedDueDate };
-}
-
 // Invoice list status filter. 'open' covers both OPEN and PENDING, as on the stat card.
 const STATUS_FILTERS = [
   { value: 'all', label: 'All Status', statuses: [] },
@@ -134,7 +65,9 @@ export default function BillingHistoryPage() {
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
   const [stats, setStats] = useState<BillingStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [selectedInvoice, setSelectedInvoice] = useState<BillingInvoice | null>(null);
+  const router = useRouter();
+  /** An invoice opens on its own page (was a popup). */
+  const openInvoice = (inv: BillingInvoice) => router.push(invoicePageUrl(inv.invoice_number));
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
   const [addonTransactions, setAddonTransactions] = useState<AddonTransaction[]>([]);
   const [retryingId, setRetryingId] = useState<string | null>(null);
@@ -212,34 +145,12 @@ export default function BillingHistoryPage() {
     fetchAddonTransactions();
   }, []);
 
-  // Deep link: ?invoice=<invoice number> opens that invoice's detail once loaded.
-  const [pendingDeepLink, setPendingDeepLink] = useState<string | null>(() =>
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('invoice') : null,
-  );
-  if (pendingDeepLink && invoices.length > 0) {
-    setPendingDeepLink(null);
-    const match = invoices.find(inv => inv.invoice_number === pendingDeepLink);
-    if (match) setSelectedInvoice(match);
-  }
-
-  // Keep ?invoice= in sync with the open modal so the URL can be shared.
-  // Wait while a deep link is still pending, or the param is dropped before
-  // the invoices arrive.
+  // Old links to the popup (…?invoice=<number>) now go to the invoice page.
   useEffect(() => {
-    if (pendingDeepLink) return;
-    const url = new URL(window.location.href);
-    if (selectedInvoice) url.searchParams.set('invoice', selectedInvoice.invoice_number);
-    else url.searchParams.delete('invoice');
-    if (url.href !== window.location.href) window.history.replaceState(window.history.state, '', url.toString());
-  }, [selectedInvoice, pendingDeepLink]);
-
-  // Esc closes the invoice detail modal.
-  useEffect(() => {
-    if (!selectedInvoice) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setSelectedInvoice(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [selectedInvoice]);
+    const legacy = new URLSearchParams(window.location.search).get('invoice');
+    if (legacy) router.replace(invoicePageUrl(legacy));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const fetchBillingData = async () => {
     setLoading(true);
@@ -737,7 +648,7 @@ export default function BillingHistoryPage() {
                     <RowActions
                       menuLabel="Invoice actions"
                       actions={[
-                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedInvoice(inv) },
+                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => openInvoice(inv) },
                         { key: 'download', label: 'Download Invoice', icon: Download, loading: downloadingId === inv.id, onClick: () => handleDownloadInvoice(inv) },
                       ]}
                     />
@@ -832,7 +743,7 @@ export default function BillingHistoryPage() {
                         <RowActions
                           menuLabel="Invoice actions"
                           actions={[
-                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedInvoice(inv) },
+                            { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => openInvoice(inv) },
                             { key: 'download', label: 'Download Invoice', icon: Download, loading: downloadingId === inv.id, onClick: () => handleDownloadInvoice(inv) },
                           ]}
                         />
@@ -1007,7 +918,7 @@ export default function BillingHistoryPage() {
                 <BillingReports<BillingInvoice>
                   invoices={invoices}
                   downloadingId={downloadingId}
-                  onView={setSelectedInvoice}
+                  onView={openInvoice}
                   onDownload={handleDownloadInvoice}
                   getDescription={getDescription}
                   getPaymentLabel={getPaymentLabel}
@@ -1019,19 +930,6 @@ export default function BillingHistoryPage() {
           </>
         )}
 
-        {/* Invoice Detail Modal */}
-        {selectedInvoice && (
-          <InvoiceDetailModal<BillingInvoice>
-            invoice={selectedInvoice}
-            downloading={downloadingId === selectedInvoice.id}
-            onClose={() => setSelectedInvoice(null)}
-            onDownload={handleDownloadInvoice}
-            formatAmount={formatAmount}
-            getPaymentLabel={getPaymentLabel}
-            getStatusVariant={getStatusVariant}
-            getStatusIcon={getStatusIcon}
-          />
-        )}
       </div>
       </div>
     </main>

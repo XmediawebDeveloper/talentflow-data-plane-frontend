@@ -277,6 +277,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
             </button>
           )}
           <ExportFormatModal
+            tone="plain"
             open={showExportModal}
             onClose={() => setShowExportModal(false)}
             title={`Export ${team.name} Member Usage`}

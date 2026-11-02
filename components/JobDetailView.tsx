@@ -13,6 +13,7 @@ import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, 
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -71,7 +72,7 @@ import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
 import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
-import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -3695,6 +3696,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               mustHaveComments={mustHaveComments}
               niceToHaveComments={niceToHaveComments}
               experience={job.experience}
+              experienceLevelOnly={job.experience ? null : formatExperienceLevelName(job.experience_level)}
               experienceNote={requirementLabel(job.experienceMandatory)}
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
@@ -6041,7 +6043,10 @@ function AIMatchTabContent({
                       <div className="flex items-start gap-2.5 pl-6">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
+                            {candidate.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           {candidate.title && (
                             <p className="tf-meta truncate">{candidate.title}</p>
                           )}
@@ -6202,12 +6207,15 @@ function AIMatchTabContent({
                       </td>
                       <td className="px-3 py-2.5 align-middle">
                         <div className="min-w-0">
-                          <p
-                            className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]"
-                            title={[formatCandidateFirstName(candidate.name), candidate.title].filter(Boolean).join(' · ')}
-                          >
-                            {formatCandidateFirstName(candidate.name)}
-                          </p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p
+                              className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]"
+                              title={[formatCandidateFirstName(candidate.name), candidate.title].filter(Boolean).join(' · ')}
+                            >
+                              {formatCandidateFirstName(candidate.name)}
+                            </p>
+                            {candidate.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
                       </td>
@@ -6452,7 +6460,10 @@ function AIMatchTabContent({
                     />
                     <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                     <div className="min-w-0 flex-1">
-                      <p className="tf-cell-name truncate">{formatCandidateFirstName(candidate.name)}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="tf-cell-name truncate">{formatCandidateFirstName(candidate.name)}</p>
+                        {candidate.isArchived && <ResumeArchivedBadge />}
+                      </div>
                       {candidate.title && <p className="tf-meta truncate">{candidate.title}</p>}
                       <p className="tf-meta-strong truncate">{candidate.email || '—'}</p>
                     </div>

@@ -263,6 +263,15 @@ export default function VersionInviteDialog({
   const [bulkJob, setBulkJob] = useState<BulkInviteJob | null>(null);
   const [sending, setSending] = useState(false);
   const bulkTracker = useOptionalBulkInviteProgress();
+  /* Closing this popup hands a still-running send to the floating card; a
+     send that already finished here is just dropped (its result was seen). */
+  const bulkJobId = bulkJob?.job_id;
+  const setBulkInPopup = bulkTracker?.setInPopup;
+  useEffect(() => {
+    if (!bulkJobId || !setBulkInPopup) return;
+    setBulkInPopup(bulkJobId, true);
+    return () => setBulkInPopup(bulkJobId, false);
+  }, [bulkJobId, setBulkInPopup]);
   const bulkReported = useRef(false);
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -752,6 +761,9 @@ export default function VersionInviteDialog({
       });
       bulkReported.current = false;
       setBulkJob(started);
+      // Mark it as on screen first, so the floating card never flashes up
+      // while this popup is showing the run.
+      bulkTracker?.setInPopup(started.job_id, true);
       bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
       bodyRef.current?.scrollTo({ top: 0 });
       const queued = started.queued ?? 0;
