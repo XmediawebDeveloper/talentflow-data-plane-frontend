@@ -62,6 +62,7 @@ import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
@@ -4299,12 +4300,15 @@ export default function AITalentMatchPage({
                                 <td className="px-4 py-4 align-top">
                                   <div className="flex items-start gap-3">
                                     <div className="min-w-0">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
-                                      >
-                                        {row.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                        >
+                                          {row.name || 'Candidate'}
+                                        </button>
+                                        {row.best?.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
                                     </div>
                                   </div>
@@ -4589,12 +4593,15 @@ export default function AITalentMatchPage({
                           <div className="min-w-0 flex-1">
                             {/* max-w-full: a button sizes to its text, so without it `truncate`
                                 never engaged and a long name ran past the card on a phone. */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                            >
-                              {row.name || 'Candidate'}
-                            </button>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                              >
+                                {row.name || 'Candidate'}
+                              </button>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
+                            </div>
                             {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
                           </div>
                         </div>
@@ -5141,7 +5148,10 @@ export default function AITalentMatchPage({
                       <div className="flex items-start gap-2.5">
                         <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                            {row.best?.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
@@ -5286,6 +5296,7 @@ export default function AITalentMatchPage({
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
                             </div>
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
@@ -5480,7 +5491,10 @@ export default function AITalentMatchPage({
                             className="mt-0.5 flex-shrink-0"
                           />
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
+                            </div>
                             <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
                           </div>
                         </div>

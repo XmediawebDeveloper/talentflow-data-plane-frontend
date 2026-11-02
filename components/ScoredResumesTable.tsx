@@ -28,6 +28,7 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -1650,16 +1651,19 @@ Best regards`);
     if (col.id === 'candidateName') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          {onViewCandidate ? (
-            <button
-              onClick={() => onViewCandidate(resume)}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-            >
-              {showName(resume.candidateName)}
-            </button>
-          ) : (
-            <div className="text-sm text-gray-900">{showName(resume.candidateName)}</div>
-          )}
+          <div className="flex items-center gap-2">
+            {onViewCandidate ? (
+              <button
+                onClick={() => onViewCandidate(resume)}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+              >
+                {showName(resume.candidateName)}
+              </button>
+            ) : (
+              <div className="text-sm text-gray-900">{showName(resume.candidateName)}</div>
+            )}
+            {resume.isArchived && <ResumeArchivedBadge />}
+          </div>
           {/* "Candidate" is name WITH mail — the email rides under the name
               instead of taking a column of its own. */}
           {resume.email && (
@@ -2731,16 +2735,19 @@ Best regards`);
                         {/* pr-7 leaves room for the corner checkbox; pl-6 keeps the
                             top-left select seal (touch, hover, any selection) off the name. */}
                         <div className="min-w-0 pr-7 pl-6">
-                          {onViewCandidate ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
-                              className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-                            >
-                              {showName(resume.candidateName) || 'Candidate'}
-                            </button>
-                          ) : (
-                            <p className="text-sm font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
-                          )}
+                          <div className="flex items-center gap-2 min-w-0">
+                            {onViewCandidate ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
+                                className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+                              >
+                                {showName(resume.candidateName) || 'Candidate'}
+                              </button>
+                            ) : (
+                              <p className="text-sm font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                            )}
+                            {resume.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           <p className="text-xs text-gray-500 truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
                         </div>
 
@@ -2773,7 +2780,10 @@ Best regards`);
                       selection) off the name. */}
                   <div className="flex items-start gap-2.5 pl-6">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                        {resume.isArchived && <ResumeArchivedBadge />}
+                      </div>
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
                     </div>
                   </div>
@@ -3057,17 +3067,20 @@ Best regards`);
                               );
                             })()}
                             <div className="min-w-0 w-full">
-                              {onViewCandidate ? (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full [overflow-wrap:anywhere]"
-                                  title={primary.candidateName || undefined}
-                                >
-                                  {primary.candidateName || 'Candidate'}
-                                </button>
-                              ) : (
-                                <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
-                              )}
+                              <div className="flex items-center gap-2 min-w-0">
+                                {onViewCandidate ? (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
+                                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full [overflow-wrap:anywhere]"
+                                    title={primary.candidateName || undefined}
+                                  >
+                                    {primary.candidateName || 'Candidate'}
+                                  </button>
+                                ) : (
+                                  <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
+                                )}
+                                {primary.isArchived && <ResumeArchivedBadge />}
+                              </div>
                               {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]" title={primary.email}>{primary.email}</div>}
                             </div>
                           </div>
@@ -3246,16 +3259,19 @@ Best regards`);
                         })()}
                       </button>
                       <div className="min-w-0 flex-1">
-                        {onViewCandidate ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block w-full [overflow-wrap:anywhere]"
-                          >
-                            {primary.candidateName || 'Candidate'}
-                          </button>
-                        ) : (
-                          <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
-                        )}
+                        <div className="flex items-center gap-2 min-w-0">
+                          {onViewCandidate ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block w-full [overflow-wrap:anywhere]"
+                            >
+                              {primary.candidateName || 'Candidate'}
+                            </button>
+                          ) : (
+                            <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
+                          )}
+                          {primary.isArchived && <ResumeArchivedBadge />}
+                        </div>
                         {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]">{primary.email}</div>}
                       </div>
                     </div>
@@ -3544,9 +3560,12 @@ Best regards`);
                   Match Status chip under them — beside the name it left a
                   320px card only a letter or two of the name. */}
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">
-                  {showName(resume.candidateName)}
-                </p>
+                <div className="flex items-center gap-2 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">
+                    {showName(resume.candidateName)}
+                  </p>
+                  {resume.isArchived && <ResumeArchivedBadge />}
+                </div>
                 {resume.email && (
                   <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{resume.email}</p>
                 )}
