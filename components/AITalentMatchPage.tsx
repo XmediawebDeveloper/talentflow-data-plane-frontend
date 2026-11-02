@@ -6063,17 +6063,20 @@ export default function AITalentMatchPage({
                                       {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
                                     </button>
                                     <div className="min-w-0 flex-1">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                        }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                                        title={c.name}
-                                      >
-                                        {c.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                          }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                                          title={c.name}
+                                        >
+                                          {c.name || 'Candidate'}
+                                        </button>
+                                        {c.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
                                     <span
@@ -6186,17 +6189,20 @@ export default function AITalentMatchPage({
                                     <td className="px-3 py-2.5 align-middle">
                                       <div className="flex items-center min-w-0">
                                         <div className="min-w-0">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                            }}
-                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
-                                            title={c.name}
-                                          >
-                                            {c.name || 'Candidate'}
-                                          </button>
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                              }}
+                                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
+                                              title={c.name}
+                                            >
+                                              {c.name || 'Candidate'}
+                                            </button>
+                                            {c.isArchived && <ResumeArchivedBadge />}
+                                          </div>
                                           {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
                                       </div>
