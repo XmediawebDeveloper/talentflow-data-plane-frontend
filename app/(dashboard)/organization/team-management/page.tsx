@@ -1283,6 +1283,7 @@ export default function TeamManagementPage() {
         />
 
         <ExportFormatModal
+          tone="plain"
           open={showExportModal}
           onClose={() => setShowExportModal(false)}
           title={exportTitle}

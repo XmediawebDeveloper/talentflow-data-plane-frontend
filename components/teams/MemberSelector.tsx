@@ -63,9 +63,18 @@ export default function MemberSelector({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <label className="block tf-label max-sm:text-[13px]">Team Members</label>
-        <span className="tf-meta">{selectedMemberIds.length} selected</span>
+      {/* The section heading above names this; here just the running count. */}
+      <div className="flex items-center gap-2">
+        <span className="sr-only">Team Members</span>
+        <span
+          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium tabular-nums ${
+            selectedMemberIds.length > 0
+              ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-300'
+              : 'bg-gray-100 text-gray-500 dark:bg-slate-800 dark:text-slate-400'
+          }`}
+        >
+          {selectedMemberIds.length} selected
+        </span>
       </div>
 
       {/* Picked members as chips — visible without scrolling the list; × removes. */}
@@ -162,12 +171,14 @@ export default function MemberSelector({
                       onToggleMember(user.id);
                     }
                   }}
-                  className={`flex cursor-pointer items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 p-3 transition-colors last:border-b-0 ${
-                    isSelected ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
+                  className={`flex cursor-pointer items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 px-3 py-2.5 transition-colors last:border-b-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40 ${
+                    isSelected
+                      ? 'bg-brand-blue/[0.05] shadow-[inset_3px_0_0_0_var(--brand-blue)] dark:bg-brand-blue/10'
+                      : 'hover:bg-gray-50 dark:hover:bg-slate-800/50'
                   }`}
                 >
                   <div
-                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border-2 transition-colors ${
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border-2 transition-colors ${
                       isSelected ? 'border-brand-blue bg-brand-blue' : 'border-gray-300 dark:border-slate-600'
                     }`}
                   >

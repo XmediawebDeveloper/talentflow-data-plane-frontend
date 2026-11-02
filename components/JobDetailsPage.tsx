@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { formatSalaryRange } from '@/lib/utils/salary';
@@ -226,7 +227,7 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
 Job Title: ${job.title}
 Department: ${job.department || 'N/A'}
 Employment Type: ${job.employment_type || 'N/A'}
-Experience: ${job.experience_min || 0} - ${job.experience_max || 0} years
+Experience: ${formatJdExperience({ jobLevel: job.job_level, experienceMin: job.experience_min, experienceMax: job.experience_max }) || 'Not specified'}
 
 Description:
 ${job.description}
@@ -549,11 +550,11 @@ ${job.certifications?.join(', ') || 'N/A'}
                       Experience
                     </h3>
                     <p className="text-gray-600">
-                      {job.experience_min && job.experience_max
-                        ? `${job.experience_min} - ${job.experience_max} years`
-                        : job.experience_min
-                        ? `${job.experience_min}+ years`
-                        : 'Not specified'}
+                      {formatJdExperience({
+                        jobLevel: job.job_level,
+                        experienceMin: job.experience_min,
+                        experienceMax: job.experience_max,
+                      }) || 'Not specified'}
                     </p>
                   </div>
 
@@ -631,7 +632,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                       <TrendingUp className="w-5 h-5 text-gray-400" />
                       <div>
                         <p className="tf-meta">Job Level</p>
-                        <p className="text-sm font-medium text-gray-900">{job.job_level || 'Not specified'}</p>
+                        <p className="text-sm font-medium text-gray-900">{formatExperienceLevelName(job.job_level) || job.job_level || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">

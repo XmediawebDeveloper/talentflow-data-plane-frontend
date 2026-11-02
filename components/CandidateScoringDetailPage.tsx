@@ -26,7 +26,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
-import { formatJobExperienceText, formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatJobExperienceText, formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -3099,6 +3099,9 @@ Best regards`);
                     /* `jdExperienceLabel` falls back to the words "Not specified",
                        so the value (and its badge) is gated on the RANGE. */
                     experience={jdDetails?.experience_min != null || jdDetails?.experience_max != null ? jdExperienceLabel : null}
+                    experienceLevelOnly={jdDetails?.experience_min != null || jdDetails?.experience_max != null
+                      ? null
+                      : formatExperienceLevelName(jdDetails?.job_level || jdDetails?.experience_level)}
                     experienceNote={jdRequirementLabel(jdDetails.experience_mandatory)}
                     industry={jdDetails.industry_type ? prettifyCode(jdDetails.industry_type) : null}
                     industryNote={jdDetails.industry_type

@@ -1,6 +1,6 @@
 'use client';
 
-import { Users, Shield, Pencil, Trash2, Crown, BarChart3 } from 'lucide-react';
+import { Users, Shield, Pencil, Trash2, Crown, BarChart3, Clock } from 'lucide-react';
 import AppModal, { AppModalAction } from '@/components/ui/app-modal';
 import { Team } from '@/lib/services/teamService';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -69,100 +69,144 @@ export default function TeamDetailsModal({
   }
 
 
+  // The lead first, then everyone else A–Z.
+  const leadId = team.team_lead?.id;
+  const members = [...(team.members ?? [])].sort((a, b) =>
+    a.id === leadId ? -1 : b.id === leadId ? 1 : (a.name || a.email || '').localeCompare(b.name || b.email || ''),
+  );
+  const initials = (team.name || '?')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]!.toUpperCase())
+    .join('');
+  const statTile = 'rounded-xl border border-gray-100 bg-gray-50/60 p-3 dark:border-slate-700/60 dark:bg-slate-800/40';
+  const statLabel = 'flex items-center gap-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400';
+
   return (
     <AppModal
+      tone="plain"
       open={isOpen}
       onCancel={onClose}
       // Shared with the edit form, so switching modes doesn't resize the popup.
       widthClassName={TEAM_MODAL_WIDTH}
       zIndexClass="z-50"
       closeButton
-      icon={<Shield />}
-      title="Team Details"
-      subtitle="Review team composition, lead ownership, and core activity indicators."
+      // The header is the team itself: its initials and name.
+      icon={<span className="text-sm font-bold tracking-wide">{initials || <Shield />}</span>}
+      title={team.name}
+      subtitle={`Team · ${team.member_count.toLocaleString()} ${team.member_count === 1 ? 'member' : 'members'}`}
+      ariaLabel={`Team details: ${team.name}`}
       actions={actions}
       footerStart={
-        <span className="text-xs">
-          Created {formatTeamDateTime(team.created_at)}{createdByName ? ` by ${createdByName}` : ''} · Updated {formatTeamDateTime(team.updated_at)}
+        <span className="flex items-center gap-1.5 text-xs">
+          <Clock className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            Created {formatTeamDateTime(team.created_at)}{createdByName ? ` by ${createdByName}` : ''} · Updated {formatTeamDateTime(team.updated_at)}
+          </span>
         </span>
       }
     >
       <div className="space-y-5">
-        {/* Name + lead on one line, stats beside them on wide screens. */}
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          <div className="min-w-0">
-            <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
-            {team.description && <p className="mt-1 whitespace-pre-line break-words tf-card-desc max-sm:text-[13px]">{team.description}</p>}
-            <p className="mt-2 flex items-center gap-1.5 tf-body-muted max-sm:text-[13px]">
-              <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
-              {team.team_lead ? (
-                <>
-                  <span className="font-medium text-gray-900 dark:text-slate-100">{team.team_lead.name}</span>
-                  <span className="truncate">· {team.team_lead.email}</span>
-                </>
-              ) : (
-                <span className="italic">No lead assigned</span>
-              )}
-            </p>
-          </div>
+        {team.description && (
+          <p className="whitespace-pre-line break-words border-l-2 border-brand-blue/30 pl-3 text-sm text-gray-600 dark:text-slate-400">
+            {team.description}
+          </p>
+        )}
 
-          {/* Members + units (last 30 days) — the Teams module is about people and units. */}
-          <dl className={`grid shrink-0 gap-2 sm:gap-3 ${showUnits ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="min-w-[7rem] rounded-xl border border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700/60 dark:bg-slate-900">
-              <dt className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
-                <Users className="h-3.5 w-3.5 text-brand-blue" />
-                Members
+        {/* Summary strip — who leads it, how many people, what it used. */}
+        <dl className={`grid grid-cols-1 gap-2 sm:gap-3 ${showUnits ? 'sm:grid-cols-[minmax(0,1.6fr)_minmax(0,0.8fr)_minmax(0,1fr)]' : 'sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]'}`}>
+          <div className={statTile}>
+            <dt className={statLabel}>
+              <Crown className="h-3.5 w-3.5 text-brand-orange-deep" />
+              Team Lead
+            </dt>
+            <dd className="mt-2">
+              {team.team_lead ? (
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <NameAvatar name={team.team_lead.name} fallback={team.team_lead.email} userId={team.team_lead.id} size="sm" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{team.team_lead.name}</p>
+                    <p className="truncate text-xs text-gray-500 dark:text-slate-400">{team.team_lead.email}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 dark:text-slate-400">
+                  Not assigned
+                  {onEdit && canEdit && <span className="block text-xs text-gray-400 dark:text-slate-500">Pick one with Edit Team.</span>}
+                </p>
+              )}
+            </dd>
+          </div>
+          <div className={statTile}>
+            <dt className={statLabel}>
+              <Users className="h-3.5 w-3.5 text-brand-blue" />
+              Members
+            </dt>
+            <dd className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">
+              {team.member_count.toLocaleString()}
+            </dd>
+          </div>
+          {showUnits && (
+            <div className={statTile}>
+              <dt className={statLabel}>
+                <BarChart3 className="h-3.5 w-3.5 text-brand-blue" />
+                Units · 30 days
               </dt>
-              <dd className="mt-0.5 text-xl max-sm:text-lg font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">
-                {team.member_count.toLocaleString()}
+              <dd className="mt-1.5">
+                <TeamUnitsSummary units={units} />
               </dd>
             </div>
-            {showUnits && (
-              <div className="min-w-[9rem] rounded-xl border border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700/60 dark:bg-slate-900">
-                <dt className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
-                  <BarChart3 className="h-3.5 w-3.5 text-brand-blue" />
-                  Units · 30 days
-                </dt>
-                <dd className="mt-0.5">
-                  <TeamUnitsSummary units={units} />
-                </dd>
-              </div>
-            )}
-          </dl>
-        </div>
+          )}
+        </dl>
 
+        {/* Members — one divided list, the lead pinned first. */}
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
-            Team Members ({team.members?.length || 0})
-          </h4>
-          {team.members && team.members.length > 0 ? (
-            // Two columns on the wider popup — roughly halves the list's height.
-            <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
-              {team.members.map((member) => (
-                <div key={member.id} className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50">
-                  <NameAvatar name={member.name} fallback={member.email} src={member.avatar_url} userId={member.id} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
-                    <p className="truncate tf-meta">{member.email}</p>
-                  </div>
-                  {team.team_lead?.id === member.id ? (
-                    <span className="shrink-0 rounded-full bg-brand-blue px-2 py-0.5 text-xs font-medium text-white">Lead</span>
-                  ) : member.role ? (
-                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
-                      {member.role}
-                    </span>
-                  ) : null}
-                </div>
-              ))}
-            </div>
+          <div className="mb-2 flex items-center gap-2">
+            <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Members</h4>
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium tabular-nums text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+              {members.length}
+            </span>
+          </div>
+          {members.length > 0 ? (
+            <ul className="max-h-64 divide-y divide-gray-100 overflow-y-auto rounded-xl border border-gray-100 dark:divide-slate-700/60 dark:border-slate-700/60">
+              {members.map((member) => {
+                const isLead = member.id === leadId;
+                return (
+                  <li
+                    key={member.id}
+                    className={`flex items-center gap-3 px-3 py-2.5 sm:px-4 ${isLead ? 'bg-brand-orange/[0.04] dark:bg-orange-500/[0.06]' : ''}`}
+                  >
+                    <NameAvatar name={member.name} fallback={member.email} src={member.avatar_url} userId={member.id} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
+                      <p className="truncate text-xs text-gray-500 dark:text-slate-400">{member.email}</p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      {isLead && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2 py-0.5 text-xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/20">
+                          <Crown className="h-3 w-3" />
+                          Lead
+                        </span>
+                      )}
+                      {member.role && (
+                        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium capitalize text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                          {member.role.replace(/_/g, ' ')}
+                        </span>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
           ) : (
-            <div className="flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 text-gray-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500">
-              <Users className="mr-2 h-4 w-4" />
-              <p className="text-sm max-sm:text-[13px]">No members</p>
+            <div className="flex flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-gray-200 bg-gray-50 py-8 text-center text-gray-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400">
+              <Users className="h-5 w-5" />
+              <p className="text-sm font-medium">No members yet</p>
+              {onEdit && canEdit && <p className="text-xs text-gray-400 dark:text-slate-500">Add people with Edit Team.</p>}
             </div>
           )}
         </div>
-
       </div>
     </AppModal>
   );

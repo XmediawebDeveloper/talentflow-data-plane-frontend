@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import {
   Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
@@ -2438,15 +2439,16 @@ export default function AIInterviewConfig() {
     return '';
   })();
   const canContinueToClusters = !continueDisabledReason;
-  const experienceRange =
-    selectedJd?.experience_min != null && selectedJd?.experience_max != null
-      ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
-      : selectedJd?.experience_min != null
-      ? `${selectedJd.experience_min}+ yrs`
-      : selectedJd?.experience_max != null
-      ? `Up to ${selectedJd.experience_max} yrs`
-      : '';
-  const experienceSummary = [experienceRange, selectedJd?.job_level].filter(Boolean).join(' • ');
+  // Shared wording: the JD's own years with the level name, or
+  // "Senior Level (years not stated)" - never a level band shown as years.
+  const experienceSummary = formatJdExperience(
+    {
+      jobLevel: selectedJd?.job_level || (selectedJd as { experience_level?: string | null } | undefined)?.experience_level,
+      experienceMin: selectedJd?.experience_min,
+      experienceMax: selectedJd?.experience_max,
+    },
+    { includeLevel: true },
+  ) || '';
   const clusterMaxCountSummary = [
     `Must-to-Have: ${timedAllocation.mthMaxClusters}`,
     ...(nth.enabled ? [`Nice-to-Have: ${timedAllocation.nthMaxClusters}`] : []),

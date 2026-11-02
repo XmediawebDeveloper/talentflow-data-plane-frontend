@@ -671,6 +671,19 @@ export default function ResumeScoringPage({
   // cards' tags (experience, salary, AI/Manual…), which the scoring records
   // themselves don't carry.
   const jobRecordsById = useJobRecords();
+  /** A JD version's status, capitalised ('Published', 'Disabled', 'Archived', …),
+   *  for every badge and Disabled/Archived lock on this page. `jobRecordsById`
+   *  only holds the user's OWN JDs (my-jds), so in a tenant where someone else
+   *  created the job it misses — the lineage (fetched per job, whoever made it)
+   *  comes first, then that record, then the scoring record's own `jdStatus`. */
+  const jdStatusOf = (jdId: string): LineageJob['status'] => {
+    const fromLineage = Object.values(versionLineage.filterLineages).flat().find(v => v.id === jdId)?.status;
+    return mapJdStatusToJobStatus(
+      fromLineage
+        || jobRecordsById.get(jdId)?.status
+        || scoredHistory.find(h => h.jobId === jdId)?.jdStatus,
+    );
+  };
   /** The JD code (JD-266) for a scored job: the scoring record's own, else the
    *  full JD record's — some score records come back without it. */
   const jdCodeOf = (it: { jdJobId?: string; jobId: string }) =>
@@ -712,7 +725,7 @@ export default function ResumeScoringPage({
     jdTitle: it.jobTitle,
     jdCode: jdCodeOf(it),
     versionNumber: versionNumber ?? it.jdVersionNumber,
-    status: mapJdStatusToJobStatus(it.jdStatus),
+    status: jdStatusOf(it.jobId),
   });
   // Scoring History popup's Match Breakdown donut — 'all' or one version, kept
   // per job (a different job reads as 'all' without needing a reset).
@@ -2626,17 +2639,13 @@ export default function ResumeScoringPage({
        invited to — the scores already there stay viewable and exportable. */
     const capitalizeStatus = (raw?: string | null) =>
       raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : undefined;
-    const detailsJobStatus = capitalizeStatus(
-      jobRecordsById.get(selectedHistoryItem.jobId)?.status
-        || (selectedHistoryItem.jdStatus === 'active' ? 'published' : selectedHistoryItem.jdStatus)
-        || 'published',
-    )!;
+    const detailsJobStatus: string = jdStatusOf(selectedHistoryItem.jobId);
     const detailsJobLocked = detailsJobStatus === 'Disabled' || detailsJobStatus === 'Archived';
     const detailsJobLockReason = detailsJobStatus === 'Archived' ? 'JD is archived' : 'JD is disabled';
     /** Any version's status — rows under "Show All Versions" belong to several. */
     const detailsStatusOf = (jdId: string): string | undefined => {
       if (jdId === selectedHistoryItem.jobId) return detailsJobStatus;
-      return capitalizeStatus(detailsFilterLineage?.find(v => v.id === jdId)?.status || jobRecordsById.get(jdId)?.status);
+      return capitalizeStatus(detailsFilterLineage?.find(v => v.id === jdId)?.status) ?? jdStatusOf(jdId);
     };
     const versionNumberOf = (item: ScoredResumeData) =>
       resolveHistoryLineageEntry(item)?.version_number ?? item.jdVersionNumber;
@@ -3576,6 +3585,8 @@ export default function ResumeScoringPage({
                 activeVerdict={matchFilter}
                 jobTitle="All Jobs"
                 jobId="global"
+                // Each row's invites follow its OWN JD's status (Disabled / Archived lock them).
+                jobStatusOf={jdStatusOf}
                 availableUnits={availableASUnits ?? 10}
                 /* This list spans every job, so neither invite target can be
                    pre-checked (no single jd_id to ask) - each invite opens
@@ -3915,11 +3926,7 @@ export default function ResumeScoringPage({
                       // falling back to this item's own jdStatus) — Archived /
                       // Disabled jobs lock both invites below, whatever the
                       // permission, with that as the reason.
-                      const statusOf = (item: typeof selectableJobs[number]) => {
-                        const record = jobRecordsById.get(item.jobId);
-                        const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
-                        return raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
-                      };
+                      const statusOf = (item: typeof selectableJobs[number]) => jdStatusOf(item.jobId);
                       const tickedJobs: InviteTargetJob[] = selectableJobs
                         .filter(item => {
                           const k = resolveHistoryGroupKey(item);
@@ -4241,6 +4248,10 @@ export default function ResumeScoringPage({
                           jobTitle={item.jobTitle}
                           jobId={item.jobId}
                           jobCode={jdCodeOf(item)}
+                          // Disabled / Archived JD → this panel's row invites lock too; rows can
+                          // span versions, so each follows its own version's status.
+                          jobStatus={jdStatusOf(item.jobId)}
+                          jobStatusOf={jdStatusOf}
                           availableUnits={availableASUnits ?? 10}
                           title=""
                           hideMatchStatusFilter
@@ -4337,7 +4348,7 @@ export default function ResumeScoringPage({
                               detail, not a scoring fact. */}
                           {(() => {
                             const record = jobRecordsById.get(item.jobId);
-                            const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                            const raw = jdStatusOf(item.jobId); // lineage → JD record → score record (see jdStatusOf)
                             const label = getDisplayStatus(
                               raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
                               record?.currentVersion ?? item.jdCurrentVersion,
@@ -4554,7 +4565,7 @@ export default function ResumeScoringPage({
                           )}
                           {(() => {
                             const record = jobRecordsById.get(item.jobId);
-                            const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                            const raw = jdStatusOf(item.jobId); // lineage → JD record → score record (see jdStatusOf)
                             const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), record?.currentVersion ?? item.jdCurrentVersion);
                             const tone = getStatusConfig(label);
                             if (label === 'Published' || label === 'Republished') return null;

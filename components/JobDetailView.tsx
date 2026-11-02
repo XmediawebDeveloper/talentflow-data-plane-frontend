@@ -72,7 +72,7 @@ import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
 import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
-import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -3685,6 +3685,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               mustHaveComments={mustHaveComments}
               niceToHaveComments={niceToHaveComments}
               experience={job.experience}
+              experienceLevelOnly={job.experience ? null : formatExperienceLevelName(job.experience_level)}
               experienceNote={requirementLabel(job.experienceMandatory)}
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
