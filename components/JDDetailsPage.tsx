@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
@@ -1249,14 +1250,14 @@ export default function JDDetailsPage() {
                       <span className="text-gray-900">{formatEmploymentType(jd.remote_type)}</span>
                     </div>
                   )}
-                  {(jd.experience_min || jd.experience_max) && (
+                  {formatJdExperience({ jobLevel: jd.job_level || jd.experience_level, experienceMin: jd.experience_min, experienceMax: jd.experience_max }) && (
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-2 text-gray-600">
                         <Clock className="w-4 h-4" />
                         Experience
                       </span>
                       <span className="text-gray-900">
-                        {jd.experience_min || 0} - {jd.experience_max || '10+'} years
+                        {formatJdExperience({ jobLevel: jd.job_level || jd.experience_level, experienceMin: jd.experience_min, experienceMax: jd.experience_max })}
                       </span>
                     </div>
                   )}

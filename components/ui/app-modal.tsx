@@ -23,10 +23,12 @@ import { Button } from './button';
  * Tone: `brand` (default) is the brand-blue header. `warning` is the white
  * header with a brand-orange icon disc and an orange primary button — the
  * warning confirm's look (ConfirmationDialog type="warning"), for "leave /
- * discard?" prompts.
+ * discard?" prompts. `plain` is a white header with a brand-blue icon tile
+ * and dark title — no coloured bar — for screens that want a lighter popup
+ * (the Teams pages); its buttons stay the standard brand ones.
  */
 
-export type AppModalTone = 'brand' | 'warning';
+export type AppModalTone = 'brand' | 'warning' | 'plain';
 
 export type AppModalSize = 'sm' | 'md' | 'lg';
 
@@ -177,6 +179,8 @@ export default function AppModal({
   mobileSheet = false,
 }: AppModalProps) {
   const warning = tone === 'warning';
+  // White header (warning's frame) — `plain` keeps a brand-blue icon tile.
+  const lightHeader = warning || tone === 'plain';
   const showFooter = !closeButton || !!footer || !!footerStart || (actions?.length ?? 0) > 0;
   useEffect(() => {
     if (!open) return;
@@ -202,7 +206,7 @@ export default function AppModal({
         {/* Header — no close button unless `closeButton`; otherwise Cancel in the footer is the way out. */}
         <div
           className={`flex shrink-0 items-center justify-between gap-3 px-4 py-4 sm:px-6 ${
-            warning ? 'border-b border-gray-100 bg-white dark:border-slate-700/60 dark:bg-slate-900' : 'bg-brand-blue'
+            lightHeader ? 'border-b border-gray-100 bg-white dark:border-slate-700/60 dark:bg-slate-900' : 'bg-brand-blue'
           }`}
         >
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -211,7 +215,9 @@ export default function AppModal({
                 className={`flex h-10 w-10 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5 ${
                   warning
                     ? 'rounded-full bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15 dark:bg-orange-500/15 dark:text-orange-300'
-                    : 'rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm'
+                    : tone === 'plain'
+                      ? 'rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30'
+                      : 'rounded-xl bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm'
                 }`}
               >
                 {icon}
@@ -220,7 +226,7 @@ export default function AppModal({
             <div className="min-w-0">
               <h2
                 className={`line-clamp-2 break-words text-base font-bold leading-snug sm:text-lg ${
-                  warning ? 'text-gray-900 dark:text-slate-50' : 'text-white'
+                  lightHeader ? 'text-gray-900 dark:text-slate-50' : 'text-white'
                 }`}
               >
                 {title}
@@ -228,7 +234,7 @@ export default function AppModal({
               {subtitle && (
                 <p
                   className={`text-xs sm:text-sm ${
-                    warning ? 'text-gray-600 dark:text-slate-400' : 'truncate text-white/80'
+                    warning ? 'text-gray-600 dark:text-slate-400' : tone === 'plain' ? 'truncate text-gray-600 dark:text-slate-400' : 'truncate text-white/80'
                   }`}
                 >
                   {subtitle}
@@ -244,7 +250,11 @@ export default function AppModal({
               disabled={cancelDisabled}
               aria-label="Close"
               title="Close"
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60 disabled:opacity-50"
+              className={`inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 disabled:opacity-50 ${
+                lightHeader
+                  ? 'text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus-visible:ring-brand-blue/40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'
+                  : 'text-white/80 hover:bg-white/15 hover:text-white focus-visible:ring-white/60'
+              }`}
             >
               <X className="h-5 w-5" />
             </button>

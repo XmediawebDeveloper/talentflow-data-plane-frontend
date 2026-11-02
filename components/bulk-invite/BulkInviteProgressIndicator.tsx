@@ -9,7 +9,8 @@ import BulkInviteResultsDialog from './BulkInviteResultsDialog';
 import { bulkInviteStatusLine } from './BulkInviteProgressPanel';
 
 /**
- * Floating card, bottom-left, for every bulk send this browser is following:
+ * Floating card, bottom-left, for bulk sends running in the background (the
+ * popup was closed mid-send) - a run still open in its popup is not shown:
  * the counts while it runs, the outcome when it ends, View results per run.
  * Minimize and Close behave as the bulk scoring widget's do: Minimize drops
  * to a round progress button that restores on click; Close forgets the runs
@@ -19,9 +20,11 @@ import { bulkInviteStatusLine } from './BulkInviteProgressPanel';
  * renders nothing when there is nothing to follow.
  */
 export default function BulkInviteProgressIndicator() {
-  const { jobs, dismiss, openResultsFor, setOpenResultsFor } = useBulkInviteProgress();
+  const { jobs, dismiss, inPopupIds, openResultsFor, setOpenResultsFor } = useBulkInviteProgress();
   const [minimized, setMinimized] = useState(false);
-  const shown = jobs.filter((j) => !j.dismissed);
+  // Only background sends: a run whose invite popup is still open is shown
+  // there, so the card stays out of the way until that popup is closed.
+  const shown = jobs.filter((j) => !j.dismissed && !inPopupIds.has(j.job_id));
   const open = openResultsFor ? jobs.find((j) => j.job_id === openResultsFor) ?? null : null;
   if (shown.length === 0 && !open) return null;
 

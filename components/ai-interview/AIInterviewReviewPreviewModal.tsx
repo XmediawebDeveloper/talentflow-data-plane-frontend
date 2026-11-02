@@ -17,6 +17,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { useJdLocations } from '@/hooks/useJdLocations';
+import { useJdExperience } from '@/hooks/useJdExperience';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { distributeSkillsLocally } from '@/lib/utils/questionDistribution';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -237,6 +238,7 @@ export default function AIInterviewReviewPreviewModal({
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
   const sttOption = getSttModelOption(sttModel);
   const jdLocations = useJdLocations(interview?.jd_id);
+  const jdExperience = useJdExperience(interview?.jd_id, interview?.jd_experience_level);
   const jdAsJob: Job = {
     id: interview?.jd_id ?? configId ?? '',
     job_id: interview?.jd_short_id,
@@ -247,9 +249,9 @@ export default function AIInterviewReviewPreviewModal({
     daysActive: 0,
     requiredMatch: 0,
     industry_type: interview?.jd_industry_type,
-    experience: interview?.jd_experience_level
-      ? interview.jd_experience_level.charAt(0).toUpperCase() + interview.jd_experience_level.slice(1)
-      : undefined,
+    // The JD's own years + level, worded like every other JD view - not just the
+    // capitalised level code ("Senior"), which said nothing about years.
+    experience: jdExperience ?? undefined,
     versionNumber: interview?.jd_version ?? undefined,
   };
   const interviewTypeLabel = hrRound?.enabled ? 'Technical + HR' : 'Technical';
@@ -605,10 +607,10 @@ export default function AIInterviewReviewPreviewModal({
                             <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{interview.jd_short_id}</span>
                           </div>
                         )}
-                        {interview.jd_experience_level && (
+                        {jdExperience && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="tf-meta flex-shrink-0">Level</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{interview.jd_experience_level}</span>
+                            <span className="tf-meta flex-shrink-0">Experience</span>
+                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{jdExperience}</span>
                           </div>
                         )}
                         {interview.jd_industry_type && (

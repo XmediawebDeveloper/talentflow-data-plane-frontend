@@ -5,7 +5,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { FileText, Lock } from 'lucide-react';
 import type { JDResponse } from '@/lib/services/jdService';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { formatJobExperienceText, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -231,6 +231,7 @@ export default function JDOverviewSections({
           niceToHaveComments={niceToHaveComments}
           showRequirementBadges={showScoringDetail}
           experience={experienceText || null}
+          experienceLevelOnly={experienceText ? null : formatExperienceLevelName(jd?.job_level || jd?.experience_level)}
           experienceNote={showScoringDetail ? requirementBadge(jd.experience_mandatory) : undefined}
           industry={jd.industry_type ? prettifyCode(jd.industry_type) : null}
           industryNote={showScoringDetail && jd.industry_type

@@ -30,6 +30,9 @@ export interface OpenInviteRequest {
   candidates?: InviteCandidate[];
   /** False = list `candidates` unticked. */
   preselect?: boolean;
+  /** Opened from the Resume Database's My Resumes / Shared Database table:
+   *  `candidates` are ticked in that list and its tab opens first. */
+  pickInto?: 'my-resumes' | 'internal-db';
   /** Host-specific entry-point gate (AI Talent Match's own invite permission). */
   inviteGate?: { allowed: boolean; reason?: string };
   hideDuplicate?: boolean;
@@ -87,6 +90,7 @@ export function InviteDialogMount({ request, onClose }: { request: OpenInviteReq
       candidates={request.candidates ?? []}
       versionId={request.versionId}
       preselect={request.preselect ?? true}
+      pickInto={request.pickInto}
       disabledReason={disabledReason}
       hideDuplicate={request.hideDuplicate}
       inviteAllowed={request.inviteGate ? request.inviteGate.allowed : true}

@@ -1689,6 +1689,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           {/* User level fetches every team's members inside onExport, so the
               modal's own spinner covers that wait. */}
           <ExportFormatModal
+            tone="plain"
             open={exportScope !== null}
             onClose={() => setExportScope(null)}
             title={exportScope === 'user' ? 'Export Team Usage by User' : 'Export Team Usage'}

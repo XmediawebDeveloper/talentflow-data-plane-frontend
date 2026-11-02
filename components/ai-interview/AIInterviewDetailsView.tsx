@@ -26,6 +26,7 @@ import {
 import { aiInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -1915,7 +1916,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           </div>
                           {config.jd_experience_level ? (
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(config.jd_experience_level)}`}>
-                              {expLabel(config.jd_experience_level) || config.jd_experience_level}
+                              {formatJdExperience(
+                                {
+                                  jobLevel: jdFullData?.job_level || jdFullData?.experience_level || config.jd_experience_level,
+                                  experienceMin: jdFullData?.experience_min,
+                                  experienceMax: jdFullData?.experience_max,
+                                },
+                                { includeLevel: true },
+                              ) || expLabel(config.jd_experience_level) || config.jd_experience_level}
                             </span>
                           ) : (
                             <span className="text-sm text-gray-400">Not available</span>

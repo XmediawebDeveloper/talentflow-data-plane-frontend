@@ -5,6 +5,10 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewResults, { type ResultsJobScopeEntry } from '@/components/ai-interview/AIInterviewResults';
 import { aiInterviewService, isJdDisabled, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import { useAuth } from '@/lib/hooks/useAuth';
+import { Button } from '@/components/ui/button';
+import { UserPlus } from 'lucide-react';
 
 /* Every interview of `own`'s job, any status, each with its job and interview
    version — the set the AI Interviews job row groups (by Job ID, else job
@@ -114,6 +118,7 @@ function AIInterviewResultsContent() {
   const [jdTitle, setJdTitle] = useState('');
   const [jdId, setJdId] = useState('');
   const [jdShortId, setJdShortId] = useState('');
+  const [jdVersion, setJdVersion] = useState<number | undefined>(undefined);
   const [jdDisabled, setJdDisabled] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -130,6 +135,7 @@ function AIInterviewResultsContent() {
           // belongs to is the authoritative link target for the breadcrumb.
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
+          setJdVersion(response.jd_version ?? undefined);
           setJdDisabled(isJdDisabled(response.jd_status));
           // Failing that lookup still shows this interview's own results.
           if (jobScoped) setJobScope(await loadJobScope(response).catch(() => null));
@@ -144,6 +150,38 @@ function AIInterviewResultsContent() {
     };
     fetchConfig();
   }, [configId, jobScoped]);
+
+  /* Invite — THE invite popup on this job (its AI Interview step lists the
+     job's interview versions), as Job Details' AI Interview Result tab
+     offers. The AI Interviews page's own invite permission; a disabled job
+     greys it, with the reason. */
+  const { open: openInvite } = useInviteDialog();
+  const { user, isTenantAdmin } = useAuth();
+  const canInvite = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
+  const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
+    : jdDisabled ? 'This job description is disabled, so nothing can be sent for it.'
+    : !jdId ? 'This AI interview is not linked to a job' : null;
+  const inviteAction = (
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() => {
+        if (inviteBlocked) return;
+        openInvite({
+          kind: 'interview',
+          job: { jdId, jdTitle: jdTitle || configTitle, jdCode: jdShortId || undefined, versionNumber: jdVersion },
+          preselect: false,
+          hideDuplicate: true,
+        });
+      }}
+      aria-disabled={!!inviteBlocked || undefined}
+      title={inviteBlocked ?? "Invite candidates to this job's AI interview"}
+      className={`whitespace-nowrap !h-9 !text-sm ${inviteBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+      icon={<UserPlus className="w-4 h-4" />}
+    >
+      Invite
+    </Button>
+  );
 
   const handleBack = () => {
     router.push(
@@ -194,6 +232,7 @@ function AIInterviewResultsContent() {
       readOnly={jdDisabled}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
+      toolbarActions={inviteAction}
     />
   );
 }

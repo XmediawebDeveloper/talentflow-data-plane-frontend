@@ -76,12 +76,10 @@ export const formatJobExperienceText = ({
   experienceMin?: number | null;
   experienceMax?: number | null;
 }): string | undefined => {
-  const trimmedJobLevel = jobLevel?.trim();
-  if (trimmedJobLevel && !isStandardExperienceLevel(trimmedJobLevel)) {
-    return trimmedJobLevel;
-  }
-
-  return formatExperienceRange(experienceMin, experienceMax);
+  // Same wording as formatJdExperience: the JD's own years, else the level name
+  // with "(years not stated)" - never undefined for a JD that has a level, which
+  // is what left "Not specified" / "—" on screens whose header showed a level.
+  return formatJdExperience({ jobLevel, experienceMin, experienceMax });
 };
 
 export const formatJobExperienceBadge = ({
@@ -107,13 +105,92 @@ export const formatJobExperienceBadge = ({
     return trimmedExperienceText || undefined;
   }
 
-  // Configured (Settings > Masters) labels already bake the range in, e.g.
-  // "Junior Level (2-4 Years)" - appending the computed range again would
-  // duplicate it. Only the bare hardcoded fallback labels (e.g. "Junior")
-  // lack a range and need one appended; those never contain a digit.
-  const standardLabelAlreadyHasRange = /\d/.test(standardLabel);
+  // Configured (Settings > Masters) labels have the master band written into
+  // them, e.g. "Senior Level (7-10 Years)". That band is the level's DEFAULT,
+  // not what the JD said: a JD that only says "Senior" is saved with
+  // experience_min/max = NULL (see JDCreation's resolvePersistedExperiencePayload),
+  // and a JD that says "8-12 years" keeps its own numbers. Showing the label as-is
+  // made the header claim "7-10 Years" while the Extracted Data Summary below it
+  // said "Not specified" (JD-458). So the band is always dropped, and only the
+  // JD's own stored years are shown next to the level name.
+  const levelName = stripExperienceBand(standardLabel);
 
-  return trimmedExperienceText && !standardLabelAlreadyHasRange
-    ? `${standardLabel} (${trimmedExperienceText})`
-    : standardLabel;
+  if (!trimmedExperienceText || trimmedExperienceText === levelName) {
+    // No years stored: same wording as every other JD view.
+    return `${levelName} (${EXPERIENCE_YEARS_NOT_STATED})`;
+  }
+  // Already worded with the level (formatJdExperience / formatJobExperienceText,
+  // e.g. "Senior Level (years not stated)") - don't wrap it in the level again.
+  if (trimmedExperienceText.startsWith(levelName)) {
+    return trimmedExperienceText;
+  }
+  return `${levelName} (${trimmedExperienceText})`;
+};
+
+/**
+ * Remove a trailing years band from a level label:
+ * "Senior Level (7-10 Years)" -> "Senior Level", "Management (10+ Years)" ->
+ * "Management". A label with no parenthesised number is returned unchanged.
+ */
+export const stripExperienceBand = (label: string): string => {
+  const stripped = label.replace(/\s*\((?=[^)]*\d)[^)]*\)\s*$/, '').trim();
+  return stripped || label.trim();
+};
+
+/**
+ * The level NAME alone (band removed) for a stored level code, or undefined when
+ * the code is empty / not a known level. Used where a JD has a level but no years
+ * stored, so the page can say "Senior Level - no years stated" rather than
+ * "Not specified".
+ */
+export const formatExperienceLevelName = (jobLevel?: string | null): string | undefined => {
+  const label = getStandardExperienceLevelLabel(jobLevel);
+  return label ? stripExperienceBand(label) : undefined;
+};
+
+/** Note shown under a level-only Experience value. */
+export const EXPERIENCE_LEVEL_ONLY_NOTE = 'Level only - the JD does not state years of experience';
+
+/** Suffix used everywhere a JD has a level but no stored years. */
+export const EXPERIENCE_YEARS_NOT_STATED = 'years not stated';
+
+/**
+ * THE one way to word a JD's experience on any read-only screen (lists, cards,
+ * pickers, detail pages, version history, downloads).
+ *
+ * Rules (2026-11-02, JD-458):
+ *   - Only the JD's OWN stored years (experience_min / experience_max) are shown.
+ *     The band inside a level's configured label ("Senior Level (7-10 Years)") is
+ *     a default, never shown as if the JD said it.
+ *   - No years but a level  -> "Senior Level (years not stated)", never
+ *     "Not specified", "-", nothing, or a made-up "0 - 10+ years".
+ *   - A non-standard (custom) level text is shown as written, as before.
+ *   - `includeLevel` puts the level name in front of the years
+ *     ("Senior Level (7-10 years)") for places that have no separate level field.
+ */
+export const formatJdExperience = (
+  {
+    jobLevel,
+    experienceMin,
+    experienceMax,
+  }: {
+    jobLevel?: string | null;
+    experienceMin?: number | null;
+    experienceMax?: number | null;
+  },
+  { includeLevel = false }: { includeLevel?: boolean } = {}
+): string | undefined => {
+  const trimmedLevel = jobLevel?.trim();
+  const years = formatExperienceRange(experienceMin, experienceMax);
+
+  if (trimmedLevel && !isStandardExperienceLevel(trimmedLevel)) {
+    // Custom level text the recruiter wrote - it already says what it means.
+    return years && includeLevel ? `${trimmedLevel} (${years})` : trimmedLevel;
+  }
+
+  const levelName = formatExperienceLevelName(trimmedLevel);
+  if (years) {
+    return includeLevel && levelName ? `${levelName} (${years})` : years;
+  }
+  return levelName ? `${levelName} (${EXPERIENCE_YEARS_NOT_STATED})` : undefined;
 };
