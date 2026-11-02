@@ -31,6 +31,7 @@ import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator, useBreadcrumbOffset } from './AIInterviewStepIndicator';
 import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { useJdLocations } from '@/hooks/useJdLocations';
+import { useJdExperience } from '@/hooks/useJdExperience';
 import WizardDiscardButton from './WizardDiscardButton';
 import { isUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import {
@@ -1114,6 +1115,7 @@ export default function AIInterviewClusters() {
   /* Config from server */
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const clusterJdLocations = useJdLocations(config?.jd_id);
+  const clusterJdExperience = useJdExperience(config?.jd_id, config?.jd_experience_level);
 
   /* Where leaving the flow lands. Started from a JD's Job Details page — the
      draft prompt there included — means the recruiter came to finish one job's
@@ -4157,10 +4159,10 @@ export default function AIInterviewClusters() {
                       <span className="tf-meta flex-shrink-0">Role Title</span>
                       <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_title || config.position || '—'}</span>
                     </div>
-                    {config.jd_experience_level && (
+                    {clusterJdExperience && (
                       <div className="px-3 py-2 flex items-start justify-between gap-2">
-                        <span className="tf-meta flex-shrink-0">Level</span>
-                        <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_experience_level}</span>
+                        <span className="tf-meta flex-shrink-0">Experience</span>
+                        <span className="text-xs font-semibold text-gray-900 text-right">{clusterJdExperience}</span>
                       </div>
                     )}
                     {config.jd_location && (

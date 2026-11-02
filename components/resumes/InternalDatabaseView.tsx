@@ -1,5 +1,6 @@
 'use client';
 
+import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Clock, Loader2, Search, Trash2, Download, FileArchive, Users, Info } from 'lucide-react';
@@ -525,7 +526,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         requiredMatch: jd.required_match || 70,
         department: jd.department,
         industry_type: jd.industry_type,
-        experience: jd.experience_required || (jd.experience_min && jd.experience_max ? `${jd.experience_min}-${jd.experience_max}` : jd.experience_min ? `${jd.experience_min}+` : undefined),
+        experience: jd.experience_required || formatExperienceRange(jd.experience_min, jd.experience_max),
+        experience_level: jd.job_level || jd.experience_level || undefined,
         applicants: jd.applicants_count || 0,
         description: jd.description,
         skills: jd.skills || [],
