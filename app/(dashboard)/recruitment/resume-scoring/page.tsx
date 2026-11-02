@@ -1,5 +1,6 @@
 'use client';
 
+import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
@@ -760,7 +761,10 @@ export default function ResumeScoringRoute() {
                 jd.status === 'archived' ? 'Archived' : 'Draft',
         applicants: jd.applicants_count || 0,
         employmentType: jd.employment_type || 'Full-time',
-        experience: jd.experience_min ? `${jd.experience_min}+ years` : undefined,
+        // Years only (the level goes on experience_level): the old `min+` form
+        // dropped the max and treated 0 as no value.
+        experience: formatExperienceRange(jd.experience_min, jd.experience_max),
+        experience_level: jd.job_level || jd.experience_level || undefined,
         job_id: jd.job_id,
         current_version: jd.current_version,
         published_at: jd.published_at,

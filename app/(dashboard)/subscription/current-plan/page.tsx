@@ -914,7 +914,8 @@ function CurrentPlanContent() {
           console.log('[CurrentPlan] Plan has expired by date:', quotaData.plan_expiry_date);
           isExpiredByDate = true;
         }
-      } else if (quotaData?.billing_period?.end) {
+      } else if (!isTrial && quotaData?.billing_period?.end) {
+        // billing_period is the monthly usage cycle, never the trial window
         const billingEndDate = new Date(quotaData.billing_period.end);
         if (billingEndDate < now) {
           console.log('[CurrentPlan] Billing period has expired by date:', quotaData.billing_period.end);
@@ -1018,9 +1019,11 @@ function CurrentPlanContent() {
         const quotas = quotaData.quotas || {};
 
         // For FREE TRIAL: Get dates from root level (backend returns trial_start_date/trial_end_date at root)
-        // Use billing_period as fallback when trial_info is missing
-        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || quotaData.billing_period?.start || null;
-        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || quotaData.billing_period?.end || null;
+        // or trial_info. Never fall back to billing_period: that is the monthly usage cycle
+        // (e.g. 1 Nov - 30 Nov), not the trial, and showed a 14-day trial as ~30 days.
+        // Without trial dates from the API, the tenant's own company_settings dates (prev) stay.
+        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || null;
+        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || null;
 
         // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
         const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
@@ -1786,8 +1789,10 @@ function CurrentPlanContent() {
       console.log('Calling API:', apiUrl);
       console.log('Request body:', requestBody);
 
+      // Above the backend's 120s Control Plane apply timeout (the trial->paid
+      // migration runs inside this call), so the browser never gives up first.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
 
       let response;
       let data;

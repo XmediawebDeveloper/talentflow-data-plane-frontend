@@ -8,13 +8,15 @@ import type { InviteKind } from './inviteVersions';
 /** Link expiry the popup opens with. */
 export const DEFAULT_EXPIRY_DAYS = 1;
 
-export const EXPIRY_OPTIONS: { value: number; label: string }[] = [
+/** `hidden`: still a valid expiry (the backend takes it), just not offered
+ *  in the popup's "Link expires in" list. */
+export const EXPIRY_OPTIONS: { value: number; label: string; hidden?: boolean }[] = [
   { value: 1, label: '1 day' },
   { value: 3, label: '3 days' },
   { value: 7, label: '7 days' },
-  { value: 14, label: '14 days' },
-  { value: 30, label: '30 days' },
-  { value: 0, label: 'No expiry' },
+  { value: 14, label: '14 days', hidden: true },
+  { value: 30, label: '30 days', hidden: true },
+  { value: 0, label: 'No expiry', hidden: true },
 ];
 
 /** Replaced with each candidate's name when the email is sent. */

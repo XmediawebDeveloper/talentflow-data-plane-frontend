@@ -626,8 +626,10 @@ api.interceptors.response.use(
         }
       }
 
-      // Check billing period end (fallback)
-      if (!quotaData.trial_end_date && !quotaData.plan_expiry_date && quotaData.billing_period?.end) {
+      // Check billing period end (fallback, paid plans only — for a trial the
+      // billing period is the monthly usage cycle, not the trial window)
+      const isTrialQuota = quotaData.is_trial === true || quotaData.is_trial === 'true' || quotaData.quota_source === 'FREE_TRIAL';
+      if (!isTrialQuota && !quotaData.trial_end_date && !quotaData.plan_expiry_date && quotaData.billing_period?.end) {
         const billingEndDate = new Date(quotaData.billing_period.end);
         if (billingEndDate < now) {
           console.log('[API] Billing period has expired:', quotaData.billing_period.end);

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -232,13 +233,6 @@ export default function JobOpeningsPage() {
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
-
-  const getExperienceText = (min?: number, max?: number) => {
-    if (min && max) return `${min}-${max} years`;
-    if (min) return `${min}+ years`;
-    if (max) return `Up to ${max} years`;
-    return 'Not specified';
-  };
 
   return (
     <div className="flex-1 p-4 md:p-8 overflow-y-auto bg-gray-50">
@@ -490,7 +484,7 @@ export default function JobOpeningsPage() {
                     </td>
                     {/* Location column hidden for now */}
                     <td className="px-3 sm:px-6 py-3 sm:py-4 tf-card-desc hidden md:table-cell">
-                      {getExperienceText(job.experience_min, job.experience_max)}
+                      {formatJdExperience({ jobLevel: job.experience_level, experienceMin: job.experience_min, experienceMax: job.experience_max }) || 'Not specified'}
                     </td>
                     <td className="px-3 sm:px-6 py-3 sm:py-4">
                       {getStatusBadge(job.status, job.republished_at)}

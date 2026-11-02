@@ -5,7 +5,6 @@
   "scripts": {
     "dev": "next dev",
     "build": "NODE_OPTIONS=--max-old-space-size=8192 next build",
-    "postbuild": "cp -r .next/static .next/standalone/.next/static && cp -r public .next/standalone/public",
     "rebuild": "node -e \"require('fs').rmSync('.next', { recursive: true, force: true })\" && NODE_OPTIONS=--max-old-space-size=8192 next build",
     "start": "next start",
     "lint": "eslint",
@@ -15,6 +14,7 @@
     "qa:module": "node e2e/scripts/run-module.mjs"
   },
   "dependencies": {
+    "@gsap/react": "^2.1.2",
     "@mediapipe/camera_utils": "^0.3.1675466862",
     "@mediapipe/drawing_utils": "^0.3.1675466124",
     "@mediapipe/face_detection": "^0.4.1646425229",
@@ -57,6 +57,7 @@
     "exceljs": "^4.4.0",
     "face-api.js": "^0.20.0",
     "fflate": "^0.8.2",
+    "gsap": "^3.15.0",
     "html2pdf.js": "^0.14.0",
     "input-otp": "^1.4.2",
     "js-cookie": "^3.0.5",
