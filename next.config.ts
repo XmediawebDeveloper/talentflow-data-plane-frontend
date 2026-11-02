@@ -92,6 +92,18 @@ const nextConfig: NextConfig = {
     return config;
   },
 
+  // NEXT_PUBLIC_API_URL points at this Next server (same origin), so forward
+  // API calls to the data-plane backend running on the same host. Resolved at
+  // build time into routes-manifest; override with BACKEND_INTERNAL_URL.
+  async rewrites() {
+    const backend = process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:8000';
+    return [
+      {
+        source: '/api/v1/:path*',
+        destination: `${backend}/api/v1/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       /* Production only: in dev, Next.js warns that a custom Cache-Control
