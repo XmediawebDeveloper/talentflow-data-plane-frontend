@@ -631,6 +631,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     openInvite({
       kind: 'interview',
       candidates: selectedInviteCandidates(),
+      // Shown ticked in the popup's Resume Database › Shared Database, which opens first.
+      pickInto: 'internal-db',
       onSent: () => setSelectedResumes([]),
     });
   };
@@ -779,6 +781,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
+      // Shown ticked in the popup's Resume Database › Shared Database, which opens first.
+      pickInto: 'internal-db',
       onSent: () => setSelectedResumes([]),
     });
   };

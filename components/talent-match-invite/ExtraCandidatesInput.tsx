@@ -98,9 +98,14 @@ const candidatesFromRows = (rows: unknown[][]): { found: { name: string; email: 
   return { found, invalid, hasEmailColumn: true };
 };
 
-/* The rows that will be emailed: not invited by link already. */
+/* The rows that will be emailed: not invited by link already. Each names its
+   source, so the review groups (and badges) sheet rows as Excel, not Manual. */
 const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] =>
-  rows.filter((r) => !r.linked).map((r) => ({ name: r.name, email: r.email }));
+  rows.filter((r) => !r.linked).map((r) => ({
+    name: r.name,
+    email: r.email,
+    invite_source: r.origin === 'Manual' ? 'Manual' : 'Excel upload',
+  }));
 
 /** How the rows added here split, for the popup's summary. */
 export interface ExtraCounts { manual: number; excel: number }
@@ -121,7 +126,7 @@ const downloadSample = () => {
 
 /**
  * Candidates added directly, one way at a time (`mode`), the rows kept across
- * both: Type in — labelled name and email, Add Candidate (Enter adds) — or
+ * both: Manual — labelled name and email, Add Candidate (Enter adds) — or
  * Upload Excel — a slim drop zone (or Browse) with a sample file to download,
  * replaced by "Upload another sheet" once a sheet has added rows. Each
  * shows a compact table of the rows it added — search, per-sheet chips (a

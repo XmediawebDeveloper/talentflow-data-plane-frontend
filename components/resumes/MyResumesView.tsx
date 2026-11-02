@@ -2629,6 +2629,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
+      // Shown ticked in the popup's Resume Database › My Resumes, which opens first.
+      pickInto: 'my-resumes',
       onSent: () => setSelectedResumes([]),
     });
   };
@@ -2651,6 +2653,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     openInvite({
       kind: 'interview',
       candidates: selectedInviteCandidates(),
+      // Shown ticked in the popup's Resume Database › My Resumes, which opens first.
+      pickInto: 'my-resumes',
       onSent: () => setSelectedResumes([]),
     });
   };

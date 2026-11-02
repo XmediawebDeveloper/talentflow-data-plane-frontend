@@ -108,6 +108,8 @@ interface UploadModalProps {
   onScoreResumes?: (resumes: { id: string; candidateName: string }[]) => void; // Bulk counterpart of onScoreResume
   onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
+  /** The duplicate dialog's main button (with `onScoreResume`); defaults to "Proceed with Scoring". */
+  duplicateProceedLabel?: string;
 }
 
 /**
@@ -130,7 +132,7 @@ export default function UploadModal(props: UploadModalProps) {
   return <UploadModalBody {...props} />;
 }
 
-function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder }: UploadModalProps) {
+function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder, duplicateProceedLabel }: UploadModalProps) {
   /* Never a destination: the root "Archived Resumes" folder. A resume filed
      there is archived (the flag follows the folder), so a fresh upload would
      land archived — unscorable and hidden from every list. My Resumes already
@@ -1406,6 +1408,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             setDuplicateInfo(null);
             onClose();
           }}
+          proceedLabel={duplicateProceedLabel}
           onProceedWithScoring={(resumeId) => {
             if (onScoreResume && duplicateInfo.existingResume) {
               onScoreResume(resumeId, duplicateInfo.existingResume.candidate_name);

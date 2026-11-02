@@ -1,15 +1,36 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, Briefcase, Eye, Folder as FolderIcon, Layers, Lightbulb, Loader2, Lock, Mail, Search } from 'lucide-react';
+import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, Archive, ArchiveRestore, Briefcase, Download, Eye, Layers, Lightbulb, Loader2, Lock, Mail, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { SourceIcon } from './inviteSources';
+import InviteFolderTree, { flattenTree, isArchivedFolder, isRootFolder } from './InviteFolderTree';
+import ResumeRowMenu, { type ResumeRowAction } from './ResumeRowMenu';
+import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import type { ExtraMode } from './ExtraCandidatesInput';
 import { useAuth } from '@/lib/hooks/useAuth';
 import FilterSelect from '@/components/ui/filter-select';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
-import { folderService, resumeService, type Folder } from '@/lib/services/resumeService';
+import UploadModal from '@/components/UploadModal';
+import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
+import { convertApiFolderToTree } from '@/lib/utils/resumeMappers';
+import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
+import { archiveResumeToArchivedFolder, folderService, resumeService, type Folder } from '@/lib/services/resumeService';
+import { aiMatchService } from '@/lib/services/aiMatchService';
+import { jdService } from '@/lib/services/jdService';
 import {
   bulkInviteService,
   SERVER_MATCH_LABEL,
@@ -24,6 +45,93 @@ import {
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 
 const PAGE_SIZE = 50;
+
+type ListParams = InviteCandidateFilters & {
+  source: InviteCandidateSourceTab;
+  kind: BulkInviteKind;
+  version_id?: string | null;
+  page?: number;
+  page_size?: number;
+};
+type ListPage = Awaited<ReturnType<typeof bulkInviteService.listCandidates>>;
+
+const sortRows = (rows: ServerInviteCandidate[], sort: InviteCandidateSort | undefined) => {
+  const byName = (a: ServerInviteCandidate, b: ServerInviteCandidate) => a.name.localeCompare(b.name);
+  const at = (r: ServerInviteCandidate) => (r.score?.scored_at ? Date.parse(r.score.scored_at) || 0 : 0);
+  const pct = (r: ServerInviteCandidate) => r.score?.percent ?? -1;
+  return rows.slice().sort(
+    sort === 'name' ? byName
+      : sort === 'recent' ? (a, b) => at(b) - at(a) || byName(a, b)
+      : (a, b) => pct(b) - pct(a) || (b.rating ?? 0) - (a.rating ?? 0) || byName(a, b),
+  );
+};
+
+/** Every page of a server list, page 1 first and the rest in parallel. */
+const loadServerAll = async (jdId: string, p: ListParams, signal?: AbortSignal): Promise<{ items: ServerInviteCandidate[]; counts: ListPage['counts'] }> => {
+  const first = await bulkInviteService.listCandidates(jdId, { ...p, page: 1, page_size: PAGE_SIZE }, signal);
+  const pages = Math.ceil(first.total / PAGE_SIZE);
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
+    bulkInviteService.listCandidates(jdId, { ...p, page: i + 2, page_size: PAGE_SIZE }, signal)));
+  return { items: [first, ...rest].flatMap((x) => x.items), counts: first.counts };
+};
+
+/** Every resume scored against the job — the list Job Details' Scored Resumes tab shows. */
+const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => {
+  const SIZE = 100;
+  const first = await jdService.getScoredResumes(jdId, { page_size: SIZE, page: 1, sort_by: 'latest' });
+  const pages = Math.ceil((first?.total ?? 0) / SIZE);
+  const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
+    jdService.getScoredResumes(jdId, { page_size: SIZE, page: i + 2, sort_by: 'latest' })));
+  const status = (m?: string): ServerMatchStatus =>
+    m === 'exact_match' || m === 'excellent' ? 'exact_match' : m === 'partial_match' || m === 'partial' ? 'partial_match' : 'no_match';
+  /* A scored resume as `/jd/{id}/scored-resumes` returns it (the fields read here). */
+  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number };
+  return [first, ...rest].flatMap((r: { items?: ScoredItem[] }) => r?.items ?? [])
+    .filter((it) => it?.resume_id)
+    .map((it) => ({
+      resume_id: it.resume_id!,
+      name: it.candidate_name || 'Unknown',
+      email: it.candidate_email || '',
+      phone: it.phone || '',
+      source: 'score-resume' as const,
+      rating: null,
+      match_score: null,
+      score: { percent: Number(Number(it.overall_score || 0).toFixed(1)), match_status: status(it.match_status), scored_at: it.created_at ?? null },
+      // Not known from this list; the Review step checks it and skips them.
+      already_invited: false,
+      version: it.resume_version ?? null,
+    }));
+};
+
+/* The server's Scored Resumes source leaves out resumes Job Details counts
+   (those also in AI Talent Match, and others it does not list), so the tab
+   is the job's own scored list — the page's count, every row shown — with
+   the server's row used where it has one (it knows "already invited"). Read
+   whole and filtered here: one page, no more to load. */
+const loadScoredTab = async (jdId: string, p: ListParams, signal?: AbortSignal): Promise<ListPage> => {
+  const [{ items: own, counts: serverCounts }, scored] = await Promise.all([
+    loadServerAll(jdId, { ...p, search: undefined, match_status: undefined, min_score: undefined, exclude_invited: undefined, scored: undefined }, signal),
+    loadJobScored(jdId),
+  ]);
+  const ownById = new Map(own.map((r) => [r.resume_id, r]));
+  const byId = new Map<string, ServerInviteCandidate>();
+  // Latest score first: a resume scored more than once is listed once.
+  for (const r of scored) if (!byId.has(r.resume_id)) byId.set(r.resume_id, ownById.get(r.resume_id) ?? r);
+  for (const r of own) if (!byId.has(r.resume_id)) byId.set(r.resume_id, r);
+  const q = p.search?.trim().toLowerCase();
+  const items = sortRows([...byId.values()].filter((r) =>
+    p.scored !== false
+    && (!q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+    && (!p.match_status || r.score?.match_status === p.match_status)
+    && (!p.min_score || (r.score?.percent ?? 0) >= p.min_score)
+    && (!p.exclude_invited || !r.already_invited)), p.sort);
+  const counts = { ...serverCounts, 'score-resume': byId.size };
+  return { items, total: items.length, page: 1, page_size: items.length, counts };
+};
+
+/** One page of a tab — Scored Resumes whole, from the job's scored list. */
+const loadListPage = (jdId: string, p: ListParams, signal?: AbortSignal): Promise<ListPage> =>
+  p.source === 'score-resume' ? loadScoredTab(jdId, p, signal) : bulkInviteService.listCandidates(jdId, p, signal);
 
 /* The list tabs: the job's two lists, then the resume database — the share
    step's "Select From" (My Resumes / Shared Database), here as server-paged
@@ -43,13 +151,17 @@ const LIST_HEADING: Record<InviteCandidateSourceTab, string> = {
 const isDbTab = (s: InviteCandidateSourceTab) => s === 'my-resumes' || s === 'internal-db';
 
 /* The one tab row, grouped: adding people yourself, then the job's two
-   lists, then the resume database. */
-const ADD_TAB_LABEL: Record<ExtraMode, string> = { manual: 'Type in', excel: 'Upload Excel' };
-const TAB_GROUPS: { label: string; tabs: (ExtraMode | InviteCandidateSourceTab)[] }[] = [
+   lists, then the resume database — one tab, as on the Resume Database page,
+   with My Resumes / Shared DB toggled inside it. */
+const ADD_TAB_LABEL: Record<ExtraMode, string> = { manual: 'Manual', excel: 'Upload Excel' };
+const DB_TAB = 'resume-db' as const;
+type TabKey = ExtraMode | InviteCandidateSourceTab | typeof DB_TAB;
+const TAB_GROUPS: { label: string; tabs: TabKey[] }[] = [
   { label: 'Add new people', tabs: ['manual', 'excel'] },
   { label: 'From this job', tabs: ['talent-match', 'score-resume'] },
-  { label: 'Resume database', tabs: ['my-resumes', 'internal-db'] },
+  { label: 'Saved resumes', tabs: [DB_TAB] },
 ];
+const DB_SOURCES = ['my-resumes', 'internal-db'] as const;
 const TAB_HINT: Record<ExtraMode | InviteCandidateSourceTab, string> = {
   manual: 'Add a candidate by name and email',
   excel: 'Add many candidates from a sheet with Name and Email columns',
@@ -62,9 +174,17 @@ const TAB_HINT: Record<ExtraMode | InviteCandidateSourceTab, string> = {
 const TAB_BUTTON_LABEL: Record<InviteCandidateSourceTab, string> = { ...TAB_LABEL, 'internal-db': 'Shared DB' };
 const isAddTab = (t: ExtraMode | InviteCandidateSourceTab): t is ExtraMode => t === 'manual' || t === 'excel';
 
-interface FolderOption { id: string; name: string; depth: number; count: number }
-const flattenFolders = (list: Folder[], depth = 0): FolderOption[] =>
-  list.flatMap((f) => [{ id: f.id, name: f.name, depth, count: f.resume_count ?? 0 }, ...flattenFolders(f.children ?? [], depth + 1)]);
+/* Where an archived resume lived before it was archived — the Resume
+   Database page stashes it on archive (MyResumesView handleArchiveResumes),
+   and Unarchive puts the resume back there (else in root), as the page does. */
+const PREV_FOLDER_KEY = 'archivedResumePrevFolder';
+const readPrevFolders = (): Record<string, string> => {
+  try { return JSON.parse(localStorage.getItem(PREV_FOLDER_KEY) || '{}'); } catch { return {}; }
+};
+const plural = (n: number, word: string) => `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
+
+/** A resume in Archived Resumes, as the folder lists it. */
+interface ArchivedRow { id: string; name: string; email: string }
 
 /** A ticked (or, in filter mode, unticked) row, remembered across tabs and pages. */
 export interface PickedCandidate {
@@ -150,6 +270,7 @@ const fmt = (n: number) => n.toLocaleString();
  * kept as ids or as the filter, never as the rows.
  */
 export default function ServerCandidatePicker({
+  initialSource,
   jdId,
   kind,
   versionId,
@@ -165,6 +286,9 @@ export default function ServerCandidatePicker({
   addPanel,
   footer,
 }: {
+  /** The list tab to open on (the Resume Database's side the popup was
+   *  opened from); omitted: AI Talent Match. */
+  initialSource?: InviteCandidateSourceTab;
   jdId: string;
   kind: BulkInviteKind;
   /** The version being sent — fills "already invited". */
@@ -176,7 +300,7 @@ export default function ServerCandidatePicker({
   /** A popup of its own opened over the list (resume, versions): hands the
    *  invite popup its closer, so Esc closes that first; null when it closed. */
   onOverlayChange?: (close: (() => void) | null) => void;
-  /** Type in / Upload Excel, shown in the same tab row ahead of the lists:
+  /** Manual / Upload Excel, shown in the same tab row ahead of the lists:
    *  the one open (null = a list tab), its picks, and its panel — kept
    *  mounted, so what was added stays while another tab is open. */
   addTab: ExtraMode | null;
@@ -191,11 +315,17 @@ export default function ServerCandidatePicker({
   /** Below every tab: the selection summary. */
   footer?: ReactNode;
 }) {
-  const [source, setSource] = useState<InviteCandidateSourceTab>('talent-match');
+  const [source, setSource] = useState<InviteCandidateSourceTab>(initialSource ?? 'talent-match');
   /* The database tabs follow the resume list's own permissions (the share
      step's rule): locked tabs stay visible, greyed, with the reason. */
-  const { user } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
   const perms = user?.permissions;
+  // The Resume Database page's own rule for Archive / Unarchive.
+  const canUnarchive = !!isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canUploadMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
+  // Folders: created with the upload permission, renamed with update — the page's rules.
+  const canUpdateMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:update');
+  const canDeleteMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     'talent-match': true,
     'score-resume': true,
@@ -203,7 +333,9 @@ export default function ServerCandidatePicker({
     'internal-db': !!(perms?.canAccessInternalDB || perms?.canViewInternalDB),
   };
   /* My Resumes' folders, read once the tab is first opened. */
-  const [folders, setFolders] = useState<FolderOption[] | null>(null);
+  const [folders, setFolders] = useState<Folder[] | null>(null);
+  const flatFolders = useMemo(() => flattenTree(folders ?? []), [folders]);
+  const archivedFolderId = flatFolders.find(isArchivedFolder)?.id ?? null;
   const [searchInput, setSearchInput] = useState('');
   const [filters, setFilters] = useState<InviteCandidateFilters>({ sort: 'best' });
   const [rows, setRows] = useState<ServerInviteCandidate[]>([]);
@@ -222,6 +354,9 @@ export default function ServerCandidatePicker({
   const listRoom = room === null ? null : room + selectionCount(selection);
   const listRef = useRef<HTMLUListElement | null>(null);
   const sentinelRef = useRef<HTMLLIElement | null>(null);
+  /* Resumes just uploaded: ticked once the list they land in is read. */
+  const tickOnLoad = useRef<string[] | null>(null);
+  const [uploadedRows, setUploadedRows] = useState<{ ids: string[]; items: ServerInviteCandidate[] } | null>(null);
   /* A folder ticked before its list was loaded: selected once it is. */
   const selectOnLoad = useRef<string | null>(null);
 
@@ -237,14 +372,17 @@ export default function ServerCandidatePicker({
     if (source !== 'my-resumes' || folders !== null) return;
     let cancelled = false;
     folderService.list()
-      .then((list) => { if (!cancelled) setFolders(flattenFolders(list)); })
+      .then((list) => { if (!cancelled) setFolders(list); })
       .catch(() => { if (!cancelled) setFolders([]); });
     return () => { cancelled = true; };
   }, [source, folders]);
 
   /* One request per (tab, filters, version, page). Page 1 replaces the list;
      later pages append. A newer request cancels an older one. */
-  const filterKey = JSON.stringify({ source, filters, versionId });
+  /* Bumped after an upload: the same tab and filters read again. */
+  const [reloadTick, setReloadTick] = useState(0);
+  const keyOf = (f: InviteCandidateFilters) => JSON.stringify({ source, filters: f, versionId, reloadTick });
+  const filterKey = keyOf(filters);
   const page = pageState.key === filterKey ? pageState.page : 1;
   const loading = loaded?.key !== filterKey;
   const loadingMore = !loading && (loaded?.page ?? 0) < page;
@@ -252,7 +390,7 @@ export default function ServerCandidatePicker({
   useEffect(() => {
     const controller = new AbortController();
     let cancelled = false;
-    bulkInviteService.listCandidates(jdId, {
+    loadListPage(jdId, {
       source, kind, version_id: versionId, ...filters, page, page_size: PAGE_SIZE,
     }, controller.signal)
       .then((res) => {
@@ -266,6 +404,10 @@ export default function ServerCandidatePicker({
           && selection.total !== res.total && JSON.stringify(selection.filters) === JSON.stringify(filters)) {
           onSelectionChange({ ...selection, total: res.total });
         }
+        if (page === 1 && source === 'my-resumes' && tickOnLoad.current) {
+          setUploadedRows({ ids: tickOnLoad.current, items: res.items });
+          tickOnLoad.current = null;
+        }
         if (page === 1 && selectOnLoad.current === filterKey) {
           selectOnLoad.current = null;
           if (listRoom !== null && res.total > listRoom) toast.warning(`This folder has ${fmt(res.total)} candidates — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left.`);
@@ -277,7 +419,7 @@ export default function ServerCandidatePicker({
         setError((err as Error)?.message || 'Could not load the candidates.');
       });
     return () => { cancelled = true; controller.abort(); };
-    // filterKey stands for source + filters + versionId.
+    // filterKey stands for source + filters + versionId (+ the reload count).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jdId, kind, filterKey, page]);
 
@@ -297,12 +439,31 @@ export default function ServerCandidatePicker({
     return () => window.removeEventListener('resize', updateTabsMore);
   }, [addTab, source, counts]);
 
-  /* First open: a job with no AI Talent Match candidates opens on Type in. */
+  /* The job's two tab counts, read the way Job Details reads its own tab
+     badges (distinct AI Talent Match total; every scored resume), so the
+     popup and the page always show the same numbers. A resume both matched
+     and scored counts on both tabs. Falls back to the server's counts. */
+  const [jobCounts, setJobCounts] = useState<{ jdId: string } & Partial<Record<InviteCandidateSourceTab, number>>>({ jdId });
+  useEffect(() => {
+    let cancelled = false;
+    const put = (t: InviteCandidateSourceTab, n: number) => {
+      if (!cancelled) setJobCounts((c) => ({ ...(c.jdId === jdId ? c : {}), jdId, [t]: n }));
+    };
+    void aiMatchService.listJdCandidates(jdId, 1).then(({ total }) => put('talent-match', total)).catch(() => {});
+    void jdService.getScoredResumes(jdId, { page_size: 1 })
+      .then((res) => put('score-resume', res?.total ?? (res?.items ?? []).length))
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [jdId]);
+  const tabCount = (t: InviteCandidateSourceTab): number | null =>
+    (jobCounts.jdId === jdId ? jobCounts[t] : undefined) ?? counts?.[t] ?? null;
+
+  /* First open: a job with no AI Talent Match candidates opens on Manual. */
   const defaulted = useRef(false);
   useEffect(() => {
     if (defaulted.current || !counts) return;
     defaulted.current = true;
-    if (counts['talent-match'] === 0 && addTab === null && selectionCount(selection) === 0) onAddTabChange('manual');
+    if (!initialSource && counts['talent-match'] === 0 && addTab === null && selectionCount(selection) === 0) onAddTabChange('manual');
     // Once, when the first counts arrive.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [counts]);
@@ -357,12 +518,34 @@ export default function ServerCandidatePicker({
       onSelectionChange({ ...selection, excluded });
     }
   };
-  const selectAllMatching = () => {
-    if (pickingDisabled || total === 0 || (listRoom !== null && total > listRoom)) return;
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatching = async () => {
+    if (pickingDisabled || total === 0 || (listRoom !== null && total > listRoom) || selectingAll) return;
     // "Select all matching" never includes rows the send would skip anyway.
     const f: InviteCandidateFilters = { ...filters, exclude_invited: true };
-    onSelectionChange({ mode: 'filter', source, filters: f, total, excluded: {} });
-    if (!filters.exclude_invited) setFilters(f);
+    const params: ListParams = { source, kind, version_id: versionId, ...f };
+    if (source !== 'score-resume') {
+      onSelectionChange({ mode: 'filter', source, filters: f, total, excluded: {} });
+      if (!filters.exclude_invited) setFilters(f);
+      return;
+    }
+    /* Scored Resumes is read from the job's own scored list, which a server
+       filter selection cannot name: every matching row is picked by id. */
+    setSelectingAll(true);
+    try {
+      const { items: all } = await loadScoredTab(jdId, params);
+      const picked: Record<string, PickedCandidate> = {};
+      for (const r of all) {
+        if (!r.email || r.already_invited || addedDirectly(r)) continue;
+        picked[r.resume_id] = { resumeId: r.resume_id, name: r.name, email: r.email, source: 'score-resume' };
+      }
+      onSelectionChange({ mode: 'ids', picked });
+      if (!filters.exclude_invited) setFilters(f);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not select the candidates.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
   const tickLoaded = () => {
     if (selection.mode !== 'ids') return;
@@ -394,7 +577,7 @@ export default function ServerCandidatePicker({
     !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
       : pickingDisabled ? 'Pick a version first'
       : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
-      : !isOn(r) && addedDirectly(r) ? 'Already added in Type in / Upload Excel'
+      : !isOn(r) && addedDirectly(r) ? 'Already added in Manual / Upload Excel'
       : !isOn(r) && !canAdd ? 'No units left. Remove someone to add more.' : null;
 
   /* ── a row's resume: 👁 opens it (AI Talent Match / Scored Resumes send the
@@ -460,13 +643,287 @@ export default function ServerCandidatePicker({
   /* ── My Resumes: the folder tree. Clicking a folder lists it; ticking it
      selects everyone in it (every row matching that folder). ── */
   const openFolder = (id: string) => setFilter('folder_id', id || undefined);
+
+  /* Archived Resumes: the invite list leaves archived resumes out, so the
+     folder is listed here the way the Resume Database lists it (archived rows
+     included), each with Unarchive. Unarchived, a resume goes back to its
+     folder and can be invited from there. */
+  const archivedHere = source === 'my-resumes' && !!archivedFolderId && filters.folder_id === archivedFolderId;
+  const archivedKey = archivedHere ? JSON.stringify({ id: archivedFolderId, q: filters.search ?? '' }) : null;
+  const [archived, setArchived] = useState<{ key: string; rows: ArchivedRow[]; total: number; error: string | null } | null>(null);
+  const [archivedReload, setArchivedReload] = useState(0);
+  const archivedLoading = !!archivedKey && archived?.key !== archivedKey;
+  useEffect(() => {
+    if (!archivedKey || !archivedFolderId) return;
+    let cancelled = false;
+    resumeService.list({ source: 'my-resumes', folder_id: archivedFolderId, include_archived: true, page: 1, page_size: 100, search: filters.search })
+      .then((res) => {
+        if (cancelled) return;
+        const rows = (res.items ?? []).map((r) => ({ id: r.id, name: r.candidate_name || 'Unknown', email: r.candidate_email || r.email || '' }));
+        setArchived({ key: archivedKey, rows, total: res.total ?? rows.length, error: null });
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setArchived({ key: archivedKey, rows: [], total: 0, error: (err as Error)?.message || 'Could not load the archived resumes.' });
+      });
+    return () => { cancelled = true; };
+    // archivedKey stands for the folder and the search.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivedKey, archivedReload]);
+  const [unarchiving, setUnarchiving] = useState<Set<string>>(new Set());
+  /* Archived rows ticked to unarchive together — only those still listed count. */
+  const [archivedPicks, setArchivedPicks] = useState<Set<string>>(new Set());
+  const archivedTicked = (archived?.key === archivedKey ? archived?.rows ?? [] : []).filter((r) => archivedPicks.has(r.id)).map((r) => r.id);
+  /* Upload into My Resumes — the Resume Database page's own upload popup and
+     rules. The new resumes are then listed (All Resumes, newest first) and
+     ticked, so they can be invited straight away; a duplicate's "Use Existing
+     Resume" ticks the resume already there. */
+  const [uploading, setUploading] = useState(false);
+  /* The folder the upload saves into: the ⋮ menu's folder, else the one open. */
+  const [uploadFolder, setUploadFolder] = useState<string | undefined>(undefined);
+  const closeUpload = () => { setUploading(false); setUploadFolder(undefined); onOverlayChange?.(null); };
+  const openUpload = (folderId?: string) => {
+    if (!canUploadMyResumes) return;
+    setUploadFolder(folderId);
+    setUploading(true);
+    onOverlayChange?.(closeUpload);
+  };
+  const onUploaded = (list: { id: string; candidateName: string }[]) => {
+    closeUpload();
+    if (list.length === 0) return;
+    tickOnLoad.current = list.map((u) => u.id);
+    if (source !== 'my-resumes') { setLastDb('my-resumes'); switchTab('my-resumes'); }
+    setSearchInput('');
+    setFilters((f) => ({ ...f, folder_id: undefined, search: undefined, sort: 'best' }));
+    setReloadTick((n) => n + 1);
+    setFolders(null);
+  };
+  const tickUploaded = useEffectEvent((items: ServerInviteCandidate[], ids: string[]) => {    const found = items.filter((r) => ids.includes(r.resume_id));
+    const tickable = found.filter((r) => r.email && !r.already_invited && !addedDirectly(r));
+    const noEmail = found.filter((r) => !r.email).length;
+    const what = ids.length === 1 ? 'Resume uploaded' : `${fmt(ids.length)} resumes uploaded`;
+    if (pickingDisabled) {
+      toast.success(`${what}. Pick a version to select ${ids.length === 1 ? 'it' : 'them'}.`);
+      return;
+    }
+    if (selection.mode !== 'ids') {
+      toast.success(`${what}. Clear “Select all matching” to tick ${ids.length === 1 ? 'it' : 'them'}.`);
+      return;
+    }
+    const picked = { ...selection.picked };
+    let left = room === null ? Infinity : room;
+    let ticked = 0;
+    for (const r of tickable) {
+      if (pickedByBase[r.resume_id]) { ticked += 1; continue; }
+      if (left <= 0) continue;
+      picked[r.resume_id] = { resumeId: r.resume_id, name: r.name, email: r.email, source: 'my-resumes' };
+      left -= 1;
+      ticked += 1;
+    }
+    if (ticked > 0) onSelectionChange({ mode: 'ids', picked });
+    const notes = [
+      noEmail > 0 && `${fmt(noEmail)} without an email cannot be invited`,
+      tickable.length > ticked && 'no units left for the rest',
+      found.length < ids.length && `${fmt(ids.length - found.length)} still processing — refresh in a moment`,
+    ].filter(Boolean);
+    const msg = `${what}${ticked > 0 ? ` and ${fmt(ticked)} selected` : ''}.${notes.length ? ` ${notes.join('; ')}.` : ''}`;
+    if (ticked > 0) toast.success(msg); else toast.info(msg);
+  });
+  const handledUpload = useRef<object | null>(null);
+  useEffect(() => {
+    if (!uploadedRows || handledUpload.current === uploadedRows) return;
+    handledUpload.current = uploadedRows;
+    tickUploaded(uploadedRows.items, uploadedRows.ids);
+  }, [uploadedRows]);
+  /* My Folders' "+ New" and ⋮ menu — the Resume Database page's checks: no
+     markup, the length cap, Archived Resumes keeps its name, and no two
+     folders of one parent share a name. The tree is read again after. */
+  const reloadFolders = async () => {
+    try { setFolders(await folderService.list()); } catch { setFolders(null); }
+  };
+  const folderNameProblem = (name: string, parentId: string | undefined, selfId?: string): string | null => {
+    if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) return 'Folder name must not contain HTML or script content';
+    if (name.length > FOLDER_NAME_MAX_LENGTH) return `Folder name must be ${FOLDER_NAME_MAX_LENGTH} characters or fewer`;
+    if (!parentId && (name.toLowerCase() === 'root' || name === 'Archived Resumes')) return `"${name}" is a system folder name`;
+    const clash = flatFolders.find((f) => f.id !== selfId
+      && (f.parent_id || undefined) === parentId
+      && f.name.trim().toLowerCase() === name.toLowerCase());
+    if (!clash) return null;
+    const parentName = parentId ? flatFolders.find((f) => f.id === parentId)?.name : undefined;
+    return parentName ? `"${name}" already exists inside "${parentName}"` : `Folder "${name}" already exists`;
+  };
+  const createFolder = async (name: string, parentId?: string): Promise<boolean> => {
+    if (!canUploadMyResumes) return false;
+    const problem = folderNameProblem(name, parentId);
+    if (problem) { toast.error(problem); return false; }
+    try {
+      await folderService.create(name, parentId);
+      await reloadFolders();
+      toast.success('Folder created');
+      return true;
+    } catch (err) {
+      toast.error(`Couldn't create folder. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      return false;
+    }
+  };
+  const renameFolder = async (id: string, name: string): Promise<boolean> => {
+    if (!canUpdateMyResumes) return false;
+    const target = flatFolders.find((f) => f.id === id);
+    if (!target) return false;
+    if (isArchivedFolder(target) || isRootFolder(target)) { toast.error(`${target.name} cannot be renamed`); return false; }
+    if (name === target.name) return true;
+    const problem = folderNameProblem(name, target.parent_id || undefined, id);
+    if (problem) { toast.error(problem); return false; }
+    try {
+      await folderService.update(id, { name });
+      await reloadFolders();
+      toast.success('Folder renamed');
+      return true;
+    } catch (err) {
+      toast.error(`Couldn't rename folder. ${friendlyErrorMessage(err, 'Please try again.')}`);
+      return false;
+    }
+  };
+  /* ── a resume row's ⋮ — the Resume Database page's row actions. My Resumes:
+     Download, Archive, Delete; Shared Database: Download (it is the org's
+     list, not one managed here); Archived Resumes: Download, Unarchive,
+     Delete. Archive and Delete ask first, as on the page. ── */
+  const [archiveAsk, setArchiveAsk] = useState<{ id: string; name: string } | null>(null);
+  const [deleteAsk, setDeleteAsk] = useState<{ id: string; name: string; archived: boolean } | null>(null);
+  const askFor = <T,>(set: (v: T | null) => void) => (v: T) => {
+    set(v);
+    onOverlayChange?.(() => { set(null); onOverlayChange?.(null); });
+  };
+  const doneAsking = <T,>(set: (v: T | null) => void) => { set(null); onOverlayChange?.(null); };
+  /* A resume gone from the list (archived / deleted) leaves the picks too. */
+  const unpick = (id: string) => {
+    if (selection.mode !== 'ids') return;
+    const had = pickedByBase[id];
+    if (!had) return;
+    const picked = { ...selection.picked };
+    delete picked[had.resumeId];
+    onSelectionChange({ mode: 'ids', picked });
+  };
+  const downloadResume = async (id: string, name: string) => {
+    const ext: Record<string, string> = {
+      'application/pdf': 'pdf',
+      'application/msword': 'doc',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+      'application/rtf': 'rtf',
+      'text/rtf': 'rtf',
+      'text/plain': 'txt',
+    };
+    try {
+      toast.loading('Downloading resume...', { id: 'download' });
+      const blob = await resumeService.download(id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${name || 'resume'}.${ext[blob.type] ?? 'pdf'}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast.success('Resume downloaded', { id: 'download' });
+    } catch {
+      toast.error('Failed to download resume', { id: 'download' });
+    }
+  };
+  const archiveResume = async (id: string) => {
+    try {
+      // Where it lived, so Unarchive can put it back (the page's stash).
+      let from: string | undefined = filters.folder_id || undefined;
+      if (!from) { try { from = (await resumeService.get(id)).folder_id; } catch { /* unknown: unarchive goes to root */ } }
+      await archiveResumeToArchivedFolder(id, from, archivedFolderId ?? undefined);
+      unpick(id);
+      toast.success('Resume archived successfully');
+    } catch (err) {
+      toast.error(`Couldn't archive resume. ${friendlyErrorMessage(err, 'Please try again.')}`);
+    } finally {
+      setReloadTick((n) => n + 1);
+      void reloadFolders();
+    }
+  };
+  const deleteResume = async (id: string, archived: boolean) => {
+    try {
+      await resumeService.delete(id);
+      unpick(id);
+      toast.success('Resume deleted');
+    } catch (err) {
+      toast.error(`Couldn't delete resume. ${friendlyErrorMessage(err, 'Please try again.')}`);
+    } finally {
+      if (archived) setArchivedReload((n) => n + 1); else setReloadTick((n) => n + 1);
+      void reloadFolders();
+    }
+  };
+  const rowActions = (id: string, name: string, where: 'my-resumes' | 'internal-db' | 'archived'): ResumeRowAction[] => [
+    { key: 'download', label: 'Download Resume', icon: <Download className="w-4 h-4 text-menu-icon-download" />, onSelect: () => void downloadResume(id, name) },
+    ...(where === 'archived' ? [{
+      key: 'unarchive',
+      label: 'Unarchive Resume',
+      icon: <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />,
+      disabledReason: !canUnarchive ? 'You do not have permission to unarchive resumes' : unarchiving.has(id) ? 'Unarchiving…' : null,
+      onSelect: () => void unarchive([id]),
+    }] : []),
+    ...(where === 'my-resumes' ? [{
+      key: 'archive',
+      label: 'Archive Resume',
+      icon: <Archive className="w-4 h-4 text-menu-icon-archive" />,
+      disabledReason: canUnarchive ? null : 'You do not have permission to archive resumes',
+      onSelect: () => askFor(setArchiveAsk)({ id, name }),
+    }] : []),
+    ...(where !== 'internal-db' ? [{
+      key: 'delete',
+      label: 'Delete Resume',
+      icon: <Trash2 className="w-4 h-4" />,
+      danger: true,
+      disabledReason: canDeleteMyResumes ? null : 'You do not have permission to delete resumes',
+      onSelect: () => askFor(setDeleteAsk)({ id, name, archived: where === 'archived' }),
+    }] : []),
+  ];
+  const archivedAllTicked = !!archived?.rows.length && archivedTicked.length === archived.rows.length;
+  const unarchive = async (ids: string[]) => {
+    if (!canUnarchive || ids.length === 0) return;
+    const rootId = flatFolders.find(isRootFolder)?.id;
+    const valid = new Set(flatFolders.map((f) => f.id));
+    const stash = readPrevFolders();
+    const target = (id: string) => {
+      const prev = stash[id];
+      return prev && valid.has(prev) && prev !== archivedFolderId ? prev : rootId;
+    };
+    setUnarchiving((s) => new Set([...s, ...ids]));
+    try {
+      // skipAudit on the move: the archive call itself logs "Resume unarchived".
+      await Promise.all(ids.map(async (id) => {
+        await resumeService.archive(id, false);
+        const to = target(id);
+        if (to) await resumeService.move(id, to, true);
+      }));
+      const restored = ids.filter((id) => target(id) !== rootId).length;
+      try {
+        ids.forEach((id) => { delete stash[id]; });
+        localStorage.setItem(PREV_FOLDER_KEY, JSON.stringify(stash));
+      } catch { /* best effort */ }
+      toast.success(restored === ids.length
+        ? `${plural(ids.length, 'resume')} unarchived and restored to ${ids.length === 1 ? 'its' : 'their'} original folder`
+        : `${plural(ids.length, 'resume')} unarchived${restored ? ` (${restored} restored, ${ids.length - restored} to root)` : ' (moved to root)'}`);
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Failed to unarchive resumes');
+    } finally {
+      setUnarchiving((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
+      setArchivedPicks((s) => { const next = new Set(s); ids.forEach((id) => next.delete(id)); return next; });
+      // Folder counts and the archived list read again.
+      setFolders(null);
+      setArchivedReload((n) => n + 1);
+    }
+  };
+
   const folderTicked = (id: string) =>
     selection.mode === 'filter' && selection.source === 'my-resumes' && (selection.filters.folder_id ?? '') === id;
   const tickFolder = (id: string, on: boolean) => {
     if (pickingDisabled) return;
     if (!on) { if (folderTicked(id)) onSelectionChange(EMPTY_SELECTION); return; }
     const f: InviteCandidateFilters = { ...filters, folder_id: id || undefined, exclude_invited: true };
-    const key = JSON.stringify({ source, filters: f, versionId });
+    const key = keyOf(f);
     if (key === filterKey && !loading) {
       onSelectionChange({ mode: 'filter', source: 'my-resumes', filters: f, total, excluded: {} });
       return;
@@ -505,7 +962,8 @@ export default function ServerCandidatePicker({
     }
   };
 
-  const tabButton = (t: ExtraMode | InviteCandidateSourceTab) => {
+  const tabButton = (t: TabKey) => {
+    if (t === DB_TAB) return dbTabButton();
     const add = isAddTab(t);
     const locked = !add && !tabAccess[t];
     const on = add ? addTab === t : !addTab && source === t;
@@ -527,13 +985,82 @@ export default function ServerCandidatePicker({
       >
         {locked ? <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <SourceIcon source={t} className="w-3.5 h-3.5" />}
         {label}
-        {!add && !locked && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({counts ? fmt(counts[t]) : '…'})</span>}
+        {!add && !locked && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({tabCount(t) !== null ? fmt(tabCount(t)!) : '…'})</span>}
         {picked > 0 && (
           <span className="inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(picked)}</span>
         )}
       </button>
     );
   };
+
+  /* Resume Database: one tab for both lists — its count and picks are the
+     two together; it opens on the side last used (My Resumes first). */
+  const dbOpen = DB_SOURCES.filter((d) => tabAccess[d]);
+  const [lastDb, setLastDb] = useState<'my-resumes' | 'internal-db'>(initialSource === 'internal-db' ? 'internal-db' : 'my-resumes');
+  const dbSum = (n: (d: InviteCandidateSourceTab) => number | null) => {
+    const parts = dbOpen.map(n);
+    return parts.some((x) => x === null) ? null : parts.reduce<number>((a, b) => a + (b ?? 0), 0);
+  };
+  const switchDb = (d: 'my-resumes' | 'internal-db') => { setLastDb(d); switchTab(d); };
+  const dbTabButton = () => {
+    const locked = dbOpen.length === 0;
+    const on = !addTab && isDbTab(source);
+    const count = dbSum(tabCount);
+    const picked = dbSum((d) => pickedBySource[d]) ?? 0;
+    return (
+      <button
+        key={DB_TAB}
+        type="button"
+        role="tab"
+        aria-selected={on}
+        aria-disabled={locked}
+        onClick={() => { if (!locked) switchDb(tabAccess[lastDb] ? lastDb : dbOpen[0]); }}
+        title={locked ? 'You do not have permission to access the Resume Database' : 'My Resumes and the Shared Database'}
+        className={`-mb-px shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-2 pt-1.5 pb-2 text-[13px] font-medium border-b-2 transition-colors ${on
+          ? 'border-brand-blue text-brand-blue font-semibold'
+          : locked ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed'
+          : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-50 dark:hover:text-slate-100 dark:hover:bg-slate-800/60'}`}
+      >
+        {locked ? <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <SourceIcon source="internal-db" className="w-3.5 h-3.5" />}
+        Resume Database
+        {!locked && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({count !== null ? fmt(count) : '…'})</span>}
+        {picked > 0 && (
+          <span className="inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(picked)}</span>
+        )}
+      </button>
+    );
+  };
+
+  /* Select loaded / Select all matching — after Upload resumes on the
+     Resume Database tab, beside the heading on the job's lists. */
+  const pickControls = (
+    <>
+      {!inFilterMode && (
+        <label className={`inline-flex items-center gap-1.5 text-xs font-medium ${pickingDisabled || loadedEligible.length === 0 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 dark:text-slate-300 cursor-pointer'}`}>
+          <input
+            type="checkbox"
+            checked={loadedAllOn}
+            disabled={pickingDisabled || loadedEligible.length === 0}
+            ref={(el) => { if (el) el.indeterminate = !loadedAllOn && loadedEligible.some(isOn); }}
+            onChange={tickLoaded}
+            className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+          />
+          Select loaded ({fmt(rows.length)})
+        </label>
+      )}
+      <button
+        type="button"
+        onClick={selectAllMatching}
+        disabled={pickingDisabled || total === 0 || filterModeHere || selectingAll || (listRoom !== null && total > listRoom)}
+        title={pickingDisabled ? 'Pick a version first'
+          : listRoom !== null && total > listRoom && !filterModeHere ? `${fmt(total)} matching — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left` : undefined}
+        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {selectingAll && <Loader2 className="w-3 h-3 mr-1 animate-spin" aria-hidden="true" />}
+        {filterModeHere ? `All ${fmt(selection.total)} matching selected` : `Select all ${fmt(total)} matching`}
+      </button>
+    </>
+  );
 
   return (
     <section aria-label="Add candidates" className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
@@ -546,13 +1073,17 @@ export default function ServerCandidatePicker({
         onScroll={updateTabsMore}
         role="tablist"
         aria-label="Where candidates come from"
-        className="flex items-end gap-x-6 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2"
+        className="flex items-end gap-x-4 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2"
       >
-        {TAB_GROUPS.map((g) => (
-          <div key={g.label} role="group" aria-label={g.label} className="flex shrink-0 flex-col gap-0.5">
-            <span className="pl-2 text-2xs font-semibold text-gray-400 dark:text-slate-500 whitespace-nowrap">{g.label}</span>
-            <div className="flex gap-0.5">{g.tabs.map(tabButton)}</div>
-          </div>
+        {TAB_GROUPS.map((g, i) => (
+          <Fragment key={g.label}>
+            {/* A hairline between the groups, from the label down to just above the tab underline. */}
+            {i > 0 && <span aria-hidden="true" className="shrink-0 self-stretch w-px my-1.5 mb-2.5 bg-gray-200 dark:bg-slate-700" />}
+            <div role="group" aria-label={g.label} className="flex shrink-0 flex-col gap-0.5">
+              <span className="pl-2 text-2xs font-semibold text-gray-400 dark:text-slate-500 whitespace-nowrap">{g.label}</span>
+              <div className="flex gap-0.5">{g.tabs.map(tabButton)}</div>
+            </div>
+          </Fragment>
         ))}
       </div>
       {tabsMore && (
@@ -561,37 +1092,65 @@ export default function ServerCandidatePicker({
       </div>
 
       <div className="p-3 sm:p-4">
-      {/* Type in / Upload Excel: always mounted, so its rows stay. */}
+      {/* Manual / Upload Excel: always mounted, so its rows stay. */}
       <div className={addTab ? '' : 'hidden'}>{addPanel}</div>
       <div className={addTab ? 'hidden' : 'space-y-3'}>
+      {/* Resume Database: My Resumes / Shared DB, as the Resume Database
+          page's own tabs — each with its count and its picks — and Upload
+          resumes at the right. One side only (permissions): no toggle. */}
+      {isDbTab(source) && (
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className={SECTION}>{LIST_HEADING[source]}</h3>
-        <div className="flex flex-wrap items-center gap-2">
-          {!inFilterMode && (
-            <label className={`inline-flex items-center gap-1.5 text-xs font-medium ${pickingDisabled || loadedEligible.length === 0 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 dark:text-slate-300 cursor-pointer'}`}>
-              <input
-                type="checkbox"
-                checked={loadedAllOn}
-                disabled={pickingDisabled || loadedEligible.length === 0}
-                ref={(el) => { if (el) el.indeterminate = !loadedAllOn && loadedEligible.some(isOn); }}
-                onChange={tickLoaded}
-                className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
-              />
-              Select loaded ({fmt(rows.length)})
-            </label>
-          )}
-          <button
-            type="button"
-            onClick={selectAllMatching}
-            disabled={pickingDisabled || total === 0 || filterModeHere || (listRoom !== null && total > listRoom)}
-            title={pickingDisabled ? 'Pick a version first'
-              : listRoom !== null && total > listRoom && !filterModeHere ? `${fmt(total)} matching — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left` : undefined}
-            className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {filterModeHere ? `All ${fmt(selection.total)} matching selected` : `Select all ${fmt(total)} matching`}
-          </button>
+      {dbOpen.length > 1 ? (
+        <div role="radiogroup" aria-label="Resume Database" className="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-0.5">
+          {DB_SOURCES.map((d) => {
+            const here = source === d;
+            const n = tabCount(d);
+            return (
+              <button
+                key={d}
+                type="button"
+                role="radio"
+                aria-checked={here}
+                onClick={() => switchDb(d)}
+                title={TAB_HINT[d]}
+                className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition-colors ${here
+                  ? 'bg-white dark:bg-slate-900 text-brand-blue font-semibold shadow-sm'
+                  : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100'}`}
+              >
+                <SourceIcon source={d} className="w-3.5 h-3.5" />
+                {TAB_LABEL[d]}
+                <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({n !== null ? fmt(n) : '…'})</span>
+                {pickedBySource[d] > 0 && (
+                  <span className="inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(pickedBySource[d])}</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      ) : <span />}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+        {/* Uploads go to My Resumes (and open it), from either side. */}
+        <button
+          type="button"
+          onClick={() => openUpload()}
+          disabled={!canUploadMyResumes}
+          title={canUploadMyResumes ? 'Upload resumes to My Resumes — they are selected once uploaded' : 'You do not have permission to upload resumes'}
+          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <Upload className="w-3.5 h-3.5 text-brand-blue" aria-hidden="true" />Upload resumes
+        </button>
+        {pickControls}
         </div>
       </div>
+      )}
+      {/* The list's heading (the Resume Database toggle row carries its own
+          picking controls, after Upload resumes). */}
+      {!isDbTab(source) && (
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className={SECTION}>{LIST_HEADING[source]}</h3>
+        <div className="flex flex-wrap items-center gap-2">{pickControls}</div>
+      </div>
+      )}
 
       {/* Above the search: how to send another version of a resume. */}
       {isDbTab(source) && (
@@ -683,50 +1242,124 @@ export default function ServerCandidatePicker({
       </div>
 
       {/* My Resumes: the folder tree beside the list (click to open, tick to
-          select everyone in it). Phones: the tree sits above the list. */}
-      <div className={source === 'my-resumes' ? 'grid grid-cols-1 sm:grid-cols-[12.5rem_minmax(0,1fr)] gap-3 items-start' : ''}>
+          select everyone in it) from laptop width — the tree needs ~15rem for
+          its names; tablets and phones: the tree sits above the list. */}
+      <div className={source === 'my-resumes' ? 'grid grid-cols-1 lg:grid-cols-[15rem_minmax(0,1fr)] gap-3 items-start' : ''}>
       {source === 'my-resumes' && (
-        <nav aria-label="Folders" className="flex flex-col max-h-72 max-sm:max-h-56 rounded-lg border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40 py-2">
-          <p className="shrink-0 px-3 pb-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Folders</p>
-          {/* The folders scroll; the title and the hint stay put. */}
-          <ul className="flex-1 min-h-0 overflow-y-auto overscroll-contain">
-            {[{ id: '', name: 'All resumes', depth: 0, count: counts?.['my-resumes'] ?? 0 }, ...(folders ?? []).map((f) => ({ ...f, depth: f.depth + 1 }))].map((f) => {
-              const here = (filters.folder_id ?? '') === f.id;
-              const ticked = folderTicked(f.id);
-              const someOut = ticked && selection.mode === 'filter' && Object.keys(selection.excluded).length > 0;
+        <InviteFolderTree
+          folders={folders}
+          allCount={counts?.['my-resumes'] ?? 0}
+          openId={filters.folder_id ?? ''}
+          onOpen={openFolder}
+          isTicked={folderTicked}
+          isPartly={(id) => folderTicked(id) && selection.mode === 'filter' && Object.keys(selection.excluded).length > 0}
+          tickDisabledReason={(id, count) => (pickingDisabled ? 'Pick a version first'
+            : count === 0 ? 'No resumes in this folder'
+            : !folderTicked(id) && listRoom !== null && count > listRoom ? `${fmt(count)} in this folder — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left`
+            : null)}
+          onTick={tickFolder}
+          actions={{
+            canCreate: canUploadMyResumes,
+            canRename: canUpdateMyResumes,
+            canUpload: canUploadMyResumes,
+            onCreate: createFolder,
+            onRename: renameFolder,
+            onUploadTo: (id) => { openFolder(id); openUpload(id); },
+          }}
+          onOverlayChange={onOverlayChange}
+        />
+      )}
+      <div className="min-w-0 space-y-2">
+      {/* The list: only the loaded rows are in the DOM; 50 more on scroll. */}
+      {archivedHere ? (
+        archivedLoading ? (
+          <div className="flex items-center justify-center py-10 rounded-lg border border-dashed border-gray-200 dark:border-slate-700">
+            <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
+          </div>
+        ) : archived?.error ? (
+          <p className="rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-3 text-sm text-destructive">{archived.error}</p>
+        ) : !archived || archived.rows.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center tf-card-desc">
+            {filters.search ? 'No archived resumes match this search.' : 'No archived resumes.'}
+          </div>
+        ) : (
+          <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
+            <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
+              <label className={`inline-flex items-center gap-2 min-w-0 ${canUnarchive ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+                <input
+                  type="checkbox"
+                  checked={archivedAllTicked}
+                  ref={(el) => { if (el) el.indeterminate = !archivedAllTicked && archivedTicked.length > 0; }}
+                  disabled={!canUnarchive || unarchiving.size > 0}
+                  onChange={() => setArchivedPicks(archivedAllTicked ? new Set() : new Set(archived.rows.map((r) => r.id)))}
+                  aria-label="Tick every listed archived resume"
+                  className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                />
+                <span className="truncate">Archived Resumes</span>
+              </label>
+              <span className="shrink-0 inline-flex items-center gap-2">
+                <span className="tabular-nums">{fmt(archived.rows.length)} of {fmt(archived.total)}</span>
+                <button
+                  type="button"
+                  onClick={() => void unarchive(archivedTicked)}
+                  disabled={!canUnarchive || unarchiving.size > 0 || archivedTicked.length === 0}
+                  title={!canUnarchive ? 'You do not have permission to unarchive resumes'
+                    : archivedTicked.length === 0 ? 'Tick the resumes to unarchive'
+                    : 'Back to their original folders — then they can be invited'}
+                  className="normal-case tracking-normal inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-2xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ArchiveRestore className="w-3 h-3" aria-hidden="true" />
+                  Unarchive selected{archivedTicked.length > 0 ? ` (${fmt(archivedTicked.length)})` : ''}
+                </button>
+              </span>
+            </li>
+            {archived.rows.map((r) => {
+              const busy = unarchiving.has(r.id);
+              const ticked = archivedPicks.has(r.id);
               return (
-                <li key={f.id || 'all'} className={`flex items-center gap-1.5 pr-2 ${here ? 'bg-brand-blue/10' : ''}`} style={{ paddingLeft: `${8 + f.depth * 14}px` }}>
+                <li key={r.id} className={`flex items-center gap-2.5 px-3 py-2 ${ticked ? 'bg-amber-50/60 dark:bg-amber-500/5' : ''}`}>
+                  {/* Ticks here pick resumes to unarchive — archived resumes are never invited. */}
                   <input
                     type="checkbox"
-                    checked={ticked && !someOut}
-                    ref={(el) => { if (el) el.indeterminate = someOut; }}
-                    disabled={pickingDisabled || f.count === 0 || (!ticked && listRoom !== null && f.count > listRoom)}
-                    title={!ticked && listRoom !== null && f.count > listRoom ? `${fmt(f.count)} in this folder — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left` : undefined}
-                    onChange={(e) => tickFolder(f.id, e.target.checked)}
-                    aria-label={`Select everyone in ${f.name}`}
+                    checked={ticked}
+                    disabled={!canUnarchive || busy}
+                    onChange={() => setArchivedPicks((s) => { const next = new Set(s); if (next.has(r.id)) next.delete(r.id); else next.add(r.id); return next; })}
+                    title={canUnarchive ? 'Tick to unarchive' : 'You do not have permission to unarchive resumes'}
+                    aria-label={`Tick ${r.name} to unarchive`}
                     className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
                   />
+                  <span aria-hidden="true" className="max-sm:hidden shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-2xs font-semibold text-amber-700 dark:text-amber-400">
+                    {initials(r.name)}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={r.name}>{kind === 'interview' ? formatCandidateFirstName(r.name) : r.name}</span>
+                    <span className="flex items-center gap-1 min-w-0 tf-meta">
+                      {r.email
+                        ? <><Mail className="w-3 h-3 shrink-0" aria-hidden="true" /><span className="truncate" title={r.email}>{r.email}</span></>
+                        : <span className="font-medium text-warning-strong">No email</span>}
+                    </span>
+                  </span>
+                  <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <Archive className="w-3 h-3" aria-hidden="true" />Archived
+                  </span>
+                  {busy && <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin text-brand-blue" aria-label="Unarchiving" />}
                   <button
                     type="button"
-                    onClick={() => openFolder(f.id)}
-                    aria-current={here || undefined}
-                    className={`flex-1 min-w-0 flex items-center gap-1.5 py-1.5 text-left text-xs ${here ? 'font-semibold text-brand-blue' : 'text-gray-700 dark:text-slate-300 hover:text-gray-900 dark:hover:text-slate-100'}`}
+                    onClick={() => openPreview({ resume_id: r.id, name: r.name, email: r.email, phone: '', source: 'my-resumes', rating: null, match_score: null, score: null, already_invited: false })}
+                    aria-label={`View resume of ${r.name}`}
+                    title="View resume"
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
                   >
-                    <FolderIcon className={`w-3.5 h-3.5 shrink-0 ${here ? 'text-brand-blue' : 'text-brand-orange'}`} aria-hidden="true" />
-                    <span className="truncate" title={f.name}>{f.name}</span>
-                    <span className="ml-auto shrink-0 tabular-nums text-gray-400">{fmt(f.count)}</span>
+                    <Eye className="w-4 h-4" aria-hidden="true" />
                   </button>
+                  <ResumeRowMenu name={r.name} actions={rowActions(r.id, r.name, 'archived')} onOverlayChange={onOverlayChange} />
                 </li>
               );
             })}
           </ul>
-          {folders === null && <p className="px-3 py-1.5 text-xs text-gray-400 inline-flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Loading folders…</p>}
-          <p className="shrink-0 px-3 pt-1.5 border-t border-gray-200/70 dark:border-slate-700/60 text-2xs text-gray-500 dark:text-slate-400">Tick a folder to select everyone in it.</p>
-        </nav>
-      )}
-      <div className="min-w-0 space-y-2">
-      {/* The list: only the loaded rows are in the DOM; 50 more on scroll. */}
-      {error ? (
+        )
+      ) : error ? (
+
         <p className="rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-3 text-sm text-destructive">{error}</p>
       ) : loading ? (
         <div className="flex items-center justify-center py-10 rounded-lg border border-dashed border-gray-200 dark:border-slate-700">
@@ -734,16 +1367,16 @@ export default function ServerCandidatePicker({
         </div>
       ) : rows.length === 0 ? (
         <div className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center tf-card-desc">
-          {counts && counts[source] === 0
+          {tabCount(source) === 0
             ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.'
-              : source === 'score-resume' ? 'No scored resumes for this job outside AI Talent Match.'
+              : source === 'score-resume' ? 'No scored resumes for this job yet.'
               : source === 'my-resumes' ? 'You have not uploaded any resumes yet.'
               : 'No resumes in the Shared Database yet.')
             : 'No candidates match these filters.'}
-          {counts && counts[source] === 0 && (source === 'talent-match' || source === 'score-resume') && (
+          {tabCount(source) === 0 && (source === 'talent-match' || source === 'score-resume') && (
             <span className="mt-3 flex flex-wrap items-center justify-center gap-2">
               <button type="button" onClick={() => onAddTabChange('manual')} className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10">
-                <SourceIcon source="manual" className="w-3.5 h-3.5" />Type in candidates
+                <SourceIcon source="manual" className="w-3.5 h-3.5" />Add manually
               </button>
               <button type="button" onClick={() => onAddTabChange('excel')} className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800">
                 <SourceIcon source="excel" className="w-3.5 h-3.5" />Upload Excel
@@ -756,7 +1389,7 @@ export default function ServerCandidatePicker({
           <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
             <span className="truncate">
               {LIST_HEADING[source]}
-              {source === 'my-resumes' && filters.folder_id ? ` · ${(folders ?? []).find((f) => f.id === filters.folder_id)?.name ?? ''}` : ''}
+              {source === 'my-resumes' && filters.folder_id ? ` · ${flatFolders.find((f) => f.id === filters.folder_id)?.name ?? ''}` : ''}
             </span>
             <span className="shrink-0 tabular-nums">{fmt(rows.length)} of {fmt(total)}</span>
           </li>
@@ -786,12 +1419,13 @@ export default function ServerCandidatePicker({
                       {isDbTab(source) && versionChip(r)}
                     </span>
                     <span className="flex items-center gap-1 min-w-0 tf-meta">
+                      {/* Phones: the email only — both were cut to a few letters. */}
                       {r.title && (
-                        <>
+                        <span className="max-sm:hidden contents">
                           <Briefcase className="w-3 h-3 shrink-0" aria-hidden="true" />
                           <span className="truncate max-w-[45%]" title={r.title}>{r.title}</span>
                           <span aria-hidden="true" className="px-0.5">•</span>
-                        </>
+                        </span>
                       )}
                       {r.email
                         ? <><Mail className="w-3 h-3 shrink-0" aria-hidden="true" /><span className="truncate" title={r.email}>{r.email}</span></>
@@ -827,6 +1461,9 @@ export default function ServerCandidatePicker({
                   >
                     <Eye className="w-4 h-4" aria-hidden="true" />
                   </button>
+                  {isDbTab(source) && (
+                    <ResumeRowMenu name={r.name} actions={rowActions(r.resume_id, r.name, source as 'my-resumes' | 'internal-db')} onOverlayChange={onOverlayChange} />
+                  )}
                 </label>
               </li>
             );
@@ -855,6 +1492,43 @@ export default function ServerCandidatePicker({
       </div>
       </div>
       {footer}
+      {uploading && typeof document !== 'undefined' && createPortal(
+        <UploadModal
+          folders={flatFolders.map(convertApiFolderToTree)}
+          tenant={tenant}
+          uploadSection="my-resumes"
+          targetFolder={uploadFolder ?? (filters.folder_id && filters.folder_id !== archivedFolderId ? filters.folder_id : undefined)}
+          onClose={closeUpload}
+          onUpload={(files, folderId) => uploadResumeFiles(files, folderId)}
+          onScoreResume={(id, candidateName) => onUploaded([{ id, candidateName }])}
+          onScoreResumes={onUploaded}
+          onViewResume={(id) => { closeUpload(); openPreview({ resume_id: id, name: 'Resume', email: '', phone: '', source: 'my-resumes', rating: null, match_score: null, score: null, already_invited: false }); }}
+          duplicateProceedLabel="Use Existing Resume"
+        />,
+        document.body,
+      )}
+      <AlertDialog open={!!archiveAsk} onOpenChange={(open) => { if (!open) doneAsking(setArchiveAsk); }}>
+        <AlertDialogContent className="sm:max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Archive className="w-5 h-5 text-amber-600" />Archive Resume</AlertDialogTitle>
+            <AlertDialogDescription>
+              Archive {archiveAsk?.name ? <b className="font-semibold">{archiveAsk.name}</b> : 'this resume'}? It moves to Archived Resumes and cannot be invited until it is unarchived.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { const a = archiveAsk; doneAsking(setArchiveAsk); if (a) void archiveResume(a.id); }}>
+              Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <DeleteResumeDialog
+        open={!!deleteAsk}
+        names={deleteAsk ? [deleteAsk.name] : []}
+        onCancel={() => doneAsking(setDeleteAsk)}
+        onConfirm={() => { const d = deleteAsk; doneAsking(setDeleteAsk); if (d) void deleteResume(d.id, d.archived); }}
+      />
       {previewing && (
         <ResumeTextPreviewModal
           resumeId={previewing.resume_id}

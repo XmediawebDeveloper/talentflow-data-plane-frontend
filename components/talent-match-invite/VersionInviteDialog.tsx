@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Loader2, Mail, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePathname } from 'next/navigation';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -59,6 +59,9 @@ interface PendingConfirm {
   confirmText: string;
   cancelText?: string;
   destructive?: boolean;
+  /** Closing with candidates picked: drawn as the discard warning (trash
+   *  icon, the count in red, a warning strip), `count` candidates. */
+  discard?: { count: number };
   run: () => Promise<void>;
 }
 
@@ -74,7 +77,7 @@ type Step = 'version' | 'candidates' | 'review' | 'send';
 const STEP_LABEL: Record<Exclude<Step, 'version'>, string> = {
   candidates: 'Add candidates',
   review: 'Review candidates',
-  send: 'Message and send',
+  send: 'Send invite',
 };
 const stepLabel = (s: Step, singular: string) => (s === 'version' ? singular : STEP_LABEL[s]);
 
@@ -125,6 +128,7 @@ export default function VersionInviteDialog({
   inviteAllowed = true,
   inviteDeniedReason,
   preselect = true,
+  pickInto,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -136,6 +140,10 @@ export default function VersionInviteDialog({
   jobVersionNumber?: number;
   /** The candidates ticked on the page ([] / omitted = none). */
   candidates?: InviteCandidate[];
+  /** Opened from the Resume Database's My Resumes / Shared Database table:
+   *  the page's ticked resumes are picked in that list (shown ticked there,
+   *  not sent as page candidates) and the Resume Database tab opens on it. */
+  pickInto?: 'my-resumes' | 'internal-db';
   /** The version the button is for (a version row's Invite, Invite More):
    *  the Version step is left out. Omitted: the cards, newest sendable ticked. */
   versionId?: string;
@@ -215,9 +223,18 @@ export default function VersionInviteDialog({
   const [versionId, setVersionId] = useState<string | null>(null);
   const [step, setStep] = useState<Step | null>(null);
   /* The page's candidates with an email go straight into the send (no email,
-     no invite — said once in Review). `preselect` false lists them left out. */
-  const recipients = candidates.filter((c) => c.email);
-  const noEmailCount = candidates.length - recipients.length;
+     no invite — said once in Review). `preselect` false lists them left out.
+     With `pickInto` they are the list's own picks instead (`pagePicks`). */
+  const recipients = pickInto ? [] : candidates.filter((c) => c.email);
+  const [pagePicks] = useState<PickerSelection>(() => (pickInto
+    ? {
+        mode: 'ids',
+        picked: Object.fromEntries(candidates
+          .filter((c) => c.email && c.resumeId)
+          .map((c) => [c.resumeId!, { resumeId: c.resumeId!, name: c.name, email: c.email, source: pickInto }])),
+      }
+    : EMPTY_SELECTION));
+  const noEmailCount = candidates.filter((c) => !c.email).length;
   const [leftOut, setLeftOut] = useState<LeftOut>(() => (
     preselect ? {} : Object.fromEntries(recipients.map((c) => [reviewKey({ resume_id: c.resumeId, email: c.email }), 'extra' as const]))
   ));
@@ -228,11 +245,11 @@ export default function VersionInviteDialog({
   const [quotaAvailable, setQuotaAvailable] = useState<number | null>(null);
   const [quotaUnlimited, setQuotaUnlimited] = useState(false);
   /* Pick from lists: the picked rows or the filter — never the rows themselves. */
-  const [serverSelection, setServerSelection] = useState<PickerSelection>(EMPTY_SELECTION);
+  const [serverSelection, setServerSelection] = useState<PickerSelection>(pagePicks);
   /* Added by email (typed / Excel). */
   const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
   const [extraCounts, setExtraCounts] = useState<ExtraCounts>({ manual: 0, excel: 0 });
-  /* The candidates step's open tab when it is Type in / Upload Excel (null =
+  /* The candidates step's open tab when it is Manual / Upload Excel (null =
      one of the lists), and a key that empties what was added directly. */
   const [addTab, setAddTab] = useState<ExtraMode | null>(null);
   const [extrasKey, setExtrasKey] = useState(0);
@@ -264,6 +281,8 @@ export default function VersionInviteDialog({
   const [editing, setEditing] = useState<AssessmentResponse | null>(null);
   const [viewingInterviewId, setViewingInterviewId] = useState<string | null>(null);
   const preselected = useRef(false);
+  /* Set by a pick from the job-less list: the steps then open on step 1. */
+  const fromListPick = useRef(false);
   /* A resume / versions popup open over a step: Esc closes it, not this. */
   const childOverlay = useRef<(() => void) | null>(null);
   const onOverlayChange = (close: (() => void) | null) => { childOverlay.current = close; };
@@ -286,8 +305,14 @@ export default function VersionInviteDialog({
       const fixed = pickedVersionId ? next.find((v) => v.id === pickedVersionId && v.sendable) : undefined;
       const chosen = fixed ?? listed.find((v) => v.sendable);
       // Open where the work is: the page's candidates → Review; a fixed
-      // version → Candidates; else the Version step.
-      setStep(!chosen ? 'version' : recipients.length > 0 ? 'review' : fixed ? 'candidates' : 'version');
+      // version → Candidates; else the Version step. Picked from the list
+      // (Resume Database and the other job-less buttons): step 1, Add
+      // candidates — the page's candidates are already in, so it skipped
+      // straight to Review.
+      setStep(!chosen ? 'version'
+        : fromListPick.current ? (fixed ? 'candidates' : 'version')
+        : recipients.length > 0 ? 'review' : fixed ? 'candidates' : 'version');
+      fromListPick.current = false;
     }
     setVersionId((cur) => {
       if (cur && pool.some((v) => v.id === cur && v.sendable)) return cur;
@@ -383,11 +408,6 @@ export default function VersionInviteDialog({
     0,
     (extraLimitByUnits ? quotaAvailable! : MAX_EXTRA_CANDIDATES) - recipients.length - selectionCount(serverSelection),
   );
-  const unitsTone = unitsRoom === null || unitsRoom > 0
-    ? { bar: 'bg-brand-blue', text: 'text-gray-600 dark:text-slate-300' }
-    : unitsRoom === 0
-      ? { bar: 'bg-warning', text: 'font-medium text-warning-strong' }
-      : { bar: 'bg-destructive', text: 'font-medium text-destructive' };
   /* Emails added directly — a list row with one of them is not ticked again. */
   const addedEmails = new Set(extras.map((x) => x.email.trim().toLowerCase()));
   const clearCandidates = () => {
@@ -403,8 +423,9 @@ export default function VersionInviteDialog({
     title: `Discard ${plural(addedCount, 'selected candidate')}?`,
     message: 'Closing now loses everyone you have picked. This cannot be undone.',
     confirmText: 'Discard and close',
-    cancelText: 'Keep editing',
+    cancelText: 'Cancel',
     destructive: true,
+    discard: { count: addedCount },
     run: async () => onClose(),
   });
   const requestClose = () => {
@@ -525,6 +546,7 @@ export default function VersionInviteDialog({
       setPickedVersionId(cfg.id);
     }
     preselected.current = false;
+    fromListPick.current = true;
     setStep(null);
     setLoading(true);
     bodyRef.current?.scrollTo({ top: 0 });
@@ -538,6 +560,8 @@ export default function VersionInviteDialog({
     setLoaded(false);
     setStep(null);
     clearCandidates();
+    // The page's own picks come back with the next pick from the list.
+    setServerSelection(pagePicks);
     setCandidatesMounted(false);
     setAddTab(null);
     setVerNote(null);
@@ -756,6 +780,48 @@ export default function VersionInviteDialog({
   const canSend = !!selected?.sendable && !!reviewCounts && reviewCounts.invite > 0 && perms.canInvite && !off && !quotaShort && !jobLock && !emptyMessage;
   const shortBy = quotaAvailable !== null ? Math.max(0, willInvite - quotaAvailable) : 0;
   const versionTag = selected ? `${label.singular} v${selected.version}` : label.singular;
+
+  /* Opened from the Resume Database with resumes ticked there: why fewer than
+     that many are selected or will be sent — no email (never ticked), or
+     already invited to this version (ticked, skipped at send) — read from the
+     same review the Review step uses, per version. Said in the candidates
+     footer, so a first-time user sees why 62 became 61. */
+  const pagePickIds = Object.keys(pagePicks.mode === 'ids' ? pagePicks.picked : {});
+  const pageCheckKey = pickInto && job && sendableId && pagePickIds.length ? `${sendableId}` : null;
+  const [pageCheck, setPageCheck] = useState<{ key: string; invited: number; other: number } | null>(null);
+  useEffect(() => {
+    if (!pageCheckKey || !job || !selected) return;
+    let cancelled = false;
+    bulkInviteService.review(selected.jdId || job.jdId, {
+      kind,
+      version_id: pageCheckKey,
+      selection: { mode: 'ids', resume_ids: pagePickIds },
+      view: 'skipped',
+      page: 1,
+      page_size: 100,
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const invited = res.items.filter((r) => /invited/i.test(r.reason ?? '')).length;
+        // Past the first 100 skipped rows the reasons are not read; they count as "other".
+        setPageCheck({ key: pageCheckKey, invited, other: Math.max(0, res.counts.skipped - invited) });
+      })
+      .catch(() => { /* the tip simply leaves the server's part out */ });
+    return () => { cancelled = true; };
+    // pageCheckKey stands for the version; the page's picks never change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageCheckKey]);
+  const pageCheckNow = pageCheck && pageCheck.key === pageCheckKey ? pageCheck : null;
+  const pageTip = (() => {
+    if (!pickInto || candidates.length === 0) return null;
+    const parts: string[] = [];
+    if (noEmailCount > 0) parts.push(`${noEmailCount.toLocaleString()} without email`);
+    if (pageCheckNow?.invited) parts.push(`${pageCheckNow.invited.toLocaleString()} already invited to ${versionTag}`);
+    if (pageCheckNow?.other) parts.push(`${pageCheckNow.other.toLocaleString()} skipped for another reason`);
+    if (parts.length === 0) return null;
+    const ready = Math.max(0, candidates.length - noEmailCount - (pageCheckNow?.invited ?? 0) - (pageCheckNow?.other ?? 0));
+    return `${ready.toLocaleString()} of ${candidates.length.toLocaleString()} picked will get the invite · ${parts.join(' · ')}`;
+  })();
   const selectedNow = reviewCounts ? reviewCounts.all - reviewCounts.left_out : recipientCount;
   const totalNow = reviewCounts ? reviewCounts.all : recipientCount;
 
@@ -782,7 +848,9 @@ export default function VersionInviteDialog({
                     ? `Deselect ${shortBy.toLocaleString()} ${shortBy === 1 ? 'candidate' : 'candidates'} or add units to continue`
                     : current === 'send' && emptyMessage
                       ? 'Write a message to continue'
-                      : `${selectedNow.toLocaleString()} of ${totalNow.toLocaleString()} selected · ${versionTag}`;
+                      // Opened from the Resume Database: why not all of the page's picks
+                      // get the invite, in place of the count.
+                      : pageTip ?? `${selectedNow.toLocaleString()} of ${totalNow.toLocaleString()} selected · ${versionTag}`;
 
   /* What each step needs before the next one opens. */
   const stepReady = (s: Step): boolean => s === 'version'
@@ -801,7 +869,7 @@ export default function VersionInviteDialog({
     : nextStep === 'review'
       ? `Next: Review ${recipientCount ? `${plural(recipientCount, 'candidate')}` : 'candidates'}`
       : nextStep === 'send'
-        ? 'Next: Message'
+        ? 'Next: Send invite'
         : `Next: ${stepLabel(nextStep, label.singular)}`;
   const onPrimary = () => {
     if (nextDisabled) return;
@@ -882,20 +950,23 @@ export default function VersionInviteDialog({
             <>
               {/* Steps — any step whose earlier steps are ready opens from here. */}
               <nav aria-label="Steps" className="flex-shrink-0 max-sm:sticky max-sm:top-0 max-sm:z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 overflow-x-auto">
-                <ol className="flex min-w-max sm:min-w-0 items-center gap-2">
+                {/* Below laptop width only the current step names itself — four
+                    labels overran a tablet-width popup and were cut off. */}
+                <ol className="flex min-w-max lg:min-w-0 items-center gap-1.5 sm:gap-2">
                   {steps.map((s, i) => {
                     const done = i < stepIndex;
                     const here = i === stepIndex;
                     const open = !here && reachable(i);
                     return (
                       <Fragment key={s}>
-                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
+                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-4 sm:min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
                         <li>
                           <button
                             type="button"
                             onClick={() => { if (open) goTo(s); }}
                             disabled={!open}
                             aria-current={here ? 'step' : undefined}
+                            title={stepLabel(s, label.singular)}
                             className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
                               here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-400 dark:text-slate-500'
                             }`}
@@ -905,7 +976,7 @@ export default function VersionInviteDialog({
                             }`}>
                               {done ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
                             </span>
-                            <span className={here ? '' : 'max-sm:hidden'}>{stepLabel(s, label.singular)}</span>
+                            <span className={here ? '' : 'max-lg:hidden'}>{stepLabel(s, label.singular)}</span>
                           </button>
                         </li>
                       </Fragment>
@@ -1116,6 +1187,7 @@ export default function VersionInviteDialog({
                   </p>
                 </div>
                 <ServerCandidatePicker
+                  initialSource={pickInto}
                   jdId={job.jdId}
                   kind={kind}
                   versionId={selected?.sendable ? selected.id : null}
@@ -1142,57 +1214,6 @@ export default function VersionInviteDialog({
                       limitByUnits={extraLimitByUnits}
                     />
                   )}
-                  footer={(
-                    /* Stays in view while the list scrolls (wide screens; on
-                       phones the popup's own footer carries the count). */
-                    <div className="sm:sticky sm:-bottom-6 z-[2] flex flex-wrap items-center justify-between gap-x-4 gap-y-1.5 rounded-b-xl border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 sm:px-4 py-2.5 text-sm">
-                      {addedCount > 0 ? (
-                        <span className="min-w-0">
-                          <b className="font-semibold text-brand-blue tabular-nums">✓ {addedCount.toLocaleString()} selected</b>
-                          <span className="text-gray-500 dark:text-slate-400 tabular-nums">
-                            {[
-                              extraCounts.manual && `${extraCounts.manual.toLocaleString()} typed in`,
-                              extraCounts.excel && `${extraCounts.excel.toLocaleString()} from Excel`,
-                              selectionCount(serverSelection) && `${selectionCount(serverSelection).toLocaleString()} picked`,
-                            ].filter(Boolean).map((part) => ` · ${part}`).join('')}
-                          </span>
-                        </span>
-                      ) : (
-                        <span className="text-gray-500 dark:text-slate-400">No one selected yet — add or pick candidates above.</span>
-                      )}
-                      <span className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-                        {quotaAvailable !== null && (
-                          <span
-                            className="inline-flex items-center gap-2 text-xs tabular-nums"
-                            title={unitsRoom !== null && unitsRoom > 0 ? `${plural(unitsRoom, 'unit')} left` : undefined}
-                          >
-                            <span
-                              aria-hidden="true"
-                              className="relative h-1.5 w-20 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
-                            >
-                              <span
-                                className={`absolute inset-y-0 left-0 rounded-full ${unitsTone.bar}`}
-                                style={{ width: `${quotaAvailable > 0 ? Math.min(100, (recipientCount / quotaAvailable) * 100) : 100}%` }}
-                              />
-                            </span>
-                            <span className={unitsTone.text}>
-                              {recipientCount.toLocaleString()} / {quotaAvailable.toLocaleString()} units
-                              {unitsRoom !== null && unitsRoom === 0 ? ' · Full' : unitsRoom !== null && unitsRoom < 0 ? ` · ${(-unitsRoom).toLocaleString()} over` : ''}
-                            </span>
-                          </span>
-                        )}
-                        {addedCount > 0 && (
-                          <button
-                            type="button"
-                            onClick={clearCandidates}
-                            className="text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:underline underline-offset-2"
-                          >
-                            Clear selection
-                          </button>
-                        )}
-                      </span>
-                    </div>
-                  )}
                 />
               </div>
             )}
@@ -1201,7 +1222,10 @@ export default function VersionInviteDialog({
           </div>
 
           <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 shrink-0 ${inSteps ? 'max-sm:sticky max-sm:bottom-0 max-sm:z-10' : ''}`}>
-            <p className="min-w-0 sm:truncate tf-body">{footerText}</p>
+            <p className="min-w-0 sm:truncate tf-body" title={footerText || undefined}>
+              {footerText && footerText === pageTip && <Lightbulb className="inline w-4 h-4 mr-1.5 -mt-0.5 text-amber-500" aria-hidden="true" />}
+              {footerText}
+            </p>
             {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
             <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
               {bulkJob ? (
@@ -1213,13 +1237,24 @@ export default function VersionInviteDialog({
                 </button>
               ) : (
                 <>
+                  {/* Cancel on every step (it asks first when candidates are
+                      picked); Back as well once past the first step. */}
                   <Button
                     variant="secondary"
-                    onClick={() => (inSteps && stepIndex > 0 ? goTo(steps[stepIndex - 1]) : requestClose())}
+                    onClick={requestClose}
                     className="!h-9 shrink-0 px-4"
                   >
-                    {inSteps && stepIndex > 0 ? 'Back' : 'Cancel'}
+                    Cancel
                   </Button>
+                  {inSteps && stepIndex > 0 && (
+                    <Button
+                      variant="secondary"
+                      onClick={() => goTo(steps[stepIndex - 1])}
+                      className="!h-9 shrink-0 px-4"
+                    >
+                      Back
+                    </Button>
+                  )}
                   {!job && !off ? (
                     <button
                       onClick={chooseFromList}
@@ -1238,8 +1273,10 @@ export default function VersionInviteDialog({
                       className={`flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : current === 'send' ? <Mail className="w-4 h-4" /> : null}
-                      {/* Phones: "Next:" gives way so the label fits. */}
-                      {primaryLabel.startsWith('Next: ') ? <span className="truncate"><span className="max-sm:hidden">Next: </span>{primaryLabel.slice(6)}</span> : primaryLabel}
+                      {/* Phones: "Next:" gives way so the label fits — except
+                          before the send step, where "Send invite" alone would
+                          read as sending now. */}
+                      {primaryLabel.startsWith('Next: ') ? <span className="truncate"><span className={nextStep === 'send' ? '' : 'max-sm:hidden'}>Next: </span>{primaryLabel.slice(6)}</span> : primaryLabel}
                     </button>
                   )}
                 </>
@@ -1249,6 +1286,46 @@ export default function VersionInviteDialog({
 
           {confirm && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-[1px] p-4 sm:p-6">
+              {confirm.discard ? (
+                /* Discard: no corner X — Cancel keeps editing, the red button
+                   discards and closes. */
+                <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" aria-describedby="version-invite-confirm-desc" className="w-full max-w-md rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-5 sm:p-6 text-left">
+                  {/* Icon and title on one line. */}
+                  <div className="flex items-center gap-3">
+                    <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-50 dark:bg-red-500/10 ring-1 ring-red-100 dark:ring-red-500/20">
+                      <Trash2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                    </span>
+                    <h3 id="version-invite-confirm" className="min-w-0 text-lg sm:text-xl font-bold text-gray-900 dark:text-slate-50">
+                      Discard <span className="text-red-600 dark:text-red-400 tabular-nums">{confirm.discard.count.toLocaleString()}</span> selected {confirm.discard.count === 1 ? 'candidate' : 'candidates'}?
+                    </h3>
+                  </div>
+                  <p id="version-invite-confirm-desc" className="mt-3 text-sm text-gray-600 dark:text-slate-400">
+                    Closing now will remove the {plural(confirm.discard.count, 'selected candidate')} from your list. This action <span className="font-semibold text-red-600 dark:text-red-400">cannot be undone</span>.
+                  </p>
+                  <div className="mt-4 flex items-center gap-3 rounded-xl border border-red-100 dark:border-red-500/20 bg-red-50/70 dark:bg-red-500/10 px-4 py-3 text-left">
+                    <AlertTriangle className="h-5 w-5 shrink-0 text-red-600 dark:text-red-400" aria-hidden="true" />
+                    <span aria-hidden="true" className="h-6 w-px shrink-0 bg-red-200 dark:bg-red-500/30" />
+                    <p className="text-sm font-medium text-gray-800 dark:text-slate-200">
+                      You are about to discard <span className="font-bold text-red-600 dark:text-red-400 tabular-nums">{confirm.discard.count.toLocaleString()}</span> {confirm.discard.count === 1 ? 'candidate' : 'candidates'}.
+                    </p>
+                  </div>
+                  <div className="mt-5 grid grid-cols-2 gap-3">
+                    <Button variant="secondary" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">
+                      {confirm.cancelText ?? 'Cancel'}
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      onClick={() => void runConfirm()}
+                      disabled={confirmBusy}
+                      icon={confirmBusy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                      className="w-full"
+                      autoFocus
+                    >
+                      {confirm.confirmText}
+                    </Button>
+                  </div>
+                </div>
+              ) : (
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
                 <h3 id="version-invite-confirm" className="tf-card-title">{confirm.title}</h3>
                 <p className="mt-1.5 tf-card-desc">{confirm.message}</p>
@@ -1267,6 +1344,7 @@ export default function VersionInviteDialog({
                   </Button>
                 </div>
               </div>
+              )}
             </div>
           )}
         </div>
