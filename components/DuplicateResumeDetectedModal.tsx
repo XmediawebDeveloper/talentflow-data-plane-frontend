@@ -30,6 +30,8 @@ interface DuplicateResumeDetectedModalProps {
   jobTitle?: string;
   onViewExisting: (resumeId: string) => void;
   onProceedWithScoring: (resumeId: string) => void;
+  /** The main button's wording — "Proceed with Scoring" unless the flow is not scoring (the invite popup: "Use Existing Resume"). */
+  proceedLabel?: string;
 }
 
 export function DuplicateResumeDetectedModal({
@@ -40,6 +42,7 @@ export function DuplicateResumeDetectedModal({
   jobTitle,
   onViewExisting,
   onProceedWithScoring,
+  proceedLabel = 'Proceed with Scoring',
 }: DuplicateResumeDetectedModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -147,7 +150,7 @@ export function DuplicateResumeDetectedModal({
             className="flex items-center justify-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3"
           >
             <ClipboardList className="w-3.5 h-3.5" />
-            Proceed with Scoring
+            {proceedLabel}
           </Button>
         </DialogFooter>
       </DialogContent>

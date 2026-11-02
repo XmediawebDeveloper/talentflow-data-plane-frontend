@@ -6,6 +6,8 @@ import { useTheme } from "next-themes";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { SiteHeader } from "./SiteHeader";
+import { REDESIGNED_ROUTES } from "./fonts";
 
 // Items with a `section` exist on the one-page landing route, so on "/" the
 // menu scrolls to them; an item without one would always navigate to its page.
@@ -18,7 +20,7 @@ const navItems: Array<{ label: string; href: string; section?: string }> = [
   { label: "About", href: "/about", section: "about" },
 ];
 
-export function Header() {
+function ClassicHeader() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [isSubdomain, setIsSubdomain] = useState(false);
@@ -245,4 +247,10 @@ export function Header() {
       </div>
     </header>
   );
+}
+
+/** Landing and pricing use the redesigned header; every other marketing page keeps the classic one. */
+export function Header() {
+  const pathname = usePathname();
+  return REDESIGNED_ROUTES.has(pathname) ? <SiteHeader /> : <ClassicHeader />;
 }

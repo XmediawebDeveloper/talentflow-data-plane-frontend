@@ -1650,10 +1650,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     setLoadingScoredResumes(true);
     try {
       console.log('[JobDetailView] Fetching scored resumes for JD:', job.id);
-      const response = await jdService.getScoredResumes(job.id, {
-        page_size: 100,
+      // Every page, not just the first 100: the tab badge, the stats and the
+      // list all read the real total. Page 1 says how many pages follow; the
+      // rest load in parallel.
+      const PAGE_SIZE = 100;
+      const first = await jdService.getScoredResumes(job.id, {
+        page_size: PAGE_SIZE,
+        page: 1,
         sort_by: 'latest'  // Always get latest scores first
       });
+      const pageCount = Math.ceil((first?.total ?? 0) / PAGE_SIZE);
+      const rest = pageCount > 1
+        ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, i) =>
+            jdService.getScoredResumes(job.id, { page_size: PAGE_SIZE, page: i + 2, sort_by: 'latest' })))
+        : [];
+      const response = {
+        ...first,
+        items: [...(first?.items || []), ...rest.flatMap((r: any) => r?.items || [])],
+      };
       console.log('[JobDetailView] Scored resumes response:', response);
 
       // Convert API response to ScoredResume format
@@ -1734,13 +1748,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // with the frontend's match_status bucketing. When a backend count was 0
       // (falsy) it fell through to the filter, letting one resume be counted in
       // two buckets at once — e.g. Total 1 but Partial Match 1 AND No Match 1.
-      // `total` also reads the converted list now, not `response.total` — the
-      // backend total counts every scored resume for this JD, while the tab
-      // itself (ScoredResumesTable) only ever renders this one `page_size:
-      // 100` page, via its own `resumes.length` count badge. For a JD with
-      // more than 100 scored resumes those two disagreed, so the tab-strip
-      // badge showed the true (higher) total and then visibly dropped to 100
-      // the moment the tab opened.
+      // `total` reads the converted list too: every page is loaded above, so
+      // it is the backend's real total and the same number the tab's own
+      // table (ScoredResumesTable's `resumes.length` badge) and the invite
+      // popup's Scored Resumes tab show.
       const stats = {
         total: convertedResumes.length,
         exactMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
