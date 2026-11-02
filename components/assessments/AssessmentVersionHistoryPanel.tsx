@@ -1502,7 +1502,7 @@ export default function AssessmentVersionHistoryPanel({
         </div>
       ) : groups.length === 0 ? (
         <p className="py-2 tf-meta">
-          No version history for this assessment.
+          No version history for this {vocabulary.childSingular.toLowerCase()}.
         </p>
       ) : (
         <>

@@ -271,6 +271,8 @@ const fmt = (n: number) => n.toLocaleString();
  */
 export default function ServerCandidatePicker({
   initialSource,
+  selectedTotal = 0,
+  onClearSelection,
   jdId,
   kind,
   versionId,
@@ -289,6 +291,10 @@ export default function ServerCandidatePicker({
   /** The list tab to open on (the Resume Database's side the popup was
    *  opened from); omitted: AI Talent Match. */
   initialSource?: InviteCandidateSourceTab;
+  /** Everyone selected in the popup (every tab, typed in and Excel too). */
+  selectedTotal?: number;
+  /** Clear selection, beside Select all: empties every tab's picks. */
+  onClearSelection?: () => void;
   jdId: string;
   kind: BulkInviteKind;
   /** The version being sent — fills "already invited". */
@@ -1059,6 +1065,16 @@ export default function ServerCandidatePicker({
         {selectingAll && <Loader2 className="w-3 h-3 mr-1 animate-spin" aria-hidden="true" />}
         {filterModeHere ? `All ${fmt(selection.total)} matching selected` : `Select all ${fmt(total)} matching`}
       </button>
+      {onClearSelection && selectedTotal > 0 && (
+        <button
+          type="button"
+          onClick={onClearSelection}
+          title={`Untick all ${fmt(selectedTotal)} selected, on every tab`}
+          className="text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100 hover:underline underline-offset-2"
+        >
+          Clear selection
+        </button>
+      )}
     </>
   );
 
@@ -1498,6 +1514,8 @@ export default function ServerCandidatePicker({
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={uploadFolder ?? (filters.folder_id && filters.folder_id !== archivedFolderId ? filters.folder_id : undefined)}
+          /* From a folder's ⋮ Upload to Folder: only that folder and its subfolders. */
+          scopeFolderId={uploadFolder}
           onClose={closeUpload}
           onUpload={(files, folderId) => uploadResumeFiles(files, folderId)}
           onScoreResume={(id, candidateName) => onUploaded([{ id, candidateName }])}

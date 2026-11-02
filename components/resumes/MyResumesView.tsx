@@ -956,6 +956,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [cardRenameValue, setCardRenameValue] = useState('');
   const [cardFolderFilter, setCardFolderFilter] = useState<CardFolderFilter>('all');
   const [uploadTargetFolderId, setUploadTargetFolderId] = useState<string | undefined>();
+  /* Set only by a folder's "Upload to Folder": the upload's folder dropdown
+     then lists just that folder and its subfolders. */
+  const [uploadScopeFolderId, setUploadScopeFolderId] = useState<string | undefined>();
 
   // Modal states
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -3012,8 +3015,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     closeCardFolderRename();
   };
 
-  const openUploadToFolder = (folderId?: string) => {
+  const openUploadToFolder = (folderId?: string, scoped = false) => {
     setUploadTargetFolderId(folderId);
+    setUploadScopeFolderId(scoped ? folderId : undefined);
     setIsUploadModalOpen(true);
   };
 
@@ -4207,7 +4211,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               onUploadToFolder={(folderId) => {
                 if (!canUploadMyResumes) return;
                 setSelectedFolder(folderId);
-                openUploadToFolder(folderId);
+                openUploadToFolder(folderId, true);
               }}
               onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
               selectedResumes={selectedResumes}
@@ -4914,9 +4918,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             const list = selectedFolder && selectedFolder !== 'all' ? selectedFolder : null;
             return card || list || undefined;
           })()}
+          scopeFolderId={uploadScopeFolderId}
           onClose={() => {
             setIsUploadModalOpen(false);
             setUploadTargetFolderId(undefined);
+            setUploadScopeFolderId(undefined);
           }}
           onUpload={handleUploadResumes}
           onCreateFolder={handleCreateFolder}

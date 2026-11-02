@@ -10,13 +10,13 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
 import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
 import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
 import InviteMessageStep from './InviteMessageStep';
 import { DEFAULT_EXPIRY_DAYS, defaultInviteMessage } from './inviteDefaults';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
-import { bulkInviteService, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection } from '@/lib/services/bulkInviteService';
+import { bulkInviteService, SERVER_MATCH_LABEL, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection, type InviteCandidateSourceTab, type ServerInviteCandidate } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -715,6 +715,116 @@ export default function VersionInviteDialog({
     return null;
   };
 
+  /* A typed email, looked up on the server before it is added (Manual tab):
+     - already sent to by a "Select all matching" selection → cannot be added
+       again (it would be invited twice);
+     - a candidate in one of the lists but not picked → offered as "Use that
+       resume", so the invite is linked to it instead of a bare email.
+     Lists the user cannot open answer with an error and are skipped. */
+  const LOOKUP_SOURCES: InviteCandidateSourceTab[] = ['talent-match', 'score-resume', 'my-resumes', 'internal-db'];
+  const sameEmail = (r: ServerInviteCandidate, email: string) => r.email.trim().toLowerCase() === email;
+  /* A filter selection with its own search keeps only rows matching it. */
+  const inFilterSearch = (r: ServerInviteCandidate, q?: string) => {
+    if (!q) return true;
+    const t = q.toLowerCase();
+    return [r.name, r.email, r.title ?? ''].some((v) => v.toLowerCase().includes(t));
+  };
+  const lookupParams = () => ({ kind, version_id: selected?.sendable ? selected.id : null, page: 1, page_size: 10 });
+  /* Already invited to the version being sent? The Review step's own check
+     (POST …/bulk-invites/review) for this one email, so the answer is the
+     one Send would act on — said when it is typed, not found at Review. */
+  const invitedCheck = async (email: string): Promise<string | null> => {
+    if (!job || !selected?.sendable) return null;
+    const res = await bulkInviteService.review(selected.jdId || job.jdId, {
+      kind,
+      version_id: selected.id,
+      selection: { mode: 'ids', resume_ids: [] },
+      // Any valid name: only the email decides "already invited".
+      extra_candidates: [{ name: 'Candidate', email }],
+      view: 'skipped',
+      page: 1,
+      page_size: 5,
+    });
+    const row = res.items.find((r) => r.email.trim().toLowerCase() === email && /invited/i.test(r.reason ?? ''));
+    return row
+      ? `${email} is already invited to ${label.singular} v${selected.version}, so it would be skipped. To send it again, use Resend in Track Invites.`
+      : null;
+  };
+  const checkEmail = async (email: string): Promise<EmailCheck> => {
+    if (!job) return {};
+    // Runs beside the list look-ups below; a failure leaves it to Review.
+    const invited = invitedCheck(email).catch(() => null);
+    const sel = serverSelection;
+    if (sel.mode === 'filter') {
+      const res = await bulkInviteService.listCandidates(job.jdId, { ...lookupParams(), ...sel.filters, source: sel.source, search: email });
+      const hit = res.items.find((r) => sameEmail(r, email) && !sel.excluded[r.resume_id] && inFilterSearch(r, sel.filters.search));
+      if (hit) return { taken: `${TAB_LABEL[sel.source]} (Select all matching)` };
+    }
+    const invitedMessage = await invited;
+    if (invitedMessage) return { invited: invitedMessage };
+    const found = await Promise.allSettled(LOOKUP_SOURCES.map((source) =>
+      bulkInviteService.listCandidates(job.jdId, { ...lookupParams(), source, search: email })));
+    for (let i = 0; i < LOOKUP_SOURCES.length; i += 1) {
+      const res = found[i];
+      if (res.status !== 'fulfilled') continue;
+      const hit = res.value.items.find((r) => sameEmail(r, email));
+      if (!hit) continue;
+      const detail = hit.score
+        ? `${hit.score.percent}% · ${SERVER_MATCH_LABEL[hit.score.match_status]}`
+        : hit.rating ? `rating ${hit.rating}` : undefined;
+      return {
+        match: {
+          resumeId: hit.resume_id,
+          name: hit.name,
+          email: hit.email.trim().toLowerCase(),
+          sourceLabel: TAB_LABEL[LOOKUP_SOURCES[i]],
+          sourceKey: LOOKUP_SOURCES[i],
+          detail,
+        },
+      };
+    }
+    return {};
+  };
+  /* A sheet's emails against a "Select all matching" selection: its rows
+     read whole (page 1, the rest in parallel) once per selection. Past 2,000
+     rows it is left to the Review step's own check. */
+  const selectionEmailsCache = useRef<{ key: string; emails: Promise<Set<string>> } | null>(null);
+  const checkEmails = async (emails: string[]): Promise<Set<string>> => {
+    const sel = serverSelection;
+    if (!job || sel.mode !== 'filter' || sel.total > 2000) return new Set();
+    const key = JSON.stringify({ jd: job.jdId, v: selected?.id, source: sel.source, filters: sel.filters, out: Object.keys(sel.excluded) });
+    if (selectionEmailsCache.current?.key !== key) {
+      const load = async () => {
+        const SIZE = 50;
+        const params = { ...lookupParams(), ...sel.filters, source: sel.source, page_size: SIZE };
+        const first = await bulkInviteService.listCandidates(job.jdId, { ...params, page: 1 });
+        const pages = Math.ceil(first.total / SIZE);
+        const rest = await Promise.all(Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
+          bulkInviteService.listCandidates(job.jdId, { ...params, page: i + 2 })));
+        return new Set([first, ...rest].flatMap((p) => p.items)
+          .filter((r) => !sel.excluded[r.resume_id])
+          .map((r) => r.email.trim().toLowerCase()));
+      };
+      selectionEmailsCache.current = { key, emails: load() };
+    }
+    const inSelection = await selectionEmailsCache.current.emails;
+    return new Set(emails.filter((e) => inSelection.has(e)));
+  };
+  /* "Use that resume": picked in its own list (ticked there, counted on that
+     tab). A "Select all matching" selection cannot take a single pick from
+     another list, so then the Manual tab adds it linked to the resume. */
+  const useExistingCandidate = (match: ExistingCandidateMatch): boolean => {
+    if (serverSelection.mode !== 'ids') return false;
+    setServerSelection({
+      mode: 'ids',
+      picked: {
+        ...serverSelection.picked,
+        [match.resumeId]: { resumeId: match.resumeId, name: match.name, email: match.email, source: match.sourceKey as InviteCandidateSourceTab },
+      },
+    });
+    return true;
+  };
+
   /* The send as it stands: the page's candidates and the typed / Excel rows
      as extras, the list picks as the selection. */
   const allExtras: BulkExtraCandidate[] = [
@@ -841,7 +951,8 @@ export default function VersionInviteDialog({
   const footerText = off
     ? ''
     : !job
-      ? `Select ${article} to continue`
+      // The list's pick named, once there is one: Continue is the next move.
+      ? ((kind === 'assessment' ? asPick : aiPick) ? `${label.singular} picked — press Continue` : `Select ${article} to continue`)
       : bulkJob
         ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
         : !loaded
@@ -1055,12 +1166,14 @@ export default function VersionInviteDialog({
                   <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                 </div>
               ) : kind === 'interview' ? (
-                <AIInterviewPicker
-                  configs={jobPickList as AIInterviewResponse[]}
-                  selection={aiPick}
-                  onSelectionChange={setAiPick}
-                  scrollContainerRef={bodyRef}
-                />
+                <div className="flex flex-col min-h-full">
+                  <AIInterviewPicker
+                    configs={jobPickList as AIInterviewResponse[]}
+                    selection={aiPick}
+                    onSelectionChange={setAiPick}
+                    scrollContainerRef={bodyRef}
+                  />
+                </div>
               ) : (
                 <div className="flex flex-col min-h-full">
                   <AssessmentPicker
@@ -1200,6 +1313,8 @@ export default function VersionInviteDialog({
                 </div>
                 <ServerCandidatePicker
                   initialSource={pickInto}
+                  selectedTotal={addedCount}
+                  onClearSelection={clearCandidates}
                   jdId={job.jdId}
                   kind={kind}
                   versionId={selected?.sendable ? selected.id : null}
@@ -1222,6 +1337,9 @@ export default function VersionInviteDialog({
                       disabled={pickingOff}
                       onCopyLink={copyLinkFor}
                       takenEmail={takenEmail}
+                      checkEmail={checkEmail}
+                      checkEmails={checkEmails}
+                      onUseExisting={useExistingCandidate}
                       maxRows={extraMaxRows}
                       limitByUnits={extraLimitByUnits}
                     />

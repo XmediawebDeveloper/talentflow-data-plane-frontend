@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
-import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
+import { Check, CheckCircle, Copy, Download, FileSpreadsheet, Link2, Loader2, Pencil, Plus, Search, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import readXlsxFile from 'read-excel-file/browser';
@@ -35,6 +35,34 @@ interface EntryRow {
   origin: string;
   /** Copy Link already invited this row by link — it is not emailed. */
   linked?: boolean;
+  /** Added through "Use that resume": the invite is linked to this resume,
+   *  and records where it was found. */
+  resumeId?: string;
+  inviteSource?: string;
+}
+
+/** A typed email that is already a candidate in one of the lists. */
+export interface ExistingCandidateMatch {
+  resumeId: string;
+  name: string;
+  email: string;
+  /** The list it was found in, as the tab names it ("AI Talent Match"). */
+  sourceLabel: string;
+  /** The host's own key for that list. */
+  sourceKey: string;
+  /** What to show beside it: "82% match", "rating 8". */
+  detail?: string;
+}
+
+/** What the host knows about a typed email beyond this tab. */
+export interface EmailCheck {
+  /** Already in the send elsewhere (e.g. "AI Talent Match (Select all
+   *  matching)") — it cannot be added again. */
+  taken?: string | null;
+  /** In a list but not picked: offered as "Use that resume". */
+  match?: ExistingCandidateMatch | null;
+  /** Already invited to the version being sent: why it is not added. */
+  invited?: string | null;
 }
 
 /** A sheet row that was not added, as the upload summary lists it. */
@@ -104,7 +132,8 @@ const toCandidates = (rows: EntryRow[]): BulkExtraCandidate[] =>
   rows.filter((r) => !r.linked).map((r) => ({
     name: r.name,
     email: r.email,
-    invite_source: r.origin === 'Manual' ? 'Manual' : 'Excel upload',
+    ...(r.resumeId ? { resume_id: r.resumeId } : {}),
+    invite_source: r.inviteSource ?? (r.origin === 'Manual' ? 'Manual' : 'Excel upload'),
   }));
 
 /** How the rows added here split, for the popup's summary. */
@@ -144,6 +173,9 @@ export default function ExtraCandidatesInput({
   disabled = false,
   onCopyLink,
   takenEmail,
+  checkEmail,
+  checkEmails,
+  onUseExisting,
   maxRows = MAX_EXTRA_CANDIDATES,
   limitByUnits = false,
 }: {
@@ -160,6 +192,17 @@ export default function ExtraCandidatesInput({
   onCopyLink?: (c: { name: string; email: string }) => Promise<string>;
   /** Where else this email is already picked (a list), if anywhere. */
   takenEmail?: (email: string) => string | null;
+  /** The server-side look-up for a typed email: in a "Select all matching"
+   *  selection (cannot be added again), or a candidate in one of the lists
+   *  that is not picked (offered as "Use that resume"). */
+  checkEmail?: (email: string) => Promise<EmailCheck>;
+  /** For a sheet: which of these emails a "Select all matching" selection
+   *  already includes — those rows are skipped as repeated. */
+  checkEmails?: (emails: string[]) => Promise<Set<string>>;
+  /** "Use that resume": the host picks it in its list and returns true; false
+   *  (it cannot, e.g. a "Select all matching" selection is on) adds it here,
+   *  linked to the resume. */
+  onUseExisting?: (match: ExistingCandidateMatch) => boolean;
   /** How many rows here may be emailed — the units left after the other
    *  picks (or the backend cap on unlimited plans). Rows past it are not added. */
   maxRows?: number;
@@ -177,6 +220,10 @@ export default function ExtraCandidatesInput({
   /* The row being edited in place, its draft and what is wrong with it. */
   const [editing, setEditing] = useState<{ id: string; name: string; email: string; error: string | null } | null>(null);
   const [upload, setUpload] = useState<UploadSummary | null>(null);
+  /* The server look-up for a typed email is running. */
+  const [checking, setChecking] = useState(false);
+  /* A typed email found in a list: use that resume, or add it typed. */
+  const [offer, setOffer] = useState<{ match: ExistingCandidateMatch; typedName: string } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const full = room !== null && room <= 0;
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -192,7 +239,9 @@ export default function ExtraCandidatesInput({
     });
   };
 
-  const add = () => {
+  const add = async () => {
+    if (checking) return;
+    setOffer(null);
     const n = name.trim();
     const e = email.trim().toLowerCase();
     if (!n || !e) { setError('Enter a full name and an email address.'); return; }
@@ -210,6 +259,15 @@ export default function ExtraCandidatesInput({
     }
     const elsewhere = takenEmail?.(e);
     if (elsewhere) { setError(`${e} is already added from ${elsewhere}.`); return; }
+    if (checkEmail) {
+      setChecking(true);
+      let found: EmailCheck = {};
+      try { found = await checkEmail(e); } catch { /* the look-up is a help, not a gate */ }
+      setChecking(false);
+      if (found.taken) { setError(`${e} is already included from ${found.taken}.`); return; }
+      if (found.invited) { setError(found.invited); return; }
+      if (found.match) { setOffer({ match: found.match, typedName: n.replace(/\s+/g, ' ') }); return; }
+    }
     commit([{ id: newId(), name: n.replace(/\s+/g, ' '), email: e, origin: 'Manual' }, ...rows]);
     setName('');
     setEmail('');
@@ -225,9 +283,32 @@ export default function ExtraCandidatesInput({
   /* Edit: the add rules again — a name of letters and spaces, a valid email
      not already in this list or picked elsewhere. A row invited by Copy Link
      already has its invitation, so it is not edited. */
+  /* The found-in-a-list offer: the resume (picked by the host where it can,
+     else added here linked to it), or the email as typed. */
+  const useExisting = () => {
+    if (!offer) return;
+    const { match } = offer;
+    if (!onUseExisting?.(match)) {
+      commit([{ id: newId(), name: match.name, email: match.email, origin: 'Manual', resumeId: match.resumeId, inviteSource: match.sourceLabel }, ...rows]);
+    }
+    toast.success(`${match.name} added from ${match.sourceLabel}, linked to their resume`);
+    setOffer(null);
+    setName('');
+    setEmail('');
+    nameRef.current?.focus();
+  };
+  const addTypedAnyway = () => {
+    if (!offer) return;
+    commit([{ id: newId(), name: offer.typedName, email: offer.match.email, origin: 'Manual' }, ...rows]);
+    setOffer(null);
+    setName('');
+    setEmail('');
+    nameRef.current?.focus();
+  };
+
   const startEdit = (r: EntryRow) => setEditing({ id: r.id, name: r.name, email: r.email, error: null });
-  const saveEdit = () => {
-    if (!editing) return;
+  const saveEdit = async () => {
+    if (!editing || checking) return;
     const n = editing.name.trim();
     const e = editing.email.trim().toLowerCase();
     const fail = (error: string) => setEditing({ ...editing, error });
@@ -241,12 +322,23 @@ export default function ExtraCandidatesInput({
       if (same) { fail(`${e} is already added${same.origin === 'Manual' ? '' : ` from ${same.origin}`}.`); return; }
       const elsewhere = takenEmail?.(e);
       if (elsewhere) { fail(`${e} is already added from ${elsewhere}.`); return; }
+      // The same look-up as Add: in a "Select all matching" selection, or a
+      // candidate in a list (added from there, so the invite is linked).
+      if (checkEmail) {
+        setChecking(true);
+        let found: EmailCheck = {};
+        try { found = await checkEmail(e); } catch { /* checked again at Review */ }
+        setChecking(false);
+        if (found.taken) { fail(`${e} is already included from ${found.taken}.`); return; }
+        if (found.invited) { fail(found.invited); return; }
+        if (found.match) { fail(`${e} is ${found.match.name} in ${found.match.sourceLabel} — add them with Add Candidate to link their resume.`); return; }
+      }
     }
     commit(rows.map((r) => (r.id === editing.id ? { ...r, name: n.replace(/\s+/g, ' '), email: e } : r)));
     setEditing(null);
   };
   const editKeys = (ev: React.KeyboardEvent<HTMLInputElement>) => {
-    if (ev.key === 'Enter') { ev.preventDefault(); saveEdit(); }
+    if (ev.key === 'Enter') { ev.preventDefault(); void saveEdit(); }
     // Escape cancels the edit only, not the popup.
     if (ev.key === 'Escape') { ev.preventDefault(); ev.stopPropagation(); setEditing(null); }
   };
@@ -323,10 +415,15 @@ export default function ExtraCandidatesInput({
         return;
       }
       const have = new Set(rows.map((r) => r.email));
+      // Emails a "Select all matching" selection already sends to.
+      let inSelection = new Set<string>();
+      if (checkEmails && found.length) {
+        try { inSelection = await checkEmails(found.map((c) => c.email)); } catch { /* checked again at Review */ }
+      }
       const fresh: EntryRow[] = [];
       let repeated = 0;
       for (const c of found) {
-        if (have.has(c.email) || takenEmail?.(c.email)) { repeated += 1; continue; }
+        if (have.has(c.email) || takenEmail?.(c.email) || inSelection.has(c.email)) { repeated += 1; continue; }
         have.add(c.email);
         fresh.push({ id: newId(), name: c.name, email: c.email, origin: file.name });
       }
@@ -381,7 +478,7 @@ export default function ExtraCandidatesInput({
                 type="text"
                 value={name}
                 onChange={(e) => { setName(e.target.value); setError(null); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
                 placeholder="e.g. Priya Raman"
                 disabled={disabled || full}
                 className={`${INPUT} w-full sm:w-48 border-gray-200 dark:border-slate-700`}
@@ -393,7 +490,7 @@ export default function ExtraCandidatesInput({
                 type="email"
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(null); }}
-                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void add(); } }}
                 placeholder="e.g. priya@company.com"
                 aria-invalid={!!error || undefined}
                 disabled={disabled || full}
@@ -402,16 +499,57 @@ export default function ExtraCandidatesInput({
             </label>
             <button
               type="button"
-              onClick={add}
-              disabled={disabled || full}
+              onClick={() => void add()}
+              disabled={disabled || full || checking}
               title={full ? NO_ROOM : undefined}
               className="h-9 inline-flex items-center justify-center gap-1.5 px-3 rounded-lg text-sm font-medium border border-brand-blue/30 text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
             >
-              <Plus className="w-4 h-4" aria-hidden="true" />
-              Add Candidate
+              {checking ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> : <Plus className="w-4 h-4" aria-hidden="true" />}
+              {checking ? 'Checking…' : 'Add Candidate'}
             </button>
           </div>
           {error && <p role="alert" className="tf-error">{error}</p>}
+          {/* Found in a list: link the invite to that resume (default), or add
+              the email as typed. */}
+          {offer && (
+            <div role="alert" className="flex flex-col gap-2 rounded-lg border border-brand-blue/25 bg-brand-blue/[0.05] px-3 py-2.5 text-sm">
+              <p className="flex items-start gap-2 text-gray-800 dark:text-slate-200">
+                <Link2 className="w-4 h-4 mt-0.5 shrink-0 text-brand-blue" aria-hidden="true" />
+                <span>
+                  <b className="font-semibold">{offer.match.name}</b> ({offer.match.email}) is already in <b className="font-semibold">{offer.match.sourceLabel}</b>
+                  {offer.match.detail ? <> · {offer.match.detail}</> : null}.
+                  {' '}Use that resume so the invite and results are linked to it.
+                  {offer.typedName.toLowerCase() !== offer.match.name.toLowerCase() && (
+                    <span className="block tf-meta">You entered: {offer.typedName}</span>
+                  )}
+                </span>
+              </p>
+              <span className="flex flex-wrap items-center gap-2 pl-6">
+                <button
+                  type="button"
+                  onClick={useExisting}
+                  autoFocus
+                  className="h-8 inline-flex items-center gap-1.5 px-3 rounded-lg text-xs font-semibold bg-brand-blue text-white hover:bg-brand-blue-2"
+                >
+                  <Link2 className="w-3.5 h-3.5" aria-hidden="true" />Use that resume
+                </button>
+                <button
+                  type="button"
+                  onClick={addTypedAnyway}
+                  className="h-8 inline-flex items-center px-3 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-gray-50 dark:hover:bg-slate-800"
+                >
+                  Add manually anyway
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOffer(null)}
+                  className="h-8 inline-flex items-center px-2 text-xs font-medium text-gray-500 dark:text-slate-400 hover:text-gray-800 dark:hover:text-slate-100"
+                >
+                  Cancel
+                </button>
+              </span>
+            </div>
+          )}
         </>
       ) : (
         <>
@@ -597,7 +735,14 @@ export default function ExtraCandidatesInput({
                         </>
                       ) : (
                         <>
-                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
+                          <span className="flex items-center gap-1.5 min-w-0">
+                            <span className="truncate font-medium text-gray-900 dark:text-slate-50" title={r.name}>{r.name}</span>
+                            {r.resumeId && (
+                              <span title={`Linked to the resume in ${r.inviteSource}`} className="shrink-0 inline-flex items-center gap-1 rounded-md border border-brand-blue/20 bg-brand-blue/5 px-1.5 py-px text-2xs font-medium text-brand-blue">
+                                <Link2 className="w-3 h-3" aria-hidden="true" />{r.inviteSource}
+                              </span>
+                            )}
+                          </span>
                           <span className="block truncate tf-meta sm:hidden">{r.email}</span>
                         </>
                       )}
@@ -629,7 +774,7 @@ export default function ExtraCandidatesInput({
                           <>
                             <button
                               type="button"
-                              onClick={saveEdit}
+                              onClick={() => void saveEdit()}
                               className="inline-flex items-center gap-1 h-7 px-2 rounded-md text-xs font-medium bg-brand-blue text-white hover:bg-brand-blue-2"
                             >
                               <Check className="w-3.5 h-3.5" aria-hidden="true" />Save

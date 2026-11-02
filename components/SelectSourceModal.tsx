@@ -241,6 +241,9 @@ export default function SelectSourceModal({
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
+  /* Set only by a folder's "Upload to Folder": the upload's folder dropdown
+     then lists just that folder and its subfolders. */
+  const [uploadScopeFolderId, setUploadScopeFolderId] = useState<string | undefined>();
 
   // Minimized state for the bulk-scoring progress popup. Kept here (not inside
   // BulkScoringProgressModal) so "expand" from the floating indicator can bring
@@ -1113,6 +1116,7 @@ export default function SelectSourceModal({
                   if (!canUploadResumes) return;
                   // The upload targets the selected folder (UploadModal's targetFolder).
                   setSelectedFolder(folderId);
+                  setUploadScopeFolderId(folderId);
                   setShowUploadModal(true);
                 }}
                 hideDeleteFolder
@@ -1464,7 +1468,8 @@ export default function SelectSourceModal({
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
-          onClose={() => setShowUploadModal(false)}
+          scopeFolderId={uploadScopeFolderId}
+          onClose={() => { setShowUploadModal(false); setUploadScopeFolderId(undefined); }}
           onUpload={handleUpload}
           onCreateFolder={handleCreateFolder}
           onScoreResume={handleAutoSelectAfterUpload}
