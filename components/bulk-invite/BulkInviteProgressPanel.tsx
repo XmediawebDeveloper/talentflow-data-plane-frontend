@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useEffectEvent, useState } from 'react';
-import { Check, CheckCircle2, Copy, Loader2, Search, XCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { AlertTriangle, Check, CheckCircle2, Copy, ListChecks, Loader2, Search, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +13,8 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import TrackInvitesModal from '@/components/TrackInvitesModal';
+import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
 
 const POLL_MS = 2000;
 const PAGE_SIZE = 50;
@@ -80,6 +83,9 @@ export default function BulkInviteProgressPanel({
   const [loadingRows, setLoadingRows] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  /* "Track status" on a sent row: the tracker for this send's interview /
+     assessment, opened over this popup, filtered to that candidate. */
+  const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
   const active = !!job && isBulkInviteActive(job);
 
   /* A run that no worker has picked up for two minutes: say so, rather
@@ -287,6 +293,13 @@ export default function BulkInviteProgressPanel({
       </div>
 
       <ul className={`rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 overflow-y-auto ${compact ? 'max-h-72' : 'max-h-[50vh]'}`}>
+        {rows.length > 0 && (
+          <li aria-hidden="true" className="hidden sm:grid sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)_8.5rem] gap-3 px-3 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 sticky top-0 z-[1]">
+            <span>Candidate</span>
+            <span>Status</span>
+            <span className="text-right">Action</span>
+          </li>
+        )}
         {rows.length === 0 && !loadingRows && (
           <li className="px-3 py-6 text-center tf-body-muted">
             {tab === 'all' ? 'No candidates in this send.' : `No ${tab} candidates${search ? ' match' : ''}.`}
@@ -294,25 +307,61 @@ export default function BulkInviteProgressPanel({
         )}
         {rows.map((r) => {
           const chip = CHIP[r.status] ?? CHIP.queued;
+          const isSent = r.status === 'sent';
+          const isProblem = r.status === 'skipped' || r.status === 'failed';
           return (
-            <li key={r.id} className="flex items-center gap-3 px-3 py-2">
-              <div className="min-w-0 flex-1">
+            <li key={r.id} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.6fr)_8.5rem] gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center">
+              {/* Candidate */}
+              <div className="min-w-0">
                 <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{r.name || '—'}</p>
                 <p className="tf-meta truncate">{r.email || 'No email'}</p>
-                {r.reason && <p className="tf-meta-strong mt-0.5 [overflow-wrap:anywhere]">{r.reason}</p>}
               </div>
-              {r.link && r.status === 'sent' && (
-                <button
-                  type="button"
-                  onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
-                  aria-label={`Copy invitation link for ${r.name || r.email}`}
-                  className="shrink-0 h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30"
-                >
-                  {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
-                  Link
-                </button>
-              )}
-              <span className={`shrink-0 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${chip.className}`}>{chip.label}</span>
+
+              {/* Status + what happened */}
+              <div className="min-w-0">
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${chip.className}`}>{chip.label}</span>
+                {isSent && (
+                  <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-success sm:ml-2 sm:mt-0">
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {job.delivery === 'link' ? 'Link created successfully' : 'Sent successfully'}
+                  </p>
+                )}
+                {isProblem && (
+                  <p className={`mt-1 flex items-start gap-1 text-xs [overflow-wrap:anywhere] ${r.status === 'failed' ? 'text-destructive' : 'text-warning-strong'}`}>
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" aria-hidden="true" />
+                    <span><span className="font-semibold">Reason:</span> {r.reason || (r.status === 'failed' ? 'The invitation could not be sent' : 'Not sent')}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Action — only a sent invite has a status to track */}
+              <div className="flex items-center gap-1.5 sm:justify-end">
+                {isSent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setTrackRow(r)}
+                      aria-label={`Track status for ${r.name || r.email}`}
+                      className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10"
+                    >
+                      <ListChecks className="w-3.5 h-3.5" /> Track status
+                    </button>
+                    {r.link && (
+                      <button
+                        type="button"
+                        onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
+                        aria-label={`Copy invitation link for ${r.name || r.email}`}
+                        title="Copy link"
+                        className="h-8 w-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30"
+                      >
+                        {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
+                      </button>
+                    )}
+                  </>
+                ) : (
+                  <span className="tf-meta" aria-label={isProblem ? 'No action — not invited' : 'No action yet'}>—</span>
+                )}
+              </div>
             </li>
           );
         })}
@@ -330,6 +379,32 @@ export default function BulkInviteProgressPanel({
           </li>
         )}
       </ul>
+
+      {trackRow && typeof document !== 'undefined' && createPortal(
+        /* Portaled above the invite popup (its open animation's transform
+           would otherwise trap a fixed child) and above the results dialog. */
+        <div className="relative z-[80]">
+          {job.kind === 'interview' ? (
+            <AIInterviewTrackInvitesModal
+              isOpen
+              onClose={() => setTrackRow(null)}
+              configId={job.version_id}
+              jdTitle={job.version_label || 'AI Interview'}
+              hideJobVersionFilter
+              initialSearch={trackRow.email || trackRow.name || undefined}
+            />
+          ) : (
+            <TrackInvitesModal
+              isOpen
+              onClose={() => setTrackRow(null)}
+              jdId={job.jd_id}
+              jdTitle={job.version_label || 'Assessment'}
+              initialSearch={trackRow.email || trackRow.name || undefined}
+            />
+          )}
+        </div>,
+        document.body,
+      )}
     </div>
   );
 }
