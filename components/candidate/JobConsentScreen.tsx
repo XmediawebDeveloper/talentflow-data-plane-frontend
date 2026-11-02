@@ -195,7 +195,7 @@ function TermsDialog({
         <div className="flex items-start justify-between gap-4 px-5 sm:px-7 pt-6 pb-4 border-b border-gray-100 shrink-0">
           <div className="min-w-0">
             <h2 id="terms-dialog-title" className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">Consent &amp; Terms</h2>
-            <p className="mt-1 text-sm text-gray-500">Please review the rules, proctoring and terms below before starting your assessment.</p>
+            <p className="mt-1 tf-body-muted">Please review the rules, proctoring and terms below before starting your assessment.</p>
           </div>
           <button
             type="button"
@@ -229,7 +229,7 @@ function TermsDialog({
                     <rule.icon className={`w-3.5 h-3.5 shrink-0 ${rule.critical ? 'text-destructive' : 'text-warning'}`} />
                     {rule.title}
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-600">{rule.text}</p>
+                  <p className="mt-1 tf-meta-strong leading-relaxed">{rule.text}</p>
                 </li>
               ))}
             </ul>
@@ -242,7 +242,7 @@ function TermsDialog({
                 <Shield className="w-4 h-4 text-brand-cyan" />
                 AI proctoring
               </h3>
-              <span className="text-xs text-gray-500">— this assessment is monitored to keep it fair</span>
+              <span className="tf-meta">— this assessment is monitored to keep it fair</span>
             </div>
             <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               {PROCTORING.map((feature, index) => (
@@ -252,11 +252,11 @@ function TermsDialog({
                     PROCTORING.length % 2 === 1 && index === PROCTORING.length - 1 ? 'sm:col-span-2' : ''
                   }`}
                 >
-                  <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+                  <p className="flex items-center gap-1.5 tf-cell-name">
                     <feature.icon className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
                     {feature.label}
                   </p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-600">{feature.description}</p>
+                  <p className="mt-1 tf-meta-strong leading-relaxed">{feature.description}</p>
                 </li>
               ))}
             </ul>
@@ -271,8 +271,8 @@ function TermsDialog({
             <div className="rounded-xl bg-slate-50 ring-1 ring-gray-200 p-4 space-y-3">
               {TERMS.map((term) => (
                 <div key={term.title}>
-                  <p className="text-sm font-semibold text-gray-900">{term.title}</p>
-                  <p className="text-xs leading-relaxed text-gray-600 mt-0.5">{term.content}</p>
+                  <p className="tf-cell-name">{term.title}</p>
+                  <p className="tf-meta-strong leading-relaxed mt-0.5">{term.content}</p>
                 </div>
               ))}
             </div>
@@ -418,7 +418,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         {assessmentInfo.jd_title || assessmentInfo.assessment_title}
                       </h1>
                       {briefMeta.length > 0 && (
-                        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 sm:gap-x-2 gap-y-1 text-sm text-gray-500">
+                        <p className="mt-1.5 flex flex-wrap items-center gap-x-3 sm:gap-x-2 gap-y-1 tf-body-muted">
                           {briefMeta.map(({ label, Icon }, index) => (
                             <span key={label} className="inline-flex items-center gap-1.5 min-w-0">
                               {/* Dot separators only where the line stays on one row; on a
@@ -441,10 +441,10 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         {candidateInitials}
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 truncate" title={assessmentInfo.candidate_name}>
+                        <p className="tf-cell-name truncate" title={assessmentInfo.candidate_name}>
                           {assessmentInfo.candidate_name}
                         </p>
-                        <p className="text-xs text-gray-500 break-all" title={assessmentInfo.candidate_email}>
+                        <p className="tf-meta break-all" title={assessmentInfo.candidate_email}>
                           {assessmentInfo.candidate_email}
                         </p>
                       </div>
@@ -542,7 +542,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue shrink-0">
                           <Icon className="w-4 h-4" />
                         </span>
-                        <span className="text-sm text-gray-600 leading-snug pt-1.5">{text}</span>
+                        <span className="tf-card-desc leading-snug pt-1.5">{text}</span>
                       </li>
                     ))}
                   </ul>
@@ -575,7 +575,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                       >
                         {agreed && <Check className="w-3.5 h-3.5 text-white" strokeWidth={3} />}
                       </span>
-                      <div className="text-sm text-gray-700 leading-relaxed min-w-0">
+                      <div className="tf-body leading-relaxed min-w-0">
                         I accept the{' '}
                         <button
                           type="button"
@@ -586,7 +586,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                           consent and terms
                         </button>
                         {' '}for AI Assessment
-                        <p className="text-xs text-gray-500 mt-1">
+                        <p className="tf-meta mt-1">
                           Checking this box accepts all consents. Click &ldquo;consent and terms&rdquo; to review them.
                         </p>
                       </div>
@@ -626,7 +626,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                     )}
                   </Button>
                   {!canContinue && (
-                    <p className="mt-2 text-center text-xs text-gray-500">Accept the consent and terms above to continue.</p>
+                    <p className="mt-2 text-center tf-meta">Accept the consent and terms above to continue.</p>
                   )}
                   {!consentAccepted && (
                     <button

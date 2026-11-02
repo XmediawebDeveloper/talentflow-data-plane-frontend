@@ -407,7 +407,7 @@ export default function SecurityPage() {
           <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Password</h2>
           <div className="space-y-3 sm:space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Current Password</label>
+              <label className="block tf-label mb-1">Current Password</label>
               <div className="relative">
                 <input
                   type={showCurrentPassword ? 'text' : 'password'}
@@ -430,7 +430,7 @@ export default function SecurityPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">New Password</label>
+              <label className="block tf-label mb-1">New Password</label>
               <div className="relative">
                 <input
                   type={showNewPassword ? 'text' : 'password'}
@@ -461,7 +461,7 @@ export default function SecurityPage() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Confirm New Password</label>
+              <label className="block tf-label mb-1">Confirm New Password</label>
               <div className="relative">
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
@@ -514,7 +514,7 @@ export default function SecurityPage() {
                 {/* Strength Bar */}
                 <div className="mt-3">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs text-gray-500 dark:text-slate-500">Password Strength</span>
+                    <span className="tf-meta">Password Strength</span>
                     <span className={`text-xs font-semibold ${
                       passwordStrength <= 2 ? 'text-destructive' : passwordStrength <= 3 ? 'text-warning' : passwordStrength <= 4 ? 'text-blue-500' : 'text-success'
                     }`}>
@@ -584,7 +584,7 @@ export default function SecurityPage() {
                     collisionPadding={8}
                     className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
                   >
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does two-factor authentication work?</h3>
+                    <h3 className="tf-subsection-title">How does two-factor authentication work?</h3>
                     <div>
                       <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
                       <p>
@@ -619,7 +619,7 @@ export default function SecurityPage() {
                     </div>
                   </HoverCardContent>
                 </HoverCard>
-                <p className="text-sm text-gray-500 dark:text-slate-500">Add an extra layer of security</p>
+                <p className="tf-body-muted">Add an extra layer of security</p>
               </div>
             </div>
             {!show2FASetup && (
@@ -666,7 +666,7 @@ export default function SecurityPage() {
 
               <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2 sm:mb-3">
+                  <p className="tf-card-desc mb-2 sm:mb-3">
                     1. Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                   </p>
                   {twoFAQRCode ? (
@@ -679,14 +679,14 @@ export default function SecurityPage() {
                       />
                     </div>
                   ) : (
-                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border text-sm text-gray-600 dark:text-slate-400">
+                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border tf-card-desc">
                       QR code unavailable. Enter the setup key below into your authenticator app instead.
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="tf-card-desc mb-2">
                     Or manually enter this secret key:
                   </p>
                   <code className="block p-2 sm:p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-sm break-all">
@@ -695,7 +695,7 @@ export default function SecurityPage() {
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="tf-card-desc mb-2">
                     2. Enter the 6-digit code from your authenticator app:
                   </p>
                   <input
@@ -750,7 +750,7 @@ export default function SecurityPage() {
                 </div>
 
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mb-2">
+                  <p className="tf-card-desc mb-2">
                     Enter the 6-digit code from your authenticator app to confirm:
                   </p>
                   <input
@@ -812,7 +812,7 @@ export default function SecurityPage() {
                   collisionPadding={8}
                   className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
                 >
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does session timeout work?</h3>
+                  <h3 className="tf-subsection-title">How does session timeout work?</h3>
                   <div>
                     <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it does</h4>
                     <p>
@@ -859,7 +859,7 @@ export default function SecurityPage() {
                   </div>
                 </HoverCardContent>
               </HoverCard>
-              <p className="text-sm text-gray-500 dark:text-slate-500">Auto log out after inactivity</p>
+              <p className="tf-body-muted">Auto log out after inactivity</p>
             </div>
           </div>
           <div className="relative" title={!canManage ? 'You do not have permission to manage security settings' : undefined}>
@@ -918,7 +918,7 @@ export default function SecurityPage() {
                     collisionPadding={8}
                     className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
                   >
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does single sign-on work?</h3>
+                    <h3 className="tf-subsection-title">How does single sign-on work?</h3>
                     <div>
                       <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
                       <p>
@@ -954,7 +954,7 @@ export default function SecurityPage() {
                     </div>
                   </HoverCardContent>
                 </HoverCard>
-                <p className="text-sm text-gray-500 dark:text-slate-500">Configure SSO for your organization</p>
+                <p className="tf-body-muted">Configure SSO for your organization</p>
               </div>
             </div>
             <div className="p-2.5 sm:p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -991,7 +991,7 @@ export default function SecurityPage() {
                 collisionPadding={8}
                 className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
               >
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What are active sessions?</h3>
+                <h3 className="tf-subsection-title">What are active sessions?</h3>
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What you see here</h4>
                   <p>
@@ -1041,7 +1041,7 @@ export default function SecurityPage() {
           </div>
 
           {sessions.length === 0 ? (
-            <p className="text-gray-500 dark:text-slate-500 text-center py-6 sm:py-8 text-sm">No active sessions found</p>
+            <p className="tf-body-muted text-center py-6 sm:py-8">No active sessions found</p>
           ) : (
             <div className="space-y-2 sm:space-y-3 md:space-y-4">
               {sessions.map((session) => (
@@ -1055,7 +1055,7 @@ export default function SecurityPage() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{session.device_info || 'Unknown Device'}</p>
-                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 text-sm text-gray-500 dark:text-slate-500">
+                      <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 tf-body-muted">
                         <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                         <span className="truncate max-w-[100px] sm:max-w-none">{session.location || 'Unknown Location'}</span>
                         {session.ip_address && (
@@ -1106,7 +1106,7 @@ export default function SecurityPage() {
             {/* Modal */}
             <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Revoke All Other Sessions</h3>
+                <h3 className="tf-card-title">Revoke All Other Sessions</h3>
                 <button
                   onClick={() => setShowRevokeAllDialog(false)}
                   className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors flex-shrink-0"

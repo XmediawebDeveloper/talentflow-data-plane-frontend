@@ -114,8 +114,8 @@ export default function EvaluationReportTab({
             <FileText className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">Evaluation Report</h3>
-            <p className="text-xs text-gray-500">Final candidate assessment · download as PDF, Excel, or JSON</p>
+            <h3 className="tf-subsection-title">Evaluation Report</h3>
+            <p className="tf-meta">Final candidate assessment · download as PDF, Excel, or JSON</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

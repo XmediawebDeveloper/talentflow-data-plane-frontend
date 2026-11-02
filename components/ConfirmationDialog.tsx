@@ -68,7 +68,7 @@ export default function ConfirmationDialog({
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         {/* Header */}
         <div className="px-6 sm:px-8 py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">{title}</h2>
+          <h2 className="tf-section-title">{title}</h2>
           <button
             onClick={onCancel}
             disabled={isLoading}
@@ -86,7 +86,7 @@ export default function ConfirmationDialog({
               <Icon className={`w-8 h-8 ${iconColor}`} />
             </div>
           </div>
-          <p className="text-center text-gray-600 dark:text-slate-400 text-sm leading-relaxed">{message}</p>
+          <p className="text-center tf-card-desc leading-relaxed">{message}</p>
         </div>
 
         {/* Footer */}

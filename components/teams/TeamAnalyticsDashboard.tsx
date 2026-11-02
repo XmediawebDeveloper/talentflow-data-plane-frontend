@@ -43,7 +43,7 @@ import { toISODateIST } from '@/lib/utils/dateUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useIsMobile } from '@/components/ui/use-mobile';
-import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, type Measure } from './reportControls';
+import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, ReportScopeBadge, type Measure } from './reportControls';
 import { UNIT_KEYS, UNIT_LABELS, UNIT_CHART_COLOR, UNIT_TEXT_CLASS, UNIT_ICON, TOTAL_UNITS_ICON, type UnitKey } from '@/lib/constants/unitColors';
 
 interface TeamAnalyticsDashboardProps {
@@ -290,7 +290,7 @@ function TopMembersCard({ teams, fromDate, toDate }: { teams: TeamUsageSummary[]
   const max = top[0]?.total ?? 0;
   return (
     <div className={`${CARD_CLASS} p-6 max-sm:p-3`}>
-      <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Top Members</h4>
+      <h4 className="tf-card-title max-sm:text-sm mb-3 sm:mb-4">Top Members</h4>
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}
@@ -305,7 +305,7 @@ function TopMembersCard({ teams, fromDate, toDate }: { teams: TeamUsageSummary[]
               <NameAvatar name={m.name} fallback={m.email} size="sm" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{m.name}</p>
-                <p className="truncate text-xs text-gray-500 dark:text-slate-400" title={m.teams.join(', ')}>{m.teams.join(', ')}</p>
+                <p className="truncate tf-meta" title={m.teams.join(', ')}>{m.teams.join(', ')}</p>
               </div>
               <div className="shrink-0 text-right">
                 <p className="text-sm sm:text-base font-semibold tabular-nums text-gray-900 dark:text-slate-50">{m.total.toLocaleString()}</p>
@@ -554,7 +554,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
           {teamComparisonData.length > 0 && (
             <div data-chart-card className={`${CARD_CLASS} p-6 max-sm:p-3`}>
               <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
-                <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                <h4 className="tf-card-title max-sm:text-sm">
                   Usage by Team
                 </h4>
                 <div className="flex shrink-0 items-center gap-2">
@@ -619,7 +619,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
           {(unitDistributionData.length > 0 || pieTeam) && (
             <div data-chart-card className={`${CARD_CLASS} p-6 max-sm:p-3`}>
               <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
-                <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+                <h4 className="tf-card-title max-sm:text-sm">
                   Unit Type Distribution
                 </h4>
                 <div className="flex min-w-0 items-center gap-2">
@@ -681,7 +681,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                       className="w-3 h-3 rounded-full"
                       style={{ backgroundColor: item.color }}
                     />
-                    <span data-export-text className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{item.name}</span>
+                    <span data-export-text className="tf-card-desc max-sm:text-[13px]">{item.name}</span>
                   </div>
                 ))}
               </div>
@@ -694,7 +694,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
         {hasTeams && (
           <div data-chart-card className={`${CARD_CLASS} p-6 max-sm:p-3`}>
             <div className="mb-3 sm:mb-4 flex items-center justify-between gap-2">
-              <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+              <h4 className="tf-card-title max-sm:text-sm">
                 {trendStep === 'week' ? 'Weekly Trend' : 'Daily Trend'}
               </h4>
               {trend.status === 'ready' && (
@@ -724,11 +724,11 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
             {trend.status === 'error' ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <ChartLine className="h-8 w-8 text-gray-300 dark:text-slate-600" />
-                <p className="text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">Could not load the daily trend.</p>
+                <p className="tf-body-muted max-sm:text-[13px]">Could not load the daily trend.</p>
                 <Button variant="secondary" size="sm" onClick={loadTrend}>Try again</Button>
               </div>
             ) : trend.status === 'idle' || trend.status === 'loading' ? (
-              <div className="flex h-[260px] items-center justify-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+              <div className="flex h-[260px] items-center justify-center gap-2 tf-body-muted">
                 <Loader2 className="h-4 w-4 animate-spin" /> Loading daily trend…
               </div>
             ) : (
@@ -770,7 +770,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.04] px-3 py-2 text-xs text-gray-600 ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:text-slate-400 dark:ring-slate-700">
+                <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta-strong ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
                   <span>
                     {isTenantAdmin ? (
@@ -790,7 +790,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
         {/* Most active teams */}
         {topTeams.length > 0 && (
           <div className={`${CARD_CLASS} p-6 max-sm:p-3`}>
-            <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Most Active Teams</h4>
+            <h4 className="tf-card-title max-sm:text-sm mb-3 sm:mb-4">Most Active Teams</h4>
             <div className="space-y-2 sm:space-y-3">
               {topTeams.map((team, index) => {
                 const share = shown.total > 0 ? Math.round((team.total / shown.total) * 100) : 0;
@@ -823,7 +823,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
                   {!idle && (
                   <div className="shrink-0 text-right">
                     <p className="text-base max-sm:text-sm sm:text-lg font-semibold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{formatMeasure(team.total, measure)}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500">total {measureNoun}</p>
+                    <p className="tf-meta">total {measureNoun}</p>
                     {/* This team's share of all usage in the range */}
                     <div className="mt-1 flex items-center justify-end gap-1.5" title={`${share}% of all ${measureNoun}`}>
                       <div className="h-1 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700">
@@ -849,10 +849,10 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
         {/* Teams that used nothing in this range */}
         {hasTeams && idleTeams.length > 0 && (
           <div className={`${CARD_CLASS} p-6 max-sm:p-3`}>
-            <h4 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
+            <h4 className="tf-card-title max-sm:text-sm">
               Teams With No Usage <span className="ml-1 text-sm font-normal text-gray-400 dark:text-slate-500">{idleTeams.length}</span>
             </h4>
-            <p className="mt-0.5 mb-3 text-xs text-gray-500 dark:text-slate-400">No units used by these teams in the selected range.</p>
+            <p className="mt-0.5 mb-3 tf-meta">No units used by these teams in the selected range.</p>
             <div className="flex flex-wrap gap-2">
               {idleTeams.map((t) => {
                 const Chip = onOpenTeam ? 'button' : 'span';
@@ -875,7 +875,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
           <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
             <BarChart3 className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
             <h3 className="text-base max-sm:text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">No Usage Data</h3>
-            <p className="text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">
+            <p className="tf-card-desc max-sm:text-[13px]">
               No team usage data available for the selected period.
             </p>
           </div>
@@ -886,6 +886,14 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Whose usage this is: every team (tenant admin) or only the viewer's teams. */}
+      {!error && (
+        <ReportScopeBadge
+          isTenantAdmin={isTenantAdmin}
+          teamNames={(teamsUsage?.teams ?? []).map((t) => t.team_name || 'Unknown')}
+          loading={isLoading}
+        />
+      )}
       {cards}
 
       {/* Controls — always shown, so the range stays editable while loading or after an

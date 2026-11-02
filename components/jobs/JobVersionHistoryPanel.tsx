@@ -392,15 +392,15 @@ export default function JobVersionHistoryPanel({
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
         <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
+        <p className="tf-cell-name">Version History</p>
       </div>
       {loading && !versions ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-2 tf-meta">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
         </div>
       ) : jobVersions.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No versions recorded for this job.</p>
+        <p className="py-2 tf-meta">No versions recorded for this job.</p>
       ) : (
         /* One shell owns BOTH scroll axes (x on narrow screens, y past 3 rows),
            so header and body live in one <table> and their columns can never
@@ -742,11 +742,11 @@ export default function JobVersionHistoryPanel({
                         Industry runs through the same formatter as the job rows
                         so it never shows the raw snake_case value. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {experienceText || '—'}
                       </div>
                       <div
-                        className="text-xs text-gray-500 dark:text-slate-400 max-w-[180px] truncate"
+                        className="tf-meta max-w-[180px] truncate"
                         title={detail?.industry_type ? formatIndustryType(detail.industry_type) : ''}
                       >
                         {detail?.industry_type ? formatIndustryType(detail.industry_type) : '—'}
@@ -755,7 +755,7 @@ export default function JobVersionHistoryPanel({
                     {/* Location — this version's own record; single field
                         first, else the cities from the locations list. */}
                     <td
-                      className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap max-w-[160px] truncate align-middle"
+                      className="py-2.5 px-3 tf-td whitespace-nowrap max-w-[160px] truncate align-middle"
                       title={locationText || ''}
                     >
                       {locationText || '—'}
@@ -764,11 +764,11 @@ export default function JobVersionHistoryPanel({
                         mode, from this version's own record. A missing half
                         simply drops out; nothing is invented. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
                       </div>
                       {detail?.remote_type && (
-                        <div className="text-xs text-gray-500 dark:text-slate-400">
+                        <div className="tf-meta">
                           {formatEmploymentType(detail.remote_type)}
                         </div>
                       )}
@@ -776,14 +776,14 @@ export default function JobVersionHistoryPanel({
                     {/* Posted On / By — one column, date over author, so the
                         table stays narrower without dropping either fact. */}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <div className="text-sm text-gray-700 dark:text-slate-300">
+                      <div className="tf-body">
                         {postedOn ? formatISTDate(postedOn) : '—'}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-slate-400 max-w-[160px] truncate" title={detail?.created_by_name || ''}>
+                      <div className="tf-meta max-w-[160px] truncate" title={detail?.created_by_name || ''}>
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap align-middle">
+                    <td className="py-2.5 px-3 tf-td whitespace-nowrap align-middle">
                       {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                     </td>
                     </>)}
@@ -796,11 +796,11 @@ export default function JobVersionHistoryPanel({
                       return (
                         <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                           {info ? (
-                            <div className="text-sm text-gray-700 dark:text-slate-300">
+                            <div className="tf-body">
                               <div className="truncate max-w-[170px]" title={info.name}>
                                 Scored by {info.name}
                               </div>
-                              <div className="text-xs text-gray-500 dark:text-slate-400">
+                              <div className="tf-meta">
                                 {formatIST(info.scoredAt)}
                               </div>
                             </div>
@@ -813,7 +813,7 @@ export default function JobVersionHistoryPanel({
                       );
                     })()}
                     <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                      <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                      <span className="inline-flex items-center gap-1.5 tf-body">
                         <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         {/* Resumes scored against this version. Dash only while
                             the count is still in flight (or if it failed) — a

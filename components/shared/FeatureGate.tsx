@@ -72,7 +72,7 @@ export default function FeatureGate({
             <h3 className="text-sm font-medium text-gray-900 mb-1">
               {meta.name} — Not Available
             </h3>
-            <p className="text-sm text-gray-500 mb-3">
+            <p className="tf-body-muted mb-3">
               Your plan does not include {meta.name}. {meta.description}.
             </p>
             <Link

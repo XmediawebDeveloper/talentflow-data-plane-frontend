@@ -15,7 +15,7 @@ export default function DashboardNotFound() {
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">
             This page doesn&apos;t exist
           </h1>
-          <p className="mx-auto max-w-md text-sm text-gray-600 mb-6">
+          <p className="mx-auto max-w-md tf-card-desc mb-6">
             The page you tried to open has moved or was removed. Use the navigation on the left, or return to the dashboard.
           </p>
           <Link

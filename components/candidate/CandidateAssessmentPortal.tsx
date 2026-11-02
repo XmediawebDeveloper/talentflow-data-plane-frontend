@@ -114,7 +114,7 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
         {/* ═══ LEFT: what this is ═══ */}
         <div className="rounded-2xl bg-gradient-to-b from-brand-blue/10 to-brand-blue/[0.03] p-4 flex flex-col min-w-0">
           <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-900">
+            <span className="inline-flex items-center gap-1.5 tf-cell-name">
               <ShieldCheck className="w-5 h-5 text-brand-blue" />
               Assessment
             </span>
@@ -147,7 +147,7 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
           </div>
 
           <h1 className="text-xl md:text-2xl font-bold text-gray-900 text-center lg:text-left">Start Assessment</h1>
-          <p className="mt-1.5 text-sm text-gray-600 text-center lg:text-left leading-relaxed">
+          <p className="mt-1.5 tf-card-desc text-center lg:text-left leading-relaxed">
             This assessment runs in fullscreen{screenShareRequired ? ' with entire screen sharing' : ''} and active
             proctoring, to ensure a focused, fair and secure testing experience.
           </p>
@@ -175,7 +175,7 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
             </span>
             <div className="min-w-0">
               <h2 className="text-base font-bold text-gray-900 leading-tight">What you need to do</h2>
-              <p className="text-xs text-gray-500">Please follow the guidelines below to continue.</p>
+              <p className="tf-meta">Please follow the guidelines below to continue.</p>
             </div>
           </div>
 
@@ -191,8 +191,8 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
                 <span className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto">
                   <Icon className="w-5 h-5" />
                 </span>
-                <p className="mt-2 text-sm font-semibold text-gray-900 leading-snug">{title}</p>
-                <p className="mt-1 text-xs text-gray-500 leading-relaxed">{text}</p>
+                <p className="mt-2 tf-cell-name leading-snug">{title}</p>
+                <p className="mt-1 tf-meta leading-relaxed">{text}</p>
               </li>
             ))}
           </ul>
@@ -2487,7 +2487,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               {terminatedReason?.message && (
                 <p className="text-sm text-destructive font-medium mb-6">Reason: {terminatedReason.message}</p>
               )}
-              <p className="text-sm text-gray-500">
+              <p className="tf-body-muted">
                 This link can no longer be used. Please contact the recruiter if you believe this was a mistake.
               </p>
             </div>
@@ -2738,7 +2738,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 <Monitor className="w-7 h-7 text-destructive" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Screen sharing stopped</h2>
-              <p className="text-sm text-gray-600 mb-6">
+              <p className="tf-card-desc mb-6">
                 Entire-screen sharing is mandatory for this assessment. This has been recorded. Share your entire screen again to continue; your timer keeps running.
               </p>
               <Button onClick={handleReshareScreen} disabled={reshareBusy} className="w-full h-11">

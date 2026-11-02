@@ -243,7 +243,7 @@ export default function SelectedCandidatesPanel({
                   )}
                 </div>
                 {/* Role first, then how to reach them. */}
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 mt-0.5 min-w-0">
+                <div className="flex items-center gap-2 tf-meta-strong mt-0.5 min-w-0">
                   {role && (
                     <span className="flex items-center gap-1 min-w-0">
                       <Briefcase className="w-3 h-3 flex-shrink-0" />

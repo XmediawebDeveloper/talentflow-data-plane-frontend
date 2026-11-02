@@ -125,7 +125,7 @@ export default function PreConditionGuard({
               <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-gray-900">User successfully logged in</p>
-                <p className="text-sm text-gray-500 mt-1">
+                <p className="tf-body-muted mt-1">
                   Logged in as: {user.email}
                 </p>
               </div>
@@ -167,7 +167,7 @@ export default function PreConditionGuard({
                       {tenant.subscription.usage[requiredUnits]} / {tenant.subscription.limits[requiredUnits]} units used
                     </p>
                   ) : (
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="tf-body-muted mt-1">
                       {getRemainingUnits(requiredUnits, tenant.subscription)} units remaining
                     </p>
                   )}
@@ -224,7 +224,7 @@ export default function PreConditionGuard({
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-gray-700">
+            <div className="tf-body">
               <p className="mb-1">
                 <strong>Need help?</strong>
               </p>

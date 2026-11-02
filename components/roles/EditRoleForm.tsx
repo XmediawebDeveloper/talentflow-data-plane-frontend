@@ -492,7 +492,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
             <div className="space-y-4 sm:space-y-5">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Name</label>
+                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Role Name</label>
                   <Input
                     value={role.name}
                     onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
@@ -503,13 +503,13 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   {showNameError && <span className="mt-1.5 block text-xs font-medium text-destructive">{nameError}</span>}
                 </div>
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Role Code</label>
+                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Role Code</label>
                   <Input value={role.code} disabled />
                 </div>
               </div>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Description</label>
+                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Description</label>
                   <Input
                     value={role.description || ''}
                     onChange={(e) => setRole({ ...role, description: e.target.value })}
@@ -517,7 +517,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   />
                 </div>
                 <div>
-                  <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300 mb-1.5">Copy permissions from</label>
+                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Copy permissions from</label>
                   <FilterSelect
                     value={String(role.parent_role_id || '')}
                     onChange={(v) => handleParentRoleChange(v)}
@@ -620,11 +620,11 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               )}
               <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
                 <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
-                  <div className="text-xs text-gray-500">Assigned users</div>
+                  <div className="tf-meta">Assigned users</div>
                   <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{role.user_count || 0}</div>
                 </div>
                 <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
-                  <div className="text-xs text-gray-500">Selected permissions</div>
+                  <div className="tf-meta">Selected permissions</div>
                   <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
                 </div>
               </div>
@@ -636,7 +636,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
               <h2 className="text-base max-sm:text-sm font-semibold text-gray-900">Role Details</h2>
-              <p className="text-sm max-sm:text-[13px] text-gray-500">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
+              <p className="tf-body-muted max-sm:text-[13px]">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
             </div>
 
             <div className="space-y-8 p-5 sm:p-6">
@@ -690,14 +690,14 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                     ]}
                     className={`${fieldClassName} sm:w-full sm:px-4 sm:py-3 sm:rounded-xl`}
                   />
-                  <span className="mt-2 block text-xs text-gray-500">Replaces this role&apos;s current permissions with a copy of that role&apos;s. Later changes to that role won&apos;t affect this one.</span>
+                  <span className="mt-2 block tf-meta">Replaces this role&apos;s current permissions with a copy of that role&apos;s. Later changes to that role won&apos;t affect this one.</span>
                 </label>
               </div>
 
               <div>
                 <div className="mb-4">
-                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Permissions</h3>
-                  <p className="text-sm max-sm:text-[13px] text-gray-500">Update the role’s access surface and review the selected scopes before saving.</p>
+                  <h3 className="tf-card-title max-sm:text-sm">Permissions</h3>
+                  <p className="tf-body-muted max-sm:text-[13px]">Update the role’s access surface and review the selected scopes before saving.</p>
                 </div>
                 {renderPermissionCategories()}
               </div>
@@ -729,36 +729,36 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                 </span>
                 <div>
-                  <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Role Snapshot</h3>
-                  <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">A compact view of the current role configuration.</p>
+                  <h3 className="tf-card-title max-sm:text-sm">Role Snapshot</h3>
+                  <p className="mt-1 tf-body-muted max-sm:text-[13px]">A compact view of the current role configuration.</p>
                 </div>
               </div>
 
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Name</div>
-                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{role.name}</div>
+                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{role.name}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Code</div>
-                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{role.code}</div>
+                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{role.code}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
-                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">
+                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">
                     {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
                   <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Selected Permissions</div>
-                  <div className="mt-1 text-sm max-sm:text-[13px] font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
+                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{selectedPermissionCodes.size}</div>
                 </div>
               </div>
             </section>
 
             <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <h3 className="text-base max-sm:text-sm font-semibold text-gray-900">Guidance</h3>
-              <div className="mt-4 space-y-3 text-sm max-sm:text-[13px] text-gray-600">
+              <h3 className="tf-card-title max-sm:text-sm">Guidance</h3>
+              <div className="mt-4 space-y-3 tf-card-desc max-sm:text-[13px]">
                 <div className="rounded-xl bg-brand-blue/[0.04] px-4 py-3 ring-1 ring-brand-blue/10">
                   System roles can still be reviewed and tuned, but key identity fields stay protected.
                 </div>

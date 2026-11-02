@@ -26,7 +26,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import ListPagination from '@/components/ListPagination';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type TableSort } from '@/components/ui/sortable-header';
 import { UNIT_ICON, TOTAL_UNITS_ICON } from '@/lib/constants/unitColors';
-import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState } from './reportControls';
+import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState, ReportScopeBadge } from './reportControls';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import UnitActivityLog from './UnitActivityLog';
@@ -35,13 +35,13 @@ import UnitActivityLog from './UnitActivityLog';
 
 const UNIT_COLORS: Record<string, string> = {
   RS:  'text-blue-600   bg-blue-50   border-blue-200',
-  AS:  'text-purple-600 bg-purple-50 border-purple-200',
+  AS:  'text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan bg-brand-cyan/10 border-brand-cyan/30',
   AIU: 'text-success  bg-success-subtle  border-success-line',
   RU:  'text-orange-600 bg-orange-50 border-orange-200',
 };
 
 const UNIT_DOT: Record<string, string> = {
-  RS: 'bg-blue-500', AS: 'bg-purple-500', AIU: 'bg-success', RU: 'bg-orange-500',
+  RS: 'bg-blue-500', AS: 'bg-brand-cyan', AIU: 'bg-success', RU: 'bg-orange-500',
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -177,7 +177,7 @@ const UNIT_TYPE_LABEL: Record<string, string> = {
 
 const ENTRY_UNIT_BADGE_EXTENDED: Record<string, string> = {
   RS:        'bg-blue-100 text-blue-700',
-  AS:        'bg-purple-100 text-purple-700',
+  AS:        'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan',
   AIU:       'bg-success-subtle text-success',
   RU:        'bg-orange-100 text-orange-700',
   max_seats: 'bg-slate-100 text-slate-600',
@@ -377,7 +377,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                         {e.overall_score != null && <span className="normal-case">Score <span className="font-semibold text-gray-600 dark:text-slate-300">{e.overall_score}%</span></span>}
                       </p>
                     )}
-                    {e.failure_reason && <p className="mt-0.5 text-xs text-destructive">{e.failure_reason}</p>}
+                    {e.failure_reason && <p className="mt-0.5 tf-error">{e.failure_reason}</p>}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
                     {/* Units charged only — the before → after balance was the whole
@@ -681,7 +681,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="px-3 py-3 whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${as_ > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(as_, measure)}
             </span>
             <ReturnedNote member={member} k="AS" />
@@ -837,7 +837,7 @@ function TeamRow({
               </div>
             )}
             <div>
-              <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
+              <p className="tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
             </div>
           </div>
         </td>
@@ -891,34 +891,34 @@ function TeamRow({
                     {/* Member table header — 9 cols */}
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-4 py-2.5 text-left tf-th">
                           Member
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-3 py-2.5 text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
                             <span className="text-gray-600 dark:text-slate-300">Resume Units</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-3 py-2.5 text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
                             <span className="text-gray-600 dark:text-slate-300">Resume Scoring</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-3 py-2.5 text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
                             <span className="text-gray-600 dark:text-slate-300">AI Assessment</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-3 py-2.5 text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
                             <span className="text-gray-600 dark:text-slate-300">AI Interview</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <th className="px-3 py-2.5 text-left tf-th">
                           Last Active
                         </th>
                       </tr>
@@ -1106,7 +1106,7 @@ function MobileTeamCard({
           </span>
         )}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.team_name || 'Unnamed Team'}</span>
+          <span className="block truncate tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</span>
         </span>
         <span className="shrink-0 text-right">
           <span className={`block text-sm max-sm:text-[13px] font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
@@ -1327,7 +1327,8 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
                 {UNIT_KEYS.map((k) => (
                   <th key={k} className={TH} aria-sort={ariaSort(sort, k)}>
                     <SortableHeader
-                      label={<><span className={`w-2 h-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                      label={<><span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="text-left leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    className="gap-1.5 sm:gap-2"
                       column={k}
                       sort={sort}
                     />
@@ -1356,7 +1357,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
                         <NameAvatar name={r.name} fallback={r.email} size="sm" />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{r.name}</p>
-                          {r.email && <p className="truncate text-xs text-gray-500 dark:text-slate-400">{r.email}</p>}
+                          {r.email && <p className="truncate tf-meta">{r.email}</p>}
                         </div>
                       </div>
                     </td>
@@ -1380,7 +1381,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
         </div>
       )}
       {!loading && rows.length > 0 && (
-        <p className="mt-2 text-xs text-gray-500 dark:text-slate-400">
+        <p className="mt-2 tf-meta">
           {q ? `${visible.length} of ${rows.length}` : rows.length} {rows.length === 1 ? 'member' : 'members'}
           {rows.some((r) => r.teams.length > 1) && (
             <span className="text-gray-400 dark:text-slate-500">
@@ -1579,6 +1580,13 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   return (
     <MeasureContext.Provider value={measure}>
     <div>
+      {/* Whose usage this is: every team (tenant admin) or only the viewer's teams. */}
+      <ReportScopeBadge
+        isTenantAdmin={isTenantAdmin}
+        teamNames={teams.map((t) => t.team_name || 'Unknown')}
+        loading={loading}
+        className="mb-3"
+      />
       {/* Summary stats — each card also sorts the table below by its column,
           and says how it moved against the previous period of the same length. */}
       <div className={`${UNIT_STAT_GRID} mb-4 sm:mb-6`}>
@@ -1698,7 +1706,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
           <RangePresets activeId={activePresetId} onPick={applyPreset} />
           {/* Same info note style as the Usage page. */}
-          <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 text-xs text-gray-600 ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:text-slate-400 dark:ring-slate-700 lg:self-auto">
+          <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta-strong ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 lg:self-auto">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
             <span>
               Totals include <strong className="font-semibold text-gray-900 dark:text-slate-100">team members only</strong> — usage by users who aren’t in a team isn’t counted here.
@@ -1847,23 +1855,24 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, 'name')}>
+              <th className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, 'name')}>
                 <SortableHeader label="Team" column="name" sort={teamSort} />
               </th>
               {UNIT_KEYS.map(k => (
                 // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
-                <th key={k} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, k)}>
+                <th key={k} className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, k)}>
                   <SortableHeader
-                    label={<><span className={`w-2 h-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    label={<><span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="text-left leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    className="gap-1.5 sm:gap-2"
                     column={k}
                     sort={teamSort}
                   />
                 </th>
               ))}
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(teamSort, 'total')}>
+              <th className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, 'total')}>
                 <SortableHeader label="Total" column="total" sort={teamSort} />
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="px-4 py-3 text-left tf-th">
                 <abbr title="This team's part of all units used by all teams in the range" className="no-underline">% of total</abbr>
               </th>
             </tr>

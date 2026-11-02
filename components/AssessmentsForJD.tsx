@@ -273,8 +273,8 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
             <ClipboardList className="w-5 h-5 text-brand-blue" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Assessment Results</h2>
-            <p className="text-sm text-gray-500 mt-1 truncate">
+            <h2 className="tf-section-title truncate">Assessment Results</h2>
+            <p className="tf-body-muted mt-1 truncate">
               {jdTitle ? `Assessments for "${jdTitle}"` : 'Assessments for this job'}
             </p>
           </div>
@@ -351,25 +351,25 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
               <table className="w-full min-w-[880px]">
                 <thead className="bg-white border-b border-gray-100">
                   <tr>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Assessment
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Status
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Candidates
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Pass Rate
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Avg Score
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left tf-th whitespace-nowrap">
                       Created
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap tf-sticky-col">
+                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right tf-th whitespace-nowrap tf-sticky-col">
                       Actions
                     </th>
                   </tr>
@@ -389,7 +389,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                               </p>
                               {assessment.version > 1 && <VersionPill kind="assessment" version={assessment.version} />}
                             </div>
-                            <p className="text-xs text-gray-500 truncate">{assessment.short_id}</p>
+                            <p className="tf-meta truncate">{assessment.short_id}</p>
                           </div>
                         </div>
                       </td>
@@ -428,7 +428,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                         </div>
                       </td>
                       <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-500 whitespace-nowrap">
+                        <div className="tf-body-muted whitespace-nowrap">
                           {formatISTDate(assessment.created_at)}
                         </div>
                       </td>

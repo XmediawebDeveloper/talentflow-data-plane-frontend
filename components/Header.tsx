@@ -979,7 +979,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-gray-900 truncate">{meta.label}</div>
+                            <div className="tf-cell-name truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
                               <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -993,7 +993,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta-strong tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
@@ -1022,13 +1022,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-sm font-semibold text-gray-900">Users</div>
+                            <div className="tf-cell-name">Users</div>
                           </div>
                           {isUnlimited ? (
                             <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta-strong tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
@@ -1200,9 +1200,9 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                                   <p className={`text-sm ${notification.is_read ? 'text-gray-600' : 'text-gray-900 font-medium'}`}>
                                     {notification.title}
                                   </p>
-                                  <span className="text-xs text-gray-500 whitespace-nowrap">{notification.time_ago}</span>
+                                  <span className="tf-meta whitespace-nowrap">{notification.time_ago}</span>
                                 </div>
-                                <p className="text-xs text-gray-600">{notification.message}</p>
+                                <p className="tf-meta-strong">{notification.message}</p>
                                 {user.role === 'tenant_admin' && notification.action_label && (
                                   <div className="flex items-center gap-2 mt-2">
                                     <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
@@ -1366,7 +1366,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       </span>
                       <div className="min-w-0">
                         <p className="text-2xs leading-tight text-gray-500">Organization</p>
-                        <p className="text-sm font-semibold text-gray-900 truncate">{tenant.name || 'N/A'}</p>
+                        <p className="tf-cell-name truncate">{tenant.name || 'N/A'}</p>
                       </div>
                     </div>
                   </div>
@@ -1401,7 +1401,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           </span>
                           <span className="min-w-0 flex-1">
                             <span className="block text-sm font-medium text-gray-900 truncate">{title}</span>
-                            <span className="block text-xs text-gray-500 truncate">{subtitle}</span>
+                            <span className="block tf-meta truncate">{subtitle}</span>
                           </span>
                           <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />
                         </button>

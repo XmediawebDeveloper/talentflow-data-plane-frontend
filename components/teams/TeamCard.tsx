@@ -146,7 +146,7 @@ export function TeamUnitsSummary({
   const breakdown = UNIT_KEYS.map((k) => `${UNIT_LABELS[k]}: ${formatTeamUnits(units[k])}`).join(' · ');
   const body = (
     <>
-      <span className="text-sm max-sm:text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-100">
+      <span className="tf-cell-name max-sm:text-[13px] tabular-nums">
         {formatTeamUnits(units.total)}
         <span className="ml-1 text-xs font-normal text-gray-500 dark:text-slate-400">units</span>
       </span>
@@ -220,7 +220,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
               {team.name}
             </button>
           </h3>
-          <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-gray-500 dark:text-slate-400">
+          <p className="mt-0.5 flex items-center gap-1 truncate tf-meta">
             {team.team_lead ? (
               <>
                 <Crown className="h-3 w-3 shrink-0 text-brand-blue/60 dark:text-blue-300/70" />
@@ -238,7 +238,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       </div>
 
       {team.description && (
-        <p className="mt-3 line-clamp-2 text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{team.description}</p>
+        <p className="mt-3 line-clamp-2 tf-card-desc max-sm:text-[13px]">{team.description}</p>
       )}
 
       <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
@@ -253,7 +253,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       <TeamSizeBar count={team.member_count} max={maxMembers} className="mt-3" />
       {unitsByTeam && (
         <div className="mt-3 flex items-end justify-between gap-2">
-          <span className="text-xs text-gray-500 dark:text-slate-400">Units · last 30 days</span>
+          <span className="tf-meta">Units · last 30 days</span>
           <TeamUnitsSummary
             units={unitsByTeam[team.id]}
             onOpen={onOpenUsage ? () => onOpenUsage(team.id) : undefined}

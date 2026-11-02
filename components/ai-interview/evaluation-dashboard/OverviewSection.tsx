@@ -202,7 +202,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold">Final Score</h3>
-                  <p className="text-sm text-gray-500">Overall Performance</p>
+                  <p className="tf-body-muted">Overall Performance</p>
                 </div>
               </div>
             </div>
@@ -210,7 +210,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               <div className="text-6xl mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)', background: 'linear-gradient(135deg, var(--raw-10b981) 0%, var(--raw-059669) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 {scores.final.toFixed(1)}
               </div>
-              <div className="text-sm text-gray-500">out of 100</div>
+              <div className="tf-body-muted">out of 100</div>
             </div>
           </div>
           <div className="relative w-full h-8 bg-gradient-to-r from-red-200 via-amber-200 to-emerald-200 rounded-full overflow-hidden shadow-inner">
@@ -267,7 +267,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   <div className={`w-10 h-10 rounded-lg ${s.iconBg} flex items-center justify-center`}><s.icon size={20} className={s.iconColor} /></div>
                   <div>
                     <div className="text-base font-medium">{s.label}</div>
-                    <div className="text-xs text-gray-500">{s.desc}</div>
+                    <div className="tf-meta">{s.desc}</div>
                   </div>
                 </div>
                 <div className={`text-3xl font-bold ${s.textColor}`} style={{ fontFamily: 'var(--font-mono)' }}>{formatScore1(s.score)}</div>
@@ -291,7 +291,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center"><TrendingUp size={24} className="text-emerald-600" /></div>
               <div>
                 <h2 className="text-2xl font-bold">Key Strengths</h2>
-                <p className="text-sm text-gray-500">Notable areas of excellence</p>
+                <p className="tf-body-muted">Notable areas of excellence</p>
               </div>
             </div>
             <ul className="space-y-4">
@@ -311,7 +311,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center"><TrendingDown size={24} className="text-amber-600" /></div>
               <div>
                 <h2 className="text-2xl font-bold">Areas for Growth</h2>
-                <p className="text-sm text-gray-500">Opportunities for improvement</p>
+                <p className="tf-body-muted">Opportunities for improvement</p>
               </div>
             </div>
             <ul className="space-y-4">
@@ -354,7 +354,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     <div className={`w-full h-3 ${colors.bar} rounded-full overflow-hidden`}>
                       <div className={`h-full bg-gradient-to-r ${colors.fill} rounded-full transition-all duration-1000`} style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>{pct.toFixed(0)}% of total</div>
+                    <div className="tf-meta mt-1" style={{ fontFamily: 'var(--font-mono)' }}>{pct.toFixed(0)}% of total</div>
                   </div>
                 );
               })}
@@ -412,7 +412,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
       {allClusters.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
           <h2 className="text-2xl font-bold mb-2">Cluster Coverage Overview</h2>
-          <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across all clusters</p>
+          <p className="tf-body-muted mb-6">Skills addressed at adequate level across all clusters</p>
           <div className="grid grid-cols-3 gap-4">
             {allClusters.map((cluster, idx) => {
               const totalSkills = cluster.skills.length;

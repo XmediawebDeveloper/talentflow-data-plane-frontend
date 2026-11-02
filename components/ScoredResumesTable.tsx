@@ -312,6 +312,10 @@ interface ScoredResumesTableProps {
    *  (e.g. this page's own per-job "Scoring History" view). Unset on the
    *  global cross-job list, which has no single host job to check. */
   jobStatus?: string;
+  /** Status of any JD version by id ('Disabled', 'Archived', …) — for hosts
+   *  whose rows span several versions ("Show All Versions"), so each row's
+   *  invites follow its OWN version. Falls back to `jobStatus` for the host job. */
+  jobStatusOf?: (jdId: string) => string | undefined;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -688,6 +692,7 @@ export default function ScoredResumesTable({
   jobCode,
   jobVersion: hostJobVersion,
   jobStatus,
+  jobStatusOf,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -1164,7 +1169,7 @@ Best regards`);
           const isLast = i === visible.length - 1;
           return (
             <div key={i} className="flex items-center gap-2 min-w-0">
-              <span className="text-sm text-gray-700 truncate" title={title}>{title}</span>
+              <span className="tf-body truncate" title={title}>{title}</span>
               {isLast && hidden > 0 && (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -1187,7 +1192,7 @@ Best regards`);
                     </div>
                     <ul className="max-h-64 overflow-y-auto py-1">
                       {titles.map((t, j) => (
-                        <li key={j} className="px-3 py-1.5 text-sm text-gray-700 break-words">{t}</li>
+                        <li key={j} className="px-3 py-1.5 tf-body break-words">{t}</li>
                       ))}
                     </ul>
                   </PopoverContent>
@@ -1217,6 +1222,12 @@ Best regards`);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
 
+  /** A row's JD status: the host's lookup when it has one (rows spanning several
+   *  versions), else `jobStatus` — which only speaks for this table's own host
+   *  job, never for another JD a row in the global cross-job list points at. */
+  const statusOfRowJob = (rowJdId: string | undefined, id: string): string | undefined =>
+    jobStatusOf?.(id) ?? (rowJdId && rowJdId !== jobId ? undefined : jobStatus);
+
   /* The jobs the ticked rows belong to — a row's own JD, or this table's
      one job on a single-job host. */
   const selectionJobs = useMemo((): InviteTargetJob[] => {
@@ -1224,14 +1235,11 @@ Best regards`);
     for (const r of effectiveSelectedRows) {
       const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
       if (!id || byId.has(id)) continue;
-      // A row's own `jdId` only appears in the global cross-job list, whose
-      // rows carry no job-status field; this table's one host job (when
-      // there is one) is the only case `jobStatus` can speak for.
-      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: r.jdId ? undefined : jobStatus });
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: statusOfRowJob(r.jdId, id) });
     }
     return Array.from(byId.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus]);
+  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus, jobStatusOf]);
 
   /** A scored row as THE invite popup lists it. */
   const toInvitee = (r: ScoredResume): InviteCandidate => ({
@@ -1655,7 +1663,7 @@ Best regards`);
           {/* "Candidate" is name WITH mail — the email rides under the name
               instead of taking a column of its own. */}
           {resume.email && (
-            <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5">
+            <div className="flex items-center gap-1 tf-meta mt-0.5">
               <Mail className="w-3 h-3 shrink-0" />
               <span className="truncate max-w-[240px]" title={resume.email}>{resume.email}</span>
             </div>
@@ -1679,7 +1687,7 @@ Best regards`);
       const code = rowJobCode(resume);
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          {code ? <JobIdBadge>{code}</JobIdBadge> : <span className="text-sm text-gray-700">-</span>}
+          {code ? <JobIdBadge>{code}</JobIdBadge> : <span className="tf-body">-</span>}
         </td>
       );
     }
@@ -1698,7 +1706,7 @@ Best regards`);
               v{resume.jobVersion}
             </span>
           ) : (
-            <span className="text-sm text-gray-700">-</span>
+            <span className="tf-body">-</span>
           )}
         </td>
       );
@@ -1716,7 +1724,7 @@ Best regards`);
     if (col.id === 'email') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <div className="flex items-center gap-1 text-sm text-gray-600">
+          <div className="flex items-center gap-1 tf-card-desc">
             <Mail className="w-3.5 h-3.5" />
             {resume.email}
           </div>
@@ -1726,7 +1734,7 @@ Best regards`);
     if (col.id === 'phone') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <div className="flex items-start gap-1 text-sm text-gray-600">
+          <div className="flex items-start gap-1 tf-card-desc">
             <Phone className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <div className="flex flex-col gap-0.5">
               {(() => {
@@ -1766,7 +1774,7 @@ Best regards`);
     if (col.id === 'experience') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
-          <div className="text-sm text-gray-600">{resume.experience || 'N/A'}</div>
+          <div className="tf-card-desc">{resume.experience || 'N/A'}</div>
         </td>
       );
     }
@@ -1778,14 +1786,14 @@ Best regards`);
           : 'N/A';
       return (
         <td key={col.id} className="py-3 px-4 align-middle min-w-[180px]">
-          <div className="text-sm text-gray-600">{educationDisplay}</div>
+          <div className="tf-card-desc">{educationDisplay}</div>
         </td>
       );
     }
     if (col.id === 'certifications') {
       return (
         <td key={col.id} className="py-3 px-4 align-middle min-w-[200px]">
-          <div className="text-sm text-gray-600">
+          <div className="tf-card-desc">
             {resume.certifications && resume.certifications.length > 0
               ? resume.certifications.map(cert =>
                   typeof cert === 'string' ? cert : (cert?.name || '')
@@ -1799,7 +1807,7 @@ Best regards`);
       return (
         <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
           <div className="text-sm text-gray-900">{resume.scoredBy}</div>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
+          <div className="flex items-center gap-1 tf-meta">
             <Calendar className="w-3 h-3" />
             <span>{formatISTDate(resume.scoredDate)}{' '}<span className="text-gray-400">{formatISTTime(resume.scoredDate)}</span></span>
           </div>
@@ -1832,8 +1840,15 @@ Best regards`);
        "none configured" no longer greys it out. An archived resume is the
        one thing that overrides all of that — same rule every other resume
        action (Score, AI Talent Match, resume-view's Invite) follows. */
-    const rowCanInviteAssessment = !resume.isArchived && canCreateAssessments;
-    const rowCanInviteAIInterview = !resume.isArchived && mayInviteAIInterview;
+    /* A Disabled / Archived JD blocks the row's invites too — on hosts with no
+       JobActionLock around them (Resume Scoring's job drill-down) this is the
+       only thing that knows. */
+    const rowJobId = resume.jdId || (jobId && jobId !== 'global' ? jobId : '');
+    const rowJobLock = rowJobId
+      ? resolveSelectionJobLock([{ jdId: rowJobId, jdTitle: resume.jobTitle || jobTitle || '', status: statusOfRowJob(resume.jdId, rowJobId) }])
+      : null;
+    const rowCanInviteAssessment = !resume.isArchived && !rowJobLock && canCreateAssessments;
+    const rowCanInviteAIInterview = !resume.isArchived && !rowJobLock && mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
@@ -1842,6 +1857,8 @@ Best regards`);
       // reason, rather than disappearing outright.
       rowInviteDisabledTitle: resume.isArchived
         ? ARCHIVED_RESUME_MESSAGE
+        : rowJobLock
+        ? rowJobLock
         : jobLockReason
         ? jobLockReason
         : !(canCreateAssessments || mayInviteAIInterview)
@@ -2724,7 +2741,7 @@ Best regards`);
                           ) : (
                             <p className="text-sm font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
                           )}
-                          <p className="text-xs text-gray-500 truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
+                          <p className="tf-meta truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
                         </div>
 
                         <div>
@@ -2757,12 +2774,12 @@ Best regards`);
                   <div className="flex items-start gap-2.5 pl-6">
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
-                      <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
+                      <p className="tf-meta truncate">{resume.email || '—'}</p>
                     </div>
                   </div>
 
                   {isGlobalView && resume.jobTitle && (
-                    <p className="text-xs text-gray-500 truncate" title={resume.jobTitle}>
+                    <p className="tf-meta truncate" title={resume.jobTitle}>
                       Applied for: <span className="font-medium text-gray-700">
                         {[resume.jobCode, truncateJobTitle(resume.jobTitle), resume.jobVersion != null ? `v${resume.jobVersion}` : null]
                           .filter(Boolean)
@@ -2785,7 +2802,7 @@ Best regards`);
                   {/* Job / Resume version — the list's two version columns, so
                       a job showing every version (All) tells the cards apart. */}
                   {!hiddenColumnIds?.includes('jobVersion') && (
-                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-500">
+                    <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                       {resume.jobVersion != null && (
                         <span className="inline-flex items-center gap-1">
                           Job
@@ -2817,7 +2834,7 @@ Best regards`);
                     </div>
                   )}
                   {!hiddenColumnIds?.includes('scoredDate') && (
-                    <div className="space-y-0.5 text-xs text-gray-500 min-w-0">
+                    <div className="space-y-0.5 tf-meta min-w-0">
                       <p className="[overflow-wrap:anywhere]">
                         <span className="text-gray-400">Scored by:</span>{' '}
                         <span className="text-gray-700">{resume.scoredBy || '—'}</span>
@@ -2843,7 +2860,7 @@ Best regards`);
                     onClick={(e) => e.stopPropagation()}
                   >
                     {groupRows ? (
-                      <div className="flex-1 min-w-0 text-xs text-gray-500">
+                      <div className="flex-1 min-w-0 tf-meta">
                         <div className="text-gray-400 uppercase tracking-wide text-2xs">Latest Updated</div>
                         <div className="truncate">
                           <span className="text-gray-700">{formatISTDate(resume.scoredDate)}</span>{' '}
@@ -2910,7 +2927,7 @@ Best regards`);
                                   {formatOverallScore(row.overallRating10, row.scorePercentage)}
                                 </span>
                               </div>
-                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                              <div className="mt-1 flex items-center gap-1 tf-meta">
                                 <Calendar className="w-3 h-3" />
                                 <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
                               </div>
@@ -2978,14 +2995,14 @@ Best regards`);
                 <tr>
                   {/* pl-[46px]: the cell's padding plus the checkbox in front of the
                       name, so the heading lines up with the names. */}
-                  <th className="text-left py-3 pr-4 pl-[46px] align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job Versions</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">Job Titles</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Exact Match</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Partial Match</th>
-                  <th className="text-center py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">No Match</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Latest Updated</th>
-                  <th className="text-left py-3 px-4 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                  <th className="text-left py-3 pr-4 pl-[46px] align-middle tf-th">Candidate</th>
+                  <th className="text-center py-3 px-4 align-middle tf-th whitespace-nowrap">Job Versions</th>
+                  <th className="text-left py-3 px-4 align-middle tf-th">Job Titles</th>
+                  <th className="text-center py-3 px-4 align-middle tf-th whitespace-nowrap">Exact Match</th>
+                  <th className="text-center py-3 px-4 align-middle tf-th whitespace-nowrap">Partial Match</th>
+                  <th className="text-center py-3 px-4 align-middle tf-th whitespace-nowrap">No Match</th>
+                  <th className="text-left py-3 px-4 align-middle tf-th whitespace-nowrap">Latest Updated</th>
+                  <th className="text-left py-3 px-4 align-middle tf-th tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -3051,7 +3068,7 @@ Best regards`);
                               ) : (
                                 <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
                               )}
-                              {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]" title={primary.email}>{primary.email}</div>}
+                              {primary.email && <div className="tf-meta [overflow-wrap:anywhere]" title={primary.email}>{primary.email}</div>}
                             </div>
                           </div>
                         </td>
@@ -3080,7 +3097,7 @@ Best regards`);
                         })()}
                         <td className="px-4 py-3 align-middle whitespace-nowrap">
                           <div className="text-sm text-gray-900">{formatISTDate(primary.scoredDate)}</div>
-                          <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
+                          <div className="tf-meta">{formatISTTime(primary.scoredDate)}</div>
                         </td>
                         <td className="px-4 py-3 align-middle text-left tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center gap-1.5">
@@ -3121,7 +3138,7 @@ Best regards`);
                                         {col.label}
                                       </th>
                                     ))}
-                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                                    <th className="text-left py-2 px-4 tf-th">Actions</th>
                                   </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -3239,7 +3256,7 @@ Best regards`);
                         ) : (
                           <div className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
                         )}
-                        {primary.email && <div className="text-xs text-gray-500 [overflow-wrap:anywhere]">{primary.email}</div>}
+                        {primary.email && <div className="tf-meta [overflow-wrap:anywhere]">{primary.email}</div>}
                       </div>
                     </div>
                     <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
@@ -3275,7 +3292,7 @@ Best regards`);
                     <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
                       {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
                     </span>
-                    <div className="text-xs text-gray-500 text-right">
+                    <div className="tf-meta text-right">
                       <div>{formatISTDate(primary.scoredDate)}</div>
                       <div className="text-gray-400">{formatISTTime(primary.scoredDate)}</div>
                     </div>
@@ -3317,7 +3334,7 @@ Best regards`);
                                   {formatOverallScore(row.overallRating10, row.scorePercentage)}
                                 </span>
                               </div>
-                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                              <div className="mt-1 flex items-center gap-1 tf-meta">
                                 <Calendar className="w-3 h-3" />
                                 <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
                               </div>
@@ -3383,7 +3400,7 @@ Best regards`);
               cell, light uppercase gray-500 labels with wider tracking, dark mode. */}
           <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
             <tr>
-              <th className="text-left py-3 px-4 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select">
+              <th className="text-left py-3 px-4 w-10 align-middle tf-sticky-col-left tf-th" aria-label="Select">
                 {/* Only when there's no toolbar (compact: a job opened inline
                     in View by Job) — otherwise Select all is in the toolbar,
                     before the search box, and a second one here repeats it. */}
@@ -3402,7 +3419,7 @@ Best regards`);
                   {col.label}
                 </th>
               ))}
-              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
+              <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -3531,7 +3548,7 @@ Best regards`);
                   {showName(resume.candidateName)}
                 </p>
                 {resume.email && (
-                  <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{resume.email}</p>
+                  <p className="tf-meta [overflow-wrap:anywhere]">{resume.email}</p>
                 )}
                 {!hiddenColumnIds?.includes('matchStatus') && (
                   <span className={`mt-1.5 inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
@@ -3772,7 +3789,7 @@ Best regards`);
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                    <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                    <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
                 <Button
@@ -3790,7 +3807,7 @@ Best regards`);
                 {/* Both files this dialog can send, side by side: the resume
                     itself and the scorecard for this job. */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachments</label>
+                  <label className="block tf-label mb-1">Attachments</label>
                   <div className="flex flex-col sm:flex-row items-stretch gap-3">
                     <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 bg-gray-50 min-w-0 flex-1">
                       <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
@@ -3802,7 +3819,7 @@ Best regards`);
                         <div className="text-sm font-medium text-gray-900 truncate" title={shareFile?.name}>
                           {shareFile ? shareFile.name : 'Loading resume file…'}
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="tf-meta truncate">
                           Resume
                           {shareFile?.type && <> &middot; {shareFile.type}</>}
                           {shareFile?.sizeKb ? <> &middot; {Math.round(shareFile.sizeKb)} KB</> : null}
@@ -3835,7 +3852,7 @@ Best regards`);
                         >
                           Scorecard - {shareCandidate.candidateName}.pdf
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
+                        <div className="tf-meta truncate">
                           Scorecard &middot; PDF
                           {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
                         </div>
@@ -3858,7 +3875,7 @@ Best regards`);
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Recipient Email <span className="text-destructive">*</span>
                   </label>
                   <input
@@ -3871,7 +3888,7 @@ Best regards`);
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                  <label className="block tf-label mb-1">Subject</label>
                   <input
                     type="text"
                     value={shareSubject}
@@ -3882,7 +3899,7 @@ Best regards`);
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                  <label className="block tf-label mb-1">Message</label>
                   <textarea
                     value={shareMessage}
                     onChange={(e) => setShareMessage(e.target.value)}
@@ -3966,8 +3983,8 @@ Best regards`);
                   <Eye className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
-                  <p className="text-sm text-gray-500 truncate">
+                  <h2 className="tf-section-title truncate">Scorecard</h2>
+                  <p className="tf-body-muted truncate">
                     {shareCandidate.candidateName}
                     {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
                   </p>
@@ -4107,7 +4124,7 @@ export function BulkActionConfirmModal({
             </div>
             <div className="min-w-0">
               <h3 id="bulk-action-title" className="text-base sm:text-lg font-bold text-gray-900">{info.title}</h3>
-              <p className="text-sm text-gray-500 mt-1">{rows.length} selected</p>
+              <p className="tf-body-muted mt-1">{rows.length} selected</p>
             </div>
           </div>
         </div>
@@ -4115,7 +4132,7 @@ export function BulkActionConfirmModal({
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4">
           <div className="p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
             <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-gray-700">
+            <p className="tf-body">
               <span className="block font-bold text-blue-700 mb-0.5">What this does</span>
               {info.what}
             </p>
@@ -4147,7 +4164,7 @@ export function BulkActionConfirmModal({
                         <span className="text-sm font-semibold tabular-nums text-gray-700">{counts[b]}</span>
                       </span>
                       {lockedReason && counts[b] > 0 && (
-                        <span className="block mt-1 text-xs text-gray-500">{lockedReason}</span>
+                        <span className="block mt-1 tf-meta">{lockedReason}</span>
                       )}
                       {/* No Match can be invited — the recruiter's call — but
                           say what the status means, so it's a decision. */}
@@ -4167,7 +4184,7 @@ export function BulkActionConfirmModal({
         </div>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 px-4 py-4 sm:px-6 border-t border-gray-200 shrink-0">
-          <p className="text-sm text-gray-600">
+          <p className="tf-card-desc">
             <span className="font-semibold text-gray-900">{chosen.length}</span> of {rows.length} will be included
           </p>
           <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-2 sm:gap-3 sm:ml-auto">

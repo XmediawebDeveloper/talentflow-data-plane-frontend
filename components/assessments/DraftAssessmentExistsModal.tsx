@@ -78,7 +78,7 @@ export default function DraftAssessmentExistsModal({
                 <FileText className="w-5 h-5 text-brand-blue dark:text-blue-300" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
+                <p className="tf-body-muted">Existing Draft</p>
                 {/* ONE LINE: JD ID | job name | job version | assessment version + Draft.
                     The app's own pieces - the shared JobIdBadge, the job list's
                     name typography, VersionChip (blue = job, cyan = assessment)
@@ -97,7 +97,7 @@ export default function DraftAssessmentExistsModal({
                   </span>
                   <span aria-hidden="true" className="flex-shrink-0 text-gray-300 dark:text-slate-600">|</span>
                   <span className="flex-shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap">
-                    <span className="text-xs text-gray-500 dark:text-slate-400">Assessment</span>
+                    <span className="tf-meta">Assessment</span>
                     <VersionChip kind="assessment" version={draftVersion} />
                   </span>
                   <span className="flex-shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ring-1 bg-warning-subtle text-warning-strong ring-warning-line">
@@ -107,7 +107,7 @@ export default function DraftAssessmentExistsModal({
                 </div>
                 {/* ONE LINE: Last edited on … | Created by … - each half kept whole;
                     only a phone lets the two halves stack. */}
-                <div className="mt-2 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-slate-400 min-w-0">
+                <div className="mt-2 flex flex-wrap sm:flex-nowrap items-center gap-x-3 gap-y-1 tf-meta min-w-0">
                   {lastEdited && (
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
                       <Calendar className="w-3.5 h-3.5 flex-shrink-0" />

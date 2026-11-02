@@ -64,8 +64,8 @@ export default function MemberSelector({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
-        <label className="block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">Team Members</label>
-        <span className="text-xs text-gray-500 dark:text-slate-500">{selectedMemberIds.length} selected</span>
+        <label className="block tf-label max-sm:text-[13px]">Team Members</label>
+        <span className="tf-meta">{selectedMemberIds.length} selected</span>
       </div>
 
       {/* Picked members as chips — visible without scrolling the list; × removes. */}
@@ -134,7 +134,7 @@ export default function MemberSelector({
 
       <div className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 p-6 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-500">
+          <div className="flex items-center justify-center gap-2 p-6 tf-body-muted max-sm:text-[13px]">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading users…
           </div>
@@ -176,7 +176,7 @@ export default function MemberSelector({
                   <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{user.name}</p>
-                    <p className="truncate text-xs text-gray-500 dark:text-slate-500">{user.email}</p>
+                    <p className="truncate tf-meta">{user.email}</p>
                   </div>
                   {user.role && (
                     <span className="hidden shrink-0 rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-gray-700 dark:text-slate-300 sm:inline">
@@ -219,9 +219,9 @@ export default function MemberSelector({
                 <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">{user.name}</p>
-                  <p className="truncate text-xs text-gray-500 dark:text-slate-500">{user.email}</p>
+                  <p className="truncate tf-meta">{user.email}</p>
                 </div>
-                <span className="max-w-[40%] shrink-0 truncate rounded-full bg-gray-100 px-2.5 py-1 text-xs text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                <span className="max-w-[40%] shrink-0 truncate rounded-full bg-gray-100 px-2.5 py-1 tf-meta-strong dark:bg-slate-800">
                   In {teamName}
                 </span>
               </div>
@@ -232,7 +232,7 @@ export default function MemberSelector({
 
       {/* Lead summary, plus a nudge when there's exactly one member and no lead. */}
       {canPickLead && selectedMembers.length > 0 && (
-        <p className="text-xs text-gray-500 dark:text-slate-500">
+        <p className="tf-meta">
           {lead ? (
             <>
               <Crown className="mr-1 inline h-3 w-3 text-brand-blue" />

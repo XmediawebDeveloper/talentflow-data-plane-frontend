@@ -472,8 +472,8 @@ export default function UnitDisputesPage() {
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Unit Consumption Disputes</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            <h1 className="tf-page-title">Unit Consumption Disputes</h1>
+            <p className="mt-1 tf-body-muted">
               File refund requests for units consumed in error and track the review status. Each request is reviewed within 2&ndash;3 business days.
             </p>
           </div>
@@ -536,7 +536,7 @@ export default function UnitDisputesPage() {
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Disputes</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-blue">{stats.total}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">All time</p>
+                <p className="mt-1 tf-meta">All time</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                 <Shield className="h-5 w-5 text-brand-blue" />
@@ -552,7 +552,7 @@ export default function UnitDisputesPage() {
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Pending Review</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.pending}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Awaiting decision</p>
+                <p className="mt-1 tf-meta">Awaiting decision</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 shadow-sm shadow-brand-orange/10">
                 <Clock className="h-5 w-5 text-brand-orange-deep" />
@@ -568,7 +568,7 @@ export default function UnitDisputesPage() {
               <div className="min-w-0">
                 <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Resolved</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved}</p>
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Approved or rejected</p>
+                <p className="mt-1 tf-meta">Approved or rejected</p>
               </div>
               <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                 <CheckCircle2 className="h-5 w-5 text-brand-teal" />
@@ -585,7 +585,7 @@ export default function UnitDisputesPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Filters</span>
+            <span className="tf-cell-name">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -680,8 +680,8 @@ export default function UnitDisputesPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Shield className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No Unit Disputes</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+            <h3 className="tf-section-title">No Unit Disputes</h3>
+            <p className="mx-auto mt-1 max-w-md tf-body-muted">
               {hasActiveFilters
                 ? 'No disputes match your filter criteria. Try adjusting your filters.'
                 : 'You have no unit consumption disputes. If you believe units were incorrectly consumed, you can file a dispute.'}
@@ -721,7 +721,7 @@ export default function UnitDisputesPage() {
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Disputes</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${disputes.length})`}
                 </p>
@@ -731,13 +731,13 @@ export default function UnitDisputesPage() {
               <table className="w-full min-w-[900px]">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Dispute ID</th>
-                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[90px]">Unit Type</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[90px]">Units</th>
-                    <th className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Reason</th>
-                    <th className="px-4 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px]">Status</th>
-                    <th className="px-4 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
+                    <th className="px-4 py-4 tf-th w-[160px]">Dispute ID</th>
+                    <th className="px-4 py-4 tf-th w-[110px]">Date</th>
+                    <th className="px-4 py-4 text-center tf-th w-[90px]">Unit Type</th>
+                    <th className="px-4 py-4 text-right tf-th w-[90px]">Units</th>
+                    <th className="px-4 py-4 tf-th w-[160px]">Reason</th>
+                    <th className="px-4 py-4 text-center tf-th w-[140px]">Status</th>
+                    <th className="px-4 py-4 text-right tf-th w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -745,7 +745,7 @@ export default function UnitDisputesPage() {
                     <tr key={dispute.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                       <td className="px-4 py-4">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="min-w-0 truncate font-mono text-sm font-semibold text-gray-900 dark:text-slate-50" title={dispute.id}>
+                          <span className="min-w-0 truncate font-mono tf-cell-name" title={dispute.id}>
                             {truncateId(dispute.id)}
                           </span>
                           <button
@@ -757,7 +757,7 @@ export default function UnitDisputesPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-4 py-4 tf-td">
                         {formatDate(dispute.created_at)}
                       </td>
                       <td className="px-4 py-4 text-center">
@@ -767,7 +767,7 @@ export default function UnitDisputesPage() {
                         <span className="text-sm font-semibold text-brand-blue">{dispute.units_to_refund}</span>
                       </td>
                       <td className="px-4 py-4">
-                        <span className="block truncate text-sm text-gray-600 dark:text-slate-400" title={dispute.reason}>
+                        <span className="block truncate tf-card-desc" title={dispute.reason}>
                           {getReasonLabel(dispute.reason)}
                         </span>
                       </td>
@@ -837,7 +837,7 @@ export default function UnitDisputesPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Created</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.created_at)}</p>
+                    <p className="mt-1 tf-cell-name">{formatDateTime(selectedDispute.created_at)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Unit Type</p>
@@ -853,7 +853,7 @@ export default function UnitDisputesPage() {
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Consumption Log ID</p>
                     <div className="mt-1 flex items-center gap-1.5">
-                      <p className="break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{truncateId(selectedDispute.consumption_log_id)}</p>
+                      <p className="break-all font-mono tf-cell-name">{truncateId(selectedDispute.consumption_log_id)}</p>
                       <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 dark:text-slate-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
                         <Copy className="h-3 w-3" />
                       </button>
@@ -868,11 +868,11 @@ export default function UnitDisputesPage() {
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Reason</span>
+                      <span className="tf-card-desc">Reason</span>
                       <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{getReasonLabel(selectedDispute.reason)}</span>
                     </div>
                     <div>
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Description</span>
+                      <span className="tf-card-desc">Description</span>
                       <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.description}</p>
                     </div>
                   </div>
@@ -905,19 +905,19 @@ export default function UnitDisputesPage() {
                     <div className="space-y-3 p-4">
                       {selectedDispute.resolution_notes && (
                         <div>
-                          <span className="text-sm text-gray-600 dark:text-slate-400">Notes</span>
+                          <span className="tf-card-desc">Notes</span>
                           <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.resolution_notes}</p>
                         </div>
                       )}
                       {selectedDispute.resolved_by_email && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="text-sm text-gray-600 dark:text-slate-400">Resolved By</span>
+                          <span className="tf-card-desc">Resolved By</span>
                           <span className="break-all text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.resolved_by_email}</span>
                         </div>
                       )}
                       {selectedDispute.resolved_at && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="text-sm text-gray-600 dark:text-slate-400">Resolved At</span>
+                          <span className="tf-card-desc">Resolved At</span>
                           <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.resolved_at)}</span>
                         </div>
                       )}
@@ -968,7 +968,7 @@ export default function UnitDisputesPage() {
                 {/* Step 1: Select consumption log */}
                 {fileStep === 1 && (
                   <>
-                    <p className="mb-4 text-sm text-gray-600 dark:text-slate-400">Select the consumption record you want to dispute.</p>
+                    <p className="mb-4 tf-card-desc">Select the consumption record you want to dispute.</p>
 
                     {loadingLogs && (
                       <div className="mb-4 space-y-2">
@@ -993,7 +993,7 @@ export default function UnitDisputesPage() {
                     {!loadingLogs && consumptionLogs.length === 0 && (
                       <div className="rounded-2xl border border-dashed border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-4 py-10 text-center">
                         <Shield className="mx-auto mb-2 h-8 w-8 text-gray-300" />
-                        <p className="text-sm text-gray-500 dark:text-slate-500">No consumption records found.</p>
+                        <p className="tf-body-muted">No consumption records found.</p>
                       </div>
                     )}
 
@@ -1017,13 +1017,13 @@ export default function UnitDisputesPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {getUnitTypeBadge(log.unit_type)}
-                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                                  <span className="tf-cell-name">
                                     {log.units_consumed} unit{log.units_consumed !== 1 ? 's' : ''}
                                   </span>
                                 </div>
                                 <ChevronRight className="h-4 w-4 text-gray-400 dark:text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-slate-500">
+                              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta">
                                 <span>{formatDateTime(log.created_at)}</span>
                                 {log.entity_name && <span className="text-gray-400 dark:text-slate-500">·</span>}
                                 {log.entity_name && <span>{log.entity_name}</span>}
@@ -1037,12 +1037,12 @@ export default function UnitDisputesPage() {
 
                         {/* Pagination */}
                         <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700/60 pt-3">
-                          <p className="text-xs text-gray-500 dark:text-slate-500">
+                          <p className="tf-meta">
                             {logTotal} total record{logTotal !== 1 ? 's' : ''}
                           </p>
                           <div className="flex items-center gap-2 sm:gap-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                              <span className="tf-meta-strong whitespace-nowrap">Go to</span>
                               <input
                                 type="number"
                                 min={1}
@@ -1100,9 +1100,9 @@ export default function UnitDisputesPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {getUnitTypeBadge(selectedLog.unit_type)}
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedLog.units_consumed} units</span>
+                        <span className="tf-cell-name">{selectedLog.units_consumed} units</span>
                         <span className="text-xs text-gray-400 dark:text-slate-500">·</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500">{formatDateTime(selectedLog.created_at)}</span>
+                        <span className="tf-meta">{formatDateTime(selectedLog.created_at)}</span>
                       </div>
                     </div>
 

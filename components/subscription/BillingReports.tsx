@@ -200,7 +200,7 @@ export default function BillingReports<T extends ReportInvoice>({
       {/* Charts */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className={cardClass}>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{groupBy === 'month' ? 'Monthly' : 'Quarterly'} Billing Amount</h3>
+          <h3 className="tf-subsection-title">{groupBy === 'month' ? 'Monthly' : 'Quarterly'} Billing Amount</h3>
           <div className="mt-3 h-52">
             {paidScoped.length === 0 ? emptyChart : (
               <ResponsiveContainer width="100%" height="100%">
@@ -221,7 +221,7 @@ export default function BillingReports<T extends ReportInvoice>({
         </div>
 
         <div className={cardClass}>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Amount by Module</h3>
+          <h3 className="tf-subsection-title">Amount by Module</h3>
           <div className="mt-3 flex h-52 items-center gap-4">
             {moduleData.length === 0 ? emptyChart : (
               <>
@@ -235,7 +235,7 @@ export default function BillingReports<T extends ReportInvoice>({
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{inr(moduleTotal)}</span>
+                    <span className="tf-cell-name tabular-nums">{inr(moduleTotal)}</span>
                     <span className="text-2xs text-gray-500 dark:text-slate-500">Total</span>
                   </div>
                 </div>
@@ -258,7 +258,7 @@ export default function BillingReports<T extends ReportInvoice>({
         </div>
 
         <div className={cardClass}>
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Invoices by Status</h3>
+          <h3 className="tf-subsection-title">Invoices by Status</h3>
           <div className="mt-3 h-52">
             {scoped.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-gray-400 dark:text-slate-500">No invoices in this period</div>
@@ -312,8 +312,8 @@ export default function BillingReports<T extends ReportInvoice>({
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
             <BarChart3 className="h-7 w-7 text-brand-blue" />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No invoices found</h3>
-          <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">Try a different year, module, status or search.</p>
+          <h3 className="tf-section-title">No invoices found</h3>
+          <p className="mx-auto mt-1 max-w-md tf-body-muted">Try a different year, module, status or search.</p>
         </div>
       ) : (
         <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
@@ -321,14 +321,14 @@ export default function BillingReports<T extends ReportInvoice>({
             <table className="w-full min-w-[900px] tf-premium-table">
               <thead className="bg-white dark:bg-slate-900">
                 <tr className="text-left">
-                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[200px]">Invoice</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Date</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px]">Module</th>
-                  <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Payment Method</th>
-                  <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[130px]">Amount</th>
-                  <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px]">Status</th>
-                  <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[100px] tf-sticky-col">Actions</th>
+                  <th className="px-5 py-4 tf-th w-[200px]">Invoice</th>
+                  <th className="px-5 py-4 tf-th w-[160px]">Date</th>
+                  <th className="px-5 py-4 tf-th">Description</th>
+                  <th className="px-5 py-4 tf-th w-[140px]">Module</th>
+                  <th className="px-5 py-4 tf-th w-[160px]">Payment Method</th>
+                  <th className="px-5 py-4 text-right tf-th w-[130px]">Amount</th>
+                  <th className="px-5 py-4 text-center tf-th w-[100px]">Status</th>
+                  <th className="px-5 py-4 text-right tf-th w-[100px] tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -339,10 +339,10 @@ export default function BillingReports<T extends ReportInvoice>({
                       <td className="px-5 py-4">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
-                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={inv.invoice_number}>{inv.invoice_number}</span>
+                          <span className="min-w-0 truncate tf-cell-name" title={inv.invoice_number}>{inv.invoice_number}</span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 text-sm text-gray-700 dark:text-slate-300">{formatIST(inv.issue_date)}</td>
+                      <td className="whitespace-nowrap px-5 py-4 tf-td">{formatIST(inv.issue_date)}</td>
                       <td className="px-5 py-4">
                         <div className="truncate text-sm font-medium text-gray-900 dark:text-slate-50" title={getDescription(inv)}>{getDescription(inv)}</div>
                       </td>
@@ -352,13 +352,13 @@ export default function BillingReports<T extends ReportInvoice>({
                       <td className="px-5 py-4">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
-                          <span className="min-w-0 truncate text-sm text-gray-700 dark:text-slate-300" title={getPaymentLabel(inv)}>{getPaymentLabel(inv)}</span>
+                          <span className="min-w-0 truncate tf-body" title={getPaymentLabel(inv)}>{getPaymentLabel(inv)}</span>
                         </div>
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{inr(inv.total_amount_inr || 0, 2)}</span>
+                        <span className="tf-cell-name">{inr(inv.total_amount_inr || 0, 2)}</span>
                         {(inv.tax_amount_inr || 0) > 0 && (
-                          <div className="text-xs text-gray-500 dark:text-slate-500">incl. {inr(inv.tax_amount_inr, 2)} tax</div>
+                          <div className="tf-meta">incl. {inr(inv.tax_amount_inr, 2)} tax</div>
                         )}
                       </td>
                       <td className="px-5 py-4 text-center">

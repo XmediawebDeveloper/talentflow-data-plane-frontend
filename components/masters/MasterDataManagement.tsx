@@ -351,7 +351,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
           <h2 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">
             {config.title}
           </h2>
-          <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{config.description}</p>
+          <p className="mt-0.5 tf-card-desc">{config.description}</p>
         </div>
       </div>
       <button
@@ -426,7 +426,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
               <thead className="bg-white">
                 <tr className="text-left">
                   {config.columns.map((col) => (
-                    <th key={col} className="px-4 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                    <th key={col} className="px-4 py-4 tf-th">
                       <Skeleton className="h-3 w-20" />
                     </th>
                   ))}
@@ -450,8 +450,8 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Icon className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No items found</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add your first {config.title.slice(0, -1).toLowerCase()} to get started.</p>
+            <h3 className="tf-section-title">No items found</h3>
+            <p className="mt-1 tf-body-muted">Add your first {config.title.slice(0, -1).toLowerCase()} to get started.</p>
             <button
               onClick={openCreateModal}
               className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -482,15 +482,15 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                 {paginatedItems.map((item) => (
                   <tr key={item.id} className="transition-colors hover:bg-brand-blue/[0.02]">
                     <td className="px-4 py-4">
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.label}</span>
+                      <span className="tf-cell-name">{item.label}</span>
                     </td>
                     <td className="px-4 py-4">
                       <code className="rounded-md bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">{item.code}</code>
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-600 dark:text-slate-400">
+                    <td className="px-4 py-4 tf-card-desc">
                       {renderExtraColumn(item)}
                     </td>
-                    <td className="px-4 py-4 text-sm text-gray-700 dark:text-slate-300">{item.sort_order}</td>
+                    <td className="px-4 py-4 tf-td">{item.sort_order}</td>
                     <td className="px-4 py-4">
                       <span
                         className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${
@@ -728,7 +728,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                   placeholder="0"
                   className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Lower numbers appear first</p>
+                <p className="mt-1 tf-meta">Lower numbers appear first</p>
               </label>
             </div>
 

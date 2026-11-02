@@ -354,19 +354,19 @@ export default function StyleGuidePage() {
                 <div className="text-2xs text-gray-400 dark:text-slate-500">PageHeader title, card titles</div>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                <h3 className="tf-card-title">
                   Subheading — text-base font-semibold
                 </h3>
                 <div className="text-2xs text-gray-400 dark:text-slate-500">SectionHeading inside a page or card</div>
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-card-desc">
                   Body — text-sm (the app's default body size)
                 </p>
                 <div className="text-2xs text-gray-400 dark:text-slate-500">Standard content, descriptions, form labels</div>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   Meta — text-xs
                 </p>
                 <div className="text-2xs text-gray-400 dark:text-slate-500">Timestamps, counts, captions</div>
@@ -622,9 +622,9 @@ export default function StyleGuidePage() {
             </div>
 
             <div className="mt-6 flex items-center gap-2">
-              <span className="text-sm text-gray-700 dark:text-slate-300">Info tooltip:</span>
+              <span className="tf-body">Info tooltip:</span>
               <InfoTooltip content="This is a portalled, viewport-clamped tooltip." />
-              <span className="ml-4 text-sm text-gray-700 dark:text-slate-300">Custom tooltip:</span>
+              <span className="ml-4 tf-body">Custom tooltip:</span>
               <Tooltip content="Custom tooltip content">
                 <span className="underline decoration-dotted cursor-help text-sm">hover me</span>
               </Tooltip>
@@ -643,7 +643,7 @@ export default function StyleGuidePage() {
                   </CardAction>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                  <p className="tf-card-desc">
                     Card / CardHeader / CardTitle / CardDescription / CardAction / CardContent / CardFooter —
                     components/ui/card.tsx
                   </p>
@@ -655,7 +655,7 @@ export default function StyleGuidePage() {
 
               <SurfaceCard>
                 <SectionHeading title="Surface card" description="Plain panel — used for generic content blocks inside a page." />
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-card-desc">
                   components/ui/section-container.tsx — same border/ring/shadow recipe as PageToolbar.
                 </p>
               </SurfaceCard>
@@ -693,11 +693,11 @@ export default function StyleGuidePage() {
             <div className="grid sm:grid-cols-2 gap-4 mb-6">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-2 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> OK — 2 levels</div>
-                <div className="text-sm text-gray-700 dark:text-slate-300 font-mono">JD → Scored Resumes</div>
+                <div className="tf-body font-mono">JD → Scored Resumes</div>
               </div>
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 mb-2 flex items-center gap-1"><XIcon className="w-3.5 h-3.5" /> Not allowed — 3 levels</div>
-                <div className="text-sm text-gray-700 dark:text-slate-300 font-mono">JD → Details → History → Export</div>
+                <div className="tf-body font-mono">JD → Details → History → Export</div>
               </div>
             </div>
 
@@ -795,7 +795,7 @@ export default function StyleGuidePage() {
                 </PopoverTrigger>
                 <PopoverContent>
                   <div className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">Quick filters</div>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">components/ui/popover.tsx — anchored, non-modal.</p>
+                  <p className="tf-meta">components/ui/popover.tsx — anchored, non-modal.</p>
                 </PopoverContent>
               </Popover>
 
@@ -822,7 +822,7 @@ export default function StyleGuidePage() {
                     <SheetTitle>Filters</SheetTitle>
                     <SheetDescription>components/ui/sheet.tsx — slides in from a screen edge.</SheetDescription>
                   </SheetHeader>
-                  <div className="px-4 sm:px-5 text-sm text-gray-600 dark:text-slate-400">
+                  <div className="px-4 sm:px-5 tf-card-desc">
                     Panel content goes here.
                   </div>
                   <SheetFooter>
@@ -840,10 +840,10 @@ export default function StyleGuidePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Candidate</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Role</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Score</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Status</th>
+                    <th className="px-3 py-2 text-left tf-th">Candidate</th>
+                    <th className="px-3 py-2 text-left tf-th">Role</th>
+                    <th className="px-3 py-2 text-left tf-th">Score</th>
+                    <th className="px-3 py-2 text-left tf-th">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -899,7 +899,7 @@ export default function StyleGuidePage() {
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-blue/5 border border-brand-blue/20 px-3 py-2">
                   <Checkbox checked className="pointer-events-none" />
-                  <span className="text-sm text-gray-700 dark:text-slate-300">3 selected</span>
+                  <span className="tf-body">3 selected</span>
                   <span className="ml-auto flex gap-2">
                     <Button size="sm" variant="outline" icon={<Send className="w-3.5 h-3.5" />}>Submit for Scoring</Button>
                     <Button size="sm" variant="outline" icon={<Download className="w-3.5 h-3.5" />}>Download</Button>
@@ -916,7 +916,7 @@ export default function StyleGuidePage() {
                 <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Resume Scoring — dynamic columns</div>
                 <div className="flex flex-wrap gap-3">
                   {(Object.keys(columns) as (keyof typeof columns)[]).map((key) => (
-                    <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                    <label key={key} className="flex items-center gap-1.5 tf-body">
                       <Checkbox checked={columns[key]} onCheckedChange={(v) => setColumns((c) => ({ ...c, [key]: !!v }))} />
                       <span className="capitalize">{key === 'matchType' ? 'Match Type' : key}</span>
                     </label>
@@ -983,7 +983,7 @@ export default function StyleGuidePage() {
                     <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Aditi Rao</span>
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: 'var(--score-high)', background: 'var(--score-high-bg)' }}>92</span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-slate-400">Backend Engineer</div>
+                  <div className="tf-meta">Backend Engineer</div>
                   <div className="text-2xs text-gray-400 mt-1">Tap for secondary actions → opens a Sheet from the bottom (see Popups), not a hidden row of buttons.</div>
                 </div>
               </div>

@@ -220,7 +220,7 @@ export default function CodingRoundLanguageModal({
             <div className="flex items-center gap-2 flex-wrap">
               <h3
                 id="coding-round-dialog-title"
-                className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight"
+                className="tf-section-title"
               >
                 {mode === 'edit' ? 'Choose your programming language' : 'Enable Coding Round'}
               </h3>
@@ -236,7 +236,7 @@ export default function CodingRoundLanguageModal({
                 </span>
               )}
             </div>
-            <p className="text-sm text-gray-500 mt-0.5 leading-snug">
+            <p className="tf-body-muted mt-0.5 leading-snug">
               Select up to {maxLanguages} programming languages for the assessment
             </p>
           </div>
@@ -264,7 +264,7 @@ export default function CodingRoundLanguageModal({
                 <p className="text-sm font-medium text-brand-blue">
                   Languages detected from the Job Description are automatically selected.
                 </p>
-                <p className="text-sm text-gray-600 mt-0.5 leading-snug">
+                <p className="tf-card-desc mt-0.5 leading-snug">
                   Coding is mandatory for this job role — you can deselect these or add additional
                   languages, but at least one must stay selected.
                 </p>
@@ -277,7 +277,7 @@ export default function CodingRoundLanguageModal({
                 <p className="text-sm font-medium text-indigo-700">
                   Programming languages are not required for this assessment.
                 </p>
-                <p className="text-sm text-gray-600 mt-0.5 leading-snug">
+                <p className="tf-card-desc mt-0.5 leading-snug">
                   Coding is handled automatically for this job role and needs no setup. You can
                   enable and select languages if you want to include a coding round anyway.
                 </p>
@@ -303,13 +303,13 @@ export default function CodingRoundLanguageModal({
                       </h4>
                       <Info className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" aria-hidden="true" />
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                    <p className="tf-meta mt-0.5 leading-snug">
                       These languages are detected from the JD and selected by default. You can
                       deselect them if needed.
                     </p>
                   </div>
                 </div>
-                <span className="text-sm text-gray-500 whitespace-nowrap flex-shrink-0">
+                <span className="tf-body-muted whitespace-nowrap flex-shrink-0">
                   <span className="font-semibold text-gray-900">{selected.length}</span> /{' '}
                   {maxLanguages} selected
                 </span>
@@ -338,7 +338,7 @@ export default function CodingRoundLanguageModal({
                   <h4 className="text-sm sm:text-base font-medium text-gray-900">
                     {isRequired ? 'Additional Languages' : 'Select Programming Languages'}
                   </h4>
-                  <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                  <p className="tf-meta mt-0.5 leading-snug">
                     {isRequired
                       ? 'Select additional programming languages from the list below.'
                       : 'Choose the languages you want to include for the coding round.'}
@@ -351,7 +351,7 @@ export default function CodingRoundLanguageModal({
             {visible.length > 0 ? (
               languageGrid(visible)
             ) : (
-              <p className="text-sm text-gray-500 py-6 text-center">No languages match your search.</p>
+              <p className="tf-body-muted py-6 text-center">No languages match your search.</p>
             )}
           </div>
 
@@ -367,7 +367,7 @@ export default function CodingRoundLanguageModal({
                 <Inbox className="w-6 h-6 text-gray-400 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-gray-700">No languages selected</p>
-                  <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                  <p className="tf-meta mt-0.5 leading-snug">
                     Please select at least one programming language to enable the coding round.
                   </p>
                 </div>
@@ -450,7 +450,7 @@ export default function CodingRoundLanguageModal({
 
         {/* Actions */}
         <div className="flex-shrink-0 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-          <p className="text-xs text-gray-500 order-2 sm:order-1">
+          <p className="tf-meta order-2 sm:order-1">
             Minimum 1 and maximum {maxLanguages} languages can be selected.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 order-1 sm:order-2">

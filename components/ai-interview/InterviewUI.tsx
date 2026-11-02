@@ -10861,7 +10861,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             >
               Retry Detection
             </button>
-            <p className="text-xs text-gray-500 mt-2">
+            <p className="tf-meta mt-2">
               This will auto-dismiss when your face is detected
             </p>
           </div>
@@ -10887,7 +10887,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
               <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
             </div>
-            <p className="text-xs text-gray-500 mt-3">Auto-closing in 15 seconds...</p>
+            <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
           </div>
         </div>
       )}

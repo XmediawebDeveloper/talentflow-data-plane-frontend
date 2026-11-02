@@ -103,7 +103,7 @@ export function VersionUsage({ kind, used }: { kind: InviteKind; used: number })
   const atCap = used >= max;
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap tabular-nums">{used} of {max} used</span>
+      <span className="tf-meta-strong whitespace-nowrap tabular-nums">{used} of {max} used</span>
       <div
         className="h-1.5 w-16 sm:w-24 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden"
         role="progressbar"
@@ -216,7 +216,7 @@ export default function VersionList({
             {used === 0 ? `No ${label.singular.toLowerCase()} for this job yet` : `No live ${label.singular.toLowerCase()} for this job version`}
           </div>
           {used === 0 && (
-            <div className="text-xs text-gray-500 dark:text-slate-400">
+            <div className="tf-meta">
               {kind === 'assessment'
                 ? 'Create v1 — configure it here, and it appears in this list.'
                 : 'Create v1 — set it up here, and it appears in this list.'}
@@ -281,7 +281,7 @@ export default function VersionList({
                         </span>
                       )}
                     </span>
-                    <span className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+                    <span className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
                       {v.createdAt && <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatIST(v.createdAt)}</span>}
                       {v.mode && <span className="inline-flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{v.mode}</span>}
                       {v.rounds.length > 0 && (
@@ -388,7 +388,7 @@ export default function VersionList({
             {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             {used === 0 ? `Create ${label.singular} (v1)` : `New version (v${nextVersionNumber(every)})`}
           </button>
-          {createBlocked && <span className="text-xs text-gray-500 dark:text-slate-400">{createBlocked}</span>}
+          {createBlocked && <span className="tf-meta">{createBlocked}</span>}
         </div>
       )}
     </div>

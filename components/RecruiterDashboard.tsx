@@ -147,8 +147,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Recruitment Pipeline</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Across your active job descriptions</p>
+                <h2 className="tf-section-title">Recruitment Pipeline</h2>
+                <p className="tf-meta mt-0.5">Across your active job descriptions</p>
               </div>
               <button
                 onClick={() => router.push('/reports/performance-reports')}
@@ -169,7 +169,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                         style={{ width: `${widthPct}%` }}
                       />
                     </div>
-                    <div className="w-12 text-right text-sm font-semibold text-gray-900 dark:text-slate-50">{stage.count}</div>
+                    <div className="w-12 text-right tf-cell-name">{stage.count}</div>
                   </div>
                 );
               })}
@@ -178,7 +178,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Quota This Cycle</h3>
+              <h3 className="tf-subsection-title">Quota This Cycle</h3>
               <button
                 onClick={() => router.push('/organization/usage')}
                 className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
@@ -240,8 +240,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
           <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm">
             <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700/60">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">My Active JDs</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open requisitions you own</p>
+                <h2 className="tf-section-title">My Active JDs</h2>
+                <p className="tf-meta mt-0.5">Open requisitions you own</p>
               </div>
               <button
                 onClick={() => router.push('/recruitment/job-openings?source=my-jds')}
@@ -294,7 +294,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                                 Published
                               </span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
                               {jd.department && <span>{jd.department}</span>}
                               {jd.location && <span>· {jd.location}</span>}
                               {daysOpen !== null && (
@@ -320,8 +320,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
 
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm">
             <div className="p-6 border-b border-gray-100 dark:border-slate-700/60">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Today's Schedule</h2>
-              <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Interviews & reviews</p>
+              <h2 className="tf-section-title">Today's Schedule</h2>
+              <p className="tf-meta mt-0.5">Interviews & reviews</p>
             </div>
             <div className="p-6 space-y-3">
               {[
@@ -355,8 +355,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
               <AlertCircle className="w-5 h-5 text-brand-orange-deep" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">Action items</h3>
-              <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
+              <h3 className="tf-subsection-title mb-1">Action items</h3>
+              <p className="tf-body mb-3">
                 You have <span className="font-semibold text-brand-orange-deep">8 assessments</span> awaiting review and{' '}
                 <span className="font-semibold text-brand-orange-deep">3 AI interview reports</span> ready.
               </p>
@@ -413,7 +413,7 @@ function KpiTile({
         )}
       </div>
       <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
-      <div className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">{label}</div>
+      <div className="tf-card-desc mt-0.5">{label}</div>
       {sub && <div className="text-2xs text-gray-500 dark:text-slate-500 mt-1" dangerouslySetInnerHTML={{ __html: sub }} />}
     </div>
   );
@@ -485,7 +485,7 @@ function EmptyState({
     <div className="text-center py-10">
       <div className="mx-auto mb-3 w-fit">{icon}</div>
       <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-1">{title}</h3>
-      <p className="text-xs text-gray-500 dark:text-slate-500 mb-4">{body}</p>
+      <p className="tf-meta mb-4">{body}</p>
       {cta && (
         <Button
           variant="primary"

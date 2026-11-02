@@ -167,7 +167,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
                 : 'border-gray-200 focus:!outline-none focus-visible:!outline-none focus:border-brand-blue/50 focus:ring-2 focus:ring-brand-blue/15'
             }`}
           />
-          <div className="flex justify-between items-center text-sm text-gray-500">
+          <div className="flex justify-between items-center tf-body-muted">
             <span>
               {isLocked ? (
                 <span className="text-green-600">✓ Answer submitted</span>

@@ -105,7 +105,7 @@ export default function CandidateResultCard({
           <p className="font-medium text-sm text-gray-900 dark:text-slate-50 truncate" title={name || 'Unknown'}>
             {name || 'Unknown'}
           </p>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-500 truncate" title={email || undefined}>
+          <p className="mt-0.5 tf-meta truncate" title={email || undefined}>
             {email || '—'}
           </p>
         </div>
@@ -185,7 +185,7 @@ export default function CandidateResultCard({
       )}
 
       {(inviteSource || phone) && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600 dark:text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-meta-strong">
           {inviteSource}
           {phone && <span className="min-w-0 max-w-full truncate">{phone}</span>}
         </div>
@@ -194,7 +194,7 @@ export default function CandidateResultCard({
       {/* Pinned to the bottom, so a row of cards ends level however much each
           one above holds. */}
       <div className="mt-auto space-y-3">
-        <div className="flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-slate-500 pt-3 border-t border-gray-100 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-3 tf-meta pt-3 border-t border-gray-100 dark:border-slate-800">
           <span className="flex items-center gap-1.5 shrink-0">
             <Clock className="w-3 h-3 flex-shrink-0" />
             {duration}

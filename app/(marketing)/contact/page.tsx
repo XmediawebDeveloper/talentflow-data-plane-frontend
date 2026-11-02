@@ -112,7 +112,7 @@ export default function ContactPage() {
                   <Mail className="w-6 h-6 text-gray-800 dark:text-gray-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  <h3 className="tf-section-title dark:text-white mb-1">
                     Email
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
@@ -131,13 +131,13 @@ export default function ContactPage() {
                   <Phone className="w-6 h-6 text-gray-800 dark:text-gray-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  <h3 className="tf-section-title dark:text-white mb-1">
                     Phone
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">
                     +1 (555) 123-4567
                   </p>
-                  <p className="text-sm text-gray-500">Mon-Fri 9am-6pm EST</p>
+                  <p className="tf-body-muted">Mon-Fri 9am-6pm EST</p>
                 </div>
               </div>
             </Card>
@@ -148,7 +148,7 @@ export default function ContactPage() {
                   <MapPin className="w-6 h-6 text-green-600 dark:text-green-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+                  <h3 className="tf-section-title dark:text-white mb-1">
                     Office
                   </h3>
                   <p className="text-gray-600 dark:text-gray-400">

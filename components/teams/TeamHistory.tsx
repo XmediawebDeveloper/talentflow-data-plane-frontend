@@ -162,7 +162,7 @@ function ChangeList({ changes }: { changes: Change[] }) {
   return (
     <ul className="mt-1 space-y-0.5">
       {known.map((c) => (
-        <li key={c.field} className="text-xs text-gray-500 dark:text-slate-400">
+        <li key={c.field} className="tf-meta">
           <span className="font-medium text-gray-700 dark:text-slate-300">{humanize(c.field)}:</span>{' '}
           {c.from !== undefined && <span className="line-through decoration-gray-300 dark:decoration-slate-600">{c.from}</span>}
           {c.from !== undefined && c.to !== undefined && ' → '}
@@ -437,7 +437,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
       <div className="rounded-xl border border-destructive-line bg-destructive-subtle py-10 text-center">
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-destructive" />
         <p className="text-sm max-sm:text-[13px] font-medium text-destructive-strong">Could not load the team history</p>
-        <p className="mt-1 text-xs text-destructive">Check your connection and try again.</p>
+        <p className="mt-1 tf-error">Check your connection and try again.</p>
         <Button variant="secondary" size="sm" onClick={refreshAll} className="mt-4">
           Retry
         </Button>
@@ -494,7 +494,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                 <thead className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                   <tr>
                     {['Date & time', 'Event', 'Team', 'Member', 'By', 'Details'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">{h}</th>
+                      <th key={h} className="px-4 py-3 text-left tf-th">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -519,10 +519,10 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                             <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={entry.team_name}>{entry.team_name}</span>
                           )}
                         </td>
-                        <td className="max-w-[12rem] truncate px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                        <td className="max-w-[12rem] truncate px-4 py-3 tf-td">
                           {entry.target_user_name || (memberEvent ? <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                        <td className="whitespace-nowrap px-4 py-3 tf-td">
                           {entry.actor_name ? (
                             <span className="inline-flex items-center gap-2">
                               <NameAvatar name={entry.actor_name} size="sm" className="h-6 w-6 text-[10px]" />

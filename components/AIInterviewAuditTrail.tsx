@@ -300,7 +300,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
     <>
       {/* Same heading treatment as every other tab's — title + count, right
           above the search/filter bar. */}
-      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+      <h2 className="tf-section-title mb-3">
         Activity Log ({total})
       </h2>
 
@@ -320,7 +320,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
       <div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           <div>
-            <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
+            <label htmlFor="audit-date-from" className="block tf-label mb-1.5">Date From</label>
             <DateField
               id="audit-date-from"
               aria-label="Date From"
@@ -330,7 +330,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
             />
           </div>
           <div>
-            <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
+            <label htmlFor="audit-date-to" className="block tf-label mb-1.5">Date To</label>
             <DateField
               id="audit-date-to"
               aria-label="Date To"
@@ -454,8 +454,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
         <div className="p-4 sm:p-6 border-b border-gray-200">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Activity Log</h2>
-              <p className="text-sm text-gray-600 mt-1">
+              <h2 className="tf-section-title">Activity Log</h2>
+              <p className="tf-card-desc mt-1">
                 Complete activity log for AI interviews and candidates
               </p>
             </div>
@@ -561,7 +561,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                     <Square className="w-4 h-4 text-gray-400" />
                   )}
                 </button>
-                <span className="text-xs text-gray-500">
+                <span className="tf-meta">
                   {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
                 </span>
               </div>
@@ -607,11 +607,11 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                           </div>
                         </div>
 
-                        <p className="text-xs text-gray-600 dark:text-slate-400 line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
+                        <p className="tf-meta-strong line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
                           {activity.description}
                         </p>
 
-                        <div className="flex flex-col gap-1 text-xs text-gray-500 dark:text-slate-500">
+                        <div className="flex flex-col gap-1 tf-meta">
                           {activity.actor_name && (
                             <span className="flex items-center gap-1 min-w-0">
                               <User className="w-3 h-3 flex-shrink-0" />
@@ -711,8 +711,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                                 {getCategoryLabel(activity.category)}
                               </span>
                             </div>
-                            <p className="text-sm text-gray-600 [overflow-wrap:anywhere]">{activity.description}</p>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-xs text-gray-500">
+                            <p className="tf-card-desc [overflow-wrap:anywhere]">{activity.description}</p>
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 tf-meta">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3" />
@@ -734,7 +734,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                             </div>
                           </div>
                           <div className="flex items-center gap-3 sm:block sm:text-right flex-shrink-0">
-                            <p className="text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
+                            <p className="tf-body-muted">{formatTimestamp(activity.timestamp)}</p>
                             <button className="mt-1 text-xs text-gray-400 hover:text-gray-600">
                               <Eye className="w-3 h-3 inline mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
@@ -785,13 +785,13 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
         {/* Footer with Pagination */}
         <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="text-sm text-gray-600">
+          <div className="tf-card-desc">
             Showing {activities.length} of {total} activity entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="hidden sm:inline tf-card-desc whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}

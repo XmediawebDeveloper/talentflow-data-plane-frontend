@@ -80,7 +80,7 @@ export default function DisableJobModal({
               <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
                 {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
-                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-cell-name">
                   {jobLabel}
                 </span>
               </span>
@@ -91,7 +91,7 @@ export default function DisableJobModal({
           {/* What stops */}
           <div className="mt-5 flex items-start gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/70 px-4 py-3">
             <Info className="w-5 h-5 shrink-0 text-destructive mt-0.5" />
-            <p className="text-sm text-gray-700 dark:text-slate-300">
+            <p className="tf-body">
               If you disable this JD, it will{' '}
               <span className="font-semibold text-destructive">not</span>{' '}
               be available to use in the following features:
@@ -100,7 +100,7 @@ export default function DisableJobModal({
 
           <ul className="mt-4 space-y-2.5">
             {modules.map(module => (
-              <li key={module.key} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+              <li key={module.key} className="flex items-start gap-2.5 tf-body">
                 <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-destructive shrink-0" aria-hidden="true" />
                 <span>
                   <span className="font-semibold text-gray-900 dark:text-slate-100">{module.name}</span>

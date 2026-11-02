@@ -1095,7 +1095,7 @@ export default function SelectSourceModal({
               <ClipboardList className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
+              <h2 className="tf-section-title mb-0.5 sm:mb-1">
                 <span className="hidden sm:inline">Select Applicants to Score</span>
                 <span className="sm:hidden">Select Applicants</span>
               </h2>
@@ -1134,7 +1134,7 @@ export default function SelectSourceModal({
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0">V{jobVersion}</span>
                 )}
                 {lineageVersions && publishedVersionCount <= 1 && (
-                  <span className="text-xs text-gray-500 dark:text-slate-500">Only published version</span>
+                  <span className="tf-meta">Only published version</span>
                 )}
               </div>
               {publishedVersionCount > 1 && (
@@ -1477,7 +1477,7 @@ export default function SelectSourceModal({
                         <div className="text-center py-10 sm:py-16">
                           <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
                           <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
+                          <p className="tf-card-desc max-w-md mx-auto">
                             {searchTerm
                               ? 'No resumes match your search. Try different keywords.'
                               : 'No resumes available in the internal database.'}
@@ -1499,7 +1499,7 @@ export default function SelectSourceModal({
         </div>
         </DndProvider>
         ) : (
-          <div className="flex-1 flex items-center justify-center p-10 text-center text-sm text-gray-500 dark:text-slate-400">
+          <div className="flex-1 flex items-center justify-center p-10 text-center tf-body-muted">
             You don't have permission to score resumes from either source.
           </div>
         )}
@@ -1507,7 +1507,7 @@ export default function SelectSourceModal({
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-            <div className="text-sm text-gray-600 dark:text-slate-400">
+            <div className="tf-card-desc">
               {selectedResumes.length > 0 ? (
                 <span>
                   <span className="font-medium text-gray-900 dark:text-slate-50">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected

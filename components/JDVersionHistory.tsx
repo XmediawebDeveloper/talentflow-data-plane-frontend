@@ -101,7 +101,7 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
         <div className="mt-2">
           <p className="text-xs font-medium text-gray-500 mb-1">Version history</p>
           {loading && !lineage ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2 py-2 tf-meta">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               Loading versions...
             </div>
@@ -114,7 +114,7 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
               Couldn&apos;t load versions — retry
             </button>
           ) : !lineage || lineage.length === 0 ? (
-            <p className="py-2 text-xs text-gray-500">No other versions of this job.</p>
+            <p className="py-2 tf-meta">No other versions of this job.</p>
           ) : (
             <ul>
               {lineage.map((entry, index) => {
@@ -148,7 +148,7 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
                         {label}
                       </span>
                       {(entry.published_at || entry.created_at) && (
-                        <span className="text-xs text-gray-500">
+                        <span className="tf-meta">
                           {formatISTDate(entry.published_at || entry.created_at)}
                         </span>
                       )}

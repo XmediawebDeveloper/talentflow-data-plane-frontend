@@ -258,7 +258,7 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
               Type + Work Mode + Posted On / By + Version */}
           {/* Phones: the "•" separators are hidden (a wrapped line began with
               one) and the items get an even gap instead. */}
-          <div className="flex flex-wrap items-center gap-x-1.5 max-sm:gap-x-2 gap-y-1 max-sm:gap-y-1.5 text-xs text-gray-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-x-1.5 max-sm:gap-x-2 gap-y-1 max-sm:gap-y-1.5 tf-meta-strong">
             {/* Location */}
             <span className="inline-flex items-center gap-1 min-w-0">
               <MapPin className="w-3 h-3 text-purple-600 shrink-0" />
@@ -496,8 +496,8 @@ export default function JDVersionHistoryModal({
      the tile from sm, and under the row on phones — one definition for both. */
   const renderVersionDetails = (version: JDHistoryVersion) => (
     <>
-      <p className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
-      <div className="flex items-center gap-3 max-sm:gap-x-3 max-sm:gap-y-1 text-sm max-sm:text-xs text-gray-600 dark:text-slate-400 mt-1 flex-wrap">
+      <p className="tf-card-desc [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
+      <div className="flex items-center gap-3 max-sm:gap-x-3 max-sm:gap-y-1 tf-card-desc max-sm:text-xs mt-1 flex-wrap">
         <span className="flex items-center gap-1 whitespace-nowrap">
           <Clock className="w-3.5 h-3.5" />
           {formatVersionDate(versionDate(version))}
@@ -541,7 +541,7 @@ export default function JDVersionHistoryModal({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">
+                <h2 className="tf-section-title truncate min-w-0">
                   {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
                 </h2>
                 {!selectedVersion && versions.length > 0 && (
@@ -550,7 +550,7 @@ export default function JDVersionHistoryModal({
                   </span>
                 )}
               </div>
-              <p className="text-sm text-gray-600 dark:text-slate-400 truncate">
+              <p className="tf-card-desc truncate">
                 {selectedVersion ? selectedVersion.title : jdTitle}
               </p>
             </div>
@@ -609,7 +609,7 @@ export default function JDVersionHistoryModal({
         </div>
 
         {!selectedVersion && versions.length > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 text-xs text-gray-600 dark:text-slate-400">
+          <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta-strong">
             <History className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
             <span>
               All available JD versions are shown. Tick any two versions to compare them.
@@ -674,7 +674,7 @@ export default function JDVersionHistoryModal({
                     </ReactMarkdown>
                   </div>
                 ) : (
-                  <p className="text-sm text-gray-500 dark:text-slate-500 italic">
+                  <p className="tf-body-muted italic">
                     No job description content recorded for this version.
                   </p>
                 )}
@@ -779,7 +779,7 @@ export default function JDVersionHistoryModal({
                 <FileText className="w-8 h-8 text-gray-400 dark:text-slate-500" />
               </div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Versions Found</h3>
-              <p className="text-sm text-gray-500 dark:text-slate-500 text-center">
+              <p className="tf-body-muted text-center">
                 No version history available for this job description.
               </p>
             </div>

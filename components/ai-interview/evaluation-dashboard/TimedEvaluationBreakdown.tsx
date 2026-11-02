@@ -36,7 +36,7 @@ export function TimedEvaluationBreakdown({ data }: Props) {
         </div>
         <div>
           <h2 className="text-2xl font-bold">Evaluation Breakdown</h2>
-          <p className="text-sm text-gray-500">
+          <p className="tf-body-muted">
             Skill → Question → Section → Final result. Weights: High = 10, Medium = 7, Low = 4.
           </p>
         </div>
@@ -87,7 +87,7 @@ export function TimedEvaluationBreakdown({ data }: Props) {
             />
           )}
           {perQuestionDetails.length === 0 && (
-            <div className="mt-3 text-sm text-gray-500 italic">
+            <div className="mt-3 tf-body-muted italic">
               No per-question evaluation data available for this interview.
             </div>
           )}
@@ -149,13 +149,13 @@ export function TimedEvaluationBreakdown({ data }: Props) {
                 >
                   {finalResult ? finalResult.toUpperCase() : '—'}
                 </div>
-                <div className="text-sm text-gray-600">
+                <div className="tf-card-desc">
                   Must-Have <strong>{formatScore1(scores.mustHave)} / 10</strong>
                   {' '}
                   {isPass ? '≥' : '<'} {mhsThreshold.toFixed(1)} threshold
                 </div>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
+              <p className="tf-card-desc mt-2">
                 The Must-Have section score is the primary pass/fail gate. Nice-to-Have is
                 informational. HR questions are never scored.
               </p>

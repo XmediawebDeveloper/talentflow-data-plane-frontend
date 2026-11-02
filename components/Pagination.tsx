@@ -52,7 +52,7 @@ export default function Pagination({
       {/* Left: Items per page */}
       {showItemsPerPage && (
         <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-600">Show</span>
+          <span className="tf-card-desc">Show</span>
           <FilterSelect
             value={String(itemsPerPage)}
             onChange={(v) => onItemsPerPageChange(Number(v))}
@@ -60,12 +60,12 @@ export default function Pagination({
             options={[10, 25, 50, 100].map((n) => ({ value: String(n), label: String(n) }))}
             className="w-auto data-[size=default]:h-8 sm:data-[size=default]:h-8 py-0 sm:py-0 pl-2 sm:pl-3 pr-2 sm:pr-2 rounded-lg sm:rounded-lg text-sm"
           />
-          <span className="text-sm text-gray-600">per page</span>
+          <span className="tf-card-desc">per page</span>
         </div>
       )}
 
       {/* Center: Page info */}
-      <div className="text-sm text-gray-600 text-center">
+      <div className="tf-card-desc text-center">
         Showing <span className="text-brand-blue font-semibold">{startItem}</span> to{' '}
         <span className="text-brand-blue font-semibold">{endItem}</span> of{' '}
         <span className="text-brand-blue font-semibold">{totalItems}</span> results
@@ -75,7 +75,7 @@ export default function Pagination({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Go to page */}
         <div className="flex items-center gap-1.5">
-          <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+          <span className="tf-card-desc whitespace-nowrap">Go to</span>
           <input
             type="number"
             min={1}

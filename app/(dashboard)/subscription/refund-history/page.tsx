@@ -329,8 +329,8 @@ export default function RefundHistoryPage() {
         {/* Header — title + actions (matches Dispute History) */}
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Refund History</h1>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-400">
+            <h1 className="tf-page-title">Refund History</h1>
+            <p className="mt-1 tf-body-muted">
               Review refunds issued to your account, track their status, and download refund records.
             </p>
           </div>
@@ -378,7 +378,7 @@ export default function RefundHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Refunded</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{formatAmount(stats.total_amount)}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
+                  <p className="mt-1 tf-meta">{stats.total_refunds} refund{stats.total_refunds !== 1 ? 's' : ''}</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
                   <RotateCcw className="h-5 w-5 text-brand-teal" />
@@ -394,7 +394,7 @@ export default function RefundHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Completed</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-gray-900 dark:text-slate-50">{stats.completed_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Processed successfully</p>
+                  <p className="mt-1 tf-meta">Processed successfully</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
                   <CheckCircle2 className="h-5 w-5 text-brand-blue" />
@@ -410,7 +410,7 @@ export default function RefundHistoryPage() {
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Pending</p>
                   <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.pending_count}</p>
-                  <p className="mt-1 text-xs text-gray-500 dark:text-slate-500">Being processed</p>
+                  <p className="mt-1 tf-meta">Being processed</p>
                 </div>
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Clock className="h-5 w-5 text-brand-orange-deep" />
@@ -428,7 +428,7 @@ export default function RefundHistoryPage() {
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Filters</span>
+            <span className="tf-cell-name">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -538,8 +538,8 @@ export default function RefundHistoryPage() {
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
               <RotateCcw className="h-7 w-7 text-brand-teal" />
             </div>
-            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">No Refunds</h3>
-            <p className="mx-auto mt-1 max-w-md text-sm text-gray-500 dark:text-slate-500">
+            <h3 className="tf-section-title">No Refunds</h3>
+            <p className="mx-auto mt-1 max-w-md tf-body-muted">
               {hasActiveFilters
                 ? 'No refunds match your filter criteria. Try adjusting your filters.'
                 : 'You have no refund transactions. Refunds will appear here when you cancel a subscription or request a refund.'}
@@ -561,7 +561,7 @@ export default function RefundHistoryPage() {
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3.5 sm:px-6">
               <div>
                 <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Refunds</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   Showing {filteredRefunds.length} refund{filteredRefunds.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${refunds.length})`}
                 </p>
@@ -571,13 +571,13 @@ export default function RefundHistoryPage() {
               <table className="w-full min-w-[800px] tf-premium-table">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[160px]">Refund #</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Date</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[150px]">Original Invoice</th>
-                    <th className="px-5 py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 w-[180px]">Reason</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Amount</th>
-                    <th className="px-5 py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 w-[110px]">Status</th>
-                    <th className="px-5 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300 w-[140px] tf-sticky-col">Actions</th>
+                    <th className="px-5 py-4 tf-th w-[160px]">Refund #</th>
+                    <th className="px-5 py-4 tf-th w-[110px]">Date</th>
+                    <th className="px-5 py-4 tf-th w-[150px]">Original Invoice</th>
+                    <th className="px-5 py-4 tf-th w-[180px]">Reason</th>
+                    <th className="px-5 py-4 text-right tf-th w-[110px]">Amount</th>
+                    <th className="px-5 py-4 text-center tf-th w-[110px]">Status</th>
+                    <th className="px-5 py-4 text-right tf-th w-[140px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -588,12 +588,12 @@ export default function RefundHistoryPage() {
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15">
                             <RotateCcw className="h-4 w-4 text-brand-teal" />
                           </span>
-                          <span className="min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-slate-50" title={refund.invoice_number || ''}>
+                          <span className="min-w-0 truncate tf-cell-name" title={refund.invoice_number || ''}>
                             {refund.invoice_number || '-'}
                           </span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-5 text-sm text-gray-700 dark:text-slate-300">
+                      <td className="whitespace-nowrap px-5 py-5 tf-td">
                         {formatISTDate(refund.issue_date)}
                       </td>
                       <td className="px-5 py-5">
@@ -602,7 +602,7 @@ export default function RefundHistoryPage() {
                         </div>
                       </td>
                       <td className="px-5 py-5">
-                        <div className="truncate text-sm text-gray-600 dark:text-slate-400" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
+                        <div className="truncate tf-card-desc" title={refund.metadata?.reason || refund.line_items?.[0]?.description || ''}>
                           {refund.metadata?.reason || refund.line_items?.[0]?.description || '-'}
                         </div>
                       </td>
@@ -677,11 +677,11 @@ export default function RefundHistoryPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Issue Date</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.issue_date)}</p>
+                    <p className="mt-1 tf-cell-name">{formatISTDate(selectedRefund.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Original Invoice</p>
-                    <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
+                    <p className="mt-1 break-all font-mono tf-cell-name">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Status</p>
@@ -692,18 +692,18 @@ export default function RefundHistoryPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Refund Method</p>
-                    <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.refund_method || '-'}</p>
+                    <p className="mt-1 tf-cell-name">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
                   {selectedRefund.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                       <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Payment Method</p>
-                      <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedRefund.payment_method}</p>
+                      <p className="mt-1 tf-cell-name capitalize">{selectedRefund.payment_method}</p>
                     </div>
                   )}
                   {selectedRefund.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                       <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Paid At</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.paid_at)}</p>
+                      <p className="mt-1 tf-cell-name">{formatISTDate(selectedRefund.paid_at)}</p>
                     </div>
                   )}
                 </div>
@@ -714,22 +714,22 @@ export default function RefundHistoryPage() {
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Description</span>
+                      <span className="tf-card-desc">Description</span>
                       <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.line_items?.[0]?.description || '-'}</span>
                     </div>
                     <div className="flex items-start justify-between gap-4">
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Reason</span>
+                      <span className="tf-card-desc">Reason</span>
                       <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.reason || '-'}</span>
                     </div>
                     {selectedRefund.metadata?.refund_percentage && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Refund Percentage</span>
+                        <span className="tf-card-desc">Refund Percentage</span>
                         <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata.refund_percentage}%</span>
                       </div>
                     )}
                     {selectedRefund.metadata?.processed_by && (
                       <div className="flex items-center justify-between gap-4">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Processed By</span>
+                        <span className="tf-card-desc">Processed By</span>
                         <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{selectedRefund.metadata.processed_by}</span>
                       </div>
                     )}

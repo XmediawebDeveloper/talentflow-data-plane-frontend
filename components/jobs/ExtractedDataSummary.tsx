@@ -125,7 +125,7 @@ export function SummaryItemList({ items, emptyMessage = 'None added' }: { items:
   return items.length > 0 ? (
     <div className="space-y-2">
       {items.map((item, index) => (
-        <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
+        <div key={index} className="flex items-start gap-2 tf-body">
           <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
           <span className="min-w-0 [overflow-wrap:anywhere]">{item}</span>
         </div>
@@ -299,7 +299,7 @@ export default function ExtractedDataSummary({
                       <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
                       <span className="min-w-0 [overflow-wrap:anywhere]">{loc.city}</span>
                       {loc.radius_km != null && (
-                        <span className="text-xs text-gray-500 dark:text-slate-400">({loc.radius_km} km radius)</span>
+                        <span className="tf-meta">({loc.radius_km} km radius)</span>
                       )}
                     </span>
                   ))

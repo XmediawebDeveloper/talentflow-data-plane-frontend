@@ -561,7 +561,7 @@ export type InviteCandidateSource =
 /** The candidate list's group headings, in the order groups are listed. */
 export const CANDIDATE_SOURCE_LABEL: Record<InviteCandidateSource, string> = {
   'talent-match': 'AI Talent Match Candidates',
-  'score-resume': 'Score Resume Candidates',
+  'score-resume': 'Scored Resumes',
   'assessment-result': 'Assessment Result Candidates',
   'interview-result': 'AI Interview Result Candidates',
 };

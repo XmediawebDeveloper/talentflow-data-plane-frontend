@@ -45,8 +45,8 @@ export default function ResumePreviewModal({
               <FileText className="w-5 h-5 text-brand-blue" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Resume Preview</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-sm">{candidateName}</p>
+              <h2 className="tf-section-title">Resume Preview</h2>
+              <p className="tf-card-desc">{candidateName}</p>
             </div>
           </div>
           <button
@@ -68,7 +68,7 @@ export default function ResumePreviewModal({
             >
               <ZoomOut className="w-4 h-4" />
             </button>
-            <span className="text-sm text-gray-700 dark:text-slate-300 min-w-[60px] text-center">
+            <span className="tf-body min-w-[60px] text-center">
               {zoomLevel}%
             </span>
             <button
@@ -115,7 +115,7 @@ export default function ResumePreviewModal({
               {/* Header */}
               <div className="border-b-2 border-gray-800 pb-4 mb-6">
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-slate-50 mb-2">{candidateName}</h1>
-                <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-slate-400">
+                <div className="flex items-center gap-4 tf-card-desc">
                   <span>{candidateEmail}</span>
                   <span>•</span>
                   <span>+1 (555) 123-4567</span>
@@ -127,7 +127,7 @@ export default function ResumePreviewModal({
               {/* Professional Summary */}
               <div className="mb-6">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-2 uppercase tracking-wide">Professional Summary</h2>
-                <p className="text-sm text-gray-700 dark:text-slate-300 leading-relaxed">
+                <p className="tf-body leading-relaxed">
                   Experienced software engineer with 8+ years of expertise in full-stack development, cloud architecture, and team leadership. 
                   Proven track record of delivering scalable solutions and driving technical excellence across multiple domains. 
                   Passionate about clean code, best practices, and continuous learning.
@@ -142,9 +142,9 @@ export default function ResumePreviewModal({
                     <div className="flex items-start justify-between mb-1">
                       <div>
                         <h3 className="font-bold text-gray-900 dark:text-slate-50">Senior Software Engineer</h3>
-                        <p className="text-sm text-gray-700 dark:text-slate-300">Tech Corp Inc. • San Francisco, CA</p>
+                        <p className="tf-body">Tech Corp Inc. • San Francisco, CA</p>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Jan 2020 - Present</span>
+                      <span className="tf-card-desc">Jan 2020 - Present</span>
                     </div>
                     <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Led development of microservices architecture serving 10M+ users</li>
@@ -158,9 +158,9 @@ export default function ResumePreviewModal({
                     <div className="flex items-start justify-between mb-1">
                       <div>
                         <h3 className="font-bold text-gray-900 dark:text-slate-50">Software Engineer</h3>
-                        <p className="text-sm text-gray-700 dark:text-slate-300">StartupXYZ • Remote</p>
+                        <p className="tf-body">StartupXYZ • Remote</p>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Mar 2018 - Dec 2019</span>
+                      <span className="tf-card-desc">Mar 2018 - Dec 2019</span>
                     </div>
                     <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Built SaaS platform from ground up using React and Node.js</li>
@@ -173,9 +173,9 @@ export default function ResumePreviewModal({
                     <div className="flex items-start justify-between mb-1">
                       <div>
                         <h3 className="font-bold text-gray-900 dark:text-slate-50">Junior Developer</h3>
-                        <p className="text-sm text-gray-700 dark:text-slate-300">Digital Agency Co. • New York, NY</p>
+                        <p className="tf-body">Digital Agency Co. • New York, NY</p>
                       </div>
-                      <span className="text-sm text-gray-600 dark:text-slate-400">Jun 2016 - Feb 2018</span>
+                      <span className="tf-card-desc">Jun 2016 - Feb 2018</span>
                     </div>
                     <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 space-y-1 ml-2">
                       <li>Developed responsive web applications for Fortune 500 clients</li>
@@ -193,18 +193,18 @@ export default function ResumePreviewModal({
                   <div className="flex items-start justify-between mb-1">
                     <div>
                       <h3 className="font-bold text-gray-900 dark:text-slate-50">Bachelor of Science in Computer Science</h3>
-                      <p className="text-sm text-gray-700 dark:text-slate-300">University of California, Berkeley</p>
+                      <p className="tf-body">University of California, Berkeley</p>
                     </div>
-                    <span className="text-sm text-gray-600 dark:text-slate-400">2012 - 2016</span>
+                    <span className="tf-card-desc">2012 - 2016</span>
                   </div>
-                  <p className="text-sm text-gray-700 dark:text-slate-300">GPA: 3.8/4.0 • Magna Cum Laude</p>
+                  <p className="tf-body">GPA: 3.8/4.0 • Magna Cum Laude</p>
                 </div>
               </div>
 
               {/* Skills */}
               <div className="mb-6">
                 <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Technical Skills</h2>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm text-gray-700 dark:text-slate-300">
+                <div className="grid grid-cols-2 gap-x-8 gap-y-2 tf-body">
                   <div><strong>Languages:</strong> JavaScript, TypeScript, Python, Java</div>
                   <div><strong>Frontend:</strong> React, Next.js, Vue.js, Tailwind CSS</div>
                   <div><strong>Backend:</strong> Node.js, Express, Django, Spring Boot</div>
@@ -232,7 +232,7 @@ export default function ResumePreviewModal({
               {/* Languages */}
               <div>
                 <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 mb-3 uppercase tracking-wide">Languages</h2>
-                <p className="text-sm text-gray-700 dark:text-slate-300">
+                <p className="tf-body">
                   English (Native) • Spanish (Professional Working Proficiency) • French (Elementary)
                 </p>
               </div>

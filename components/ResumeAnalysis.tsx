@@ -275,7 +275,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
             </p>
             
             {/* Contact Info */}
-            <div className="flex items-center gap-6 text-sm text-gray-600">
+            <div className="flex items-center gap-6 tf-card-desc">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-gray-400" />
                 <span>{applicant.email}</span>
@@ -424,12 +424,12 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                             </div>
                             <div>
                               <div className="text-gray-900">{category.category}</div>
-                              <div className="text-sm text-gray-500">Weight: {category.weight}%</div>
+                              <div className="tf-body-muted">Weight: {category.weight}%</div>
                             </div>
                           </div>
                           <div className="text-right">
                             <div className="text-2xl text-gray-900">{category.score}/{category.maxScore}</div>
-                            <div className="text-sm text-gray-500">{Math.round(percentage)}%</div>
+                            <div className="tf-body-muted">{Math.round(percentage)}%</div>
                           </div>
                         </div>
                         
@@ -440,7 +440,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                           ></div>
                         </div>
 
-                        <div className="mt-3 text-sm text-gray-600">
+                        <div className="mt-3 tf-card-desc">
                           {category.details.length} criteria evaluated
                         </div>
                       </div>
@@ -474,7 +474,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                               {rec.priority} priority
                             </span>
                           </div>
-                          <p className="text-sm text-gray-600">{rec.description}</p>
+                          <p className="tf-card-desc">{rec.description}</p>
                         </div>
                       </div>
                     );
@@ -496,7 +496,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                           <Icon className={`w-6 h-6 text-${category.color}-600`} />
                           <div>
                             <h3 className="text-gray-900">{category.category}</h3>
-                            <p className="text-sm text-gray-600">
+                            <p className="tf-card-desc">
                               {category.details.length} criteria • {category.weight}% weight
                             </p>
                           </div>
@@ -515,12 +515,12 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                               {getStatusIcon(detail.status)}
                               <div className="flex-1">
                                 <div className="text-gray-900 mb-1">{detail.criterion}</div>
-                                <p className="text-sm text-gray-600">{detail.explanation}</p>
+                                <p className="tf-card-desc">{detail.explanation}</p>
                               </div>
                             </div>
                             <div className="text-right ml-4">
                               <div className="text-lg text-gray-900">{detail.score}/{detail.maxScore}</div>
-                              <div className="text-xs text-gray-500">
+                              <div className="tf-meta">
                                 {Math.round((detail.score / detail.maxScore) * 100)}%
                               </div>
                             </div>
@@ -541,7 +541,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                   </div>
                   <ul className="space-y-3">
                     {strengths.map((strength, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                      <li key={idx} className="flex items-start gap-2 tf-body">
                         <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                         <span>{strength}</span>
                       </li>
@@ -556,7 +556,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                   </div>
                   <ul className="space-y-3">
                     {improvements.map((improvement, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                      <li key={idx} className="flex items-start gap-2 tf-body">
                         <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
                         <span>{improvement}</span>
                       </li>

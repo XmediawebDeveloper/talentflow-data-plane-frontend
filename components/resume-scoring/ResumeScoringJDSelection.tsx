@@ -207,7 +207,7 @@ export default function ResumeScoringJDSelection() {
                         )}
                       </div>
                       {/* Metadata row */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 text-xs text-gray-600">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 tf-meta-strong">
                         {jd.department && (
                           <span className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />

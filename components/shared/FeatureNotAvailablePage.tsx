@@ -58,7 +58,7 @@ export default function FeatureNotAvailablePage({ feature }: FeatureNotAvailable
         <p className="text-gray-600 mb-2">
           Your subscribed plan does not include <strong>{meta.name}</strong>.
         </p>
-        <p className="text-sm text-gray-500 mb-8">
+        <p className="tf-body-muted mb-8">
           {meta.description}. Upgrade your plan to unlock this feature.
         </p>
 

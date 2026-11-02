@@ -240,7 +240,7 @@ function DetailsContent() {
           <Clock className="w-6 h-6 text-brand-orange-deep" />
         </div>
         <p className="text-base font-medium text-gray-900">Results are not available yet</p>
-        <p className="text-sm text-gray-500 max-w-md">
+        <p className="tf-body-muted max-w-md">
           The candidate has not started or completed the assessment. Results will be
           available once the assessment is completed.
         </p>

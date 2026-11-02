@@ -217,8 +217,8 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           </button>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">Resume Scoring Analysis</h1>
-              <p className="text-sm text-gray-600">
+              <h1 className="tf-page-title mb-1">Resume Scoring Analysis</h1>
+              <p className="tf-card-desc">
                 AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
             </div>
@@ -245,7 +245,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Total Matches</div>
+                <div className="tf-card-desc mb-1">Total Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{scoringResults.length}</div>
               </div>
               <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -257,7 +257,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Excellent Matches</div>
+                <div className="tf-card-desc mb-1">Excellent Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'excellent').length}
                 </div>
@@ -271,7 +271,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Good Matches</div>
+                <div className="tf-card-desc mb-1">Good Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'good').length}
                 </div>
@@ -285,7 +285,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           <div className="bg-white rounded-lg border border-gray-200 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Avg. Score</div>
+                <div className="tf-card-desc mb-1">Avg. Score</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {Math.round(scoringResults.reduce((acc, r) => acc + r.score, 0) / scoringResults.length)}%
                 </div>
@@ -303,13 +303,13 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Candidate</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Job Position</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Match Score</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Key Matches</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Missing Skills</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Status</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Action</th>
+                  <th className="text-left px-4 py-3 tf-th">Candidate</th>
+                  <th className="text-left px-4 py-3 tf-th">Job Position</th>
+                  <th className="text-center px-4 py-3 tf-th">Match Score</th>
+                  <th className="text-left px-4 py-3 tf-th">Key Matches</th>
+                  <th className="text-left px-4 py-3 tf-th">Missing Skills</th>
+                  <th className="text-center px-4 py-3 tf-th">Status</th>
+                  <th className="text-center px-4 py-3 tf-th">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -327,13 +327,13 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                           <NameAvatar name={resume.name || resume.candidateName} fallback={resume.email} size="md" />
                           <div>
                             <div className="text-sm font-medium text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
-                            <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>
+                            <div className="tf-meta">{resume.title || resume.experience || ''}</div>
                           </div>
                         </div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="text-sm text-gray-900">{job.title}</div>
-                        <div className="text-xs text-gray-500">{job.location}</div>
+                        <div className="tf-meta">{job.location}</div>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
@@ -359,7 +359,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                             result.missingSkills.map((skill, i) => (
                               <span
                                 key={i}
-                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs border border-gray-200"
+                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 tf-meta-strong border border-gray-200"
                               >
                                 {skill}
                               </span>
@@ -419,7 +419,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
               <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="text-sm text-gray-600">
+                    <div className="tf-card-desc">
                       Overall Match Score:
                     </div>
                     <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-gray-300">
@@ -447,7 +447,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-medium text-gray-900 mb-1">Ready to Proceed?</h3>
-              <p className="text-sm text-gray-600">
+              <p className="tf-card-desc">
                 Review the scoring analysis above and click "Complete & Apply" to finalize the applications.
               </p>
             </div>

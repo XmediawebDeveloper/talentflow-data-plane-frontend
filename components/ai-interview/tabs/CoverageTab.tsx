@@ -1039,7 +1039,7 @@ export default function CoverageTab({
                         {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-semibold text-gray-900 truncate">{cluster.name}</span>
+                            <span className="tf-cell-name truncate">{cluster.name}</span>
                             <span className={`px-1.5 py-0.5 text-2xs rounded border ${priorityStyle(cluster.priority, pLabel)}`}>
                               {pLabel} Priority
                             </span>
@@ -1201,7 +1201,7 @@ export default function CoverageTab({
           IN-PROGRESS FOOTER NOTE
           ═══════════════════════════════════════════════════════════════════ */}
       {isInProgress && (
-        <div className="flex items-center justify-center gap-2 py-3 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded-xl">
+        <div className="flex items-center justify-center gap-2 py-3 tf-meta bg-gray-50 border border-gray-200 rounded-xl">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           <span>Coverage updates in real-time · Full evaluation insights available after the interview completes</span>
         </div>

@@ -221,7 +221,7 @@ export default function AdminDashboard({
           <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-blue/5 blur-2xl group-hover:bg-brand-blue/10 transition-colors" />
           <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Resumes</p>
+              <p className="tf-card-desc">Total Resumes</p>
               <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_resumes || 0}</p>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
@@ -251,7 +251,7 @@ export default function AdminDashboard({
           <div className="relative flex items-center justify-between">
             <div>
               <p
-                className="text-sm text-gray-600 cursor-pointer hover:text-brand-cyan transition-colors"
+                className="tf-card-desc cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
                 Job Descriptions
@@ -296,7 +296,7 @@ export default function AdminDashboard({
           <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-teal/5 blur-2xl group-hover:bg-brand-teal/10 transition-colors" />
           <div className="relative flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600">Total Users</p>
+              <p className="tf-card-desc">Total Users</p>
               <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_users || 0}</p>
               <p className="text-xs text-success font-medium mt-1">{stats?.active_users || 0} Active</p>
             </div>
@@ -315,7 +315,7 @@ export default function AdminDashboard({
             <div className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-brand-orange/5 blur-2xl group-hover:bg-brand-orange/10 transition-colors" />
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Assessments</p>
+                <p className="tf-card-desc">Assessments</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_assessments || 0}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
                   <span className="text-xs text-success font-medium">{stats?.assessment_completed_count || 0} Completed</span>
@@ -343,7 +343,7 @@ export default function AdminDashboard({
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Layers className="w-4 h-4 text-brand-blue" />
             </span>
-            <h2 className="text-lg font-semibold text-gray-900">Available Units</h2>
+            <h2 className="tf-section-title">Available Units</h2>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
             {/* Resume Upload Units */}
@@ -357,13 +357,13 @@ export default function AdminDashboard({
                     <Upload className="w-5 h-5 text-brand-blue" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-nowrap">Resume Storage</p>
+                <p className="tf-card-desc whitespace-nowrap">Resume Storage</p>
                 <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.RU.is_unlimited ? 'Unlimited' : subscriptionUnits.RU.available}
                 </p>
                 {!subscriptionUnits.RU.is_unlimited && (
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between tf-meta mb-1">
                       <span>{subscriptionUnits.RU.used} / {subscriptionUnits.RU.limit} used</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -388,13 +388,13 @@ export default function AdminDashboard({
                     <Zap className="w-5 h-5 text-brand-cyan" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-nowrap">Resume Scoring</p>
+                <p className="tf-card-desc whitespace-nowrap">Resume Scoring</p>
                 <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.RS.is_unlimited ? 'Unlimited' : subscriptionUnits.RS.available}
                 </p>
                 {!subscriptionUnits.RS.is_unlimited && (
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between tf-meta mb-1">
                       <span>{subscriptionUnits.RS.used} / {subscriptionUnits.RS.limit} used</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -419,13 +419,13 @@ export default function AdminDashboard({
                     <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-nowrap">Assessment</p>
+                <p className="tf-card-desc whitespace-nowrap">Assessment</p>
                 <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.AS.is_unlimited ? 'Unlimited' : subscriptionUnits.AS.available}
                 </p>
                 {!subscriptionUnits.AS.is_unlimited && (
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between tf-meta mb-1">
                       <span>{subscriptionUnits.AS.used} / {subscriptionUnits.AS.limit} used</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -450,13 +450,13 @@ export default function AdminDashboard({
                     <Video className="w-5 h-5 text-brand-blue-2" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-nowrap">AI Interview</p>
+                <p className="tf-card-desc whitespace-nowrap">AI Interview</p>
                 <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.AIU.is_unlimited ? 'Unlimited' : subscriptionUnits.AIU.available}
                 </p>
                 {!subscriptionUnits.AIU.is_unlimited && (
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between tf-meta mb-1">
                       <span>{subscriptionUnits.AIU.used} / {subscriptionUnits.AIU.limit} used</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -481,13 +481,13 @@ export default function AdminDashboard({
                     <UserCheck className="w-5 h-5 text-brand-teal" />
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 whitespace-nowrap">Max Users</p>
+                <p className="tf-card-desc whitespace-nowrap">Max Users</p>
                 <p className="text-xl font-bold text-gray-900 tracking-tight">
                   {subscriptionUnits.max_seats.is_unlimited ? 'Unlimited' : subscriptionUnits.max_seats.available}
                 </p>
                 {!subscriptionUnits.max_seats.is_unlimited && (
                   <div className="mt-3">
-                    <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex justify-between tf-meta mb-1">
                       <span>{subscriptionUnits.max_seats.used} / {subscriptionUnits.max_seats.limit} used</span>
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
@@ -509,7 +509,7 @@ export default function AdminDashboard({
         <div className="mb-8">
           <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900">
+              <h2 className="flex items-center gap-2.5 tf-section-title">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </span>
@@ -530,7 +530,7 @@ export default function AdminDashboard({
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {activity.jd_title || 'Untitled JD'}
                       </p>
-                      <p className="text-xs text-gray-500 truncate">
+                      <p className="tf-meta truncate">
                         {activity.action_display} by {activity.user_name || 'System'}
                       </p>
                     </div>
@@ -547,7 +547,7 @@ export default function AdminDashboard({
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Quick Actions */}
         <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 sm:p-6">
-          <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900 mb-4">
+          <h2 className="flex items-center gap-2.5 tf-section-title mb-4">
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-cyan/15 ring-1 ring-brand-cyan/20">
               <Sparkles className="w-4 h-4 text-brand-teal" />
             </span>
@@ -562,8 +562,8 @@ export default function AdminDashboard({
                 <Briefcase className="w-5 h-5 text-brand-blue" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">Create New Job</p>
-                <p className="text-xs text-gray-500">Post a new job opening</p>
+                <p className="tf-cell-name">Create New Job</p>
+                <p className="tf-meta">Post a new job opening</p>
               </div>
             </button>
 
@@ -576,8 +576,8 @@ export default function AdminDashboard({
                   <Zap className="w-5 h-5 text-brand-teal" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900">Resume Scoring</p>
-                  <p className="text-xs text-gray-500">Review and score candidate resumes</p>
+                  <p className="tf-cell-name">Resume Scoring</p>
+                  <p className="tf-meta">Review and score candidate resumes</p>
                 </div>
               </button>
             )}</PlanLockedOverlay>}
@@ -591,8 +591,8 @@ export default function AdminDashboard({
                   <ClipboardCheck className="w-5 h-5 text-brand-orange-deep" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900">Assessment</p>
-                  <p className="text-xs text-gray-500">Create and manage candidate assessments</p>
+                  <p className="tf-cell-name">Assessment</p>
+                  <p className="tf-meta">Create and manage candidate assessments</p>
                 </div>
               </button>
             )}</PlanLockedOverlay>}
@@ -606,8 +606,8 @@ export default function AdminDashboard({
                   <Video className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div className="text-left">
-                  <p className="text-sm font-semibold text-gray-900">AI Interview</p>
-                  <p className="text-xs text-gray-500">Launch and monitor interview workflows</p>
+                  <p className="tf-cell-name">AI Interview</p>
+                  <p className="tf-meta">Launch and monitor interview workflows</p>
                 </div>
               </button>
             )}</PlanLockedOverlay>}
@@ -620,8 +620,8 @@ export default function AdminDashboard({
                 <Building2 className="w-5 h-5 text-brand-cyan" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">Manage Team</p>
-                <p className="text-xs text-gray-500">Add or edit team members</p>
+                <p className="tf-cell-name">Manage Team</p>
+                <p className="tf-meta">Add or edit team members</p>
               </div>
             </button>
 
@@ -633,8 +633,8 @@ export default function AdminDashboard({
                 <Users className="w-5 h-5 text-brand-teal" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">Manage Users</p>
-                <p className="text-xs text-gray-500">Add users & permissions</p>
+                <p className="tf-cell-name">Manage Users</p>
+                <p className="tf-meta">Add users & permissions</p>
               </div>
             </button>
 
@@ -646,8 +646,8 @@ export default function AdminDashboard({
                 <Settings className="w-5 h-5 text-brand-orange-deep" />
               </div>
               <div className="text-left">
-                <p className="text-sm font-semibold text-gray-900">Settings</p>
-                <p className="text-xs text-gray-500">System configuration</p>
+                <p className="tf-cell-name">Settings</p>
+                <p className="tf-meta">System configuration</p>
               </div>
             </button>
           </div>
@@ -657,13 +657,13 @@ export default function AdminDashboard({
         <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] md:col-span-2 overflow-hidden">
           <div className="flex items-start justify-between gap-4 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50">
             <div className="min-w-0">
-              <h2 className="flex items-center gap-2.5 text-base sm:text-lg font-semibold text-gray-900">
+              <h2 className="flex items-center gap-2.5 tf-section-title">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <Activity className="w-4 h-4 text-brand-blue" />
                 </span>
                 Recent Activity
               </h2>
-              <p className="text-sm text-gray-600 mt-0.5">
+              <p className="tf-card-desc mt-0.5">
                 Latest actions across your workspace
               </p>
             </div>
@@ -780,7 +780,7 @@ export default function AdminDashboard({
                             {activity.action_display}
                           </p>
                           {detailsDisplay && (
-                            <p className="text-xs text-gray-500 mt-0.5 truncate">
+                            <p className="tf-meta mt-0.5 truncate">
                               {detailsDisplay}
                             </p>
                           )}
@@ -812,7 +812,7 @@ export default function AdminDashboard({
                 <Activity className="w-6 h-6 text-brand-blue" />
               </div>
               <p className="text-sm font-medium text-gray-900">No activity in the last 24 hours</p>
-              <p className="text-xs text-gray-500 mt-1">New actions will appear here as your team works</p>
+              <p className="tf-meta mt-1">New actions will appear here as your team works</p>
             </div>
           )}
         </div>

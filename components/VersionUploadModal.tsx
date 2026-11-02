@@ -152,8 +152,8 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   <GitBranch className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Version Upload</h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">
+                  <h2 className="tf-section-title">Version Upload</h2>
+                  <p className="tf-body-muted mt-0.5">
                     Upload new versions of existing resumes
                   </p>
                 </div>
@@ -202,10 +202,10 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
               <p className="text-gray-900 dark:text-slate-50 mb-2">
                 Drop updated resumes here or click to browse
               </p>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+              <p className="tf-card-desc mb-4">
                 Supported formats: PDF, DOCX, DOC
               </p>
-              <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-slate-500">
+              <div className="flex items-center justify-center gap-4 tf-meta">
                 <span>• Max file size: 3MB</span>
               </div>
               <input
@@ -222,7 +222,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             {selectedFiles.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-700 dark:text-slate-300">
+                  <span className="tf-body">
                     {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
                   </span>
                   <button
@@ -245,7 +245,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                       <File className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500">{formatFileSize(file.size)}</div>
+                        <div className="tf-meta">{formatFileSize(file.size)}</div>
                       </div>
                       <button
                         onClick={(e) => {
@@ -266,7 +266,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             {validationErrors.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-700 dark:text-slate-300">
+                  <span className="tf-body">
                     Validation Errors
                   </span>
                 </div>
@@ -279,7 +279,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{error.fileName}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500">{error.error}</div>
+                        <div className="tf-meta">{error.error}</div>
                       </div>
                     </div>
                   ))}

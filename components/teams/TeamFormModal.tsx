@@ -173,7 +173,7 @@ export default function TeamFormModal({
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <div className="space-y-5">
             <div>
-              <label htmlFor="team-name" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-name" className="mb-2 block tf-label max-sm:text-[13px]">
                 Team Name <span className="text-brand-blue">*</span>
               </label>
               <input
@@ -209,7 +209,7 @@ export default function TeamFormModal({
             </div>
 
             <div>
-              <label htmlFor="team-description" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-description" className="mb-2 block tf-label max-sm:text-[13px]">
                 Description
               </label>
               <textarea
@@ -222,7 +222,7 @@ export default function TeamFormModal({
                 className={`${fieldClassName} ${fieldOk} resize-y`}
               />
               {description.length >= DESCRIPTION_MAX * COUNTER_FROM && (
-                <p className="mt-1.5 text-right text-xs tabular-nums text-gray-500 dark:text-slate-500">
+                <p className="mt-1.5 text-right tf-meta tabular-nums">
                   {description.length}/{DESCRIPTION_MAX}
                 </p>
               )}
