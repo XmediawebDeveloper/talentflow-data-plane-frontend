@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useCallback, useRef, useEffect, memo } from "react";
+import { useState, useCallback, useRef, useEffect, memo, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
@@ -323,6 +323,11 @@ const RECORDING_STALL_RECHECK_MS = 6_000;
 // Per-tick reveal tracing (console.debug every 200 ms while Bina speaks).
 // Off in shipped builds; flip locally when tuning caption sync.
 const REVEAL_DEBUG = false;
+// Stall telemetry while Bina speaks: a reveal-tick gap (interval 200 ms) or a
+// long task at least this long is logged on its own line.
+const CAPTION_STALL_LOG_MS = 600;
+// Long tasks shorter than this are ignored (normal render work).
+const LONG_TASK_LOG_MS = 200;
 // The text reveal is anchored to audio playback so caption ≈ voice. But tracking
 // the audio position EXACTLY makes the text always trail the word you already
 // hear ("voice comes before text"). We reveal this many ms AHEAD of the audio
@@ -521,11 +526,41 @@ const MessageRowMemo = memo(MessageRow);
 // surrounding messages list / chrome to reconcile. React.memo on the
 // single `text` prop — when token reveal pushes a new substring, only
 // this component renders.
-interface LiveAIBubbleProps {
-  text: string;
+//
+// The revealed text lives in a tiny store the bubble subscribes to, NOT in
+// InterviewUI state: a state update re-rendered the whole 12k-line component 5x
+// a second while Bina spoke, adding main-thread load. When the main thread
+// stalls, Bina's voice (audio thread) keeps playing while the caption freezes
+// and then jumps ahead (staging 2026-11-02). Now a tick re-renders only this.
+interface CaptionStore {
+  get: () => string;
+  set: (text: string) => void;
+  subscribe: (fn: () => void) => () => void;
 }
 
-const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
+function createCaptionStore(): CaptionStore {
+  let text = "";
+  const subs = new Set<() => void>();
+  return {
+    get: () => text,
+    set: (next: string) => {
+      if (next === text) return;
+      text = next;
+      subs.forEach((fn) => fn());
+    },
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => { subs.delete(fn); };
+    },
+  };
+}
+
+interface LiveAIBubbleProps {
+  store: CaptionStore;
+}
+
+const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
+  const text = useSyncExternalStore(store.subscribe, store.get, store.get);
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[render] LiveAIBubble');
   }
@@ -620,7 +655,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // transcript the candidate sees while speaking.
   const currentTranscriptRef = useRef("");
   const liveTranscriptDisplayRef = useRef("");
-  const [currentAiText, setCurrentAiText] = useState("");
+  // Bina's revealed caption: text in captionStore (only LiveAIBubble renders
+  // it), plus whether there is any - the only part the parent layout needs.
+  const [captionStore] = useState(createCaptionStore);
+  const [hasAiText, setHasAiText] = useState(false);
+  const setCurrentAiText = useCallback((text: string) => {
+    captionStore.set(text);
+    setHasAiText(text.length > 0);
+  }, [captionStore]);
   const [status, setStatus] = useState("Connecting...");
   const [lindaAvatarSrc, setLindaAvatarSrc] = useState("/linda-avatar.webp");
   /** True while Bina is currently streaming a question that the backend
@@ -3797,6 +3839,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
   const measuredRevealCpsRef = useRef<number | null>(null);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
+  // kept playing, caption froze for seconds then jumped). Reset at the first
+  // chunk of each Bina turn, summarised once in saveAiMessage.
+  const revealLastTickMsRef = useRef(0);
+  const binaStallStatsRef = useRef({ longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 });
   const startRecordingInternalRef = useRef<() => void>(() => {});
   const disconnectRef = useRef<() => void>(() => {});
 
@@ -4865,6 +4912,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
+    {
+      const st = binaStallStatsRef.current;
+      if (text && (st.longTasks > 0 || st.captionStalls > 0)) {
+        console.log('[INTERVIEW-DEBUG] Bina turn main-thread summary', {
+          question: questionNumberRef.current,
+          audioSec: Number((currentTurnAudioMsRef.current / 1000).toFixed(1)),
+          longTasks: st.longTasks,
+          blockedMs: Math.round(st.blockedMs),
+          maxTaskMs: Math.round(st.maxTaskMs),
+          captionStalls: st.captionStalls,
+          maxStallMs: Math.round(st.maxStallMs),
+          maxJumpChars: st.maxJumpChars,
+        });
+      }
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+    }
     // Learn Bina's real speaking rate from this completed turn so the NEXT
     // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
     // here because this is the one place where both the final text length and
@@ -4957,7 +5020,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (revealTimerRef.current) {
       clearInterval(revealTimerRef.current);
     }
+    revealLastTickMsRef.current = 0;
     revealTimerRef.current = setInterval(() => {
+      // Interval is 200 ms; a much longer gap means the main thread was
+      // blocked, so the caption froze while the voice played on.
+      const tickNow = performance.now();
+      const tickGapMs = revealLastTickMsRef.current > 0 ? tickNow - revealLastTickMsRef.current : 0;
+      revealLastTickMsRef.current = tickNow;
+      const charsBeforeTick = revealedCharsRef.current;
       const fullText = tokenBufferRef.current;
       if (fullText.length === 0) return;
       // Captions never lead an inaudible voice: hold until TalkingHead reports
@@ -5068,6 +5138,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         currentAiTextRef.current = revealedText;
         setCurrentAiText(revealedText);
       }
+      if (tickGapMs >= CAPTION_STALL_LOG_MS && isPlayingRef.current) {
+        const jumpChars = revealedCharsRef.current - charsBeforeTick;
+        const st = binaStallStatsRef.current;
+        st.captionStalls += 1;
+        st.maxStallMs = Math.max(st.maxStallMs, tickGapMs);
+        st.maxJumpChars = Math.max(st.maxJumpChars, jumpChars);
+        console.warn('[INTERVIEW-DEBUG] caption stalled - main thread blocked while Bina spoke', {
+          gapMs: Math.round(tickGapMs),
+          jumpChars,
+          revealed: revealedCharsRef.current,
+          total: fullText.length,
+          playedSec: Number(playedSec.toFixed(1)),
+          question: questionNumberRef.current,
+        });
+      }
       // NOTE: We intentionally do NOT clear the interval when the text is
       // fully revealed. The loop keeps running so we remain ready for
       // streamed additions, and `saveAiMessage` (called by finalizePlayback
@@ -5093,6 +5178,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => {
     return () => { stopRevealingTokens(); };
   }, [stopRevealingTokens]);
+
+  // Long tasks (main thread busy >= LONG_TASK_LOG_MS) while Bina's voice plays:
+  // counted into the per-turn summary; the big ones are logged individually so
+  // the next test shows WHEN the caption froze and for how long.
+  useEffect(() => {
+    if (typeof PerformanceObserver === 'undefined') return;
+    if (!(PerformanceObserver.supportedEntryTypes || []).includes('longtask')) return;
+    const obs = new PerformanceObserver((list) => {
+      if (!isPlayingRef.current) return;
+      for (const entry of list.getEntries()) {
+        if (entry.duration < LONG_TASK_LOG_MS) continue;
+        const st = binaStallStatsRef.current;
+        st.longTasks += 1;
+        st.blockedMs += entry.duration;
+        st.maxTaskMs = Math.max(st.maxTaskMs, entry.duration);
+        if (entry.duration >= CAPTION_STALL_LOG_MS) {
+          const attr = (entry as PerformanceEntry & { attribution?: Array<{ containerType?: string; containerName?: string; containerSrc?: string }> }).attribution?.[0];
+          console.warn('[INTERVIEW-DEBUG] long task while Bina spoke', {
+            durationMs: Math.round(entry.duration),
+            container: attr ? `${attr.containerType || ''} ${attr.containerName || attr.containerSrc || ''}`.trim() : undefined,
+            question: questionNumberRef.current,
+          });
+        }
+      }
+    });
+    try { obs.observe({ type: 'longtask', buffered: false }); } catch { return; }
+    return () => obs.disconnect();
+  }, []);
 
   // Web Speech API for real-time transcription
   // Accumulates ALL finalized segments + current interim so the user
@@ -5471,6 +5584,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // clock anchor (firstChunkStartCtxSecRef) is stamped inside
       // trackPlaybackChunk, which has the real scheduled start time.
       firstPcmAtMsRef.current = Date.now();
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+      revealLastTickMsRef.current = 0;
       isPlayingRef.current = true;
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
@@ -11609,7 +11724,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           >
             {/* Hidden while the centred "Preparing your interview…" card is up
                 (turnBanner 'starting') — it peeked out above the card. */}
-            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
+            {messages.length === 0 && !hasAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
               && (binaHasSpoken || isClosing || isRecording) && (
               <div className="flex items-center justify-center h-full">
                 <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
@@ -11854,10 +11969,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Live AI text (streaming) — violet (matches AI bubble).
                 Extracted into <LiveAIBubbleMemo> so the 80 ms token-reveal
                 ticks only reconcile this bubble, not the full chat tree. */}
-            {currentAiText && <LiveAIBubbleMemo text={currentAiText} />}
+            {hasAiText && <LiveAIBubbleMemo store={captionStore} />}
 
             {/* Thinking dots — violet (matches AI bubble) */}
-            {isProcessing && !isCandidateTranscriptProcessing && !currentAiText && (
+            {isProcessing && !isCandidateTranscriptProcessing && !hasAiText && (
               <div className="flex gap-2">
                 <img
                   src="/linda-avatar.webp"
