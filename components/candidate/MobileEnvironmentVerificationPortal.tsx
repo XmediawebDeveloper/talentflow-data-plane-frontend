@@ -958,7 +958,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       // commit both succeeded (spec #15/#6).
       if (!res?.data?.video_uploaded) {
         console.warn('[ENV-VERIFY] Upload: FAILED (response did not confirm persistence)');
-        setErrorMessage('Upload could not be confirmed.');
+        setErrorMessage('Your video could not be confirmed as received. Please check your internet connection and tap Retry.');
         setCanRetryUpload(true); // blob is still in memory — no need to rescan
         setPhase('error');
         return;
@@ -967,7 +967,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       setPhase('done');
     } catch (err) {
       console.warn('[ENV-VERIFY] Upload: FAILED', err);
-      setErrorMessage('Upload failed.');
+      setErrorMessage('We couldn’t upload your video. Please check your internet connection and tap Retry — you don’t need to record again.');
       setCanRetryUpload(true); // blob is still in memory — no need to rescan
       setPhase('error');
     }
@@ -1031,7 +1031,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
       {(phase === 'expired' || phase === 'error') && (
         <div className="max-w-sm space-y-4">
-          <h1 className="text-lg font-semibold">Unable to verify</h1>
+          <h1 className="text-lg font-semibold">{canRetryUpload ? 'Upload failed' : 'Unable to verify'}</h1>
           <p className="text-sm text-[var(--raw-94a3b8)]">{errorMessage}</p>
           {canRetryUpload && (
             <Button
@@ -1160,6 +1160,15 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           {/* Overlaid ON the camera preview (not stacked below it) so it's
               always visible within the bounded video frame — no scrolling
               needed to find and tap it, regardless of page height/orientation. */}
+          {phase === 'pan_instructions' && (
+            <button
+              type="button"
+              onClick={handlePanNext}
+              className="absolute bottom-4 right-4 z-10 px-6 py-3 rounded-xl bg-brand-blue text-white font-medium text-sm shadow-lg shadow-black/40 hover:opacity-90 transition-opacity"
+            >
+              Next →
+            </button>
+          )}
           {phase === 'aligning' && (canRecord || alignFallback) && (
             <button
               type="button"
@@ -1192,14 +1201,9 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               Recording paused
             </div>
-            <Button
-              variant="primary"
-              type="button"
-              onClick={handlePanNext}
-              className="w-full"
-            >
-              Next
-            </Button>
+            {/* Next button lives ON the preview (see pan_instructions overlay
+                above) — down here it fell below the fold in landscape, where
+                the preview takes ~88dvh (reported 2026-11-02). */}
           </>
         ) : (
           <>
@@ -1249,13 +1253,26 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
       )}
 
-      {phase === 'uploading' && <p className="text-[var(--raw-94a3b8)]">Uploading…</p>}
-
-      {phase === 'done' && (
-        <div className="max-w-sm space-y-2">
-          <h1 className="text-lg font-semibold">Recordings uploaded successfully.</h1>
+      {phase === 'uploading' && (
+        <div className="max-w-sm space-y-3 flex flex-col items-center">
+          <span className="w-8 h-8 rounded-full border-2 border-white/20 border-t-brand-blue animate-spin" />
+          <h1 className="text-lg font-semibold">Uploading your video…</h1>
           <p className="text-sm text-[var(--raw-94a3b8)]">
-            You can put your phone down — your interview is resuming on your laptop.
+            Please keep this page open until the upload finishes.
+          </p>
+        </div>
+      )}
+
+      {/* Only reached after the backend confirmed video_uploaded=true
+          (storage + DB commit both succeeded) — see handleSubmit. */}
+      {phase === 'done' && (
+        <div className="max-w-sm space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center landscape:w-10 landscape:h-10">
+            <span className="text-2xl text-green-400 landscape:text-xl">✓</span>
+          </div>
+          <h1 className="text-lg font-semibold">Verification video uploaded successfully</h1>
+          <p className="text-sm text-[var(--raw-94a3b8)]">
+            Your interview is now resuming on your laptop. You can put your phone down and close this page.
           </p>
         </div>
       )}
