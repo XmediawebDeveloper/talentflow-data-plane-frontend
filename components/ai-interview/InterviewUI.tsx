@@ -559,11 +559,67 @@ interface LiveAIBubbleProps {
   store: CaptionStore;
 }
 
+// Typewriter: the reveal clock moves the TARGET in ~3-char steps every 200 ms
+// (and further after a main-thread stall), which looked word-by-word / jumpy.
+// The bubble types toward the target one letter at a time on animation frames,
+// trailing it by about one tick; after a stall it types the backlog fast but
+// visibly instead of popping it in. Text is written straight to the DOM node,
+// so no React render per letter.
+const TYPE_TRAIL_MS = 220;          // normal lag behind the reveal target
+const TYPE_MAX_CPS = 120;           // fastest visible typing for a backlog
+const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
+
 const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
   const text = useSyncExternalStore(store.subscribe, store.get, store.get);
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[render] LiveAIBubble');
   }
+  const typedRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef(0);        // fractional count of letters on screen
+  const shownTextRef = useRef("");
+  const rafRef = useRef<number | null>(null);
+  const lastFrameRef = useRef(0);
+  useEffect(() => {
+    const target = text;
+    // Text replaced rather than extended (llm_correction): keep only the part
+    // that still matches, then type the rest.
+    if (!target.startsWith(shownTextRef.current)) {
+      let i = 0;
+      const prev = shownTextRef.current;
+      while (i < prev.length && i < target.length && prev[i] === target[i]) i++;
+      shownRef.current = i;
+      shownTextRef.current = target.slice(0, i);
+      if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+    }
+    if (rafRef.current !== null) return; // loop already running; it reads `text` via store
+    lastFrameRef.current = 0;
+    const step = (now: number) => {
+      const goal = store.get();
+      const dt = lastFrameRef.current ? Math.min(now - lastFrameRef.current, 100) : 16;
+      lastFrameRef.current = now;
+      const backlog = goal.length - shownRef.current;
+      if (backlog <= 0) {
+        rafRef.current = null;
+        return;
+      }
+      const perMs = Math.max(
+        Math.min(backlog / TYPE_TRAIL_MS, TYPE_MAX_CPS / 1000),
+        backlog / TYPE_MAX_CATCHUP_MS,
+      );
+      shownRef.current = Math.min(goal.length, shownRef.current + perMs * dt);
+      const n = Math.floor(shownRef.current);
+      if (n !== shownTextRef.current.length) {
+        shownTextRef.current = goal.slice(0, n);
+        if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+      }
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [text, store]);
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  }, []);
   return (
     <div className="flex gap-2">
       <img
@@ -589,7 +645,7 @@ const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
               look as the Practice Session bubble (StepSamplePractice). */}
           <style>{`@keyframes tfLiveCaret {0%,100%{opacity:1}50%{opacity:0.25}}`}</style>
           <p className="text-sm leading-relaxed whitespace-pre-line break-words">
-            {text}
+            <span ref={typedRef} />
             <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 dark:bg-violet-400 align-middle" style={{ animation: 'tfLiveCaret 1.4s ease-in-out infinite' }} aria-hidden="true" />
           </p>
         </div>
