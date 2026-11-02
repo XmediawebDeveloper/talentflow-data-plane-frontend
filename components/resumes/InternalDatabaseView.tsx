@@ -147,6 +147,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     const params: ResumeSearchParams = {
       source: 'internal-db',
       page: 1,
+      // The Shared Database holds the same resume rows as My Resumes, so a
+      // resume archived there must still be listed here — with the Archived
+      // badge, and blocked from Score / AI Talent Match / Assessment / AI
+      // Interview by isResumeArchived below — not silently vanish.
+      include_archived: true,
     };
 
     // NOTE: Search is done client-side to include phone and skills
@@ -248,6 +253,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         skills: r.skills || [],
         source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
         folderId: r.folder_id || '',
+        // Drives ResumeTable's Archived badge and every isResumeArchived
+        // guard in this view; without it those guards never fired here.
+        is_archived: !!r.is_archived,
+        isArchived: !!r.is_archived,
+        archived_at: r.archived_at,
         uploadDate: r.created_at,
         attachments: r.version_count || 1, // Show version count as file count
         uploadedBy: r.uploaded_by_name || 'System',
