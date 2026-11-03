@@ -1729,6 +1729,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Video recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // First chunk the live MediaRecorder emitted. It alone carries the WebM
+  // header (EBML + Segment + Tracks); a file assembled without it has
+  // "0 real headers" and will not play. Kept so segment 0 can always start
+  // with it, even if the buffer was trimmed (staging c810f95f, 2026-11-03).
+  const recordingHeaderChunkRef = useRef<Blob | null>(null);
   const webcamStreamRef = useRef<MediaStream | null>(null);
   // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
   // the boost). Used to make quiet headset mics clearly audible in the saved video.
@@ -1790,6 +1795,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   })());
   const _saveRecSeg = (next: number) => {
     try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_recSegKey, String(next)); } catch { /* ignore */ }
+  };
+  // Segment 0 is the start of the stored file, so it MUST begin with the
+  // recorder's header chunk. If the buffer lost it, re-attach it rather than
+  // upload a headerless (unplayable) recording. Later segments are mid-stream
+  // continuations and never carry a header.
+  const withRecordingHeader = (chunks: Blob[], segmentIndex: number): Blob[] => {
+    const header = recordingHeaderChunkRef.current;
+    if (segmentIndex !== 0 || !header || chunks.length === 0 || chunks.includes(header)) return chunks;
+    console.warn(`[Recording] Segment 0 buffer is missing the WebM header chunk (${chunks.length} chunks) — re-attaching it so the recording is playable`);
+    return [header, ...chunks];
   };
 
   // Avatar state controller
@@ -3248,7 +3263,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const staleChunks = recordedChunksRef.current;
           const staleIndex = recordingSegmentIndexRef.current;
           const staleMime = (mediaRecorderRef.current?.mimeType || opts.mimeType || 'video/webm').split(';')[0];
-          const staleBlob = new Blob(staleChunks, { type: staleMime });
+          const staleBlob = new Blob(withRecordingHeader(staleChunks, staleIndex), { type: staleMime });
           candidateAIInterviewService
             .uploadRecording(token, staleBlob, staleIndex, false)
             .then(() => { recordingSegmentIndexRef.current = staleIndex + 1; })
@@ -3258,8 +3273,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         recordedChunksRef.current = [];
         let gotData = false;
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) { gotData = true; recordedChunksRef.current.push(e.data); }
+          if (e.data.size > 0) {
+            // A new recorder's first chunk is its stream header.
+            if (!gotData) recordingHeaderChunkRef.current = e.data;
+            gotData = true;
+            recordedChunksRef.current.push(e.data);
+          }
         };
+        // The recorder going inactive on its own (all recorded tracks ended,
+        // UA stop) used to be silent: the checkpoint no-ops on a non-recording
+        // state and the interview just ends with whatever was buffered. Make it
+        // visible in the client log and on the proctor timeline.
+        const describeTracks = () =>
+          recordStream.getTracks().map((t) => `${t.kind}:${t.readyState}`).join(',') || 'none';
+        recorder.onstop = () => {
+          if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+          console.error(
+            `[Recording] MediaRecorder stopped unexpectedly mid-interview (tracks=${describeTracks()}, buffered=${recordedChunksRef.current.length} chunks, segment=${recordingSegmentIndexRef.current}) — recording will not continue`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_failed',
+            severity: 'high',
+            details: { error: 'recorder_stopped', tracks: describeTracks(), segment_index: recordingSegmentIndexRef.current },
+          }).catch(() => { /* best-effort */ });
+        };
+        recordStream.getTracks().forEach((t) => {
+          t.addEventListener('ended', () => {
+            if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+            console.error(`[Recording] Recorded ${t.kind} track ended mid-interview (label='${t.label}', recorder=${recorder.state})`);
+          }, { once: true });
+        });
         // Stall watchdog. If the audio mix's AudioContext isn't running, Chrome's
         // MediaRecorder emits nothing for the WHOLE interview and a 0-byte
         // recording is saved (staging ai-d7eff074). keepAudioContextRunning
@@ -3291,6 +3334,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }).catch(() => { /* best-effort */ });
           recorder.ondataavailable = null;
           recorder.onerror = null;
+          recorder.onstop = null; // deliberate stop — not an unexpected one
           try { recorder.stop(); } catch { /* already stopped */ }
           recordStream = rawAudioFallbackStream();
           recordStreamRef.current = recordStream;
@@ -7903,7 +7947,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       recordedChunksRef.current = [];
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks, { type: mimeType });
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
       try {
         await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
         recordingSegmentIndexRef.current = segmentIndex + 1;
@@ -7976,7 +8020,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       recordedChunksRef.current = [];
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks, { type: mimeType });
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
       const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
       console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
       // Nothing was ever recorded: no earlier segment and an empty buffer. The
