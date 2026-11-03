@@ -924,6 +924,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // The folder id the currently-rendered `resumes` actually belong to. Set in
+  // lockstep with setResumes in fetchData — unlike `selectedFolder`, which
+  // flips the instant a folder is clicked, this only moves once the rows on
+  // screen really are that folder's. Reading `selectedFolder` directly for
+  // "is this the Archived Resumes folder" let the Archived badge flash on the
+  // previous folder's rows during the silent refetch gap (list view only —
+  // card view already clears `resumes` synchronously in navigateToFolder).
+  const [loadedFolderId, setLoadedFolderId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   // Search + filters in the shared hook, the same one every list toolbar uses.
   // `appliedQuery` is the settled value: it drives the fetch and the result
@@ -1958,6 +1966,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       if (primeFolderCounts && isUnfiltered) await reconcileFolderCounts(rawFolders);
 
       setResumes(convertedResumes);
+      setLoadedFolderId(folderId || 'all');
       setTotalItems(resumeResponse.total);
       setTotalIncludingVersions(resumeResponse.total_including_versions);
       setTotalPages(resumeResponse.total_pages);
@@ -2123,6 +2132,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
     );
   };
+
+  // Archived Resumes is a separate action context (Unarchive instead of
+  // Archive; no Score/Assessment/AI Interview/AI Talent Match), so carrying a
+  // selection across its boundary left the bulk action bar showing options
+  // for resumes that aren't even checked in the folder on screen. Clear the
+  // selection on either transition; ordinary folder-to-folder navigation
+  // still preserves cross-folder selections (see handleSelectAll above).
+  const previousSelectedFolderRef = useRef(selectedFolder);
+  useEffect(() => {
+    const archivedFolderId = folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id;
+    const prevFolder = previousSelectedFolderRef.current;
+    previousSelectedFolderRef.current = selectedFolder;
+    if (
+      archivedFolderId &&
+      prevFolder !== selectedFolder &&
+      (prevFolder === archivedFolderId || selectedFolder === archivedFolderId)
+    ) {
+      setSelectedResumes([]);
+    }
+  }, [selectedFolder, folders]);
 
   // Only act on currently visible IDs. Selections in OTHER folders / pages
   // must be preserved — wiping them would surprise users with multi-folder
@@ -4296,7 +4325,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   canShare={canShareMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
-                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === loadedFolderId)
                   }
                   archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                   /* All Resumes aggregates every folder, so each row names the
