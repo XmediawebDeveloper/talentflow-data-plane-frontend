@@ -324,7 +324,7 @@ export default function ServerCandidatePicker({
   const [source, setSource] = useState<InviteCandidateSourceTab>(initialSource ?? 'talent-match');
   /* The database tabs follow the resume list's own permissions (the share
      step's rule): locked tabs stay visible, greyed, with the reason. */
-  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermissionCode, permissionsVerified } = useAuth();
   const perms = user?.permissions;
   // The Resume Database page's own rule for Archive / Unarchive.
   const canUnarchive = !!isTenantAdmin || hasPermissionCode('my_resumes:archive');
@@ -335,8 +335,10 @@ export default function ServerCandidatePicker({
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     'talent-match': true,
     'score-resume': true,
-    'my-resumes': !!(perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
-    'internal-db': !!(perms?.canAccessInternalDB || perms?.canViewInternalDB),
+    // Tenant admin sees everything — same rule as usePermissions' menu
+    // visibility — so it never depends on the per-flag values being loaded.
+    'my-resumes': !!(isTenantAdmin || perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
+    'internal-db': !!(isTenantAdmin || perms?.canAccessInternalDB || perms?.canViewInternalDB),
   };
   /* My Resumes' folders, read once the tab is first opened. */
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -1008,7 +1010,13 @@ export default function ServerCandidatePicker({
   };
   const switchDb = (d: 'my-resumes' | 'internal-db') => { setLastDb(d); switchTab(d); };
   const dbTabButton = () => {
-    const locked = dbOpen.length === 0;
+    // While the cached (localStorage) permissions are still being re-validated
+    // against /auth/me, "no access" may just be stale — show a neutral
+    // "checking" state instead of the lock, so the tab doesn't flash locked
+    // and then turn clickable a moment later.
+    const checking = dbOpen.length === 0 && !permissionsVerified;
+    const locked = dbOpen.length === 0 && permissionsVerified;
+    const unavailable = locked || checking;
     const on = !addTab && isDbTab(source);
     const count = dbSum(tabCount);
     const picked = dbSum((d) => pickedBySource[d]) ?? 0;
@@ -1018,17 +1026,20 @@ export default function ServerCandidatePicker({
         type="button"
         role="tab"
         aria-selected={on}
-        aria-disabled={locked}
-        onClick={() => { if (!locked) switchDb(tabAccess[lastDb] ? lastDb : dbOpen[0]); }}
-        title={locked ? 'You do not have permission to access the Resume Database' : 'My Resumes and the Shared Database'}
+        aria-disabled={unavailable}
+        aria-busy={checking || undefined}
+        onClick={() => { if (!unavailable) switchDb(tabAccess[lastDb] ? lastDb : dbOpen[0]); }}
+        title={checking ? 'Checking your access…' : locked ? 'You do not have permission to access the Resume Database' : 'My Resumes and the Shared Database'}
         className={`-mb-px shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-2 pt-1.5 pb-2 text-[13px] font-medium border-b-2 transition-colors ${on
           ? 'border-brand-blue text-brand-blue font-semibold'
+          : checking ? 'border-transparent text-gray-500 dark:text-slate-400 cursor-wait'
           : locked ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed'
           : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-50 dark:hover:text-slate-100 dark:hover:bg-slate-800/60'}`}
       >
         {locked ? <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <SourceIcon source="internal-db" className="w-3.5 h-3.5" />}
         Resume Database
-        {!locked && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({count !== null ? fmt(count) : '…'})</span>}
+        {checking && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">(…)</span>}
+        {!unavailable && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({count !== null ? fmt(count) : '…'})</span>}
         {picked > 0 && (
           <span className="inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(picked)}</span>
         )}

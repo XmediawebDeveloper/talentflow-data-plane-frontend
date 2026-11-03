@@ -11,6 +11,7 @@ import {
 import type { DashboardData, PerQuestionDetail } from './types';
 import { orderQuestionsAsAsked, isSkillNotAssessed } from './types';
 import { buildRationaleLines } from './types';
+import { isNonEnglishAnswer, NON_ENGLISH_ANSWER_TEXT } from './nonEnglishAnswer';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 import { formatScore1, formatSkillScore, truncate1 } from '@/lib/utils/matchStatus';
@@ -828,6 +829,9 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 !ansClean ||
                 ansClean.toLowerCase() === '[skipped]' ||
                 ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(rt);
+              if (ansClean && isNonEnglishAnswer(ansClean)) {
+                return <span className="text-gray-400 italic">{NON_ENGLISH_ANSWER_TEXT}</span>;
+              }
               if (!noRealAnswer) {
                 return <span className="text-gray-700">{answer}</span>;
               }
