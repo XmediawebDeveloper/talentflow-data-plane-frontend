@@ -3,6 +3,53 @@
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { Button } from '@/components/ui/button';
+import { ArrowLeft, ArrowRight, ClipboardList, Info, Video } from 'lucide-react';
+
+/**
+ * Horizontal pan illustration — a LANDSCAPE phone sliding left → right →
+ * left along a level track. Deliberately NO rotation/tilt: the candidate
+ * sweeps the camera across the room holding the phone level, they do not
+ * twist the device. (The old curved-arc emoji animation read as "rotate
+ * your phone", which is the wrong motion.)
+ */
+function PanIllustration({ compact = false }: { compact?: boolean }) {
+  const travel = compact ? 36 : 56; // px each side of centre — stays inside the arrows
+  return (
+    <div className={`flex flex-col items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+      <div
+        className={`relative ${compact ? 'w-44 h-12' : 'w-60 h-16'} rounded-xl border border-brand-blue/40 bg-brand-blue/10 flex items-center justify-between px-2`}
+        aria-hidden="true"
+      >
+        <ArrowLeft className="w-5 h-5 text-sky-300 flex-shrink-0" />
+        <div className="absolute left-9 right-9 top-1/2 h-px bg-sky-300/30" />
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div
+            className={`${compact ? 'w-12 h-7' : 'w-16 h-9'} rounded-md border-2 border-sky-300 bg-[var(--raw-0f1929)] flex items-center justify-center`}
+            style={{ animation: `tf-pan-slide-${travel} 3.2s ease-in-out infinite` }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-300" />
+          </div>
+        </div>
+        <ArrowRight className="w-5 h-5 text-sky-300 flex-shrink-0" />
+      </div>
+      <div className="flex items-center gap-2 text-2xs sm:text-xs">
+        <span className="inline-flex items-center gap-1 rounded-full border border-brand-blue/40 bg-brand-blue/10 px-2.5 py-1 text-sky-200">
+          <ArrowRight className="w-3.5 h-3.5" /> Left to Right
+        </span>
+        <span className="text-white/30">|</span>
+        <span className="inline-flex items-center gap-1 rounded-full border border-brand-blue/40 bg-brand-blue/10 px-2.5 py-1 text-sky-200">
+          <ArrowLeft className="w-3.5 h-3.5" /> Right to Left
+        </span>
+      </div>
+      <style>{`
+        @keyframes tf-pan-slide-${travel} {
+          0%, 100% { transform: translateX(-${travel}px); }
+          50%      { transform: translateX(${travel}px); }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const verifyApi = axios.create({ baseURL: API_BASE_URL });
@@ -987,25 +1034,26 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   const showLinkTimer = linkSecondsRemaining !== null
     && !['loading', 'expired', 'error', 'done'].includes(phase);
 
-  // Phases where orientation doesn't matter: the read-only instructions/
-  // permission screens (let the candidate read comfortably in portrait,
-  // their natural hold, before ever asking them to rotate), terminal/error
-  // screens, and post-recording review/upload where forcing a rotation back
-  // would only be annoying. Landscape is only actually required once the
-  // camera is live (aligning through recording) — the only phases that
-  // capture anything.
+  // Phases where orientation doesn't matter: terminal/error screens and
+  // post-recording review/upload, where forcing a rotation back would only
+  // be annoying. Landscape is required from the Recording Guide onwards
+  // through the end of recording.
   const orientationGateActive = isPortrait
-    && !['loading', 'expired', 'error', 'permission_denied', 'instructions', 'requesting_permission', 'ready_to_submit', 'uploading', 'done'].includes(phase);
+    // 'instructions' and 'requesting_permission' are intentionally NOT exempt:
+    // the Recording Guide is laid out for landscape and must always be shown
+    // that way, so the candidate is already holding the phone sideways before
+    // the camera ever opens.
+    && !['loading', 'expired', 'error', 'permission_denied', 'ready_to_submit', 'uploading', 'done'].includes(phase);
 
   return (
-    <div className={`min-h-[100dvh] bg-[var(--raw-0f1929)] text-white flex flex-col items-center justify-center p-4 sm:p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
+    <div className={`min-h-[100dvh] bg-[var(--raw-0f1929)] text-white flex flex-col items-center justify-center p-4 sm:p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20 [@media(max-height:420px)]:!pt-12 [@media(max-height:420px)]:!pb-2' : ''}`}>
       {showLinkTimer && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[var(--raw-0f1929)]/95 backdrop-blur px-4 py-3 max-w-[calc(100vw-1rem)] shadow-lg shadow-black/30">
-          <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
+        <div className="fixed top-3 [@media(max-height:420px)]:top-1.5 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 [@media(max-height:420px)]:gap-0 rounded-xl border border-amber-400/30 bg-[var(--raw-0f1929)]/95 backdrop-blur px-4 py-3 [@media(max-height:420px)]:py-1 max-w-[calc(100vw-1rem)] shadow-lg shadow-black/30">
+          <span className="font-mono font-bold text-3xl [@media(max-height:420px)]:text-xl tracking-wider text-amber-400 tabular-nums">
             {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
             {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
           </span>
-          <span className="text-2xs text-[var(--raw-94a3b8)]">Link will expire when the timer ends</span>
+          <span className="text-2xs text-[var(--raw-94a3b8)] [@media(max-height:420px)]:hidden">Link will expire when the timer ends</span>
         </div>
       )}
 
@@ -1058,57 +1106,85 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       )}
 
       {phase === 'instructions' && (
-        <div className="max-w-sm space-y-5">
-          <h1 className="text-2xl font-semibold">Environment Verification</h1>
-          <div className="text-base text-[var(--raw-cbd5e1)] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
-            <p>
-              You'll record a <strong className="text-white">10-second video</strong> in{' '}
-              <strong className="text-white">landscape mode</strong>, in two steps:
-            </p>
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-blue/20 text-brand-blue text-sm font-bold flex items-center justify-center mt-0.5">1</span>
-              <p>
-                <strong className="text-white">First 5 seconds</strong> — focus your camera on your
-                laptop screen/display. It will show a changing color and a unique ID; keep it
-                centered and hold steady.
+        // Landscape-only layout (the orientation gate blocks portrait for
+        // this phase): compact header, the two steps side by side, then the
+        // tip + Next on one row — sized to fit a phone's short landscape
+        // height without scrolling.
+        <div className="w-full max-w-3xl rounded-2xl border border-brand-blue/40 bg-white/[0.03] p-3 sm:p-4 space-y-3 [@media(max-height:420px)]:p-2 [@media(max-height:420px)]:space-y-1.5 text-left">
+          <div className="flex items-center justify-center gap-3 text-center">
+            <span className="flex-shrink-0 w-9 h-9 rounded-full border border-sky-400/60 bg-sky-400/10 flex items-center justify-center shadow-[0_0_12px_rgba(56,189,248,0.35)]">
+              <Video className="w-5 h-5 text-sky-300" />
+            </span>
+            <div>
+              <h1 className="text-lg font-semibold leading-tight">Environment Verification</h1>
+              <p className="text-xs text-[var(--raw-cbd5e1)]">
+                Record a <strong className="text-white">10-second video</strong> in{' '}
+                <strong className="text-white">landscape mode</strong> to verify your interview environment.
               </p>
             </div>
-            <div className="flex items-start gap-3">
-              <span className="flex-shrink-0 w-7 h-7 rounded-full bg-brand-blue/20 text-brand-blue text-sm font-bold flex items-center justify-center mt-0.5">2</span>
-              <div className="flex-1">
-                <p>
-                  <strong className="text-white">Next 5 seconds</strong> — slowly move your phone, keeping
-                  your laptop screen in view, to capture your workspace and surroundings:
-                </p>
-                <ul className="mt-1.5 ml-1 space-y-1">
-                  <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Left to Right</li>
-                  <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Right to Left</li>
-                </ul>
-                <p className="mt-1.5 text-sm text-[var(--raw-94a3b8)]">
-                  Move slowly and keep the phone steady — no sudden movements.
-                </p>
-                <div className="mt-2 flex items-center gap-1.5 px-2">
-                  <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
-                  <span className="text-2xs text-[var(--raw-94a3b8)]">left → right → left</span>
+          </div>
+
+          <div className="flex items-center gap-2 text-sm font-semibold [@media(max-height:420px)]:hidden">
+            <ClipboardList className="w-4 h-4 text-brand-blue" /> Recording Steps
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            {/* Step 1 */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 [@media(max-height:420px)]:p-2 flex flex-col gap-2 [@media(max-height:420px)]:gap-1">
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue text-white text-xs font-bold flex items-center justify-center">1</span>
+                <div className="text-xs text-[var(--raw-cbd5e1)] leading-snug">
+                  <p className="text-sm font-semibold text-white">First 5 seconds</p>
+                  Point your camera at your laptop screen. It will show a changing color and a
+                  unique ID — keep it centered and hold steady.
+                </div>
+              </div>
+              <div className="mt-auto flex justify-center" aria-hidden="true">
+                <div className="relative w-36 h-16 [@media(max-height:420px)]:h-12 flex items-center justify-center">
+                  <span className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2 border-white/70 rounded-tl" />
+                  <span className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2 border-white/70 rounded-tr" />
+                  <span className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2 border-white/70 rounded-bl" />
+                  <span className="absolute bottom-0 right-0 w-3 h-3 border-b-2 border-r-2 border-white/70 rounded-br" />
+                  <div className="flex flex-col items-center">
+                    <div className="w-24 h-10 [@media(max-height:420px)]:h-8 rounded-sm border-2 border-sky-300 bg-brand-blue/40 flex items-center justify-center text-2xs font-semibold text-white">
+                      ID: A7F3
+                    </div>
+                    <div className="w-28 h-1 rounded-b bg-sky-300/70" />
+                  </div>
                 </div>
               </div>
             </div>
+
+            {/* Step 2 */}
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3 [@media(max-height:420px)]:p-2 flex flex-col gap-2 [@media(max-height:420px)]:gap-1">
+              <div className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-brand-blue text-white text-xs font-bold flex items-center justify-center">2</span>
+                <div className="text-xs text-[var(--raw-cbd5e1)] leading-snug">
+                  <p className="text-sm font-semibold text-white">Next 5 seconds</p>
+                  Hold the phone level and slowly move it from left to right, then right to left,
+                  to capture your workspace and surroundings — keep your laptop screen in view.
+                </div>
+              </div>
+              <div className="mt-auto flex justify-center">
+                <PanIllustration compact />
+              </div>
+            </div>
           </div>
-          <Button
-            variant="primary"
-            type="button"
-            onClick={() => { void startVerificationFlow(); }}
-            className="w-full"
-          >
-            Next
-          </Button>
-          <style>{`
-            @keyframes tf-instr-curve {
-              0%   { transform: translateX(-8px) translateY(0) rotate(-12deg); }
-              50%  { transform: translateX(0)     translateY(-4px) rotate(0deg); }
-              100% { transform: translateX(8px)  translateY(0) rotate(12deg); }
-            }
-          `}</style>
+
+          <div className="flex items-center gap-3">
+            <div className="flex-1 flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-[var(--raw-cbd5e1)]">
+              <Info className="w-4 h-4 text-sky-300 flex-shrink-0" />
+              Move slowly and keep the phone steady — no sudden movements.
+            </div>
+            <Button
+              variant="primary"
+              type="button"
+              onClick={() => { void startVerificationFlow(); }}
+              className="flex-shrink-0 px-8"
+            >
+              Next <ArrowRight className="w-4 h-4 ml-1 inline" />
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1155,19 +1231,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           )}
           {phase === 'pan_instructions' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/70 rounded-xl px-4 overflow-hidden">
-              <span className="text-5xl inline-block animate-[tf-phone-curve_1.8s_ease-in-out_infinite_alternate]">📱</span>
-              <p className="text-sm font-medium text-white text-center">
-                Slowly turn the mobile from left to right and right to left, keeping your laptop screen visible while you capture your workspace, surrounding area, and any nearby devices.
+              <PanIllustration />
+              <p className="text-sm font-medium text-white text-center max-w-xl">
+                Hold the phone level and slowly move it from left to right, then right to left, keeping your laptop screen visible while you capture your workspace, surrounding area, and any nearby devices.
               </p>
-              <style>{`
-                @keyframes tf-phone-curve {
-                  0%   { transform: translateX(-40px) translateY(0)    rotate(-16deg); }
-                  25%  { transform: translateX(-20px) translateY(-14px) rotate(-6deg); }
-                  50%  { transform: translateX(0)      translateY(-18px) rotate(0deg); }
-                  75%  { transform: translateX(20px)  translateY(-14px) rotate(6deg); }
-                  100% { transform: translateX(40px)  translateY(0)    rotate(16deg); }
-                }
-              `}</style>
             </div>
           )}
           {(phase === 'recording_screen' || phase === 'recording_pan') && (
