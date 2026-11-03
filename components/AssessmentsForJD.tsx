@@ -211,7 +211,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
         </div>
 
         {/* Assessments Table */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
+        <div className="tf-card-soft overflow-hidden tf-table-shell">
           <table className="w-full min-w-[880px]">
             <thead className="bg-white border-b border-gray-100">
               <tr>
@@ -225,7 +225,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
             <tbody className="divide-y divide-gray-100">
               {Array.from({ length: 7 }).map((_, r) => (
                 <tr key={r}>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <div className="flex items-center gap-3">
                       <Skeleton className="flex-shrink-0 w-10 h-10 rounded-xl" />
                       <div className="flex-1 min-w-0 space-y-2">
@@ -234,22 +234,22 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <Skeleton className="h-5 w-16 rounded-full" />
                   </td>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <Skeleton className="h-4 w-28" />
                   </td>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <Skeleton className="h-4 w-10" />
                   </td>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <Skeleton className="h-4 w-10" />
                   </td>
-                  <td className="px-3 sm:px-4 py-3">
+                  <td className="tf-td">
                     <Skeleton className="h-4 w-20" />
                   </td>
-                  <td className="px-3 sm:px-4 py-3 tf-sticky-col">
+                  <td className="tf-td tf-sticky-col">
                     <div className="flex items-center justify-end gap-2">
                       <Skeleton className="h-8 w-8 rounded-md" />
                       <Skeleton className="h-8 w-8 rounded-md" />
@@ -273,8 +273,8 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
             <ClipboardList className="w-5 h-5 text-brand-blue" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight truncate">Assessment Results</h2>
-            <p className="text-sm text-gray-500 mt-1 truncate">
+            <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Assessment Results</h2>
+            <p className="tf-body-muted mt-1 truncate">
               {jdTitle ? `Assessments for "${jdTitle}"` : 'Assessments for this job'}
             </p>
           </div>
@@ -302,10 +302,10 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id as any)}
-            className={`pb-2.5 sm:pb-3 text-sm font-medium border-b-2 whitespace-nowrap flex items-center gap-1.5 sm:gap-2 shrink-0 transition-colors ${
+            className={`tf-tab-line shrink-0 ${
               activeTab === tab.id
-                ? 'text-brand-blue border-brand-blue'
-                : 'text-gray-600 border-transparent hover:text-brand-blue'
+                ? 'tf-tab-line-active'
+                : ''
             }`}
           >
             {tab.label}
@@ -322,7 +322,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
 
       {/* Empty State */}
       {filteredAssessments.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="text-center py-12 tf-card-soft">
           <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
             <ClipboardList className="w-10 h-10 text-brand-blue" />
           </div>
@@ -347,29 +347,29 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {/* Assessments List */}
       {filteredAssessments.length > 0 && (
         <>
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
+            <div className="tf-card-soft overflow-hidden tf-table-shell">
               <table className="w-full min-w-[880px]">
                 <thead className="bg-white border-b border-gray-100">
                   <tr>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Assessment
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Status
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Candidates
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Pass Rate
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Avg Score
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 whitespace-nowrap">
+                    <th className="tf-th-cell text-left tf-th">
                       Created
                     </th>
-                    <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-right text-xs font-semibold text-gray-600 whitespace-nowrap tf-sticky-col">
+                    <th className="tf-th-cell text-right tf-th tf-sticky-col">
                       Actions
                     </th>
                   </tr>
@@ -377,26 +377,26 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                 <tbody className="divide-y divide-gray-100">
                   {filteredAssessments.map((assessment) => (
                     <tr key={assessment.id} className="hover:bg-brand-blue/5 transition-colors">
-                      <td className="px-3 sm:px-4 py-3 max-w-[320px]">
+                      <td className="tf-td max-w-[320px]">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="flex-shrink-0 w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center">
                             <ClipboardList className="w-5 h-5 text-brand-blue" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 min-w-0">
-                              <p className="min-w-0 text-sm font-medium text-gray-900 truncate" title={stripVersionFromTitle(assessment.title)}>
+                              <p className="min-w-0 tf-row-name truncate" title={stripVersionFromTitle(assessment.title)}>
                                 {stripVersionFromTitle(assessment.title)}
                               </p>
                               {assessment.version > 1 && <VersionPill kind="assessment" version={assessment.version} />}
                             </div>
-                            <p className="text-xs text-gray-500 truncate">{assessment.short_id}</p>
+                            <p className="tf-meta truncate">{assessment.short_id}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                      <td className="tf-td whitespace-nowrap">
                         {getStatusBadge(assessment.status)}
                       </td>
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                      <td className="tf-td whitespace-nowrap">
                         <div className="flex items-center gap-2 text-sm whitespace-nowrap">
                           <Users className="w-4 h-4 text-gray-400 shrink-0" />
                           <span className="text-gray-900">{assessment.candidates}</span>
@@ -405,7 +405,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                      <td className="tf-td whitespace-nowrap">
                         <div className="text-sm">
                           {assessment.completed > 0 ? (
                             <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
@@ -416,7 +416,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                           )}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
+                      <td className="tf-td whitespace-nowrap">
                         <div className="text-sm">
                           {assessment.average_score != null ? (
                             <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
@@ -427,19 +427,19 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                           )}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 whitespace-nowrap">
-                        <div className="text-sm text-gray-500 whitespace-nowrap">
+                      <td className="tf-td whitespace-nowrap">
+                        <div className="tf-body-muted whitespace-nowrap">
                           {formatISTDate(assessment.created_at)}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 py-3 text-right tf-sticky-col">
+                      <td className="tf-td text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-2">
                           <Button
                             variant="secondary"
                             size="sm"
                             onClick={() => handleViewResults(assessment)}
                             aria-label="View Results" title="View Results"
-                            className="h-8 w-8 px-0 shrink-0"
+                            className="h-8 w-8 shrink-0"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>

@@ -142,7 +142,7 @@ export default function PreInterviewLayout({
 
       {/* Help text */}
       <div className="bg-white/60 dark:bg-slate-900/60 px-4 py-3 text-center">
-        <p className="text-xs text-gray-400 sm:text-sm">
+        <p className="tf-hint sm:text-sm">
           Need help?{' '}
           <a
             href="mailto:support@talentflow.com"

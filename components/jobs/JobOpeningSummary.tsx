@@ -371,7 +371,7 @@ export default function JobOpeningSummary({
         </h3>
         </div>
         {job.versionNumber && job.versionNumber >= 1 && (
-          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+          <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
             <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
             v{job.versionNumber}
           </span>

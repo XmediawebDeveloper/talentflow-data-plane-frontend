@@ -284,7 +284,7 @@ export default function DashboardQuickAccess() {
           <Rocket className="h-5 w-5 text-slate-900 dark:text-slate-50" />
           <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">Quick access</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-2xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
+        <span className="tf-badge gap-1.5 bg-white text-2xs text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />
           {totalItems} {totalItems === 1 ? 'tool' : 'tools'}
         </span>
@@ -307,7 +307,7 @@ export default function DashboardQuickAccess() {
       <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         {/* Flattened first so the colour run counts tiles as they appear on
             screen, not as they are grouped by section. */}
-        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <ul className="tf-grid-stats-5">
           {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneForTool(item.id, index)} />

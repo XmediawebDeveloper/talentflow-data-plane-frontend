@@ -38,7 +38,7 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
                 <h2 className="text-gray-900">Quick Actions</h2>
               </div>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-500">Press ESC to close</span>
+                <span className="tf-meta">Press ESC to close</span>
                 <button
                   onClick={onClose}
                   className="text-gray-400 hover:text-gray-600"
@@ -68,14 +68,14 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm text-gray-900">{action.label}</span>
+                        <span className="tf-body">{action.label}</span>
                         {action.shortcut && (
-                          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                          <span className="tf-meta bg-gray-100 px-2 py-0.5 rounded">
                             {action.shortcut}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-600">{action.description}</p>
+                      <p className="tf-meta">{action.description}</p>
                     </div>
                   </button>
                 );
@@ -85,7 +85,7 @@ export default function QuickActions({ isOpen, onClose, actions }: QuickActionsP
 
           {/* Recently Used */}
           <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <div className="flex items-center gap-2 text-xs text-gray-600">
+            <div className="flex items-center gap-2 tf-meta">
               <Clock className="w-3.5 h-3.5" />
               <span>Tip: Use keyboard shortcuts for faster access</span>
             </div>

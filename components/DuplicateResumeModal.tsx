@@ -334,7 +334,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                 <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
                   Duplicate Resume{exactDuplicates.length > 1 ? 's' : ''} Detected
                 </h2>
-                <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mt-1">
+                <p className="tf-body-secondary sm:text-base mt-1">
                   {exactDuplicates.length === 1
                     ? 'This resume matches an existing candidate in the system and cannot be uploaded.'
                     : 'These resumes match existing candidates in the system and cannot be uploaded.'}
@@ -357,11 +357,11 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
               return (
                 <div key={originalIndex} className="space-y-4">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="tf-grid-split">
                     {/* Existing */}
                     <div className="rounded-xl border border-gray-200 overflow-hidden flex flex-col">
                       <div className="px-5 py-3.5 bg-gray-50 border-b border-gray-200">
-                        <h3 className="text-base font-semibold text-gray-900">Existing Resume</h3>
+                        <h3 className="tf-section-title">Existing Resume</h3>
                       </div>
                       <div className="px-5 py-2 flex-1">
                         <DetailRow label="Candidate" value={existing.candidate_name} />
@@ -421,7 +421,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                 sentence spilled a few words onto a second row. */}
             <div className="flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
               <Info className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-700 dark:text-slate-300">
+              <p className="tf-body">
                 <span className="font-semibold">Note:</span> Exact duplicates are blocked automatically — existing records stay unchanged.
               </p>
             </div>
@@ -431,7 +431,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
           <div className="flex-shrink-0 flex justify-end gap-3 p-4 sm:p-6 sm:pt-4 border-t border-gray-100 dark:border-slate-700/60">
             <button
               onClick={closeAsDiscarded}
-              className="px-5 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors font-medium"
+              className="tf-btn tf-btn-primary px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 transition-colors whitespace-normal shadow-none gap-0"
             >
               Close
             </button>
@@ -460,10 +460,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               <AlertTriangle className="w-6 h-6 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1">
+              <h2 className="tf-section-title sm:text-xl mb-1">
                 Resume Update Detected
               </h2>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
+              <p className="tf-body-secondary">
                 This candidate already exists in the system. Choose how to handle this update.
               </p>
             </div>
@@ -473,17 +473,17 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         {/* File Counter */}
         <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+            <span className="tf-label">
               Resume {currentVersionIndex + 1} of {versionsWithChanges.length}
             </span>
             {exactDuplicates.length > 0 && (
-              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">
+              <span className="tf-badge bg-red-100 text-red-700">
                 {exactDuplicates.length} duplicate{exactDuplicates.length > 1 ? 's' : ''} auto-blocked
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
+            <span className="tf-badge bg-amber-100 text-amber-700">
               Content Changes Detected
             </span>
           </div>
@@ -499,7 +499,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
               </div>
               <div>
                 <h3 className="font-semibold text-gray-900 dark:text-slate-50">{currentDuplicate.existingResume.candidate_name}</h3>
-                <p className="text-sm text-gray-500 dark:text-slate-500">{currentDuplicate.existingResume.email}</p>
+                <p className="tf-body-muted">{currentDuplicate.existingResume.email}</p>
               </div>
             </div>
           </div>
@@ -528,12 +528,12 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             const uploadLocation = targetFolderPath || existingLocation;
 
             return (
-              <div className="mb-6 grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="tf-grid-split mb-6">
                 {/* Existing */}
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden flex flex-col">
                   <div className="px-5 py-3.5 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center gap-2">
                     <FileText className="w-4 h-4 text-gray-700 dark:text-slate-300" />
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Existing Resume</h3>
+                    <h3 className="tf-section-title">Existing Resume</h3>
                   </div>
                   <div className="px-5 py-1 flex-1 divide-y divide-gray-100 dark:divide-slate-800">
                     <DetailRow icon={User} label="Candidate" value={existing.candidate_name} />
@@ -627,10 +627,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                       <Check className="w-5 h-5 text-blue-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-body-secondary mt-1">
                     Keep existing resume unchanged. New resume will be deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                     <span>• Old resume: <span className="text-gray-700 dark:text-slate-300">Unchanged</span></span>
                     <span>• New resume: <span className="text-red-600">Deleted</span></span>
                     <span>• Storage: <span className="text-gray-700 dark:text-slate-300">No impact</span></span>
@@ -661,10 +661,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                       <Check className="w-5 h-5 text-orange-500" />
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-body-secondary mt-1">
                     Replace old resume with new one. Original will be permanently deleted.
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                     <span>• Old resume: <span className="text-red-600">Deleted</span></span>
                     <span>• New resume: <span className="text-green-600">Saved</span></span>
                     <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -726,10 +726,10 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
                     </div>
                   ) : (
                     <>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                      <p className="tf-body-secondary mt-1">
                         Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
                       </p>
-                      <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-slate-500">
+                      <div className="mt-3 flex flex-wrap gap-4 tf-meta">
                         <span>• Old resume: <span className="text-green-600">Kept</span></span>
                         <span>• New resume: <span className="text-green-600">Saved as v{currentDuplicate.existingResume.version + 1}</span></span>
                         <span>• Consumes: <span className="text-orange-600">1 upload unit</span></span>
@@ -743,7 +743,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
 
           {/* Note */}
           <div className="mt-6 p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-            <p className="text-xs text-gray-600 dark:text-slate-400">
+            <p className="tf-meta">
               <span className="font-medium">Note:</span> All actions are fully audit logged.
               Overwriting or saving as a new version will consume 1 resume upload unit from your quota.
             </p>
@@ -757,7 +757,7 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             <button
               onClick={onClose}
               disabled={isSubmitting}
-              className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-brand-blue/30 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 transition-colors whitespace-normal gap-0"
             >
               Cancel
             </button>

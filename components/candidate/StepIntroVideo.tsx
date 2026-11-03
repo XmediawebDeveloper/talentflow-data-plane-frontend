@@ -148,8 +148,8 @@ export default function StepIntroVideo({
                 <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
                   <Play className="w-8 h-8 text-gray-500" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">No Introduction Video Available</h3>
-                <p className="text-gray-500 text-sm max-w-md">
+                <h3 className="tf-section-title">No Introduction Video Available</h3>
+                <p className="tf-body-muted max-w-md">
                   There is no introduction video for this interview. You may continue
                   directly to the interview.
                 </p>
@@ -166,7 +166,7 @@ export default function StepIntroVideo({
               <h2 className="mt-1.5 text-2xl sm:text-3xl font-bold text-gray-900 leading-tight break-words">
                 Welcome, {candidateName}
               </h2>
-              <p className="mt-2 text-sm text-gray-500 leading-relaxed">
+              <p className="mt-2 tf-body-muted leading-relaxed">
                 Thanks for interviewing for the{' '}
                 <span className="font-semibold text-gray-900">{position}</span> role.{' '}
                 {videoSrc
@@ -180,15 +180,15 @@ export default function StepIntroVideo({
               {/* 2×2 tiles (one column on phones): keeps the card short enough
                   to sit level with a 16:9 video beside it. The 1px gap over a
                   grey background draws the dividers in either layout. */}
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100 rounded-xl border border-gray-100 overflow-hidden">
+              <ul className="tf-grid-2 bg-gray-100 rounded-xl border border-gray-100 overflow-hidden">
                 {BEFORE_YOU_BEGIN.map(({ icon: RowIcon, title, text }) => (
                   <li key={title} className="bg-white flex items-start gap-2.5 px-3 py-3">
                     <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <RowIcon className="w-4 h-4 text-brand-blue" />
                     </span>
                     <span className="min-w-0 leading-snug">
-                      <span className="block text-sm font-semibold text-gray-900">{title}</span>
-                      <span className="block text-xs text-gray-500">{text}</span>
+                      <span className="block tf-row-title">{title}</span>
+                      <span className="block tf-meta">{text}</span>
                     </span>
                   </li>
                 ))}
@@ -198,7 +198,7 @@ export default function StepIntroVideo({
             {/* Language Selection (only if more than 1 language) */}
             {availableLanguages.length > 1 && (
               <div className="space-y-2">
-                <p className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <p className="flex items-center gap-2 tf-row-title">
                   <Globe className="w-4 h-4 text-brand-blue" />
                   Interview Language
                 </p>
@@ -240,7 +240,7 @@ export default function StepIntroVideo({
                 {submitting ? 'Loading...' : 'Continue to Practice'}
                 {!submitting && <ArrowRight className="w-5 h-5" />}
               </Button>
-              <p className="text-center text-xs text-gray-500">
+              <p className="text-center tf-meta">
                 Good luck, {candidateName}! We&apos;re rooting for you.
               </p>
             </div>

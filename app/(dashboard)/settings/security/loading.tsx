@@ -4,9 +4,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // password form card, 2FA card, session-timeout card, active-sessions list.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
           <section className="mb-4 sm:mb-6 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:p-6">
@@ -21,7 +21,7 @@ export default function Loading() {
           </section>
 
           {/* Password card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -35,7 +35,7 @@ export default function Loading() {
           </div>
 
           {/* Two-Factor Authentication card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
@@ -49,7 +49,7 @@ export default function Loading() {
           </div>
 
           {/* Session Timeout card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center gap-3 mb-4">
               <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
               <div className="space-y-2">
@@ -61,7 +61,7 @@ export default function Loading() {
           </div>
 
           {/* Active Sessions card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
+          <div className="tf-panel p-4 sm:p-6">
             <Skeleton className="h-5 w-36 mb-4" />
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (

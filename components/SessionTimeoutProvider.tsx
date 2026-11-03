@@ -292,14 +292,14 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
                 <span className="font-bold text-red-600 dark:text-red-400">{remainingSeconds} seconds</span> due to inactivity.
               </p>
 
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-3">
+              <p className="tf-body-muted mt-3">
                 Click the button below to continue your session and stay signed in.
               </p>
 
               <button
                 onClick={continueSession}
                 autoFocus
-                className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                className="tf-btn tf-btn-primary mt-6 w-full flex px-4 py-3.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal"
               >
                 Continue Session
                 <ArrowRight className="w-4 h-4" strokeWidth={2} />
@@ -309,7 +309,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
             {/* Footer */}
             <div className="px-6 sm:px-8 pb-6 pt-5 border-t border-gray-100 dark:border-slate-700/60 flex items-start gap-2.5 text-left">
               <Info className="w-4 h-4 text-brand-blue dark:text-brand-blue shrink-0 mt-0.5" strokeWidth={2} />
-              <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+              <p className="tf-meta leading-relaxed">
                 For <span className="font-medium text-gray-700 dark:text-slate-300">security</span> reasons, your{' '}
                 <span className="font-medium text-gray-700 dark:text-slate-300">session</span> will be automatically signed out after the timer ends.
               </p>

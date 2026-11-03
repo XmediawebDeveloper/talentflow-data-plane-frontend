@@ -38,7 +38,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
   return (
     <div className="space-y-8">
       {/* Candidate Profile Card */}
-      <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-2xl p-8 shadow-lg">
+      <div className="bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-2xl p-4 sm:p-6 lg:p-8 shadow-lg">
         <div className="flex items-start justify-between flex-wrap gap-6">
           <div className="flex items-start gap-6">
             <div className="relative">
@@ -57,7 +57,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
             </div>
 
             <div>
-              <h1 className="text-4xl font-bold mb-2">{candidate.name}</h1>
+              <h1 className="tf-page-title mb-2">{candidate.name}</h1>
               <p className="text-xl text-white/80 mb-4">{candidate.role}</p>
               <div className="space-y-2">
                 {candidate.email && (
@@ -91,7 +91,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
       {/* Timed-mode Pass/Fail Gate — MHS section avg ≥ mhsThreshold = Pass (doc spec). */}
       {showPassFailGate && (
         <div
-          className={`rounded-2xl p-8 border-2 shadow-md ${
+          className={`rounded-2xl p-4 sm:p-6 lg:p-8 border-2 shadow-md ${
             isPass
               ? 'bg-gradient-to-br from-emerald-50 to-emerald-100 border-emerald-300'
               : 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
@@ -137,7 +137,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 min-w-[320px]">
+            <div className="grid grid-cols-2 gap-4 w-full sm:w-auto sm:min-w-[320px]">
               {sectionsPresent.mustHave && (
                 <div
                   className={`p-4 rounded-xl border-2 ${
@@ -145,7 +145,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   }`}
                 >
                   <div
-                    className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                    className="tf-eyebrow mb-1"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
                     Must-Have
@@ -171,7 +171,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               {sectionsPresent.niceToHave && (
                 <div className="p-4 rounded-xl bg-white border-2 border-amber-300">
                   <div
-                    className="text-xs uppercase tracking-wider font-semibold text-gray-500 mb-1"
+                    className="tf-eyebrow mb-1"
                     style={{ fontFamily: 'var(--font-mono)' }}
                   >
                     Nice-to-Have
@@ -192,8 +192,8 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
       )}
 
       {/* Performance Highlights */}
-      <div className="grid grid-cols-2 gap-8">
-        <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-8 border-2 border-blue-200 shadow-lg">
+      <div className="tf-grid-2 md:gap-8">
+        <div className="bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl p-4 sm:p-6 lg:p-8 border-2 border-blue-200 shadow-lg">
           <div className="flex items-start justify-between mb-6">
             <div>
               <div className="flex items-center gap-3 mb-2">
@@ -201,8 +201,8 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   <Award size={24} className="text-white" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold">Final Score</h3>
-                  <p className="text-sm text-gray-500">Overall Performance</p>
+                  <h3 className="text-lg sm:text-2xl font-bold">Final Score</h3>
+                  <p className="tf-body-muted">Overall Performance</p>
                 </div>
               </div>
             </div>
@@ -210,11 +210,11 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               <div className="text-6xl mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)', background: 'linear-gradient(135deg, var(--raw-10b981) 0%, var(--raw-059669) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 {scores.final.toFixed(1)}
               </div>
-              <div className="text-sm text-gray-500">out of 100</div>
+              <div className="tf-body-muted">out of 100</div>
             </div>
           </div>
           <div className="relative w-full h-8 bg-gradient-to-r from-red-200 via-amber-200 to-emerald-200 rounded-full overflow-hidden shadow-inner">
-            <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-medium text-gray-700">
+            <div className="absolute inset-0 flex items-center justify-between px-4 tf-caption">
               <span>0</span><span>50</span><span>100</span>
             </div>
             <div className="absolute top-0 w-3 h-full border-2 border-white shadow-lg transition-all duration-1000 ease-out" style={{ left: `calc(${Math.min(scores.final, 100)}% - 6px)`, background: 'linear-gradient(135deg, var(--score-high) 0%, var(--raw-059669) 100%)' }} />
@@ -254,8 +254,8 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
       </div>
 
       {/* Category Score Bars */}
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-        <h2 className="text-2xl font-bold mb-6">Performance Breakdown by Category</h2>
+      <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
+        <h2 className="text-lg sm:text-2xl font-bold mb-6">Performance Breakdown by Category</h2>
         <div className="space-y-6">
           {[
             { label: 'Must-Have Skills', desc: `Critical competencies • ${data.weights.mustHave.toFixed(1)}% weight`, score: scores.mustHave, count: mustHaveClusters.length, icon: CheckCircle, iconBg: 'bg-emerald-100', iconColor: 'text-emerald-600', barBg: 'bg-emerald-100', barFill: 'from-emerald-500 to-emerald-600', textColor: 'text-emerald-900', present: data.sectionsPresent.mustHave },
@@ -267,7 +267,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   <div className={`w-10 h-10 rounded-lg ${s.iconBg} flex items-center justify-center`}><s.icon size={20} className={s.iconColor} /></div>
                   <div>
                     <div className="text-base font-medium">{s.label}</div>
-                    <div className="text-xs text-gray-500">{s.desc}</div>
+                    <div className="tf-meta">{s.desc}</div>
                   </div>
                 </div>
                 <div className={`text-3xl font-bold ${s.textColor}`} style={{ fontFamily: 'var(--font-mono)' }}>{formatScore1(s.score)}</div>
@@ -285,13 +285,13 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
 
       {/* Strengths & Weaknesses */}
       {(strengths.length > 0 || weaknesses.length > 0) && (
-        <div className="grid grid-cols-2 gap-8">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-emerald-200 shadow-sm">
+        <div className="tf-grid-2 md:gap-8">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 lg:p-8 border-2 border-emerald-200 shadow-sm">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center"><TrendingUp size={24} className="text-emerald-600" /></div>
               <div>
-                <h2 className="text-2xl font-bold">Key Strengths</h2>
-                <p className="text-sm text-gray-500">Notable areas of excellence</p>
+                <h2 className="text-lg sm:text-2xl font-bold">Key Strengths</h2>
+                <p className="tf-body-muted">Notable areas of excellence</p>
               </div>
             </div>
             <ul className="space-y-4">
@@ -302,16 +302,16 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   </div>
                   <span className="text-sm text-emerald-900">{s}</span>
                 </li>
-              )) : <li className="text-sm text-gray-400 italic">No strengths captured.</li>}
+              )) : <li className="tf-body-muted italic">No strengths captured.</li>}
             </ul>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border-2 border-amber-200 shadow-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 sm:p-6 lg:p-8 border-2 border-amber-200 shadow-sm">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center"><TrendingDown size={24} className="text-amber-600" /></div>
               <div>
-                <h2 className="text-2xl font-bold">Areas for Growth</h2>
-                <p className="text-sm text-gray-500">Opportunities for improvement</p>
+                <h2 className="text-lg sm:text-2xl font-bold">Areas for Growth</h2>
+                <p className="tf-body-muted">Opportunities for improvement</p>
               </div>
             </div>
             <ul className="space-y-4">
@@ -322,7 +322,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                   </div>
                   <span className="text-sm text-amber-900">{w}</span>
                 </li>
-              )) : <li className="text-sm text-gray-400 italic">No concerns captured.</li>}
+              )) : <li className="tf-body-muted italic">No concerns captured.</li>}
             </ul>
           </div>
         </div>
@@ -330,8 +330,8 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
 
       {/* Skills Distribution + Score Comparison + Top Skills */}
       {allSkills.length > 0 && (
-        <div className="grid grid-cols-3 gap-8">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="tf-grid-3 lg:gap-8">
+          <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
             <h3 className="text-xl font-bold mb-6">Skills Level Distribution</h3>
             <div className="space-y-6">
               {(['High', 'Medium', 'Low'] as const).map(level => {
@@ -354,14 +354,14 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     <div className={`w-full h-3 ${colors.bar} rounded-full overflow-hidden`}>
                       <div className={`h-full bg-gradient-to-r ${colors.fill} rounded-full transition-all duration-1000`} style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="text-xs text-gray-500 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>{pct.toFixed(0)}% of total</div>
+                    <div className="tf-meta mt-1" style={{ fontFamily: 'var(--font-mono)' }}>{pct.toFixed(0)}% of total</div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+          <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
             <h3 className="text-xl font-bold mb-6">Score Comparison</h3>
             <div className="space-y-6">
               {[
@@ -384,7 +384,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-8 border-2 border-emerald-200 shadow-sm">
+          <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-4 sm:p-6 lg:p-8 border-2 border-emerald-200 shadow-sm">
             <h3 className="text-xl font-bold mb-6 text-emerald-900">Top Performing Skills</h3>
             <div className="space-y-3">
               {allSkills.sort((a, b) => b.score - a.score).slice(0, 5).map((skill, idx) => (
@@ -410,10 +410,10 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
 
       {/* Cluster Coverage Overview — coverage %, not score */}
       {allClusters.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-2xl font-bold mb-2">Cluster Coverage Overview</h2>
-          <p className="text-sm text-gray-500 mb-6">Skills addressed at adequate level across all clusters</p>
-          <div className="grid grid-cols-3 gap-4">
+        <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
+          <h2 className="text-lg sm:text-2xl font-bold mb-2">Cluster Coverage Overview</h2>
+          <p className="tf-body-muted mb-6">Skills addressed at adequate level across all clusters</p>
+          <div className="tf-grid-3">
             {allClusters.map((cluster, idx) => {
               const totalSkills = cluster.skills.length;
               const coveredCount = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;

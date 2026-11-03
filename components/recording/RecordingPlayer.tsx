@@ -344,7 +344,7 @@ export function VideoWithDuration({
                   onClick={() => seekToTime(m.seconds, true)}
                   title={`${m.label} · ${formatDuration(m.seconds)}${m.title ? ` — ${m.title}` : ''}`}
                   aria-label={`Jump to ${m.label} at ${formatDuration(m.seconds)}`}
-                  className={`absolute top-0 -translate-x-1/2 px-1 py-0.5 rounded text-[10px] font-semibold leading-none ring-1 transition-colors cursor-pointer ${
+                  className={`absolute top-0 -translate-x-1/2 px-1 py-0.5 rounded text-2xs font-semibold leading-none ring-1 transition-colors cursor-pointer ${
                     i === activeMarker
                       ? 'bg-white text-slate-900 ring-white z-10'
                       : 'bg-black/40 text-white/90 ring-white/25 hover:bg-white/20'
@@ -497,7 +497,7 @@ export function VideoWithDuration({
                 />
               ))}
             </div>
-            <div className="flex items-center justify-between gap-3 text-2xs text-gray-400 mt-1">
+            <div className="flex items-center justify-between gap-3 tf-micro-hint mt-1">
               <span>0:00</span>
               <span className="flex items-center gap-3 text-gray-500">
                 {severitiesShown.map(sv => (
@@ -528,14 +528,14 @@ function VideoPane({
 }) {
   if (source.loading || source.available === null) {
     return (
-      <div className="h-64 rounded-xl bg-slate-100 flex items-center justify-center text-sm text-gray-500 gap-2">
+      <div className="h-64 rounded-xl bg-slate-100 flex items-center justify-center tf-body-muted gap-2">
         <Loader2 className="w-4 h-4 animate-spin" /> Loading {label.toLowerCase()}…
       </div>
     );
   }
   if (source.available === false || !source.url) {
     return (
-      <div className="h-64 rounded-xl bg-slate-50 border border-dashed border-gray-200 flex flex-col items-center justify-center text-sm text-gray-500 gap-2">
+      <div className="h-64 rounded-xl bg-slate-50 border border-dashed border-gray-200 flex flex-col items-center justify-center tf-body-muted gap-2">
         <Video className="w-6 h-6 text-gray-400" />
         {label} not available
       </div>
@@ -594,8 +594,8 @@ export function RecordingPlayer({
 
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
+      <span className="tf-meta">{label}</span>
+      <span className="tf-row-name">{value}</span>
     </div>
   );
 
@@ -627,7 +627,7 @@ export function RecordingPlayer({
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="tf-grid-3">
         {/* Keyed on the view so the incoming recording fades in. */}
         <div key={view} className="lg:col-span-2 space-y-2 animate-in fade-in duration-300 motion-reduce:animate-none">
           {isCandidate ? (
@@ -637,8 +637,8 @@ export function RecordingPlayer({
           )}
         </div>
         <div className="space-y-3">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2 tracking-tight">Recording Information</h3>
+          <div className="tf-card-soft p-4">
+            <h3 className="tf-row-title mb-2 tracking-tight">Recording Information</h3>
             <Row label="Status" value={<Badge variant={source.available ? 'success' : 'secondary'}>{status}</Badge>} />
             <Row label="File Size" value={formatBytes(source.size)} />
             <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />

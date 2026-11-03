@@ -97,15 +97,15 @@ export default function CandidateResultCard({
             onChange={(e) => selection.onChange(e.target.checked)}
             onClick={(e) => e.stopPropagation()}
             aria-label={`Select ${name || 'candidate'}`}
-            className="w-4 h-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+            className="tf-checkbox focus:ring-brand-blue/40"
           />
         )}
         <NameAvatar name={name} fallback={email} size="md" />
         <div className="min-w-0 flex-1">
-          <p className="font-medium text-sm text-gray-900 dark:text-slate-50 truncate" title={name || 'Unknown'}>
+          <p className="tf-row-name truncate" title={name || 'Unknown'}>
             {name || 'Unknown'}
           </p>
-          <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-500 truncate" title={email || undefined}>
+          <p className="mt-0.5 tf-meta truncate" title={email || undefined}>
             {email || '—'}
           </p>
         </div>
@@ -121,7 +121,7 @@ export default function CandidateResultCard({
       <div className="space-y-2.5">
         <div className="flex items-center gap-2.5 min-w-0">
           {jobShortId && <JobIdBadge className="shrink-0">{jobShortId}</JobIdBadge>}
-          <span className="truncate text-sm font-medium text-gray-900 dark:text-slate-50" title={jobTitle || undefined}>
+          <span className="truncate tf-row-name" title={jobTitle || undefined}>
             {jobTitle || '—'}
           </span>
         </div>
@@ -149,7 +149,7 @@ export default function CandidateResultCard({
             return (
               <div key={label}>
                 <div className="flex items-center justify-between gap-3 mb-1.5">
-                  <span className="min-w-0 truncate text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400">{label}</span>
+                  <span className="min-w-0 truncate tf-micro-hint uppercase tracking-wider">{label}</span>
                   {scored ? (
                     <span className="flex shrink-0 items-center gap-1.5">
                       <span className={`text-sm font-medium ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
@@ -160,7 +160,7 @@ export default function CandidateResultCard({
                       </span>
                     </span>
                   ) : (
-                    <span className="text-sm text-gray-400">&mdash;</span>
+                    <span className="tf-body-muted">&mdash;</span>
                   )}
                 </div>
                 <div
@@ -185,7 +185,7 @@ export default function CandidateResultCard({
       )}
 
       {(inviteSource || phone) && (
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-gray-600 dark:text-slate-400">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-meta">
           {inviteSource}
           {phone && <span className="min-w-0 max-w-full truncate">{phone}</span>}
         </div>
@@ -194,7 +194,7 @@ export default function CandidateResultCard({
       {/* Pinned to the bottom, so a row of cards ends level however much each
           one above holds. */}
       <div className="mt-auto space-y-3">
-        <div className="flex items-center justify-between gap-3 text-xs text-gray-500 dark:text-slate-500 pt-3 border-t border-gray-100 dark:border-slate-800">
+        <div className="flex items-center justify-between gap-3 tf-meta pt-3 border-t border-gray-100 dark:border-slate-800">
           <span className="flex items-center gap-1.5 shrink-0">
             <Clock className="w-3 h-3 flex-shrink-0" />
             {duration}

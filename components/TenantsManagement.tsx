@@ -101,8 +101,8 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
               <Building2 className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-50">Tenants</h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Manage your organization tenants</p>
+              <h1 className="tf-page-title">Tenants</h1>
+              <p className="tf-body-secondary">Manage your organization tenants</p>
             </div>
           </div>
           <button
@@ -124,17 +124,17 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             placeholder="Search tenants..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent"
+            className="tf-input pl-10 pr-4"
           />
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-3 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+        <div className="tf-card-soft p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Total Tenants</p>
+              <p className="tf-body-secondary">Total Tenants</p>
               <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">{tenants.length}</p>
             </div>
             <div className="w-12 h-12 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center">
@@ -142,10 +142,10 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+        <div className="tf-card-soft p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Active Tenants</p>
+              <p className="tf-body-secondary">Active Tenants</p>
               <p className="text-3xl font-semibold text-green-600 mt-1">
                 {tenants.filter(t => t.isActive).length}
               </p>
@@ -155,10 +155,10 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
             </div>
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
+        <div className="tf-card-soft p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Total Users</p>
+              <p className="tf-body-secondary">Total Users</p>
               <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">
                 {tenants.reduce((acc, t) => acc + t.userCount, 0)}
               </p>
@@ -175,22 +175,22 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-left tf-th">
                 Tenant
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-left tf-th">
                 Plan
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-left tf-th">
                 Users
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-left tf-th">
                 Status
               </th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-left tf-th">
                 Created
               </th>
-              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell text-right tf-th">
                 Actions
               </th>
             </tr>
@@ -202,7 +202,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                 className="hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer"
                 onClick={() => onSelectTenant && onSelectTenant(tenant as unknown as Tenant)}
               >
-                <td className="px-6 py-4">
+                <td className="tf-td">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg flex items-center justify-center">
                       <span className="text-white text-sm font-medium">
@@ -210,12 +210,12 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                       </span>
                     </div>
                     <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{tenant.name}</div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500">{tenant.email}</div>
+                      <div className="tf-row-name">{tenant.name}</div>
+                      <div className="tf-meta">{tenant.email}</div>
                     </div>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="tf-td">
                   <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${
                     tenant.subscription.planName === 'Enterprise'
                       ? 'bg-gray-100 text-gray-900'
@@ -226,13 +226,13 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                     {tenant.subscription.planName}
                   </span>
                 </td>
-                <td className="px-6 py-4">
+                <td className="tf-td">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                    <span className="text-sm text-gray-900 dark:text-slate-50">{tenant.userCount}</span>
+                    <span className="tf-body">{tenant.userCount}</span>
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="tf-td">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -247,13 +247,13 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                     {tenant.isActive ? 'Active' : 'Inactive'}
                   </button>
                 </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                <td className="tf-td">
+                  <div className="flex items-center gap-2 tf-body-muted">
                     <Calendar className="w-4 h-4" />
                     {tenant.createdAt}
                   </div>
                 </td>
-                <td className="px-6 py-4">
+                <td className="tf-td">
                   <div className="flex items-center justify-end gap-2">
                     <button
                       onClick={(e) => {
@@ -304,7 +304,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
 
             <div className="space-y-4 px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block tf-label mb-1">
                   Tenant Name
                 </label>
                 <input
@@ -312,11 +312,11 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.name}
                   onChange={(e) => setNewTenant({ ...newTenant, name: e.target.value })}
                   placeholder="Enter tenant name"
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="tf-input px-4"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
+                <label className="block tf-label mb-1">
                   Email
                 </label>
                 <input
@@ -324,7 +324,7 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
                   value={newTenant.email}
                   onChange={(e) => setNewTenant({ ...newTenant, email: e.target.value })}
                   placeholder="admin@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600"
+                  className="tf-input px-4"
                 />
               </div>
             </div>

@@ -15,10 +15,10 @@ export default function ModuleInfoBanner({ icon, title, description }: ModuleInf
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
-          <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide text-emerald-700">Live</span>
+          <h2 className="tf-row-title">{title}</h2>
+          <span className="tf-badge bg-emerald-100 text-2xs uppercase tracking-wide text-emerald-700">Live</span>
         </div>
-        <p className="mt-1 text-xs leading-5 text-gray-600 sm:text-sm">{description}</p>
+        <p className="mt-1 tf-meta leading-5 sm:text-sm">{description}</p>
       </div>
     </section>
   );

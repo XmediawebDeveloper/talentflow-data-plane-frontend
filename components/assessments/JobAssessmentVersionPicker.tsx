@@ -97,11 +97,11 @@ export default function JobAssessmentVersionPicker({
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+        <span className="tf-row-title">
           {multiple ? 'Select Assessment Versions' : 'Select Assessment Version'}
         </span>
         {job?.jd_short_id && <JobIdBadge>{job.jd_short_id}</JobIdBadge>}
-        {job?.jd_title && <span className="min-w-0 text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title}</span>}
+        {job?.jd_title && <span className="min-w-0 tf-body-secondary truncate">{job.jd_title}</span>}
         {job && !spansJobVersions && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">
             V{jobVersionNumber ?? job.jd_version ?? 1}
@@ -112,8 +112,8 @@ export default function JobAssessmentVersionPicker({
       {versions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 flex flex-col items-center gap-2 text-center px-4">
           <ClipboardCheck className="w-8 h-8 text-gray-300" />
-          <div className="text-sm font-medium text-gray-700 dark:text-slate-300">No active assessment for this job</div>
-          <div className="text-xs text-gray-500 dark:text-slate-400">
+          <div className="tf-label">No active assessment for this job</div>
+          <div className="tf-meta">
             Create and publish an assessment for this job from Assessments, then invite candidates here.
           </div>
         </div>
@@ -174,7 +174,7 @@ export default function JobAssessmentVersionPicker({
                         stripped — the pill carries the version), so two
                         assessments of one job version read apart. */}
                     <span
-                      className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]"
+                      className="min-w-0 tf-row-title sm:text-base [overflow-wrap:anywhere]"
                       title={a.title || undefined}
                     >
                       {parseAssessmentTitle(a.title || '').cleanTitle || 'Assessment'}
@@ -191,7 +191,7 @@ export default function JobAssessmentVersionPicker({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
                     {a.created_at && (
                       <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatIST(a.created_at)}</span>
                     )}
@@ -202,7 +202,7 @@ export default function JobAssessmentVersionPicker({
                           <span
                             key={round.key}
                             title={round.label}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
+                            className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
                           >
                             {round.short}
                           </span>
@@ -246,7 +246,7 @@ export default function JobAssessmentVersionPicker({
                 ? 'You’re about to use the selected assessment versions to invite candidates.'
                 : 'You’re about to use this assessment version to invite candidates.'}
             </div>
-            <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
+            <div className="tf-meta mt-0.5">
               {multiple
                 ? 'Each candidate you invite receives every assessment version you select.'
                 : 'Once selected, this version will be used for the candidate invitation.'}

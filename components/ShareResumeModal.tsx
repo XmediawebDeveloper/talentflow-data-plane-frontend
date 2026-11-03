@@ -103,8 +103,8 @@ Best regards`;
                   <Mail className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                  <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                  <h2 className="tf-section-title tracking-tight">Share Resume</h2>
+                  <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                 </div>
               </div>
             </div>
@@ -112,16 +112,16 @@ Best regards`;
             <div className="space-y-4">
               {/* What goes out with the email, and the eye to read it first. */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                <label className="block tf-label mb-1">Attachment</label>
                 <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                     <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-gray-900 truncate" title={fileName}>
+                    <div className="tf-row-name truncate" title={fileName}>
                       {fileName}
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="tf-meta">
                       {resume.name}
                       {fileType && <> &middot; {fileType}</>}
                       {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
@@ -141,7 +141,7 @@ Best regards`;
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block tf-label mb-1">
                   Recipient Email <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -149,29 +149,29 @@ Best regards`;
                   value={shareEmail}
                   onChange={(e) => setShareEmail(e.target.value)}
                   placeholder="Enter email address"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                  className="tf-input px-4"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Subject</label>
+                <label className="block tf-label mb-1">Subject</label>
                 <input
                   type="text"
                   value={shareSubject}
                   onChange={(e) => setShareSubject(e.target.value)}
                   placeholder="Email subject"
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                  className="tf-input px-4"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                <label className="block tf-label mb-1">Message</label>
                 <textarea
                   value={shareMessage}
                   onChange={(e) => setShareMessage(e.target.value)}
                   placeholder="Enter your message"
                   rows={8}
-                  className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
+                  className="tf-textarea px-4 py-2.5 resize-none"
                 />
               </div>
             </div>
@@ -180,14 +180,14 @@ Best regards`;
               <button
                 onClick={onClose}
                 disabled={isSendingEmail}
-                className="px-5 py-2 text-gray-700 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-brand-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="tf-btn tf-btn-secondary px-5 py-2 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 transition-colors whitespace-normal gap-0 font-normal"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSend}
                 disabled={isSendingEmail || !shareEmail.trim()}
-                className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="tf-btn tf-btn-primary flex px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start font-normal"
               >
                 {isSendingEmail ? (
                   <>

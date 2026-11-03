@@ -25,6 +25,7 @@ import type { Job } from '@/lib/types/types';
 import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { getStatusVariant, getStatusLabel } from './AIInterviewResults';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 /**
  * A read-only rendering of AIInterviewPreview.tsx's "Review & Publish" (step
@@ -91,12 +92,12 @@ function SectionCard({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+    <div className="tf-card-soft overflow-hidden">
       <div className="flex items-center gap-3 px-4 sm:px-5 py-3.5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/40">
         <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
           <Icon className="w-5 h-5 text-brand-blue" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 tracking-tight">{title}</h3>
+        <h3 className="tf-row-title tracking-tight">{title}</h3>
         {badge}
         <button
           type="button"
@@ -116,8 +117,8 @@ function SectionCard({
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-start justify-between py-2">
-      <span className="text-sm text-gray-500 dark:text-slate-400">{label}</span>
-      <span className="text-sm font-medium text-gray-900 dark:text-slate-100 text-right">{value}</span>
+      <span className="tf-body-muted">{label}</span>
+      <span className="tf-row-name text-right">{value}</span>
     </div>
   );
 }
@@ -274,7 +275,7 @@ export default function AIInterviewReviewPreviewModal({
                   <DialogTitle className="text-base sm:text-lg truncate">Review &amp; Publish</DialogTitle>
                   {interview && <Badge variant={getStatusVariant(interview.status)}>{getStatusLabel(interview.status)}</Badge>}
                   {versionNumber != null && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                    <span className="tf-badge text-2xs bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                       V{versionNumber}
                     </span>
                   )}
@@ -286,7 +287,7 @@ export default function AIInterviewReviewPreviewModal({
             </div>
           </DialogHeader>
 
-          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-4 sm:py-5">
+          <div className="tf-page tf-page-pad min-h-0 overflow-y-auto">
             {loading ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
@@ -300,7 +301,7 @@ export default function AIInterviewReviewPreviewModal({
               <div className="flex flex-col lg:flex-row gap-5 lg:items-start">
                 <div className="flex-1 min-w-0 space-y-4">
                   {/* JD card — same row the wizard's own review draws. */}
-                  <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
+                  <div className="tf-card-soft px-4 py-3.5">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <JobOpeningSummary job={jdAsJob} mergeInfoRows />
@@ -327,11 +328,11 @@ export default function AIInterviewReviewPreviewModal({
                             <Timer className="w-4 h-4 text-brand-cyan" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-2xs text-gray-500 dark:text-slate-500">Interview Mode</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+                            <p className="tf-micro-hint">Interview Mode</p>
+                            <p className="tf-row-title">
                               {mode === 'fixed' ? 'Timed Interview' : 'Conversational'}
                             </p>
-                            <p className="text-2xs text-gray-500 dark:text-slate-500">
+                            <p className="tf-micro-hint">
                               {mode === 'fixed'
                                 ? `${duration} minutes`
                                 : `${bufferEnabled ? 35 : 30} minutes${bufferEnabled ? ' · +5 min buffer' : ''}`}
@@ -344,8 +345,8 @@ export default function AIInterviewReviewPreviewModal({
                             <Mic className="w-4 h-4 text-brand-blue" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-2xs text-gray-500 dark:text-slate-500">AI Model</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100 truncate">{sttOption.label}</p>
+                            <p className="tf-micro-hint">AI Model</p>
+                            <p className="tf-row-title truncate">{sttOption.label}</p>
                           </div>
                         </div>
 
@@ -354,9 +355,9 @@ export default function AIInterviewReviewPreviewModal({
                             <Layers className="w-4 h-4 text-brand-orange-deep" />
                           </div>
                           <div className="min-w-0">
-                            <p className="text-2xs text-gray-500 dark:text-slate-500">Interview Type</p>
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">{interviewTypeLabel}</p>
-                            <p className="text-2xs text-gray-500 dark:text-slate-500">
+                            <p className="tf-micro-hint">Interview Type</p>
+                            <p className="tf-row-title">{interviewTypeLabel}</p>
+                            <p className="tf-micro-hint">
                               {enabledRounds.length} round{enabledRounds.length === 1 ? '' : 's'}
                             </p>
                           </div>
@@ -367,16 +368,16 @@ export default function AIInterviewReviewPreviewModal({
                         <div className="flex-1 min-w-0 w-full">
                           <div className="flex items-center gap-2 mb-3">
                             <Clock className="w-4 h-4 text-brand-blue" />
-                            <h4 className="text-sm font-semibold text-gray-800 dark:text-slate-100 tracking-tight">Time Allocation</h4>
+                            <h4 className="tf-row-title tracking-tight">Time Allocation</h4>
                           </div>
-                          <div className="overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]">
+                          <div className={`${DESKTOP_TABLE_ONLY} overflow-x-auto rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02]`}>
                             <table className="w-full min-w-[360px] text-sm">
                               <thead>
                                 <tr className="bg-white dark:bg-slate-900 text-left">
-                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-xs">Round</th>
-                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Questions</th>
-                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Clusters</th>
-                                  <th className="px-4 py-2.5 font-semibold text-gray-600 dark:text-slate-300 text-right text-xs">Time</th>
+                                  <th className="tf-th-cell tf-th">Round</th>
+                                  <th className="tf-th-cell tf-th text-right">Questions</th>
+                                  <th className="tf-th-cell tf-th text-right">Clusters</th>
+                                  <th className="tf-th-cell tf-th text-right">Time</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -389,12 +390,12 @@ export default function AIInterviewReviewPreviewModal({
                                   const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                                   return (
                                     <tr key={r.type}>
-                                      <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100">{roundLabel}</td>
-                                      <td className="px-4 py-2.5 text-gray-700 dark:text-slate-300 text-right">
+                                      <td className="tf-td text-gray-900 dark:text-slate-100">{roundLabel}</td>
+                                      <td className="tf-td text-gray-700 dark:text-slate-300 text-right">
                                         <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>
                                       </td>
-                                      <td className="px-4 py-2.5 text-gray-700 dark:text-slate-300 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
-                                      <td className="px-4 py-2.5 text-gray-700 dark:text-slate-300 text-right">
+                                      <td className="tf-td text-gray-700 dark:text-slate-300 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
+                                      <td className="tf-td text-gray-700 dark:text-slate-300 text-right">
                                         <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>
                                       </td>
                                     </tr>
@@ -403,14 +404,51 @@ export default function AIInterviewReviewPreviewModal({
                               </tbody>
                               <tfoot>
                                 <tr className="bg-slate-50 dark:bg-slate-800 font-semibold">
-                                  <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100">Total</td>
-                                  <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100 text-right">{totalPreviewQuestions}</td>
-                                  <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100 text-right">{mthClusters.length + nthClusters.length}</td>
-                                  <td className="px-4 py-2.5 text-gray-900 dark:text-slate-100 text-right">{totalPreviewMinutes} min</td>
+                                  <td className="tf-td text-gray-900 dark:text-slate-100">Total</td>
+                                  <td className="tf-td text-gray-900 dark:text-slate-100 text-right">{totalPreviewQuestions}</td>
+                                  <td className="tf-td text-gray-900 dark:text-slate-100 text-right">{mthClusters.length + nthClusters.length}</td>
+                                  <td className="tf-td text-gray-900 dark:text-slate-100 text-right">{totalPreviewMinutes} min</td>
                                 </tr>
                               </tfoot>
                             </table>
                           </div>
+                          <MobileRecordList>
+                            {enabledRounds.map((r) => {
+                              const isMth = r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical';
+                              const isNth = r.type === 'nice_to_have_skills' || r.type === 'nice_to_have';
+                              const roundLabel = isMth ? 'Must-To-Have' : isNth ? 'Nice-To-Have' : r.type === 'hr' ? 'HR Round' : r.type;
+                              const previewMin = timedPreviewDurations[r.type] ?? r.duration_minutes;
+                              const previewQuestions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
+                              const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
+                              return (
+                                <MobileRecordCard
+                                  key={r.type}
+                                  title={roundLabel}
+                                  fields={[
+                                    {
+                                      label: 'Questions',
+                                      value: <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>,
+                                    },
+                                    { label: 'Clusters', value: clusterCount !== null ? String(clusterCount) : '—' },
+                                    {
+                                      label: 'Time',
+                                      value: <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>,
+                                    },
+                                  ]}
+                                />
+                              );
+                            })}
+                            <MobileRecordCard
+                              key="__total"
+                              className="bg-slate-50 dark:bg-slate-800"
+                              title="Total"
+                              fields={[
+                                { label: 'Questions', value: String(totalPreviewQuestions) },
+                                { label: 'Clusters', value: String(mthClusters.length + nthClusters.length) },
+                                { label: 'Time', value: `${totalPreviewMinutes} min` },
+                              ]}
+                            />
+                          </MobileRecordList>
                         </div>
                       )}
                     </div>
@@ -421,7 +459,7 @@ export default function AIInterviewReviewPreviewModal({
                       title="Skill Clusters"
                       icon={Layers}
                       badge={
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200/70 dark:ring-slate-700">
+                        <span className="tf-badge tf-micro-hint bg-slate-100 dark:bg-slate-800 ring-1 ring-gray-200/70 dark:ring-slate-700">
                           {mthClusters.length + nthClusters.length} cluster{mthClusters.length + nthClusters.length === 1 ? '' : 's'}
                         </span>
                       }
@@ -429,14 +467,14 @@ export default function AIInterviewReviewPreviewModal({
                       <div className="space-y-6">
                         {mthClusters.length > 0 && (
                           <div>
-                            <h4 className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-3">Must-To-Have Clusters</h4>
+                            <h4 className="tf-eyebrow tracking-wide mb-3">Must-To-Have Clusters</h4>
                             <div className="space-y-3">
                               {mthClusters.map((cluster) => (
-                                <div key={cluster.id} className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white dark:bg-slate-900">
+                                <div key={cluster.id} className="tf-panel p-4">
                                   <div className="flex items-center gap-2 mb-2">
                                     <PriorityBadge p={cluster.priority} />
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{cluster.name}</span>
-                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">
+                                    <span className="tf-row-title">{cluster.name}</span>
+                                    <span className="tf-hint ml-auto">
                                       {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
                                     </span>
                                   </div>
@@ -455,14 +493,14 @@ export default function AIInterviewReviewPreviewModal({
 
                         {nthClusters.length > 0 && (
                           <div>
-                            <h4 className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-3">Nice-To-Have Clusters</h4>
+                            <h4 className="tf-eyebrow tracking-wide mb-3">Nice-To-Have Clusters</h4>
                             <div className="space-y-3">
                               {nthClusters.map((cluster) => (
-                                <div key={cluster.id} className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white dark:bg-slate-900">
+                                <div key={cluster.id} className="tf-panel p-4">
                                   <div className="flex items-center gap-2 mb-2">
                                     <PriorityBadge p={cluster.priority} />
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{cluster.name}</span>
-                                    <span className="text-xs text-gray-400 dark:text-slate-500 ml-auto">
+                                    <span className="tf-row-title">{cluster.name}</span>
+                                    <span className="tf-hint ml-auto">
                                       {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
                                     </span>
                                   </div>
@@ -488,7 +526,7 @@ export default function AIInterviewReviewPreviewModal({
                       icon={Users}
                       badge={
                         hrRound.hr_questions?.length ? (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                          <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                             {hrRound.hr_questions.length} question{hrRound.hr_questions.length === 1 ? '' : 's'}
                           </span>
                         ) : undefined
@@ -502,15 +540,15 @@ export default function AIInterviewReviewPreviewModal({
                       )}
                       {hrRound.hr_questions?.length > 0 && (
                         <div className="mt-4">
-                          <p className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
+                          <p className="tf-eyebrow tracking-wide mb-2">Selected HR Questions</p>
                           <ol className="space-y-2">
                             {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
                               <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60">
                                 <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-2xs font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
                                 <div className="flex-1 min-w-0">
-                                  <p className="text-sm text-gray-800 dark:text-slate-200">{q.question_text}</p>
+                                  <p className="tf-body">{q.question_text}</p>
                                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                                    <span className="text-2xs text-gray-400 dark:text-slate-500">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                                    <span className="tf-micro-hint">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
                                     <HRQuestionStageBadge stage={q.stage} />
                                   </div>
                                 </div>
@@ -525,21 +563,21 @@ export default function AIInterviewReviewPreviewModal({
                   <SectionCard title="Settings" icon={Settings}>
                     <div className="rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                       <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Recording</span>
+                        <span className="tf-body-secondary">Recording</span>
                         {interview.recording_enabled ? (
-                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                          <span className="tf-badge gap-1.5 bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
                             <Video className="w-3 h-3" /> Enabled
                           </span>
                         ) : (
-                          <span className="text-sm text-gray-400 dark:text-slate-500">Disabled</span>
+                          <span className="tf-body-muted">Disabled</span>
                         )}
                       </div>
 
                       <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Introduction Video</span>
+                        <span className="tf-body-secondary">Introduction Video</span>
                         {interview.introduction_video_url ? (
                           <div className="flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                            <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                               <Video className="w-3 h-3" /> Uploaded
                             </span>
                             <button
@@ -552,12 +590,12 @@ export default function AIInterviewReviewPreviewModal({
                             </button>
                           </div>
                         ) : (
-                          <span className="text-sm text-gray-400 dark:text-slate-500">None</span>
+                          <span className="tf-body-muted">None</span>
                         )}
                       </div>
 
                       <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">Languages</span>
+                        <span className="tf-body-secondary">Languages</span>
                         <div className="flex flex-wrap items-center gap-1.5 justify-end">
                           {languages.map((lang) => (
                             <span key={lang} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
@@ -574,7 +612,7 @@ export default function AIInterviewReviewPreviewModal({
                 {/* Configuration Summary sidebar — same sticky card the wizard
                     shows, sized to the dialog rather than the full page. */}
                 <div className="w-full lg:w-72 flex-shrink-0">
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+                  <div className="tf-card-soft p-4">
                     <div className="mb-4 flex items-center justify-between gap-2">
                       <SectionHeader icon={ClipboardList} title="Configuration Summary" subtitle="What this interview looked like when reviewed." />
                       {(mthClusters.length > 0 || nthClusters.length > 0) && interview && (
@@ -596,55 +634,55 @@ export default function AIInterviewReviewPreviewModal({
                       </div>
                       <div className="divide-y divide-gray-50 dark:divide-slate-800">
                         <div className="px-3 py-2 flex items-start justify-between gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Role Title</span>
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{position}</span>
+                          <span className="tf-meta flex-shrink-0">Role Title</span>
+                          <span className="tf-caption text-right">{position}</span>
                         </div>
                         {interview.jd_short_id && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">JD ID</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{interview.jd_short_id}</span>
+                            <span className="tf-meta flex-shrink-0">JD ID</span>
+                            <span className="tf-caption text-right">{interview.jd_short_id}</span>
                           </div>
                         )}
                         {interview.jd_experience_level && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Level</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{interview.jd_experience_level}</span>
+                            <span className="tf-meta flex-shrink-0">Level</span>
+                            <span className="tf-caption text-right">{interview.jd_experience_level}</span>
                           </div>
                         )}
                         {interview.jd_industry_type && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Industry</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{formatIndustryType(interview.jd_industry_type)}</span>
+                            <span className="tf-meta flex-shrink-0">Industry</span>
+                            <span className="tf-caption text-right">{formatIndustryType(interview.jd_industry_type)}</span>
                           </div>
                         )}
                         {interview.jd_location && (
                           <div className="px-3 py-2 flex items-center justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Location</span>
+                            <span className="tf-meta flex-shrink-0">Location</span>
                             <SummaryLocation value={interview.jd_location} locations={jdLocations} />
                           </div>
                         )}
                         {interview.jd_version != null && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">JD Version</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">v{interview.jd_version}</span>
+                            <span className="tf-meta flex-shrink-0">JD Version</span>
+                            <span className="tf-caption text-right">v{interview.jd_version}</span>
                           </div>
                         )}
                         <div className="px-3 py-2 flex items-center justify-between gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Interview Mode</span>
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">
+                          <span className="tf-meta flex-shrink-0">Interview Mode</span>
+                          <span className="tf-caption text-right">
                             {mode === 'fixed' ? 'Timed' : 'Conversational'}
                           </span>
                         </div>
                         <div className="px-3 py-2 flex items-center justify-between gap-2">
-                          <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Total Duration</span>
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">
+                          <span className="tf-meta flex-shrink-0">Total Duration</span>
+                          <span className="tf-caption text-right">
                             {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} min
                           </span>
                         </div>
                         {interview.created_by_name && (
                           <div className="px-3 py-2 flex items-start justify-between gap-2">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 flex-shrink-0">Created By</span>
-                            <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 text-right">{interview.created_by_name}</span>
+                            <span className="tf-meta flex-shrink-0">Created By</span>
+                            <span className="tf-caption text-right">{interview.created_by_name}</span>
                           </div>
                         )}
                       </div>
@@ -654,16 +692,16 @@ export default function AIInterviewReviewPreviewModal({
                       <div className="border border-gray-100 dark:border-slate-700/60 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
                         <div className="px-3 py-2 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
                           <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {totalPreviewQuestions})</span>
-                          <span className="text-xs text-gray-400 dark:text-slate-500">{totalPreviewMinutes} min</span>
+                          <span className="tf-hint">{totalPreviewMinutes} min</span>
                         </div>
                         <div className="overflow-x-auto">
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100 dark:border-slate-700/60">
-                              <th className="px-3 py-1.5 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Round</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Q</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Clusters</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 dark:text-slate-300 text-xs">Time</th>
+                              <th className="tf-th-cell text-left tf-th">Round</th>
+                              <th className="tf-th-cell text-right tf-th">Q</th>
+                              <th className="tf-th-cell text-right tf-th">Clusters</th>
+                              <th className="tf-th-cell text-right tf-th">Time</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -674,10 +712,10 @@ export default function AIInterviewReviewPreviewModal({
                               const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
                               return (
                                 <tr key={r.type} className="border-b border-gray-50 dark:border-slate-800 last:border-0">
-                                  <td className="px-3 py-2 text-gray-600 dark:text-slate-400">{label}</td>
-                                  <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-slate-100">{timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0}</td>
-                                  <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-slate-100">{clusterCount !== null ? clusterCount : '—'}</td>
-                                  <td className="px-3 py-2 text-right font-semibold text-gray-900 dark:text-slate-100">{timedPreviewDurations[r.type] ?? r.duration_minutes}m</td>
+                                  <td className="tf-td text-gray-600 dark:text-slate-400">{label}</td>
+                                  <td className="tf-td text-right font-semibold text-gray-900 dark:text-slate-100">{timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0}</td>
+                                  <td className="tf-td text-right font-semibold text-gray-900 dark:text-slate-100">{clusterCount !== null ? clusterCount : '—'}</td>
+                                  <td className="tf-td text-right font-semibold text-gray-900 dark:text-slate-100">{timedPreviewDurations[r.type] ?? r.duration_minutes}m</td>
                                 </tr>
                               );
                             })}
@@ -698,7 +736,7 @@ export default function AIInterviewReviewPreviewModal({
                             { label: 'Nice-to-Have', count: nthClusters.length, show: nthClusters.length > 0 },
                           ].filter((row) => row.show).map((row) => (
                             <div key={row.label} className="flex items-center justify-between">
-                              <span className="text-xs text-gray-600 dark:text-slate-400">{row.label}</span>
+                              <span className="tf-meta">{row.label}</span>
                               <span className="text-xs font-semibold text-advice-positive">{row.count} cluster{row.count === 1 ? '' : 's'}</span>
                             </div>
                           ))}
@@ -725,7 +763,7 @@ export default function AIInterviewReviewPreviewModal({
         <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2 bg-gray-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700/60">
             <DialogTitle className="text-sm font-semibold tracking-tight">Introduction Video</DialogTitle>
-            <DialogDescription className="text-xs text-gray-500 dark:text-slate-500">
+            <DialogDescription className="tf-meta">
               What the candidate sees before the interview starts.
             </DialogDescription>
           </DialogHeader>

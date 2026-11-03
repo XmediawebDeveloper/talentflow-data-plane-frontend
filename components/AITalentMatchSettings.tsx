@@ -35,11 +35,11 @@ export default function AITalentMatchSettings({
     <div className="p-4 space-y-4">
       {/* Model Selection */}
       <div className="space-y-3">
-        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+        <label className="flex items-center gap-2 tf-label">
           <Cpu className="w-4 h-4" />
           Embedding Model
         </label>
-        <p className="text-xs text-gray-500">
+        <p className="tf-meta">
           Choose the AI model for finding matching candidates
         </p>
 
@@ -78,7 +78,7 @@ export default function AITalentMatchSettings({
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500">{model.description}</p>
+                  <p className="tf-meta">{model.description}</p>
                 </div>
               </div>
               <span className={`text-xs px-2 py-0.5 rounded ${getSpeedBadge(model.speed)}`}>

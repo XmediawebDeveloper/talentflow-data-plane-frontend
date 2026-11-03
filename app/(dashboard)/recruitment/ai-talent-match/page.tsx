@@ -19,9 +19,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 //             By / Matched / Scored line; rating stack, details icon, View Candidates).
 function AITalentMatchSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label="Loading AI Talent Match">
+    <main className="tf-page" aria-busy="true" aria-label="Loading AI Talent Match">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl min-h-[calc(100dvh-7rem)]">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           {/* Breadcrumb bar (Dashboard › AI Talent Match) */}
           <div className="flex items-center gap-3 h-[46px] px-4 mb-4 md:mb-6 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/40">
             <Skeleton className="h-4 w-20" />
@@ -45,9 +45,9 @@ function AITalentMatchSkeleton() {
               Match Rating (10), (9 – 7) / Below 7. Each StatsCard: icon ·
               label · count · "N candidates" chip under the count, and the
               click arrow in the top-right corner. */}
-          <div className="mb-4 sm:mb-5 grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="tf-grid-4 mb-4 sm:mb-5">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="relative rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-3.5 py-3.5 sm:px-4 sm:py-4 pr-12">
+              <div key={i} className="relative tf-panel px-3.5 py-3.5 sm:px-4 sm:py-4 pr-12">
                 <div className="flex items-start gap-2.5">
                   <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
                   <div className="space-y-2 pt-0.5">
@@ -64,29 +64,29 @@ function AITalentMatchSkeleton() {
           <div className="rounded-lg border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
             {/* Row 1: search + Location + Industry + More Filters + Sort by + List/Grid */}
             <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:gap-2">
-              <Skeleton className="h-[38px] w-full sm:flex-1 rounded-lg" />
+              <Skeleton className="h-9 w-full sm:flex-1 rounded-lg" />
               <div className="flex flex-wrap items-center gap-2">
-                <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
-                <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
-                <Skeleton className="h-[38px] w-36 rounded-lg" />
+                <Skeleton className="h-9 w-full sm:w-48 rounded-lg" />
+                <Skeleton className="h-9 w-full sm:w-48 rounded-lg" />
+                <Skeleton className="h-9 w-36 rounded-lg" />
                 <Skeleton className="hidden sm:block h-4 w-12" />
-                <Skeleton className="h-[38px] w-[12rem] rounded-lg" />
-                <Skeleton className="h-[38px] w-[4.5rem] rounded-lg" />
+                <Skeleton className="h-9 w-[12rem] rounded-lg" />
+                <Skeleton className="h-9 w-[4.5rem] rounded-lg" />
               </div>
             </div>
 
             {/* Row 2: Select All | All + Rating 10 / 9 – 7 / Below 7 | View by … Expand all */}
             <div className="mt-3 pt-3 mb-4 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-              <Skeleton className="h-[38px] w-36 rounded-lg" />
+              <Skeleton className="h-9 w-36 rounded-lg" />
               <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
-              <Skeleton className="h-[38px] w-28 rounded-lg" />
-              <Skeleton className="h-[38px] w-36 rounded-lg" />
-              <Skeleton className="h-[38px] w-40 rounded-lg" />
-              <Skeleton className="h-[38px] w-48 rounded-lg" />
+              <Skeleton className="h-9 w-28 rounded-lg" />
+              <Skeleton className="h-9 w-36 rounded-lg" />
+              <Skeleton className="h-9 w-40 rounded-lg" />
+              <Skeleton className="h-9 w-48 rounded-lg" />
               <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
               <Skeleton className="h-4 w-14" />
-              <Skeleton className="h-[38px] w-[20rem] max-w-full rounded-lg" />
-              <Skeleton className="h-[38px] w-36 rounded-lg sm:ml-auto" />
+              <Skeleton className="h-9 w-[20rem] max-w-full rounded-lg" />
+              <Skeleton className="h-9 w-36 rounded-lg sm:ml-auto" />
             </div>
 
             {/* Job cards */}
@@ -475,11 +475,11 @@ export default function AITalentMatchRoute() {
           <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 ring-1 ring-red-200 dark:ring-red-500/40 rounded-full flex items-center justify-center mx-auto mb-3">
             <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">!</span>
           </div>
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 tracking-tight">Failed to Load Jobs</h2>
-          <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{error}</p>
+          <h2 className="tf-section-title sm:text-lg mb-2 tracking-tight">Failed to Load Jobs</h2>
+          <p className="tf-body-secondary mb-4">{error}</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+            className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
           >
             Retry
           </button>
@@ -490,7 +490,7 @@ export default function AITalentMatchRoute() {
 
   return (
     <FeatureGate feature="ai_talent_match">
-      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+      <div className="tf-page relative flex flex-col">
         <AITalentMatchPage
           jobs={jobs}
           matchHistory={matchHistory}

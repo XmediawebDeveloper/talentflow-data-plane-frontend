@@ -18,12 +18,12 @@ export default function ResumeSelectionSummary({
   const picked = countBySource([...partition.accepted, ...partition.noEmail, ...partition.duplicate]);
   const skipped = partition.noEmail.length + partition.duplicate.length;
   if (total === 0) {
-    return <span className="text-xs text-gray-500 dark:text-slate-500">No resumes selected</span>;
+    return <span className="tf-meta">No resumes selected</span>;
   }
   const names = (list: { name: string }[]) => list.map((p) => p.name).join(', ');
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta">
         <span className="font-medium text-gray-900 dark:text-slate-50">{total} selected</span>
         <span className="inline-flex items-center gap-1">
           <FolderOpen className="w-3.5 h-3.5 text-brand-orange" />

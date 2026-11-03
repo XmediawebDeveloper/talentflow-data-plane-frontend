@@ -566,11 +566,11 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
 // pill tabs, and a plans grid. Shared with loading.tsx.
 export function CurrentPlanLoadingSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Shared current-plan card: plan summary, cycle bar and limits */}
-          <section className="mb-4 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+          <section className="tf-card-soft mb-4 flex flex-col gap-4 p-4 sm:p-5">
             <div className="flex flex-col gap-4 rounded-lg bg-gray-50 p-3 sm:p-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-10 w-10 shrink-0 rounded-lg" />
@@ -620,7 +620,7 @@ export function CurrentPlanLoadingSkeleton() {
             </div>
 
             {/* Plans — one boxed tier section */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm sm:p-5">
+            <div className="tf-card-soft p-4 sm:p-5">
             <div className="mb-4 flex items-center gap-3 border-b border-gray-100 pb-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="space-y-2">
@@ -628,9 +628,9 @@ export function CurrentPlanLoadingSkeleton() {
                 <Skeleton className="h-3 w-56 max-w-full" />
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 pt-3 md:grid-cols-2 xl:grid-cols-3">
+            <div className="tf-grid-3 pt-3">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5">
+                <div key={i} className="tf-card-soft p-4 sm:p-5">
                   <Skeleton className="mb-2 h-5 w-32" />
                   <Skeleton className="mb-4 h-3.5 w-full" />
                   <Skeleton className="mb-4 h-8 w-28" />
@@ -2139,8 +2139,8 @@ function CurrentPlanContent() {
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 p-4 md:p-8">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 rounded-2xl p-4 md:p-8 my-4 md:my-5 shadow-2xl">
+      <main className="tf-page tf-page-pad">
+        <div className="tf-page-sheet mx-auto max-w-[1400px]">
           <PageHeader
             icon={<CreditCard className="h-5 w-5" />}
             title="Upgrade Plans"
@@ -2219,9 +2219,9 @@ function CurrentPlanContent() {
   })();
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Upgrade Plans' }]} />
 
         {/* Shared Current Plan Card (shown on every tab) — mild brand-palette gradient border (1px gradient frame around the white card) */}
@@ -2236,15 +2236,15 @@ function CurrentPlanContent() {
                 <Crown className="h-5 w-5" />
               </span>
               <div className="min-w-0">
-                <h2 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Your Current Plan</h2>
+                <h2 className="tf-eyebrow tracking-wide">Your Current Plan</h2>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <span className="truncate text-base font-semibold text-gray-900 dark:text-slate-50">{planDisplayName}</span>
+                  <span className="truncate tf-section-title">{planDisplayName}</span>
                   <Badge variant={statusBadge.variant} className="shrink-0">
                     <StatusIcon />
                     {statusBadge.label}
                   </Badge>
                   {sharedQuotaData?.plan_info?.plan_tier && (
-                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                    <span className="rounded-full bg-gray-100 px-2.5 py-0.5 tf-caption uppercase tracking-wide dark:bg-slate-800">
                       Tier: {sharedQuotaData.plan_info.plan_tier}
                     </span>
                   )}
@@ -2252,7 +2252,7 @@ function CurrentPlanContent() {
                     const isolation = sharedQuotaData?.plan_info?.isolation_type || sharedQuotaData?.isolation_type;
                     if (!isolation) return null;
                     return (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-0.5 tf-caption dark:bg-slate-800">
                         <Database className="h-3 w-3" />
                         {isolation === 'DEDICATED' ? 'Dedicated Server' :
                          isolation === 'DATABASE' ? 'Dedicated Database' :
@@ -2262,18 +2262,18 @@ function CurrentPlanContent() {
                     );
                   })()}
                   {cycleEndDate && !isExpiredSubscription && !isLocked && (
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-teal/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-teal">
+                    <span className="tf-badge gap-1.5 bg-brand-teal/10 text-brand-teal">
                       <span className="h-1.5 w-1.5 rounded-full bg-brand-teal" />
                       {isOnTrial ? 'Trial ends' : 'Valid till'}: {formatISTDate(cycleEndDate)}
                     </span>
                   )}
                   {selectedPlan && (
-                    <span className="inline-flex items-center rounded-full bg-warning-subtle px-2.5 py-0.5 text-[11px] font-semibold text-warning-strong">
+                    <span className="tf-badge bg-warning-subtle text-warning-strong">
                       Selected plan: {selectedPlan.name}
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                <p className="mt-1 tf-meta sm:text-sm">
                 {isLocked
                   ? 'Your account is locked. Please select a plan and complete payment.'
                   : isOnTrial
@@ -2290,14 +2290,14 @@ function CurrentPlanContent() {
               </div>
             </div>
             <div className="flex shrink-0 flex-col lg:text-right">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Price</span>
+              <span className="tf-eyebrow tracking-wide">Price</span>
               <div className="flex items-baseline gap-1 lg:justify-end">
                 {isOnTrial ? (
                   <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">Free</span>
                 ) : currentPlanPrice !== null && currentPlanPrice > 0 ? (
                   <>
                     <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlanPrice, currentPlanCurrency)}</span>
-                    <span className="text-sm text-gray-500 dark:text-slate-500">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
+                    <span className="tf-body-muted">{getBillingPeriodLabel(currentPlanBillingPeriod)}</span>
                   </>
                 ) : currentPlan?.price ? (
                   <span className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(currentPlan.price, currentPlan.currency)}</span>
@@ -2456,7 +2456,7 @@ function CurrentPlanContent() {
           {/* Quotas - Using data from quota-status API via companySettings */}
           {companySettings && (
             <div>
-              <h3 className="mb-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Your Plan Limits</h3>
+              <h3 className="mb-2.5 tf-eyebrow">Your Plan Limits</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-2 sm:gap-3">
                 {[
                   { label: 'Team Seats', icon: Users, value: companySettings.max_seats },
@@ -2509,7 +2509,7 @@ function CurrentPlanContent() {
             return (
               <div className="border-t border-gray-100 pt-4 dark:border-slate-700/60">
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <h3 className="mr-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">Plan Features:</h3>
+                  <h3 className="mr-1 tf-eyebrow">Plan Features:</h3>
                   {nonQuotaFeatures.map(f => (
                     <span
                       key={f.feature_key}
@@ -2546,7 +2546,7 @@ function CurrentPlanContent() {
             {(() => {
               const activeIndex = billingLinks.findIndex((l) => l.id === activeSection);
               const cols = billingLinks.length;
-              const cell = 'relative z-10 inline-flex min-w-0 items-center justify-center rounded-md px-0.5 text-[11px] font-medium transition-colors duration-300 sm:px-1 sm:text-sm';
+              const cell = 'relative z-10 inline-flex min-w-0 items-center justify-center rounded-md px-0.5 text-xs font-medium transition-colors duration-300 sm:px-1 sm:text-sm';
               return (
                 <nav
                   aria-label="Subscription sections"
@@ -2680,7 +2680,7 @@ function CurrentPlanContent() {
             </span>
             <div className="flex-1">
               <p className="text-sm font-semibold text-brand-orange-deep">Plan Changes Pending</p>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">
+              <p className="mt-0.5 tf-body-secondary">
                 {daysRemaining !== null && (
                   <>{daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining to review. </>
                 )}
@@ -2742,7 +2742,7 @@ function CurrentPlanContent() {
               <button
                 onClick={() => handleSimulatePayment(false)}
                 disabled={isProcessingPayment}
-                className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-destructive disabled:opacity-50"
+                className="tf-btn tf-btn-destructive flex flex-1 bg-destructive px-4 py-2.5 text-sm shadow-sm transition-colors hover:bg-destructive whitespace-normal"
               >
                 {isProcessingPayment ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2776,7 +2776,7 @@ function CurrentPlanContent() {
                 {purchaseHold.message}
               </p>
               {purchaseHold.paymentReference && (
-                <p className="text-xs text-gray-600 dark:text-slate-400 mt-2">
+                <p className="tf-meta mt-2">
                   Payment reference: <span className="font-mono">{purchaseHold.paymentReference}</span>
                 </p>
               )}
@@ -2828,7 +2828,7 @@ function CurrentPlanContent() {
                           </span>
                         )}
                       </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 text-sm">
+                      <div className="tf-grid-4 text-sm">
                         {upgrade.payment_amount !== undefined && (
                           <div>
                             <span className="text-gray-500 dark:text-slate-500">Amount Paid:</span>
@@ -2870,7 +2870,7 @@ function CurrentPlanContent() {
                         const correctedReason = fromPlan
                           ? `User ${direction} from ${fromPlan}${fromPeriod ? ` (${fromPeriod})` : ''} to ${upgrade.new_plan_name}${toPeriod ? ` (${toPeriod})` : ''}`
                           : upgrade.reason.replace(/\b(upgrade|downgrade)\b/gi, (m: string) => m[0] === m[0].toUpperCase() ? (isQueuedDowngrade ? 'Downgrade' : 'Upgrade') : direction);
-                        return <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Reason: {correctedReason}</p>;
+                        return <p className="tf-meta mt-2">Reason: {correctedReason}</p>;
                       })()}
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -2917,10 +2917,10 @@ function CurrentPlanContent() {
           <>
             <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div className="min-w-0">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                <h2 className="tf-section-title">
                   {isOnTrial || isLocked ? 'Choose a Plan' : 'Upgrade Plans'}
                 </h2>
-                <p className="mt-0.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                <p className="mt-0.5 tf-meta sm:text-sm">
                   Pick the plan that fits your team. Switch between monthly and yearly billing.
                 </p>
                 {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
@@ -3007,26 +3007,26 @@ function CurrentPlanContent() {
                     }`}
                   >
                     {isSelectedPending && (
-                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-warning px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm">
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-warning px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm">
                         <Clock className="h-3.5 w-3.5" />
                         Selected - Pending Payment
                       </span>
                     )}
                     {isCurrentForToggle && !isSelectedPending && (
-                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm shadow-success/25">
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-success px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm shadow-success/25">
                         <CheckCircle className="h-3.5 w-3.5" />
                         Current Plan
                       </span>
                     )}
                     {plan.popular && !isCurrentForToggle && !isSelectedPending && (
-                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-brand-blue px-2.5 py-0.5 text-[11px] font-semibold text-white shadow-sm shadow-brand-blue/25">
+                      <span className="absolute -top-3 right-4 inline-flex items-center gap-1 rounded-full bg-brand-blue px-2.5 py-0.5 text-xs font-semibold text-white shadow-sm shadow-brand-blue/25">
                         <Sparkles className="h-3.5 w-3.5" />
                         Most Popular
                       </span>
                     )}
 
-                    <h3 className="pt-1 text-base font-bold text-gray-900 dark:text-slate-50">{plan.name}</h3>
-                    <p className="mt-0.5 min-h-[32px] text-xs sm:text-sm text-gray-600 dark:text-slate-400">{plan.description}</p>
+                    <h3 className="pt-1 tf-section-title">{plan.name}</h3>
+                    <p className="mt-0.5 min-h-[32px] tf-meta sm:text-sm">{plan.description}</p>
 
                     <div className="my-4">
                       {(plan.monthlyPrice || plan.annualPrice) ? (
@@ -3040,7 +3040,7 @@ function CurrentPlanContent() {
                                 plan.currency
                               )}
                             </span>
-                            <span className="text-gray-500 dark:text-slate-500 text-sm">
+                            <span className="tf-body-muted">
                               {/* Show correct billing period based on what's available */}
                               {isYearly
                                 ? (plan.annualPrice ? '/year' : '/month')
@@ -3050,7 +3050,7 @@ function CurrentPlanContent() {
                           {/* Show strikethrough price and discount badge when viewing yearly and both prices exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (plan.monthlyPrice * 12) > plan.annualPrice && (
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-xs text-gray-400 dark:text-slate-500 line-through">
+                              <span className="tf-hint line-through">
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
@@ -3074,13 +3074,13 @@ function CurrentPlanContent() {
                           )}
                           {/* Show monthly equivalent hint when viewing yearly and both exist */}
                           {isYearly && plan.monthlyPrice && plan.annualPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               {formatCurrency(plan.monthlyPrice, plan.currency)}/month if billed monthly
                             </p>
                           )}
                           {/* Show yearly option hint when viewing monthly and both exist */}
                           {!isYearly && plan.annualPrice && plan.monthlyPrice && (
-                            <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                            <p className="tf-meta mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
                                 <span className="text-brand-teal font-semibold"> (Save {Math.round(plan.discountPercentage)}%)</span>
@@ -3151,7 +3151,7 @@ function CurrentPlanContent() {
                             {displayFeatures.slice(0, expandedFeaturesPlan === plan.id ? undefined : 4).map((feature, idx) => (
                               <li key={idx} className="flex items-start gap-2">
                                 <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-brand-teal" />
-                                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">{feature}</span>
+                                <span className="tf-label">{feature}</span>
                               </li>
                             ))}
                           </ul>
@@ -3273,18 +3273,18 @@ function CurrentPlanContent() {
                             <SectionIcon className="h-[18px] w-[18px]" />
                           </span>
                           <div className="min-w-0">
-                            <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{section.label}</h3>
-                            <p className="text-xs text-gray-500 dark:text-slate-400">{section.description}</p>
+                            <h3 className="tf-row-title sm:text-base">{section.label}</h3>
+                            <p className="tf-meta">{section.description}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2">
                           {hasCurrentPlan && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-blue">
+                            <span className="tf-badge bg-brand-blue/10 text-brand-blue">
                               <CheckCircle className="h-3.5 w-3.5" />
                               Your tier
                             </span>
                           )}
-                          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[11px] font-semibold text-gray-600 dark:bg-slate-800 dark:text-slate-400">
+                          <span className="rounded-full bg-gray-100 px-2.5 py-0.5 tf-caption dark:bg-slate-800">
                             {count} plan{count !== 1 ? 's' : ''}
                           </span>
                         </div>
@@ -3337,21 +3337,21 @@ function CurrentPlanContent() {
                       <PlanIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <h2 className="text-base font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+                      <h2 className="tf-section-title tracking-tight">
                         {modalStep === 'result'
                           ? (isDowngradePayment ? 'Downgrade Confirmed!' : 'Upgrade Complete!')
                           : (isDowngradePayment ? 'Downgrade Plan' : 'Upgrade Plan')}
                       </h2>
                       <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                        <span className="text-[13px] text-gray-600 dark:text-slate-400">{selectedPlanForPayment.name}</span>
+                        <span className="tf-body-secondary">{selectedPlanForPayment.name}</span>
                         {modalStep !== 'result' && (
-                          <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">
+                          <span className="tf-badge bg-brand-blue/10 text-brand-blue">
                             {billedYearly ? 'Yearly Plan' : 'Monthly Plan'}
                           </span>
                         )}
                       </div>
                       {modalStep !== 'result' && selectedPlanForPayment.description && (
-                        <p className="mt-0.5 line-clamp-1 text-xs text-gray-500 dark:text-slate-500">{selectedPlanForPayment.description}</p>
+                        <p className="mt-0.5 line-clamp-1 tf-meta">{selectedPlanForPayment.description}</p>
                       )}
                     </div>
                   </div>
@@ -3420,8 +3420,8 @@ function CurrentPlanContent() {
                       {/* Left: billing summary + add-on */}
                       <div className="flex min-w-0 flex-col gap-3">
                         <div className="rounded-xl border border-gray-200 p-3 dark:border-slate-700 sm:p-4">
-                          <h3 className="mb-1 text-sm font-semibold text-gray-900 dark:text-slate-50">Billing Summary</h3>
-                          <div className="divide-y divide-gray-100 text-[13px] dark:divide-slate-700/60">
+                          <h3 className="mb-1 tf-row-title">Billing Summary</h3>
+                          <div className="divide-y divide-gray-100 text-sm dark:divide-slate-700/60">
                             <div className="flex items-center justify-between gap-3 py-1.5">
                               <span className="text-gray-600 dark:text-slate-400">Plan</span>
                               <span className="truncate text-right font-medium text-gray-900 dark:text-slate-50">{plan.name}</span>
@@ -3432,10 +3432,10 @@ function CurrentPlanContent() {
                             </div>
                             {/* Show note when billing period doesn't match available pricing */}
                             {isYearly && !plan.annualPrice && plan.monthlyPrice && (
-                              <div className="py-1.5 text-[11px] text-warning">Yearly billing not available for this plan. Will be billed monthly.</div>
+                              <div className="py-1.5 text-xs text-warning">Yearly billing not available for this plan. Will be billed monthly.</div>
                             )}
                             {!isYearly && !plan.monthlyPrice && plan.annualPrice && (
-                              <div className="py-1.5 text-[11px] text-warning">Monthly billing not available for this plan. Will be billed annually.</div>
+                              <div className="py-1.5 text-xs text-warning">Monthly billing not available for this plan. Will be billed annually.</div>
                             )}
                             {isolationType === 'database' && (
                               <div className="flex items-center justify-between gap-3 py-1.5 text-warning">
@@ -3467,8 +3467,8 @@ function CurrentPlanContent() {
                           {/* Total */}
                           <div className="mt-2 flex flex-col gap-1.5 rounded-xl bg-brand-blue/[0.05] px-3 py-2.5 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:ring-slate-700 sm:flex-row sm:items-center sm:justify-between">
                             <div>
-                              <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">Total (incl. GST)</p>
-                              <p className="text-[11px] text-gray-500 dark:text-slate-400">
+                              <p className="tf-row-title">Total (incl. GST)</p>
+                              <p className="tf-meta">
                                 {(isYearly && plan.annualPrice) || (!plan.monthlyPrice && plan.annualPrice)
                                   ? 'Billed annually (12× quotas)'
                                   : 'Billed monthly'}
@@ -3477,7 +3477,7 @@ function CurrentPlanContent() {
                             <div className="flex flex-col sm:items-end">
                               <span className="text-xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50 sm:text-2xl">{formatCurrency(total, cur)}</span>
                               {savings !== null && (
-                                <span className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md bg-success-subtle px-1.5 py-0.5 text-[11px] font-semibold text-success sm:self-auto">
+                                <span className="mt-0.5 inline-flex items-center gap-1 self-start rounded-md bg-success-subtle px-1.5 py-0.5 text-xs font-semibold text-success sm:self-auto">
                                   <CheckCircle className="h-3.5 w-3.5" />
                                   You save {formatCurrency(savings, cur)}
                                 </span>
@@ -3503,7 +3503,7 @@ function CurrentPlanContent() {
                               }
                             }}
                             disabled={hasDedicatedDatabase || planSettingsError}
-                            className="mt-1.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30 disabled:cursor-not-allowed"
+                            className="tf-checkbox mt-1.5 focus:ring-brand-blue/30"
                           />
                           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue">
                             <Database className="h-4 w-4" />
@@ -3511,19 +3511,19 @@ function CurrentPlanContent() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">Dedicated Database</span>
-                                <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-semibold text-brand-blue">Add-on</span>
+                                <span className="tf-row-title">Dedicated Database</span>
+                                <span className="tf-badge bg-brand-blue/10 text-brand-blue">Add-on</span>
                                 {hasDedicatedDatabase && (
-                                  <span className="rounded-full bg-warning-subtle px-2 py-0.5 text-[11px] font-semibold text-warning">Active</span>
+                                  <span className="tf-badge bg-warning-subtle text-warning">Active</span>
                                 )}
                               </div>
                               {!planSettingsError && (
-                                <span className="text-[13px] font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                                <span className="tf-row-title tabular-nums">
                                   +{formatCurrency(isYearly ? dbMonthly * 12 : dbMonthly, cur)}{isYearly ? '/year' : '/month'}
                                 </span>
                               )}
                             </div>
-                            <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">
+                            <p className="mt-0.5 tf-meta">
                               {hasDedicatedDatabase
                                 ? 'Your organization already uses a dedicated database. This cannot be changed.'
                                 : 'Get your own dedicated database for enhanced isolation and performance'}
@@ -3551,11 +3551,11 @@ function CurrentPlanContent() {
 
                       {/* Right: what's included */}
                       <div className="flex min-w-0 flex-col rounded-xl bg-gray-50 p-3 dark:bg-slate-800/50 sm:p-4">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">What&apos;s included</h3>
-                        <p className="text-[11px] text-gray-500 dark:text-slate-400">Everything you need to scale your hiring.</p>
+                        <h3 className="tf-row-title">What&apos;s included</h3>
+                        <p className="tf-meta">Everything you need to scale your hiring.</p>
 
                         {includedRows.length > 0 && (
-                          <ul className="mt-2.5 space-y-1.5 text-[13px]">
+                          <ul className="mt-2.5 space-y-1.5 text-sm">
                             {includedRows.map(({ label, icon: RowIcon, value }) => {
                               const formatted = formatQuotaValue(value);
                               return (
@@ -3571,10 +3571,10 @@ function CurrentPlanContent() {
 
                         {features.length > 0 && (
                           <div className={includedRows.length > 0 ? 'mt-3 border-t border-gray-200 pt-3 dark:border-slate-700' : 'mt-3'}>
-                            <h4 className="mb-1.5 text-[13px] font-semibold text-gray-900 dark:text-slate-50">Key Features</h4>
-                            <ul className="grid grid-cols-1 gap-x-3 gap-y-1.5 min-[400px]:grid-cols-2">
+                            <h4 className="mb-1.5 tf-row-title">Key Features</h4>
+                            <ul className="tf-grid-2">
                               {visibleFeatures.map((feature, idx) => (
-                                <li key={idx} className="flex min-w-0 items-start gap-2 text-[13px] text-gray-700 dark:text-slate-300">
+                                <li key={idx} className="flex min-w-0 items-start gap-2 tf-body">
                                   <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-brand-blue text-white">
                                     <Check className="h-3 w-3" strokeWidth={3} />
                                   </span>
@@ -3599,14 +3599,14 @@ function CurrentPlanContent() {
 
                   {/* Footer — security note + pay button */}
                   <div className="flex shrink-0 flex-col-reverse gap-3 border-t border-gray-100 px-4 py-2.5 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-                    <div className="flex items-center justify-center gap-2 text-[11px] text-gray-500 dark:text-slate-500 sm:justify-start sm:text-xs">
+                    <div className="flex items-center justify-center gap-2 tf-meta sm:justify-start sm:text-xs">
                       <Lock className="h-3.5 w-3.5 shrink-0" />
                       <span>Secure payment powered by Razorpay · 256-bit SSL encryption. Your payment details are protected.</span>
                     </div>
                     <button
                       onClick={handlePaymentSubmit}
                       disabled={isSelectingPlan}
-                      className="flex w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-blue px-5 py-2.5 text-sm font-semibold text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60 sm:w-auto sm:min-w-[220px]"
+                      className="tf-btn tf-btn-primary flex w-full shrink-0 bg-brand-blue px-5 py-2.5 text-sm font-semibold shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60 sm:w-auto sm:min-w-[220px] whitespace-normal hover:bg-brand-blue"
                     >
                       {isSelectingPlan ? (
                         <>
@@ -3760,7 +3760,7 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Payment ID:</span>
-                        <span className="font-medium text-gray-500 dark:text-slate-500 text-xs">{transactionResult.razorpay?.payment_id || transactionResult.external_transaction_id}</span>
+                        <span className="tf-caption">{transactionResult.razorpay?.payment_id || transactionResult.external_transaction_id}</span>
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Status:</span>
@@ -3862,7 +3862,7 @@ function CurrentPlanContent() {
                   <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">
                     {isQueuedDowngrade ? 'Apply Downgrade Now' : 'Apply Upgrade Now'}
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                  <p className="tf-body-secondary mt-1">
                     {isQueuedDowngrade ? 'Downgrade' : 'Upgrade'} to {selectedQueuedUpgrade.new_plan_name}
                   </p>
                 </div>
@@ -3922,7 +3922,7 @@ function CurrentPlanContent() {
               {/* Terms & Conditions */}
               <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-4">
                 <h4 className="font-medium text-gray-900 dark:text-slate-50 mb-3">Terms & Conditions</h4>
-                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 text-sm text-gray-600 dark:text-slate-400 space-y-2 max-h-40 overflow-y-auto">
+                <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-3 tf-body-secondary space-y-2 max-h-40 overflow-y-auto">
                   <p>1. Any unused credits, quotas, or features from your current subscription will be immediately terminated and cannot be recovered.</p>
                   <p>2. Your new plan will start immediately upon confirmation and will be valid for the billing period you selected ({selectedQueuedUpgrade.billing_interval}).</p>
                   <p>3. No prorated refunds will be issued for the remaining period of your current plan.</p>
@@ -3939,11 +3939,11 @@ function CurrentPlanContent() {
                   type="checkbox"
                   checked={tcAccepted}
                   onChange={(e) => setTcAccepted(e.target.checked)}
-                  className="mt-1 w-5 h-5 text-success border-gray-300 rounded focus:ring-success-line"
+                  className="tf-checkbox mt-1 w-5 h-5 focus:ring-success-line"
                 />
                 <div className="flex-1">
                   <span className="font-medium text-gray-900 dark:text-slate-50">I accept the terms and conditions</span>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     I understand that remaining credits on my current plan will be forfeited and my new plan will start immediately.
                   </p>
                 </div>
@@ -3997,7 +3997,7 @@ function CurrentPlanContent() {
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Cancel {changeLabel}</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Cancel queued plan {changeLabel.toLowerCase()}</p>
+                    <p className="tf-body-secondary">Cancel queued plan {changeLabel.toLowerCase()}</p>
                   </div>
                 </div>
                 <button
@@ -4030,7 +4030,7 @@ function CurrentPlanContent() {
 
               {/* Plan Change Details */}
               <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
-                <h4 className="font-medium text-gray-900 dark:text-slate-50 text-sm">{changeLabel} Details</h4>
+                <h4 className="tf-row-name">{changeLabel} Details</h4>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-500 dark:text-slate-500">New Plan:</span>
@@ -4064,7 +4064,7 @@ function CurrentPlanContent() {
 
               {/* Cancellation Reason */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Reason for cancellation (optional)
                 </label>
                 <textarea
@@ -4072,7 +4072,7 @@ function CurrentPlanContent() {
                   onChange={(e) => setCancelReason(e.target.value)}
                   placeholder="Please let us know why you're cancelling..."
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-destructive-line focus:border-destructive-line resize-none"
+                  className="tf-textarea px-4 py-3 focus:ring-destructive-line focus:border-destructive-line resize-none"
                 />
               </div>
 

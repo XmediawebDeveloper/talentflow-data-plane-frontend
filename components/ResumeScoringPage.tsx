@@ -34,6 +34,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -315,7 +316,7 @@ const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
 ];
 
 const TOOLBAR_BUTTON_CLASS =
-  'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
+  'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 
 /** One row's verdict, either spelling; no verdict reads as No Match. */
 const rowVerdict = (r: { matchStatus?: string; match_status?: string }): Verdict =>
@@ -2665,9 +2666,9 @@ export default function ResumeScoringPage({
     };
 
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
         {/* Previous / Next rides inside the breadcrumb bar, as on job-details,
             so it stays reachable while the sticky crumb is pinned. */}
         <PageBreadcrumb
@@ -2716,7 +2717,7 @@ export default function ResumeScoringPage({
         {/* Job header — the Prev/Next that used to sit beside Score New Resumes
             moved into the breadcrumb. */}
         <div className="mb-5">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+          <div className="tf-card p-4 sm:p-5">
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 {/* Icon tile from sm only (as on the other page headers): on a
@@ -2730,7 +2731,7 @@ export default function ResumeScoringPage({
                     {jdCodeOf(selectedHistoryItem) && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0 max-w-[9rem] sm:max-w-none truncate" title={jdCodeOf(selectedHistoryItem)}>{jdCodeOf(selectedHistoryItem)}</JobIdBadge>
                     )}
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
+                    <h1 className="tf-page-title [overflow-wrap:anywhere] min-w-0">{selectedHistoryItem.jobTitle}</h1>
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
                         <DropdownMenu>
@@ -2760,7 +2761,7 @@ export default function ResumeScoringPage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
+                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                           v{detailsVersionNumber}
                         </span>
@@ -2820,7 +2821,7 @@ export default function ResumeScoringPage({
                       View Job Detail
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+                  <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatIST(selectedHistoryItem.scoredAt)}
@@ -3289,7 +3290,7 @@ export default function ResumeScoringPage({
 
 
     return (
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+      <main ref={rootRef} className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
@@ -3305,7 +3306,7 @@ export default function ResumeScoringPage({
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
-                  className="px-2"
+                 
                   aria-label="Back to Dashboard" title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -3360,7 +3361,7 @@ export default function ResumeScoringPage({
             (v === 'Exact Match' ? people.exact : v === 'Partial Match' ? people.partial : people.none).add(k);
           });
           const CandidatesChip = ({ count }: { count: number }) => (
-            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+            <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
               {count} {count === 1 ? 'candidate' : 'candidates'}
             </span>
           );
@@ -3416,10 +3417,10 @@ export default function ResumeScoringPage({
              2. HOW to group — By Job / By Candidates.
            Any grouping combines with any verdict: "By Job + Exact" lists the
            jobs that have Exact matches, each opening its own Exact rows. */
-        // h-[38px] + text-sm + font-medium: the same size as the toolbar's
+        // h-9 + text-sm + font-medium: the same size as the toolbar's
         // More Filters / Export buttons below.
         const pillClass = (active: boolean) =>
-          `inline-flex items-center gap-2 h-[38px] px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+          `inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
             active
               ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
               : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3465,11 +3466,11 @@ export default function ResumeScoringPage({
           {/* "View by" once, then a sliding tile toggle: two equal halves on
               one track, and a white tile that slides under the active one. */}
           <div className="flex w-full sm:w-auto items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
+            <span className="tf-label whitespace-nowrap">View by</span>
             <div
               role="radiogroup"
               aria-label="View by"
-              className="relative grid grid-cols-2 flex-1 sm:flex-none h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+              className="relative grid grid-cols-2 flex-1 sm:flex-none h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
             >
               <span
                 aria-hidden
@@ -3516,12 +3517,12 @@ export default function ResumeScoringPage({
             ) : globalScoredResumes.length === 0 ? (
               <>
               <div className="mb-3">{viewPills}</div>
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+              <div className="tf-card-soft p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                   <Search className="w-5 h-5 text-brand-blue" />
                 </div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2 tracking-tight">No Scored Candidates</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Score resumes against jobs to see them here.</p>
+                <p className="tf-body-secondary">Score resumes against jobs to see them here.</p>
               </div>
               </>
             ) : (
@@ -3651,7 +3652,7 @@ export default function ResumeScoringPage({
               <ListViewToggle
                 value={jobListDisplayMode}
                 onChange={setJobListDisplayMode}
-                className="h-[38px] !border-brand-blue/10"
+                className="h-9 !border-brand-blue/10"
               />
             </ListToolbar>
 
@@ -3667,7 +3668,7 @@ export default function ResumeScoringPage({
                 /* Same boxed panel, and the same gap under the toolbar, as
                    View by Candidates' More Filters (ScoredResumesTable). */
                 <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 [&>div]:min-w-0">
+                  <div className="tf-grid-3 [&>div]:min-w-0">
                     <div>
                       <label className={labelCls}>Created By</label>
                       <FilterSelect
@@ -3803,7 +3804,7 @@ export default function ResumeScoringPage({
                 <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                 aria-label={`Actions for ${selectedJobCount} selected ${selectedJobCount === 1 ? 'job' : 'jobs'}`}
               >
                 <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -4098,7 +4099,7 @@ export default function ResumeScoringPage({
                   className="mt-3 pt-3 sm:pl-6 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
                 >
                   {!globalLoaded ? (
-                    <div className="flex items-center gap-2 py-3 text-sm text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-2 py-3 tf-body-muted">
                       <Loader2 className="w-4 h-4 animate-spin" />
                       Loading candidates...
                     </div>
@@ -4106,7 +4107,7 @@ export default function ResumeScoringPage({
                     <>
                       {versionChips.length > 1 && (
                         <div className="flex flex-wrap items-center gap-2 mb-3">
-                          <span className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Versions</span>
+                          <span className="tf-eyebrow tracking-wide">Versions</span>
                           <button
                             type="button"
                             onClick={() => setJobVersionPick(prev => { const next = { ...prev }; delete next[jobKey]; return next; })}
@@ -4129,7 +4130,7 @@ export default function ResumeScoringPage({
                         </div>
                       )}
                       {panelRows.length === 0 ? (
-                        <p className="py-3 text-sm text-gray-500 dark:text-slate-400">
+                        <p className="py-3 tf-body-muted">
                           {matchFilter ? `No ${matchFilter} candidates for this job.` : 'No scored candidates for this job yet.'}
                         </p>
                       ) : (
@@ -4237,7 +4238,7 @@ export default function ResumeScoringPage({
                           </div>
                           {/* Version badge */}
                           {displayVersionNumber && displayVersionNumber >= 1 && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                               v{displayVersionNumber}
                             </span>
@@ -4273,7 +4274,7 @@ export default function ResumeScoringPage({
                             variant="secondary"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="h-7 w-7 p-0 flex-shrink-0"
+                            className="w-7 flex-shrink-0"
                             aria-label="Scoring History" title="Scoring History"
                           >
                             <History className="w-3.5 h-3.5" />
@@ -4288,7 +4289,7 @@ export default function ResumeScoringPage({
                             icon-less meta line: label in the form-label weight,
                             value a shade lighter (JobOpeningSummary's
                             MetaLabelValue). */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-2">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-body-secondary mb-2">
                           {item.scoredResumes?.[0]?.scoredBy && (
                             <span className="flex items-center gap-1">
                               <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
@@ -4364,7 +4365,7 @@ export default function ResumeScoringPage({
                           <div className="flex flex-row flex-wrap gap-1 sm:flex-col sm:items-stretch sm:gap-1.5 flex-shrink-0">
                             {!globalLoaded ? (
                               <span className="flex items-center gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
-                                <FileText className="w-4 h-4 max-[359px]:hidden" />
+                                <FileText className="w-4 h-4 max-2xs:hidden" />
                                 {scoredCountValue(item.totalScored, verdictTally)} Scored
                               </span>
                             ) : ([
@@ -4385,7 +4386,7 @@ export default function ResumeScoringPage({
                                       muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
                                     }`}
                                   >
-                                    <Icon className="w-4 h-4 max-[359px]:hidden" />
+                                    <Icon className="w-4 h-4 max-2xs:hidden" />
                                     <span className="tabular-nums">{count}</span> {id}
                                   </span>
                                 );
@@ -4421,7 +4422,7 @@ export default function ResumeScoringPage({
                             }}
                             aria-label="View Details"
                             title="View Details"
-                            className="h-9 w-9 p-0"
+                            className="h-9 w-9"
                           >
                             <FileText className="w-4 h-4" />
                           </Button>
@@ -4432,7 +4433,7 @@ export default function ResumeScoringPage({
                             disabled={loadingProgressJobId === item.jobId}
                             aria-label="View Progress"
                             title="View Progress (every version of this job)"
-                            className="h-9 w-9 p-0"
+                            className="h-9 w-9"
                           >
                             {loadingProgressJobId === item.jobId
                               ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -4462,6 +4463,176 @@ export default function ResumeScoringPage({
                     </div>
                     {inlineCandidatesPanel}
                   </div>
+                ), mobileCard: (
+                  /* Below xl: the same job as the card above, in the shared
+                     MobileRecordCard layout (the job-openings card) — same
+                     handlers, same values. The card above stays for xl Grid. */
+                  <MobileRecordCard
+                    key={item.id}
+                    // The row opens its candidates in place; the job title (and
+                    // the View Details button) still go to the job's own page.
+                    onClick={() => toggleJobExpanded(jobKey)}
+                    aria-expanded={isJobExpanded}
+                    selected={isSelected || isPartlySelected || isJobExpanded}
+                    select={!item.isProcessing ? (
+                      /* Tick the job for Export. Stops the click so it doesn't
+                         also open / close the row. */
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
+                        aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
+                        aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
+                        title={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
+                        className="inline-flex p-1.5 -m-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : isPartlySelected ? (
+                          <MinusSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    ) : undefined}
+                    /* The scoring record's own JD code, else the full JD
+                       record's — some scores come back without it. */
+                    idBadge={jdCodeOf(item) ? (
+                      <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
+                    ) : undefined}
+                    title={
+                      <span
+                        className="cursor-pointer hover:text-brand-blue transition-colors"
+                        title={item.jobTitle}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedHistoryItem(item);
+                          setViewMode('details');
+                          onLoadJdScores?.(item.jobId, item.jobTitle);
+                          try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch (e) {}
+                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                        }}
+                      >
+                        {item.jobTitle}
+                      </span>
+                    }
+                    badges={
+                      <>
+                        {displayVersionNumber && displayVersionNumber >= 1 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></span>
+                            v{displayVersionNumber}
+                          </span>
+                        )}
+                        {(() => {
+                          const record = jobRecordsById.get(item.jobId);
+                          const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                          const label = getDisplayStatus(
+                            raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
+                            record?.currentVersion ?? item.jdCurrentVersion,
+                          );
+                          const tone = getStatusConfig(label);
+                          /* Only Archived / Disabled earns a badge — see the card above. */
+                          return label !== 'Published' && label !== 'Republished' ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${tone.bg} ${tone.text} border ${tone.border} gap-1.5 flex-shrink-0`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>
+                              {label}
+                            </span>
+                          ) : null;
+                        })()}
+                      </>
+                    }
+                    fields={[
+                      { label: 'By', value: item.scoredResumes?.[0]?.scoredBy },
+                      { label: 'Scored', value: formatIST(item.scoredAt) },
+                      {
+                        label: 'Scored Count',
+                        value: <span className="tabular-nums">{scoredCountValue(item.totalScored, verdictTally)}</span>,
+                      },
+                    ]}
+                    /* Exact / Partial / No Match across every version of this
+                       job; under a verdict filter the others are muted. Until
+                       the scores load, a placeholder (see `scoredCountValue`). */
+                    footer={!globalLoaded ? (
+                      <MobileStatChip tone="info" icon={<FileText />}>
+                        {scoredCountValue(item.totalScored, verdictTally)} Scored
+                      </MobileStatChip>
+                    ) : (
+                      <>
+                        {([
+                          { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, tone: 'success' as const },
+                          { id: 'Partial Match' as const, count: verdictTally.partial, Icon: MinusCircle, tone: 'warning' as const },
+                          { id: 'No Match' as const, count: verdictTally.none, Icon: XCircle, tone: 'danger' as const },
+                        ]).map(({ id, count, Icon, tone }) => {
+                          const muted = !!matchFilter && id !== matchFilter;
+                          return (
+                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={muted ? 'opacity-60' : undefined}>
+                              <span className="tabular-nums">{count}</span> {id}
+                            </MobileStatChip>
+                          );
+                        })}
+                      </>
+                    )}
+                    actions={
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
+                          className="w-7 flex-shrink-0"
+                          aria-label="Scoring History" title="Scoring History"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedHistoryItem(item);
+                            setViewMode('details');
+                            onLoadJdScores?.(item.jobId, item.jobTitle);
+                            showAllVersionsFor(item);
+                            try {
+                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                            } catch (e) {}
+                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                          }}
+                          aria-label="View Details"
+                          title="View Details"
+                          className="w-7 flex-shrink-0"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                          disabled={loadingProgressJobId === item.jobId}
+                          aria-label="View Progress"
+                          title="View Progress (every version of this job)"
+                          className="w-7 flex-shrink-0"
+                        >
+                          {loadingProgressJobId === item.jobId
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <WorkInProgressIcon className="w-3.5 h-3.5" />}
+                        </Button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
+                          aria-expanded={isJobExpanded}
+                          title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
+                          className={`h-7 px-3 rounded-lg transition-all text-xs font-medium flex items-center gap-1.5 justify-center whitespace-nowrap border ${
+                            isJobExpanded
+                              ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
+                              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-900 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </>
+                    }
+                    expanded={inlineCandidatesPanel}
+                  />
                 ), row: (
                   /* List mode — User-Management-uniform table row (+ an
                      expandable full-width row holding this job's candidates). */
@@ -4471,7 +4642,7 @@ export default function ResumeScoringPage({
                       onClick={() => toggleJobExpanded(jobKey)}
                       aria-expanded={isJobExpanded}
                     >
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <td className="tf-td">
                         {!item.isProcessing && (
                           <button
                             type="button"
@@ -4484,10 +4655,10 @@ export default function ResumeScoringPage({
                           </button>
                         )}
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
-                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="text-xs text-gray-400 dark:text-slate-500">—</span>}
+                      <td className="tf-td hidden sm:table-cell">
+                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <td className="tf-td">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <button
                             type="button"
@@ -4527,28 +4698,28 @@ export default function ResumeScoringPage({
                             variant="secondary"
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="h-6 w-6 p-0 flex-shrink-0"
+                            className="w-6 flex-shrink-0"
                             aria-label="Scoring History" title="Scoring History"
                           >
                             <History className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                        <span className="text-sm text-gray-600 dark:text-slate-400">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
+                      <td className="tf-td hidden lg:table-cell">
+                        <span className="tf-body-secondary">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell whitespace-nowrap">
-                        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                      <td className="tf-td hidden lg:table-cell whitespace-nowrap">
+                        <div className="flex items-center gap-2 tf-body-muted">
                           <Calendar className="w-4 h-4 text-brand-cyan" />
                           {formatIST(item.scoredAt)}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
-                        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                      <td className="tf-td hidden md:table-cell">
+                        <span className="tf-row-title tabular-nums">
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <td className="tf-td">
                         {!globalLoaded ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />
@@ -4572,7 +4743,7 @@ export default function ResumeScoringPage({
                           </div>
                         )}
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                      <td className="tf-td tf-sticky-col">
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="secondary"
@@ -4587,7 +4758,7 @@ export default function ResumeScoringPage({
                               router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
                             }}
                             aria-label="View Details" title="View Details"
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8"
                           >
                             <FileText className="w-4 h-4" />
                           </Button>
@@ -4597,7 +4768,7 @@ export default function ResumeScoringPage({
                             onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
                             disabled={loadingProgressJobId === item.jobId}
                             aria-label="View Progress" title="View Progress (every version of this job)"
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8"
                           >
                             {loadingProgressJobId === item.jobId ? <Loader2 className="w-4 h-4 animate-spin" /> : <WorkInProgressIcon className="w-4 h-4" />}
                           </Button>
@@ -4607,7 +4778,7 @@ export default function ResumeScoringPage({
                             onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
                             aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'}
                             title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8"
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
@@ -4616,7 +4787,7 @@ export default function ResumeScoringPage({
                     </tr>
                     {isJobExpanded && (
                       <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                        <td colSpan={8} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">
+                        <td colSpan={8} className="tf-td pb-4 pt-0">
                           {inlineCandidatesPanel}
                         </td>
                       </tr>
@@ -4631,7 +4802,7 @@ export default function ResumeScoringPage({
                 every field stays visible. Same responsive approach the
                 candidates table uses. */}
             <div className="xl:hidden space-y-3">
-              {rowNodes.map(n => n.card)}
+              {rowNodes.map(n => n.mobileCard)}
             </div>
             {/* xl and up: honor the List / Grid toggle — the uniform table for
                 List (fits cleanly at this width), cards for Grid. */}
@@ -4642,18 +4813,18 @@ export default function ResumeScoringPage({
                 </div>
               ) : (
                 /* User-Management-uniform table shell */
-                <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="tf-table-shell overflow-x-auto tf-card">
                   <table className="w-full">
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">Job</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job Title</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored By</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Scored</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Count</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Verdict</th>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                        <th className="tf-th-cell w-10" aria-hidden="true" />
+                        <th className="tf-th-cell text-left tf-th">Job</th>
+                        <th className="tf-th-cell text-left tf-th">Job Title</th>
+                        <th className="tf-th-cell text-left tf-th">Scored By</th>
+                        <th className="tf-th-cell text-left tf-th">Scored</th>
+                        <th className="tf-th-cell text-left tf-th">Count</th>
+                        <th className="tf-th-cell text-left tf-th">Verdict</th>
+                        <th className="tf-th-cell text-center tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -4678,7 +4849,7 @@ export default function ResumeScoringPage({
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4"
+                className="tf-card-soft p-4"
               >
                 <div className="flex flex-col sm:flex-row items-start gap-3">
                   {/* Scoring icon */}
@@ -4715,7 +4886,7 @@ export default function ResumeScoringPage({
             ))}
           </div>
         ) : scoredHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
               icon={History}
               title="No Scoring History Yet"
@@ -4734,7 +4905,7 @@ export default function ResumeScoringPage({
             />
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
               icon={Search}
               title="No Results Found"
@@ -5075,8 +5246,8 @@ export default function ResumeScoringPage({
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base sm:text-lg truncate font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
-                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate">
+                    <h3 className="tf-section-title sm:text-lg truncate">Scoring History</h3>
+                    <p className="tf-body-muted truncate">
                       {historyModalItem.jobTitle}
                       {jdCodeOf(historyModalItem) && ` (${jdCodeOf(historyModalItem)})`}
                     </p>
@@ -5105,7 +5276,7 @@ export default function ResumeScoringPage({
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="px-2" aria-label="Close">
+                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="" aria-label="Close">
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
@@ -5121,40 +5292,40 @@ export default function ResumeScoringPage({
                   short to fit the rest, instead of silently cutting it. */}
               <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="px-4 sm:px-6 pt-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                <div className="tf-grid-4">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Total Resumes Scored</div>
+                      <div className="tf-meta leading-tight">Total Resumes Scored</div>
                       <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-success-subtle flex items-center justify-center flex-shrink-0">
                       <CheckCircle className="w-4 h-4 text-success" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Exact Match</div>
+                      <div className="tf-meta leading-tight">Exact Match</div>
                       <div className="text-xl font-bold text-success">{summary.exact}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                       <PieChart className="w-4 h-4 text-orange-500" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">Partial Match</div>
+                      <div className="tf-meta leading-tight">Partial Match</div>
                       <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">
                       <XCircle className="w-4 h-4 text-destructive" />
                     </div>
                     <div className="min-w-0">
-                      <div className="text-xs text-gray-500 dark:text-slate-500 leading-tight">No Match</div>
+                      <div className="tf-meta leading-tight">No Match</div>
                       <div className="text-xl font-bold text-destructive">{summary.noMatch}</div>
                     </div>
                   </div>
@@ -5172,7 +5343,7 @@ export default function ResumeScoringPage({
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
                   {/* Phone: one filter per row; sm: a 2×2 grid; lg: the single
                       row (py-1 -my-1 keeps focus rings from clipping). */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-end gap-3 sm:gap-4 py-1 -my-1 [&>div]:min-w-0">
+                  <div className="tf-grid-2 lg:flex lg:items-end py-1 -my-1 [&>div]:min-w-0">
                     <div className="min-w-0 lg:flex-1 lg:min-w-[11rem]">
                       <label className={historyLabelClass}>Search</label>
                       <div className="relative">
@@ -5248,11 +5419,11 @@ export default function ResumeScoringPage({
                   history popups: the table with its version summary beneath
                   it on the left, a breakdown donut with its own version
                   picker on the right, stretched to the left column's height. */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 px-4 sm:px-6 py-4 items-stretch">
+              <div className="tf-grid-3 px-4 sm:px-6 py-4 items-stretch">
                 <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
                 <div className="flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                   {groups.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center py-10 text-center text-sm text-gray-400 dark:text-slate-500">
+                    <div className="flex-1 flex items-center justify-center py-10 text-center tf-body-muted">
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
                     </div>
                   ) : (
@@ -5270,72 +5441,66 @@ export default function ResumeScoringPage({
                     <>
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
-                    <div className="sm:hidden rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800 max-h-[320px] overflow-y-auto overscroll-contain">
+                    <div className="lg:hidden tf-record-list p-2 rounded-lg border border-gray-200 dark:border-slate-700 max-h-[320px] overflow-y-auto overscroll-contain">
                       {groups.map((g) => (
-                        <div key={`${g.version}||${g.scoredBy}||${g.date}`} className="p-3 text-xs">
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-gray-900 dark:text-slate-100 truncate" title={g.scoredBy}>{g.scoredBy}</div>
-                              {g.scoredByEmail && (
-                                <div className="text-gray-400 dark:text-slate-600 truncate" title={g.scoredByEmail}>{g.scoredByEmail}</div>
-                              )}
-                            </div>
-                            <span className="px-2 py-0.5 rounded-md font-semibold whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                        <MobileRecordCard
+                          key={`${g.version}||${g.scoredBy}||${g.date}`}
+                          idBadge={
+                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                               v{g.version}
                             </span>
+                          }
+                          title={<span title={g.scoredBy}>{g.scoredBy}</span>}
+                          meta={[
+                            { label: g.scoredByEmail ? <span title={g.scoredByEmail}>{g.scoredByEmail}</span> : null },
+                            { icon: <Calendar className="text-brand-blue" />, label: g.date },
+                          ]}
+                          footer={
+                            <>
+                              <MobileStatChip tone="info">{g.count} Resumes Scored</MobileStatChip>
+                              <MobileStatChip tone="success">Exact {g.exactCount}</MobileStatChip>
+                              <MobileStatChip tone="warning">Partial {g.partialCount}</MobileStatChip>
+                              <MobileStatChip tone="danger">No Match {g.noMatchCount}</MobileStatChip>
+                              <MobileStatChip tone="neutral">Avg Score {Math.round(g.totalScore / g.count)}</MobileStatChip>
+                            </>
+                          }
+                          actions={
                             <Button
                               variant="secondary"
                               size="sm"
                               onClick={() => goToHistoryResume(g.resumes[0])}
-                              className="px-2 flex-shrink-0"
+                              className="flex-shrink-0"
                               aria-label="View job scores"
                               title="View job scores"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                          </div>
-                          <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
-                            <dt className="text-gray-500 dark:text-slate-500">Date</dt>
-                            <dd className="min-w-0 text-gray-600 dark:text-slate-400 inline-flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-                              {g.date}
-                            </dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Resumes Scored</dt>
-                            <dd className="font-semibold text-gray-900 dark:text-slate-100">{g.count}</dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Status</dt>
-                            <dd className="flex flex-wrap items-center gap-1">
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-success bg-success-subtle/60">Exact {g.exactCount}</span>
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">Partial {g.partialCount}</span>
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-destructive bg-destructive-subtle/60">No Match {g.noMatchCount}</span>
-                            </dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Average Score</dt>
-                            <dd className={`${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</dd>
-                          </dl>
-                        </div>
+                          }
+                        />
                       ))}
                     </div>
-                    <div className="max-sm:hidden overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
+                    <div className="max-lg:hidden overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 z-10 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr className="text-left bg-white dark:bg-slate-900">
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Version</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">Scored By</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Version</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Scored By</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Date
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Resumes Scored
                             </th>
-                            <th colSpan={3} className="py-1.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom">
+                            <th colSpan={3} className="tf-th-cell tf-th text-center border-b border-gray-200 dark:border-slate-700">Status</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Average Score
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 text-xs font-semibold text-gray-600 dark:text-slate-300 align-bottom text-right">Action</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom text-right">Action</th>
                           </tr>
                           <tr className="text-left bg-white dark:bg-slate-900">
-                            <th className="py-1.5 px-3 font-semibold text-success text-xs">Exact</th>
-                            <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400 text-xs">Partial</th>
-                            <th className="py-1.5 px-3 font-semibold text-destructive text-xs">No Match</th>
+                            <th className="tf-th-cell font-semibold text-success text-xs">Exact</th>
+                            <th className="tf-th-cell font-semibold text-brand-orange-deep dark:text-orange-400 text-xs">Partial</th>
+                            <th className="tf-th-cell font-semibold text-destructive text-xs">No Match</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -5343,29 +5508,29 @@ export default function ResumeScoringPage({
                           const groupKey = `${g.version}||${g.scoredBy}||${g.date}`;
                           return (
                             <tr key={groupKey} className="hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.06]">
-                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                <td className="tf-td whitespace-nowrap">
                                   <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                     v{g.version}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                <td className="tf-td whitespace-nowrap">
                                   <div className="font-semibold text-gray-900 dark:text-slate-100 truncate max-w-[160px]">{g.scoredBy}</div>
                                   {g.scoredByEmail && (
                                     <div className="text-gray-400 dark:text-slate-600 truncate max-w-[160px]">{g.scoredByEmail}</div>
                                   )}
                                 </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">
                                   <span className="inline-flex items-center gap-1.5">
                                     <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
                                     {g.date}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
+                                <td className="tf-td font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
+                                <td className="tf-td text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
+                                <td className="tf-td text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
+                                <td className="tf-td text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
                                 <td className={`py-2.5 px-3 ${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</td>
-                                <td className="py-2.5 px-3 text-right">
+                                <td className="tf-td text-right">
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
                                       regardless of how many resumes the session scored. */}
@@ -5373,7 +5538,7 @@ export default function ResumeScoringPage({
                                     variant="secondary"
                                     size="sm"
                                     onClick={() => goToHistoryResume(g.resumes[0])}
-                                    className="px-2"
+                                    className=""
                                     aria-label="View job scores"
                                     title="View job scores"
                                   >
@@ -5397,21 +5562,21 @@ export default function ResumeScoringPage({
                   <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Job Version Average</p>
-                      <p className="text-2xs text-gray-500 dark:text-slate-500">Average score by version</p>
+                      <p className="tf-micro-hint">Average score by version</p>
                     </div>
                     <TrendingUp className="w-4 h-4 text-brand-blue flex-shrink-0" />
                   </div>
                   <div className="p-4">
                     {versionAverages.length === 0 ? (
-                      <div className="text-center text-xs text-gray-400 dark:text-slate-500 py-4">No data yet.</div>
+                      <div className="text-center tf-hint py-4">No data yet.</div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                      <div className="tf-grid-3">
                         {versionAverages.map((v, idx) => {
                           const accent = VERSION_ACCENTS[idx % VERSION_ACCENTS.length];
                           return (
                             <div key={v.version}>
                               <div className="flex items-center justify-between gap-2 mb-1.5">
-                                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-1.5 tf-label">
                                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${accent.dot}`} />
                                   v{v.version}
                                 </span>
@@ -5439,7 +5604,7 @@ export default function ResumeScoringPage({
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                         <PieChart className="w-4 h-4" />
                       </div>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">Match Breakdown</span>
+                      <span className="tf-row-title truncate">Match Breakdown</span>
                     </div>
                     <FilterSelect
                       value={breakdownVersion}
@@ -5481,7 +5646,7 @@ export default function ResumeScoringPage({
                       )}
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
                         <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{breakdownTotal}</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Resumes<br />Scored</span>
+                        <span className="tf-meta mt-1 leading-tight">Resumes<br />Scored</span>
                       </div>
                     </div>
                     {/* Legend: names in the left half, values in the right
@@ -5496,7 +5661,7 @@ export default function ResumeScoringPage({
                           </span>
                           <span className="flex items-baseline gap-1.5 pl-3 pr-1">
                             <span className="tabular-nums font-semibold text-gray-900 dark:text-slate-100">{row.value}</span>
-                            <span className="tabular-nums text-xs text-gray-500 dark:text-slate-400">({breakdownPct(row.value)}%)</span>
+                            <span className="tabular-nums tf-meta">({breakdownPct(row.value)}%)</span>
                           </span>
                         </li>
                       ))}
@@ -5508,7 +5673,7 @@ export default function ResumeScoringPage({
               <div className="px-4 sm:px-6 pb-4">
                 <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                  <p className="tf-body-secondary">
                     Match status is based on the comparison of candidate resumes with the job description.
                   </p>
                 </div>
@@ -5527,9 +5692,9 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {/* "Score Resumes" is an in-page view of this same route, reached via the
           Score Resumes button, so it needs its own crumb — "Resume Scoring"
           goes back to the history overview in-page (onClick, not href, since the
@@ -5559,8 +5724,8 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-5">
-        <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+      <div className="tf-card-soft p-3 sm:p-4 mb-5">
+        <label className="block tf-label mb-2">
           Select Job Description
         </label>
 

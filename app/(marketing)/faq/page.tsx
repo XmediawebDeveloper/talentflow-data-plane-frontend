@@ -44,7 +44,7 @@ export default function FAQPage() {
       <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Hero */}
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
-          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 tf-body border-0">
             FAQ
           </Badge>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0 tracking-tight">
@@ -63,7 +63,7 @@ export default function FAQPage() {
                 <AccordionTrigger className="text-left text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-white hover:no-underline py-4 sm:py-5">
                   {faq.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
+                <AccordionContent className="tf-body-secondary sm:text-base leading-relaxed">
                   {faq.answer}
                 </AccordionContent>
               </AccordionItem>
@@ -76,7 +76,7 @@ export default function FAQPage() {
           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
             Still have questions?
           </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-5 sm:mb-6 max-w-md mx-auto px-4 sm:px-0">
+          <p className="tf-body-secondary sm:text-base mb-5 sm:mb-6 max-w-md mx-auto px-4 sm:px-0">
             Our team is here to help. Get in touch and we&apos;ll get back to you within 24 hours.
           </p>
         </div>

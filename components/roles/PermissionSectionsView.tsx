@@ -49,7 +49,7 @@ export const withAlwaysOnPermissions = (codes: Iterable<string>): string[] =>
 /** One-line explanation shown above a role's permission list. */
 export function AlwaysOnPermissionsNote() {
   return (
-    <p className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 px-3 py-2 text-xs text-gray-600 dark:text-slate-400">
+    <p className="mb-4 rounded-xl border border-brand-blue/15 bg-brand-blue/5 px-3 py-2 tf-meta">
       <span className="font-semibold text-brand-blue">View Analytics</span> and{' '}
       <span className="font-semibold text-brand-blue">View Support</span>
       {' '}are always included for every user, whatever their role — they are counted here and can&apos;t be switched off.
@@ -102,19 +102,19 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
         return (
           <section
             key={section.id}
-            className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm"
+            className="tf-card-soft overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
               <div>
                 <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   {showAll
                     ? `${grantedCount} of ${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`
                     : `${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`}
                 </p>
               </div>
             </div>
-            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="tf-grid-3 p-4">
               {section.items.map((item) => {
                 const isGranted = granted.has(item.code);
                 return (
@@ -138,7 +138,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
                       >
                         <span className="text-xs font-semibold uppercase">{item.label[0] || 'P'}</span>
                       </span>
-                      <p className={`min-w-0 text-sm max-sm:text-[13px] font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
+                      <p className={`min-w-0 text-sm font-semibold ${isGranted ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>
                         {item.label}
                       </p>
                     </div>
@@ -158,12 +158,12 @@ export function PermissionSectionsSkeleton({ sections = 2, Skeleton }: { section
   return (
     <div className="space-y-4">
       {Array.from({ length: sections }).map((_, si) => (
-        <div key={si} className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
+        <div key={si} className="tf-card-soft overflow-hidden">
           <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
             <Skeleton className="h-4 w-32" />
             <Skeleton className="mt-1.5 h-3 w-20" />
           </div>
-          <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="tf-grid-3 p-4">
             {Array.from({ length: 3 }).map((_, pi) => (
               <div key={pi} className="flex items-center gap-3 rounded-2xl border border-gray-100 dark:border-slate-700/60 p-4">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />

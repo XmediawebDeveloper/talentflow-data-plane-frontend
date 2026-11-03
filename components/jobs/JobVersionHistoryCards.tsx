@@ -71,15 +71,15 @@ export default function JobVersionHistoryCards({
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
         <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
+        <p className="tf-row-title">Version History</p>
       </div>
       {loading && !versions ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-2 tf-meta">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
         </div>
       ) : jobVersions.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">No versions recorded for this job.</p>
+        <p className="py-2 tf-meta">No versions recorded for this job.</p>
       ) : (
         <div className="space-y-2.5">
           {jobVersions.map((version) => {
@@ -177,7 +177,7 @@ export default function JobVersionHistoryCards({
 
                 {/* Experience / location / work mode */}
                 {metaParts.length > 0 && (
-                  <p className="text-xs text-gray-600 dark:text-slate-400 truncate mb-1.5">
+                  <p className="tf-meta truncate mb-1.5">
                     {metaParts.join(' · ')}
                   </p>
                 )}
@@ -203,7 +203,7 @@ export default function JobVersionHistoryCards({
                 )}
 
                 {/* Applicants + posted date footer */}
-                <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-400">
+                <div className="flex items-center justify-between tf-meta">
                   <span className="inline-flex items-center gap-1">
                     <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                     {versionApplicants[version.id] ?? '—'}

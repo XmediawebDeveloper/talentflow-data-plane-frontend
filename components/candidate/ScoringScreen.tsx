@@ -129,13 +129,13 @@ export function ScoringScreen() {
         {/* Warning for extended wait */}
         {waitTime > 180 && (
           <div className="mt-4 rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4">
-            <p className="text-sm text-gray-700">
+            <p className="tf-body">
               <strong>Taking longer than usual:</strong> Don't worry, your assessment is being processed. Please don't close this page. Results will appear automatically.
             </p>
           </div>
         )}
 
-        <p className="text-xs text-gray-400 text-center mt-6">
+        <p className="tf-hint text-center mt-6">
           Do not refresh or close this page. Results will appear automatically.
         </p>
       </div>

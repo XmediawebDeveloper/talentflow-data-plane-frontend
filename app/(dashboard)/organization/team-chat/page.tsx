@@ -1038,7 +1038,7 @@ export default function TeamChatPage() {
 
   const groupHeader = (label: string, onAdd: () => void, canAdd: boolean, addLabel: string, denyTitle?: string) => (
     <div className="flex items-center justify-between px-2.5 pb-1 pt-2">
-      <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{label}</span>
+      <span className="tf-eyebrow tracking-wider">{label}</span>
       <button
         type="button"
         onClick={onAdd}
@@ -1060,7 +1060,7 @@ export default function TeamChatPage() {
     <div className="flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:h-[calc(100dvh-4.5rem)] [@media(max-height:500px)]:flex-none">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
-        <div className="relative flex flex-1 min-h-0 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700 dark:bg-slate-900">
+        <div className="tf-card-soft relative flex flex-1 min-h-0 overflow-hidden">
 
         {/* ── Conversations ──
             Below lg: a drawer that slides over the conversation from the left
@@ -1075,9 +1075,9 @@ export default function TeamChatPage() {
         >
           <div className="space-y-3 border-b border-gray-100 p-3 dark:border-slate-700/60">
             <div className="flex items-center gap-2 px-1">
-              <h1 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Team Chat</h1>
+              <h1 className="tf-page-title tf-section-title">Team Chat</h1>
               {totalUnread > 0 && (
-                <span className="rounded-full bg-brand-blue px-2 py-0.5 text-xs font-semibold text-white" title={`${totalUnread} unread`}>
+                <span className="tf-badge bg-brand-blue text-white" title={`${totalUnread} unread`}>
                   {totalUnread}
                 </span>
               )}
@@ -1101,7 +1101,7 @@ export default function TeamChatPage() {
                 placeholder="Search conversations"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+                className="tf-input pl-9 pr-3 focus-visible:!outline-none"
               />
             </div>
 
@@ -1109,7 +1109,7 @@ export default function TeamChatPage() {
             <div
               role="radiogroup"
               aria-label="Show conversations"
-              className="relative grid h-[38px] grid-cols-3 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10"
+              className="relative grid h-9 grid-cols-3 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10"
             >
               <span
                 aria-hidden
@@ -1138,7 +1138,7 @@ export default function TeamChatPage() {
               <div className="mb-2">
                 {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
                 {filteredChannels.length === 0 ? (
-                  <p className="px-3 py-4 text-center text-xs text-gray-400">
+                  <p className="px-3 py-4 text-center tf-hint">
                     {searchQuery ? 'No channels match your search' : 'No channels yet'}
                   </p>
                 ) : (
@@ -1151,7 +1151,7 @@ export default function TeamChatPage() {
               <div>
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
-                  <p className="px-3 py-4 text-center text-xs text-gray-400">
+                  <p className="px-3 py-4 text-center tf-hint">
                     {searchQuery ? 'No conversations match your search' : 'No direct messages yet'}
                   </p>
                 ) : (
@@ -1162,7 +1162,7 @@ export default function TeamChatPage() {
           </div>
 
           <div className="border-t border-gray-100 px-3 py-2.5 dark:border-slate-700/60">
-            <p className="text-center text-xs text-gray-400">Messages are kept for 90 days</p>
+            <p className="text-center tf-hint">Messages are kept for 90 days</p>
           </div>
         </aside>
 
@@ -1208,10 +1208,10 @@ export default function TeamChatPage() {
                   )}
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <h2 className="truncate text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedChannel.name}</h2>
+                      <h2 className="truncate tf-section-title max-sm:text-sm">{selectedChannel.name}</h2>
                       {isMuted && <BellOff className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-label="Muted" />}
                     </div>
-                    <p className="truncate text-xs text-gray-500 dark:text-slate-400">
+                    <p className="truncate tf-meta">
                       {connectionStatus === 'closed' && (
                         <span className="mr-1 inline-flex items-center gap-1 text-brand-orange-deep" title="Live updates paused — checking for new messages every few seconds">
                           <Loader2 className="h-3 w-3 animate-spin" /> Reconnecting… ·
@@ -1288,22 +1288,22 @@ export default function TeamChatPage() {
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
                         <div className="absolute top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-xl border border-gray-200 bg-white p-2 shadow-xl max-sm:inset-x-2 sm:right-0 sm:mt-2 sm:max-h-96 sm:w-80 dark:border-slate-700 dark:bg-slate-900">
-                          <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs font-semibold uppercase tracking-wider text-gray-400">
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 tf-eyebrow tracking-wider">
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
                           {pinnedMessages.length === 0 ? (
-                            <p className="px-3 py-6 text-center text-sm max-sm:text-[13px] text-gray-400">No pinned messages yet</p>
+                            <p className="px-3 py-6 text-center tf-body-muted">No pinned messages yet</p>
                           ) : (
                             <div className="space-y-0.5">
                               {pinnedMessages.map((m) => (
                                 <div key={m.id} className="flex items-start gap-2 rounded-lg px-2.5 py-2 hover:bg-gray-50 sm:px-3 dark:hover:bg-slate-800/60">
                                   <div className="min-w-0 flex-1">
-                                    <span className="block truncate text-xs font-semibold text-gray-900 dark:text-slate-100">{m.user_name}</span>
-                                    <p className="mt-0.5 line-clamp-2 break-words text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">{m.content}</p>
+                                    <span className="block truncate tf-caption">{m.user_name}</span>
+                                    <p className="mt-0.5 line-clamp-2 break-words tf-body">{m.content}</p>
                                   </div>
                                   {/* Time, with Unpin under it */}
                                   <div className="flex shrink-0 flex-col items-end gap-1">
-                                    <span className="text-xs text-gray-400">{formatISTTime(m.created_at)}</span>
+                                    <span className="tf-hint">{formatISTTime(m.created_at)}</span>
                                     <button
                                       type="button"
                                       onClick={() => handleUnpinMessage(m.id)}
@@ -1356,7 +1356,7 @@ export default function TeamChatPage() {
                           <button
                             type="button"
                             onClick={() => { toggleMute(); setShowHeaderMenu(false); }}
-                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                            className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                           >
                             {isMuted ? <Bell className="h-4 w-4 text-gray-400" /> : <BellOff className="h-4 w-4 text-gray-400" />}
                             {isMuted ? 'Unmute notifications' : 'Mute notifications'}
@@ -1366,14 +1366,14 @@ export default function TeamChatPage() {
                               <button
                                 type="button"
                                 onClick={openAddMembersModal}
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                               >
                                 <UserPlus className="h-4 w-4 text-gray-400" /> Add members
                               </button>
                               <button
                                 type="button"
                                 onClick={handleLeaveChannel}
-                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm max-sm:text-[13px] text-gray-700 transition-colors hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800/60"
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 tf-body transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/60"
                               >
                                 <LogOut className="h-4 w-4 text-gray-400" /> Leave channel
                               </button>
@@ -1402,7 +1402,7 @@ export default function TeamChatPage() {
 
               {selectedChannel.description && (
                 <div className="shrink-0 border-b border-gray-100 px-4 py-2 sm:px-5 dark:border-slate-700/60">
-                  <p className="truncate text-xs text-gray-500 dark:text-slate-400" title={selectedChannel.description}>
+                  <p className="truncate tf-meta" title={selectedChannel.description}>
                     {selectedChannel.description}
                   </p>
                 </div>
@@ -1429,8 +1429,8 @@ export default function TeamChatPage() {
                     <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                       <MessageCircle className="h-6 w-6 text-brand-blue" />
                     </div>
-                    <p className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">No messages yet</p>
-                    <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
+                    <p className="tf-section-title max-sm:text-sm">No messages yet</p>
+                    <p className="mt-1 tf-body-muted">
                       {selectedChannel.type === 'channel'
                         ? `Start the conversation in #${selectedChannel.name}.`
                         : `Say hello to ${selectedChannel.name}.`}
@@ -1468,7 +1468,7 @@ export default function TeamChatPage() {
                           {showDateSeparator && (
                             <div className="flex items-center gap-3 py-3">
                               <div className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
-                              <span className="rounded-full bg-white px-3 py-0.5 text-xs font-medium text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
+                              <span className="tf-badge bg-white text-gray-500 ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
                                 {dayLabel === todayLabel ? 'Today' : dayLabel}
                               </span>
                               <div className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
@@ -1484,7 +1484,7 @@ export default function TeamChatPage() {
 
                             <div className={`flex max-w-[80%] flex-col sm:max-w-[65%] ${isSender ? 'items-end' : 'items-start'}`}>
                               {groupStart && !isSender && (
-                                <span className="mb-1 px-1 text-xs font-semibold text-gray-700 dark:text-slate-300">
+                                <span className="mb-1 px-1 tf-caption">
                                   {message.user_name}
                                 </span>
                               )}
@@ -1533,7 +1533,7 @@ export default function TeamChatPage() {
                                     />
                                   </button>
                                 ) : (
-                                  <p className="whitespace-pre-wrap break-words text-sm max-sm:text-[13px] leading-relaxed">
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                                     {message.is_deleted ? 'This message was deleted' : message.content}
                                   </p>
                                 )}
@@ -1546,11 +1546,11 @@ export default function TeamChatPage() {
                                       key={rIdx}
                                       type="button"
                                       onClick={() => handleAddReaction(message.id, reaction.emoji)}
-                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm max-sm:text-[13px] ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
+                                      className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-sm ring-1 ring-gray-200 transition-colors hover:ring-brand-blue/40 dark:bg-slate-800 dark:ring-slate-700"
                                       title={reaction.users.join(', ')}
                                     >
                                       <span>{reaction.emoji}</span>
-                                      <span className="text-xs font-medium text-gray-600 dark:text-slate-300">{reaction.count}</span>
+                                      <span className="tf-caption">{reaction.count}</span>
                                     </button>
                                   ))}
                                 </div>
@@ -1558,8 +1558,8 @@ export default function TeamChatPage() {
 
                               {showMeta && (
                                 <div className={`mt-1 flex items-center gap-1.5 px-1 ${isSender ? 'justify-end' : 'justify-start'}`}>
-                                  <span className="text-xs text-gray-400">{formatISTTime(message.created_at)}</span>
-                                  {message.is_edited && <span className="text-xs text-gray-400">· edited</span>}
+                                  <span className="tf-hint">{formatISTTime(message.created_at)}</span>
+                                  {message.is_edited && <span className="tf-hint">· edited</span>}
                                   {message.is_pinned && (
                                     <span className="inline-flex items-center gap-0.5 text-xs text-brand-blue">
                                       · <Pin className="h-3 w-3" /> Pinned
@@ -1642,7 +1642,7 @@ export default function TeamChatPage() {
                     conversation doesn't jump when it appears. */}
                 <div aria-live="polite" className="pointer-events-none absolute bottom-full left-3 mb-2 sm:left-4">
                   {typingNames.length > 0 && (
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs text-gray-500 shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 tf-meta shadow-sm ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
                       <span className="flex items-center gap-0.5" aria-hidden>
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-blue/60 [animation-delay:-0.3s]" />
                         <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-blue/60 [animation-delay:-0.15s]" />
@@ -1656,7 +1656,7 @@ export default function TeamChatPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex items-end gap-1 rounded-xl border border-gray-200 bg-white p-1.5 transition-colors focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-brand-blue/30 dark:border-slate-700 dark:bg-slate-900">
+                <div className="flex items-end gap-1 tf-panel p-1.5 transition-colors focus-within:border-brand-blue focus-within:ring-2 focus-within:ring-brand-blue/30">
                   <input
                     ref={attachmentInputRef}
                     type="file"
@@ -1686,7 +1686,7 @@ export default function TeamChatPage() {
                     onKeyDown={handleKeyDown}
                     placeholder={`Message ${selectedChannel.type === 'channel' ? '#' : ''}${selectedChannel.name}`}
                     rows={1}
-                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
+                    className="min-h-9 flex-1 resize-none bg-transparent px-1 py-2 text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400 dark:text-slate-100"
                   />
                   <div className="relative shrink-0">
                     <button
@@ -1722,14 +1722,14 @@ export default function TeamChatPage() {
                     type="button"
                     onClick={handleSendMessage}
                     disabled={!messageInput.trim() || isSending}
-                    className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 transition-colors hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-slate-700"
+                    className="tf-btn tf-btn-primary h-9 w-9 shrink-0 bg-brand-blue shadow-sm shadow-brand-blue/25 transition-colors hover:bg-brand-blue/90 disabled:bg-gray-200 disabled:text-gray-400 disabled:shadow-none dark:disabled:bg-slate-700 whitespace-normal gap-0 font-normal"
                     aria-label="Send message"
                     title="Send (Enter)"
                   >
                     <Send className="h-4 w-4" />
                   </button>
                 </div>
-                <p className="mt-1.5 hidden px-1 text-xs text-gray-400 sm:block">
+                <p className="mt-1.5 hidden px-1 tf-hint sm:block">
                   Enter to send · Shift + Enter for a new line
                 </p>
               </div>
@@ -1752,8 +1752,8 @@ export default function TeamChatPage() {
                 <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
                   <MessageCircle className="h-6 w-6 text-brand-blue" />
                 </div>
-                <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Welcome to Team Chat</h2>
-                <p className="mt-1 text-sm max-sm:text-[13px] text-gray-500">
+                <h2 className="tf-section-title max-sm:text-sm">Welcome to Team Chat</h2>
+                <p className="mt-1 tf-body-muted">
                   {channels.length === 0
                     ? 'No channels yet. Create one to bring your team into the conversation.'
                     : 'Pick a channel or direct message to start the conversation.'}
@@ -1764,7 +1764,7 @@ export default function TeamChatPage() {
                     onClick={openCreateModal}
                     aria-disabled={!permissions.can_create_channel}
                     title={!permissions.can_create_channel ? 'You do not have permission to create channels' : undefined}
-                    className={!permissions.can_create_channel ? 'cursor-not-allowed opacity-60' : undefined}
+                    className={`${(!permissions.can_create_channel ? 'cursor-not-allowed opacity-60' : undefined) ?? ''} disabled:opacity-50`}
                     icon={<Hash className="h-4 w-4" />}
                   >
                     New channel
@@ -1783,8 +1783,8 @@ export default function TeamChatPage() {
           <aside className="hidden w-64 shrink-0 flex-col border-l border-gray-200 lg:flex xl:w-72 dark:border-slate-700">
             <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-gray-200 px-4 dark:border-slate-700">
               <div className="min-w-0">
-                <h3 className="text-base max-sm:text-sm font-semibold text-gray-900 dark:text-slate-50">Members</h3>
-                <p className="text-xs text-gray-500">
+                <h3 className="tf-section-title max-sm:text-sm">Members</h3>
+                <p className="tf-meta">
                   {selectedChannel.member_count} total · {onlineMembersCount} online
                 </p>
               </div>
@@ -1811,11 +1811,11 @@ export default function TeamChatPage() {
                     />
                   </span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-100">
+                    <p className="truncate tf-row-name">
                       {member.name}
                       {member.user_id === currentUser?.id && <span className="font-normal text-gray-400"> (You)</span>}
                     </p>
-                    <p className="truncate text-xs capitalize text-gray-500">{member.role?.replace(/_/g, ' ') || 'Member'}</p>
+                    <p className="truncate tf-meta capitalize">{member.role?.replace(/_/g, ' ') || 'Member'}</p>
                   </div>
                 </div>
               ))}
@@ -1846,34 +1846,34 @@ export default function TeamChatPage() {
           ]}
         >
                 <label className="block">
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">
+                  <span className="mb-2 block tf-label">
                     Channel name <span className="text-brand-orange">*</span>
                   </span>
-                  <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
+                  <div className="flex items-center gap-2 tf-panel px-3 py-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
                     <Hash className="h-4 w-4 text-gray-400" />
                     <input
                       type="text"
                       value={newChannelName}
                       onChange={(e) => setNewChannelName(e.target.value)}
                       placeholder="e.g. engineering-team"
-                      className="flex-1 bg-transparent text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
+                      className="flex-1 bg-transparent text-sm text-gray-900 outline-none focus-visible:!outline-none placeholder:text-gray-400"
                     />
                   </div>
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Description</span>
+                  <span className="mb-2 block tf-label">Description</span>
                   <textarea
                     value={newChannelDescription}
                     onChange={(e) => setNewChannelDescription(e.target.value)}
                     placeholder="What's this channel about?"
                     rows={2}
-                    className="w-full resize-none rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 outline-none focus-visible:!outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="tf-textarea resize-none rounded-xl py-2.5 focus-visible:!outline-none"
                   />
                 </label>
 
                 <div>
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Visibility</span>
+                  <span className="mb-2 block tf-label">Visibility</span>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => setNewChannelPrivate(false)}
@@ -1885,7 +1885,7 @@ export default function TeamChatPage() {
                     >
                       <Globe className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm max-sm:text-[13px] font-semibold">Public</div>
+                        <div className="text-sm font-semibold">Public</div>
                         <div className={`text-xs ${!newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Anyone can join
                         </div>
@@ -1901,7 +1901,7 @@ export default function TeamChatPage() {
                     >
                       <Lock className="h-4 w-4" />
                       <div className="text-left">
-                        <div className="text-sm max-sm:text-[13px] font-semibold">Private</div>
+                        <div className="text-sm font-semibold">Private</div>
                         <div className={`text-xs ${newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Invite only
                         </div>
@@ -1911,18 +1911,18 @@ export default function TeamChatPage() {
                 </div>
 
                 <div>
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Add members (optional)</span>
+                  <span className="mb-2 block tf-label">Add members (optional)</span>
                   {isLoadingUsers ? (
-                    <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+                    <div className="space-y-2 tf-panel p-3">
                       {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-9 w-full rounded-lg" />)}
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center">
                       <Users className="mx-auto mb-2 h-6 w-6 text-gray-300" />
-                      <p className="text-xs text-gray-500">No teammates available</p>
+                      <p className="tf-meta">No teammates available</p>
                     </div>
                   ) : (
-                    <div className="max-h-44 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                    <div className="max-h-44 overflow-y-auto tf-panel">
                       {/* You're in the channel anyway. */}
                       {availableUsers.filter((u) => u.id !== currentUser?.id).map((user) => {
                         const checked = selectedMemberIds.includes(user.id);
@@ -1946,8 +1946,8 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-row-name">{user.name}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
                           </button>
                         );
@@ -1979,17 +1979,17 @@ export default function TeamChatPage() {
           ]}
         >
                 {isLoadingUsers ? (
-                  <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="space-y-2 tf-panel p-3">
                     {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
                   </div>
                 ) : availableUsers.filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                   .length === 0 ? (
                   <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-10 text-center">
                     <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                    <p className="text-sm max-sm:text-[13px] text-gray-500">No teammates left to add.</p>
+                    <p className="tf-body-muted">No teammates left to add.</p>
                   </div>
                 ) : (
-                  <div className="max-h-72 overflow-y-auto rounded-xl border border-gray-200 bg-white">
+                  <div className="max-h-72 overflow-y-auto tf-panel">
                     {availableUsers
                       .filter((user) => !selectedChannel?.members.some((m) => m.user_id === user.id))
                       .map((user) => {
@@ -2014,8 +2014,8 @@ export default function TeamChatPage() {
                             </span>
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-row-name">{user.name}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
                           </button>
                         );
@@ -2035,7 +2035,7 @@ export default function TeamChatPage() {
           subtitle="Pick a teammate to start a private chat."
           cancelDisabled={isCreatingDM}
         >
-                <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+                <div className="overflow-hidden tf-panel">
                   {isLoadingUsers ? (
                     <div className="max-h-80 overflow-y-auto">
                       {Array.from({ length: 6 }).map((_, i) => (
@@ -2052,7 +2052,7 @@ export default function TeamChatPage() {
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-500">
                       <Users className="mx-auto mb-2 h-7 w-7 text-gray-300" />
-                      <p className="text-sm max-sm:text-[13px]">No team members found</p>
+                      <p className="text-sm">No team members found</p>
                     </div>
                   ) : (
                     <div className="max-h-80 overflow-y-auto">
@@ -2067,10 +2067,10 @@ export default function TeamChatPage() {
                           >
                             <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="lg" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-xs text-gray-500">{user.email}</p>
+                              <p className="truncate tf-row-name">{user.name}</p>
+                              <p className="truncate tf-meta">{user.email}</p>
                             </div>
-                            <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium capitalize text-gray-600 sm:inline-flex">
+                            <span className="tf-badge hidden bg-slate-100 capitalize text-gray-600 sm:inline-flex">
                               {user.role?.replace(/_/g, ' ') || 'User'}
                             </span>
                           </button>

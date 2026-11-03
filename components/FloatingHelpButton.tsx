@@ -34,8 +34,8 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
               >
                 <MessageSquare className="w-5 h-5 text-gray-800" />
                 <div>
-                  <div className="text-sm text-gray-900">Quick Support</div>
-                  <div className="text-xs text-gray-500">Open support panel</div>
+                  <div className="tf-body">Quick Support</div>
+                  <div className="tf-meta">Open support panel</div>
                 </div>
               </button>
               
@@ -48,8 +48,8 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
               >
                 <ExternalLink className="w-5 h-5 text-gray-800" />
                 <div>
-                  <div className="text-sm text-gray-900">Support Center</div>
-                  <div className="text-xs text-gray-500">Go to full page</div>
+                  <div className="tf-body">Support Center</div>
+                  <div className="tf-meta">Go to full page</div>
                 </div>
               </button>
             </div>

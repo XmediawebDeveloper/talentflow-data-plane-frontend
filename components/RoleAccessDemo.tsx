@@ -33,7 +33,7 @@ export default function RoleAccessDemo({ user }: RoleAccessDemoProps) {
               {roleLabels[user.role]}
             </span>
           </h4>
-          <p className="text-sm text-gray-700 mb-3">
+          <p className="tf-body mb-3">
             Your current role determines what actions you can perform in the system.
           </p>
           

@@ -197,7 +197,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             <div className="flex items-center gap-3 mb-4">
               <Shield className="w-10 h-10" />
               <div>
-                <h1 className="text-2xl">Assessment Consent & Terms</h1>
+                <h1 className="tf-page-title">Assessment Consent & Terms</h1>
                 <p className="text-gray-100 text-sm">Please review and accept before proceeding</p>
               </div>
             </div>
@@ -206,9 +206,9 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
           <div className="p-6">
             {/* Candidate Info */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-4">
-              <div className="text-sm text-gray-800 mb-2">Assessment Details</div>
+              <div className="tf-body mb-2">Assessment Details</div>
               <div className="text-gray-900 mb-1">{assessment.title}</div>
-              <div className="text-sm text-gray-600">
+              <div className="tf-body-secondary">
                 {assessment.jobTitle} • {assessment.companyName} • {assessment.duration} minutes
               </div>
             </div>
@@ -221,14 +221,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     type="checkbox"
                     checked={consentChecks.terms}
                     onChange={(e) => setConsentChecks({ ...consentChecks, terms: e.target.checked })}
-                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="tf-checkbox w-5 h-5 mt-1"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <FileText className="w-4 h-4 text-gray-800" />
-                      <span className="text-sm text-gray-900">Terms & Conditions</span>
+                      <span className="tf-body">Terms & Conditions</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta">
                       I agree to the assessment terms and conditions. I understand this is a formal evaluation and my responses will be recorded and reviewed by {assessment.companyName}.
                     </p>
                   </div>
@@ -241,14 +241,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     type="checkbox"
                     checked={consentChecks.dataUse}
                     onChange={(e) => setConsentChecks({ ...consentChecks, dataUse: e.target.checked })}
-                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="tf-checkbox w-5 h-5 mt-1"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Lock className="w-4 h-4 text-gray-800" />
-                      <span className="text-sm text-gray-900">Data Use & Privacy</span>
+                      <span className="tf-body">Data Use & Privacy</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta">
                       I consent to {assessment.companyName} collecting, processing, and storing my assessment data including responses, performance metrics, and AI analysis results for recruitment purposes. Data will be handled in accordance with GDPR and data protection laws.
                     </p>
                   </div>
@@ -261,14 +261,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     type="checkbox"
                     checked={consentChecks.recording}
                     onChange={(e) => setConsentChecks({ ...consentChecks, recording: e.target.checked })}
-                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="tf-checkbox w-5 h-5 mt-1"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Video className="w-4 h-4 text-success" />
-                      <span className="text-sm text-gray-900">AI Interview Recording</span>
+                      <span className="tf-body">AI Interview Recording</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta">
                       I understand this assessment uses AI-powered interview technology. My text responses will be analyzed by AI and reviewed by human recruiters. No video/audio recording, only text-based interactions.
                     </p>
                   </div>
@@ -281,14 +281,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     type="checkbox"
                     checked={consentChecks.честность}
                     onChange={(e) => setConsentChecks({ ...consentChecks, честность: e.target.checked })}
-                    className="w-5 h-5 text-gray-800 rounded mt-1 cursor-pointer flex-shrink-0"
+                    className="tf-checkbox w-5 h-5 mt-1"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <CheckCircle2 className="w-4 h-4 text-gray-800" />
-                      <span className="text-sm text-gray-900">Honesty & Integrity</span>
+                      <span className="tf-body">Honesty & Integrity</span>
                     </div>
-                    <p className="text-xs text-gray-600">
+                    <p className="tf-meta">
                       I commit to completing this assessment independently without external assistance. I understand that dishonest practices may result in disqualification from the recruitment process.
                     </p>
                   </div>
@@ -339,7 +339,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             <div className="flex items-center gap-3">
               <Sparkles className="w-8 h-8" />
               <div>
-                <h1 className="text-xl">Ready to Begin!</h1>
+                <h1 className="tf-page-title">Ready to Begin!</h1>
                 <p className="text-success text-sm">You're all set for your AI-powered interview</p>
               </div>
             </div>
@@ -349,7 +349,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {/* Welcome Message */}
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
               <h3 className="text-base text-gray-900 mb-1">Welcome, {candidateName}!</h3>
-              <p className="text-sm text-gray-700">
+              <p className="tf-body">
                 You're about to begin your assessment for <strong>{assessment.jobTitle}</strong> at {assessment.companyName}. 
                 This AI-powered interview will adapt to your responses and ask relevant follow-up questions.
               </p>
@@ -362,17 +362,17 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <Clock className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.duration} min</div>
-                  <div className="text-xs text-gray-600">Total Duration</div>
+                  <div className="tf-meta">Total Duration</div>
                 </div>
                 <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                   <MessageSquare className="w-5 h-5 text-gray-800 mb-1" />
                   <div className="text-xl text-gray-900">{assessment.sections.length}</div>
-                  <div className="text-xs text-gray-600">Sections</div>
+                  <div className="tf-meta">Sections</div>
                 </div>
                 <div className="p-3 bg-success-subtle rounded-lg border border-success-line">
                   <Sparkles className="w-5 h-5 text-success mb-1" />
                   <div className="text-xl text-gray-900">AI-Driven</div>
-                  <div className="text-xs text-gray-600">Interview Type</div>
+                  <div className="tf-meta">Interview Type</div>
                 </div>
               </div>
 
@@ -382,8 +382,8 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                   <div key={idx} className="p-3 border border-gray-200 rounded-lg">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm text-gray-900">{section.name} Section</div>
-                        <div className="text-xs text-gray-600">~{section.estimatedTime} minutes</div>
+                        <div className="tf-body">{section.name} Section</div>
+                        <div className="tf-meta">~{section.estimatedTime} minutes</div>
                       </div>
                       <div className="text-lg text-gray-800">{section.percentage}%</div>
                     </div>
@@ -394,8 +394,8 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
 
             {/* Instructions */}
             <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
-              <h4 className="text-sm text-gray-900 mb-2">How It Works</h4>
-              <div className="space-y-1 text-xs text-gray-700">
+              <h4 className="tf-body mb-2">How It Works</h4>
+              <div className="space-y-1 tf-meta">
                 <p>✓ The AI will ask you questions one at a time</p>
                 <p>✓ Type your answers in the text field provided</p>
                 <p>✓ The AI may ask follow-up questions based on your responses</p>
@@ -432,7 +432,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                 <Sparkles className="w-5 h-5 text-gray-800" />
                 <span className="text-gray-900">Assessment</span>
               </div>
-              <div className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm">
+              <div className="px-3 py-1 bg-gray-100 tf-body rounded-full">
                 Question {currentQuestion + 1} of {aiQuestions.length}
               </div>
             </div>
@@ -480,13 +480,13 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {currentQ.type !== 'coding' && (
               <div className="px-6 pb-6">
                 <div className="max-w-5xl mx-auto">
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
+                  <div className="tf-card-soft p-6 mb-6">
                     <div className="flex items-start gap-4">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-gray-700 to-gray-500 flex items-center justify-center flex-shrink-0">
                         <Sparkles className="w-5 h-5 text-white" />
                       </div>
                       <div className="flex-1">
-                        <div className="text-sm text-gray-800 mb-2">AI Interviewer</div>
+                        <div className="tf-body mb-2">AI Interviewer</div>
                         <p className="text-base text-gray-900 leading-relaxed mb-3">{currentQ.question}</p>
                         
                         {/* Scenario for Technical Questions */}
@@ -494,13 +494,13 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                           <div className="mt-4 p-4 bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg">
                             <div className="flex items-start gap-2 mb-2">
                               <FileText className="w-4 h-4 text-gray-800 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm text-gray-800">Scenario:</span>
+                              <span className="tf-body">Scenario:</span>
                             </div>
-                            <p className="text-sm text-gray-700 whitespace-pre-line ml-6">{currentQ.scenario}</p>
+                            <p className="tf-body whitespace-pre-line ml-6">{currentQ.scenario}</p>
                           </div>
                         )}
                         
-                        <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
+                        <div className="tf-badge mt-4 gap-2 bg-gray-100 text-gray-600">
                           {currentQ.type === 'behavioral' && '💭 Behavioral'}
                           {currentQ.type === 'technical' && '🔧 Technical'}
                         </div>
@@ -522,7 +522,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                         <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                         <div className="w-2 h-2 bg-gray-800 rounded-full animate-bounce" style={{ animationDelay: '0.4s' }}></div>
                       </div>
-                      <span className="text-sm text-gray-900">AI is processing your response...</span>
+                      <span className="tf-body">AI is processing your response...</span>
                     </div>
                   </div>
                 </div>
@@ -542,7 +542,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                           {/* Top Section: Split View - Question (Left) + Code Editor (Right) */}
                           <div className="flex-1 flex gap-6 min-h-0 mb-4">
                             {/* LEFT SIDE: Question & Scenario */}
-                            <div className="w-1/2 flex flex-col rounded-xl shadow-lg overflow-hidden border border-gray-200 bg-white">
+                            <div className="tf-card-soft w-1/2 flex flex-col overflow-hidden">
                               <div className="bg-gradient-to-r from-gray-800 to-gray-800 text-white px-5 py-3.5 flex items-center gap-3">
                                 <FileText className="w-5 h-5" />
                                 <span className="font-medium">Problem Statement</span>
@@ -551,21 +551,21 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                 <h3 className="text-xl text-gray-900 mb-4 leading-relaxed">{currentQ.question}</h3>
                                 
                                 {currentQ.scenario && (
-                                  <div className="mt-4 p-5 bg-white border border-gray-200 rounded-xl shadow-sm">
+                                  <div className="tf-card-soft mt-4 p-5">
                                     <div className="flex items-center gap-2 mb-3">
                                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                                         <FileText className="w-4 h-4 text-gray-800" />
                                       </div>
-                                      <span className="text-sm font-semibold text-gray-800">Problem Description</span>
+                                      <span className="tf-row-title">Problem Description</span>
                                     </div>
-                                    <p className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">{currentQ.scenario}</p>
+                                    <p className="tf-body whitespace-pre-line leading-relaxed">{currentQ.scenario}</p>
                                   </div>
                                 )}
                                 
                                 {/* AI-Detected Language Info */}
                                 <div className="mt-6 flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-gray-100 to-gray-100 border border-gray-300 rounded-lg shadow-sm">
                                   <Sparkles className="w-4 h-4 text-gray-800" />
-                                  <span className="text-sm text-gray-700">Detected Language:</span>
+                                  <span className="tf-body">Detected Language:</span>
                                   <span className="text-sm font-bold text-gray-900 uppercase">
                                     {currentQ.programmingLanguage || 'python'}
                                   </span>
@@ -600,28 +600,28 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               
                               {/* Editor Footer with Stats */}
                               <div className="bg-gray-800 px-5 py-2.5 border-t border-gray-700 flex items-center justify-between">
-                                <div className="text-xs text-gray-400 flex items-center gap-4">
+                                <div className="tf-hint flex items-center gap-4">
                                   <span>{codeAnswer.split('\n').length} lines</span>
                                   <span>•</span>
                                   <span>{codeAnswer.length} chars</span>
                                 </div>
                                 <div className="flex items-center gap-1">
                                   <div className="w-2 h-2 rounded-full bg-green-500"></div>
-                                  <span className="text-xs text-gray-400">Ready</span>
+                                  <span className="tf-hint">Ready</span>
                                 </div>
                               </div>
                             </div>
                           </div>
 
                           {/* BOTTOM SECTION: Output Console - Reduced Height */}
-                          <div className="rounded-xl overflow-hidden bg-white shadow-lg border border-gray-200" style={{ height: '140px' }}>
+                          <div className="tf-card-soft overflow-hidden" style={{ height: '140px' }}>
                             <div className="bg-gray-900 px-5 py-2.5 flex items-center gap-2">
                               <Terminal className="w-4 h-4 text-green-400" />
                               <span className="text-sm text-gray-300 font-medium">Output</span>
                             </div>
                             <div className="h-[calc(100%-40px)] overflow-y-auto bg-gray-50 p-4">
                               {!hasRun ? (
-                                <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+                                <div className="flex items-center justify-center h-full tf-body-muted">
                                   <div className="text-center">
                                     <Terminal className="w-8 h-8 mx-auto mb-2 text-gray-300" />
                                     <p>Run your code to see output</p>
@@ -637,14 +637,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                                   <span className="text-sm">Executing...</span>
                                 </div>
                               ) : (
-                                <pre className="text-sm text-gray-800 whitespace-pre-wrap font-mono leading-relaxed">{codeOutput}</pre>
+                                <pre className="tf-body whitespace-pre-wrap font-mono leading-relaxed">{codeOutput}</pre>
                               )}
                             </div>
                           </div>
 
                           {/* FIXED ACTION BUTTONS - Simplified & Elegant */}
                           <div className="mt-5 flex items-center justify-between">
-                            <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <div className="flex items-center gap-2 tf-body-muted">
                               <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
                               <span>Compiler ready</span>
                             </div>
@@ -672,16 +672,16 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                     </>
                   ) : (
                     /* For Behavioral & Technical Questions - Show Text Area */
-                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <div className="tf-card-soft p-6">
                       <label className="block text-gray-900 mb-3">Your Answer</label>
                       <textarea
                         value={answer}
                         onChange={(e) => setAnswer(e.target.value)}
                         placeholder="Type your answer here... Be specific and provide examples where possible."
-                        className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent resize-none text-gray-900"
+                        className="tf-textarea h-48 px-4 py-3 resize-none"
                       />
                       <div className="flex items-center justify-between mt-4">
-                        <div className="text-sm text-gray-500">
+                        <div className="tf-body-muted">
                           {answer.length} characters
                         </div>
                         <button
@@ -713,7 +713,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             <div className="w-16 h-16 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="w-10 h-10 text-success" />
             </div>
-            <h1 className="text-2xl text-gray-900 mb-3">Assessment Completed!</h1>
+            <h1 className="tf-page-title mb-3">Assessment Completed!</h1>
             <p className="text-base text-gray-600 mb-6">
               Thank you for completing the {assessment.title}. Your responses have been recorded and submitted successfully.
             </p>
@@ -751,20 +751,20 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {/* Assessment Summary */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Questions</div>
+                <div className="tf-meta mb-1">Questions</div>
                 <div className="text-xl text-gray-900">{aiQuestions.length}</div>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Duration</div>
+                <div className="tf-meta mb-1">Duration</div>
                 <div className="text-xl text-gray-900">{assessment.duration}m</div>
               </div>
               <div className="p-3 bg-gray-50 rounded-lg">
-                <div className="text-gray-500 text-xs mb-1">Status</div>
+                <div className="tf-meta mb-1">Status</div>
                 <div className="text-xl text-gray-900">✓</div>
               </div>
             </div>
 
-            <div className="text-xs text-gray-500">
+            <div className="tf-meta">
               Assessment ID: {assessmentId} • Submitted on {formatISTDate(new Date().toISOString())}
             </div>
           </div>

@@ -96,11 +96,11 @@ function AlreadyOpenInAnotherTab() {
         <h1 className="text-xl sm:text-2xl font-bold text-[#0f1d40] mb-3">
           This interview is already open in another tab
         </h1>
-        <p className="text-gray-600 text-sm sm:text-base leading-relaxed">
+        <p className="tf-body-secondary sm:text-base leading-relaxed">
           Please switch to the tab where you first opened this interview link to continue.
           You can close this tab.
         </p>
-        <p className="text-gray-500 text-sm leading-relaxed mt-4">
+        <p className="tf-body-muted leading-relaxed mt-4">
           If you closed that tab, this page continues automatically.
         </p>
       </div>

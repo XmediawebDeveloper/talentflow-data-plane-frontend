@@ -152,6 +152,7 @@ import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
 
@@ -185,7 +186,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
   return (
     <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
-        <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <span className="tf-body-secondary whitespace-nowrap">Go to</span>
         <input
           type="number"
           min={1}
@@ -200,7 +201,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
           }}
           onBlur={commitGoToPage}
           aria-label="Go to page"
-          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+          className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
         />
       </div>
 
@@ -213,7 +214,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
         <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </button>
 
-      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+      <span className="tf-label px-1 whitespace-nowrap">
         <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
       </span>
 
@@ -1940,9 +1941,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const card = document.querySelector(
         `[data-tf-job-row="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(jobId) : jobId}"]`,
       );
+      /* The version panel draws its rows twice — the table from md, phone
+         cards below it — and only one copy is displayed, so take the first
+         match that is actually rendered (a display:none one has no
+         offsetParent and would scroll nowhere). */
+      const firstShown = (selector: string) =>
+        Array.from(card?.querySelectorAll(selector) ?? []).find((el) => (el as HTMLElement).offsetParent !== null);
       const precise =
-        card?.querySelector('[data-tf-assessment-selected="true"]')
-        ?? card?.querySelector('[data-tf-job-version-open="true"]');
+        firstShown('[data-tf-assessment-selected="true"]')
+        ?? firstShown('[data-tf-job-version-open="true"]');
       if (precise) {
         scrollTo(precise, 'center');
         return;
@@ -2233,7 +2240,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           ? 'Scoring in progress'
           : 'Not scored yet';
       return (
-        <td className="px-3 sm:px-4 py-3 align-middle text-sm text-center">
+        <td className="tf-td text-sm text-center">
           <span className="text-gray-400" title={why}>&mdash;</span>
         </td>
       );
@@ -2241,7 +2248,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
     const passed = score >= RESULT_PASS_MARK;
     return (
-      <td className="px-3 sm:px-4 py-3 align-middle text-sm text-center">
+      <td className="tf-td text-sm text-center">
         <div className="flex flex-col items-center gap-0.5">
           <span className={`${SCORE_CELL_TEXT} ${passed ? 'text-success' : 'text-destructive'}`}>
             {formatScore(score)}%
@@ -2251,6 +2258,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           </span>
         </div>
       </td>
+    );
+  };
+
+  /* The phone card's version of `renderInviteScoreCell`: the same score, the
+     same readiness rule and the same pass mark, drawn as a footer chip. */
+  const renderInviteScoreChip = (inv: any, round: 'technical' | 'coding') => {
+    const score = round === 'technical' ? inv.technical_score : inv.coding_score;
+    const label = round === 'technical' ? 'Tech' : 'Coding';
+    const scoring = inv.scoring_status === 'pending' || inv.scoring_status === 'processing';
+    if (score == null || scoring) {
+      return <MobileStatChip tone="neutral">{label}: &mdash;</MobileStatChip>;
+    }
+    const passed = score >= RESULT_PASS_MARK;
+    return (
+      <MobileStatChip tone={passed ? 'success' : 'danger'}>
+        {label}: {formatScore(score)}% · {passed ? 'Pass' : 'Fail'}
+      </MobileStatChip>
     );
   };
 
@@ -5390,7 +5414,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
           )}
           <h3
-            className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+            className="tf-row-name truncate min-w-0"
             title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
           >
             {assessment.job?.title || stripVersionFromTitle(assessment.title)}
@@ -5419,7 +5443,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             list layout: one row of four metrics, not a 2 x 2 block. */}
         <div className={!selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id
           ? 'grid grid-cols-2 gap-x-2 gap-y-3'
-          : 'grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/job-row:flex-1 @4xl/job-row:min-w-0'}>
+          : 'tf-grid-stats @4xl/job-row:flex-1 @4xl/job-row:min-w-0'}>
           {/* `selectMode` is exactly what the panel below is given as
               `hideDraftJobVersions`, so the row's Job Versions figure and the
               panel's "Job Versions (N)" heading count the same versions. */}
@@ -5434,9 +5458,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
                 {/* Null while the figure is still resolving - the same "..." the
                     stat cards above show, rather than a provisional number. */}
-                <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value ?? '...'}</span>
+                <span className="tf-row-title">{value ?? '...'}</span>
               </div>
-              <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+              <p className="tf-micro-hint truncate mt-0.5">{label}</p>
             </div>
           ))}
         </div>
@@ -6616,9 +6640,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      stats from an earlier visit skip it — `isLoadingStats` then starts false. */
   if (isLoadingStats) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
@@ -6636,7 +6660,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             </div>
             {/* Stats cards */}
-            <div className="grid gap-2.5 sm:gap-3 mb-5 sm:mb-8 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="tf-grid-4 mb-5 sm:mb-8">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-brand-blue/15 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex items-start gap-2.5">
@@ -6652,7 +6676,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {/* Assessment rows */}
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="p-3 sm:p-4 bg-white rounded-xl border border-gray-300 shadow-sm shadow-brand-blue/5">
+                <div key={i} className="tf-card-soft p-3 sm:p-4">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
                     <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
                       <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
@@ -6662,7 +6686,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <div className="flex-shrink-0 lg:w-[104px]">
                       <Skeleton className="h-5 w-20 rounded-full" />
                     </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1 lg:min-w-0">
+                    <div className="tf-grid-stats lg:flex-1 lg:min-w-0">
                       {Array.from({ length: 4 }).map((_, j) => (
                         <div key={j} className="space-y-1.5">
                           <Skeleton className="h-3 w-16" />
@@ -6681,9 +6705,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Assessments' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-5">
@@ -6692,8 +6716,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg lg:text-xl text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight font-semibold">Assessment Management</h1>
-              <p className="text-xs lg:text-sm text-gray-600 dark:text-slate-400">
+              <h1 className="tf-page-title mb-0.5">Assessment Management</h1>
+              <p className="tf-meta lg:text-sm">
                 Create and manage skill assessments for candidates
               </p>
               {/* JD Filter Indicator */}
@@ -6932,7 +6956,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {/* The versions behind the job count: every assessment row is
                   one version of a job's assessment (Total Assessments). */}
               {!isLoadingStats && (
-                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                   {stats.total_assessments} {stats.total_assessments === 1 ? 'version' : 'versions'}
                 </span>
               )}
@@ -6953,7 +6977,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('all')}
             >
               {!isLoadingStats && (
-                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                   {stats.total_assessments} {stats.total_assessments === 1 ? 'version' : 'versions'}
                 </span>
               )}
@@ -6969,7 +6993,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               onClick={() => openAssessmentsList('active')}
             >
               {!isLoadingStats && (
-                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                   {stats.active_assessments} {stats.active_assessments === 1 ? 'version' : 'versions'}
                 </span>
               )}
@@ -6987,7 +7011,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {/* The people behind the attempt count, like the versions pill
                   under Configured Jobs. */}
               {!isLoadingStats && uniqueCandidatesAssessed !== undefined && (
-                <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                   {uniqueCandidatesAssessed} {uniqueCandidatesAssessed === 1 ? 'candidate' : 'candidates'}
                 </span>
               )}
@@ -7009,7 +7033,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             `[&>*:last-child:not(:first-child)]:mb-3` spaces an open filter
             panel (or the match line) off that rule the way the toolbar row's
             own mb-3 already does when it is alone. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+        <div className="tf-card p-3 sm:p-4 mb-4">
 
         {/* THE search position for this page: one row, directly above the tab
             pills, for every tab.
@@ -7071,7 +7095,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }
                 >
                     <div>
-                      <label htmlFor="assessment-type" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="assessment-type" className="block tf-caption mb-1.5">
                         Type
                       </label>
                       <FilterSelect
@@ -7089,7 +7113,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     <div>
-                      <label htmlFor="assessment-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="assessment-creator" className="block tf-caption mb-1.5">
                         Created by
                       </label>
                       <FilterSelect
@@ -7105,7 +7129,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     <div>
-                      <label htmlFor="assessment-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="assessment-created-from" className="block tf-caption mb-1.5">
                         Created from
                       </label>
                       <DateField
@@ -7118,7 +7142,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     <div>
-                      <label htmlFor="assessment-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="assessment-created-to" className="block tf-caption mb-1.5">
                         Created to
                       </label>
                       <DateField
@@ -7133,7 +7157,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               )}
 
               {assessmentListNarrowed && !isLoading && (
-                <p className="mt-3 text-sm text-gray-600 dark:text-slate-400">
+                <p className="mt-3 tf-body-secondary">
                   <span className="font-semibold text-gray-900 dark:text-slate-50">{assessmentResultCount}</span>
                   {' '}assessment{assessmentResultCount === 1 ? '' : 's'} match
                   {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
@@ -7322,7 +7346,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {showSortBy && (() => {
                 const sortControl = (
                 <div className="flex items-center gap-2">
-                  <label htmlFor="assessment-sort" className="text-sm text-gray-700 dark:text-slate-300 font-medium whitespace-nowrap">Sort by</label>
+                  <label htmlFor="assessment-sort" className="tf-label whitespace-nowrap">Sort by</label>
                   <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                     <Dropdown
                       id="assessment-sort"
@@ -7374,7 +7398,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             least a screen tall. A tab click scrolls the toolbar card to the
             top; a list that loaded shorter than its skeleton shrank the page
             under that scroll and the browser snapped back to the stat cards. */}
-        <div className={activeTab === 'settings' ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5' : 'min-h-[calc(100dvh-11rem)]'}>
+        <div className={activeTab === 'settings' ? 'tf-card-soft' : 'min-h-[calc(100dvh-11rem)]'}>
           {/* Assessment List */}
           <div className={activeTab === 'settings' ? 'p-3 sm:p-6' : ''}>
 
@@ -7616,7 +7640,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           />
 
                           <div>
-                            <label htmlFor="result-outcome" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="result-outcome" className="block tf-caption mb-1.5">
                               Outcome
                             </label>
                             <FilterSelect
@@ -7633,7 +7657,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
 
                           <div>
-                            <label htmlFor="result-completed-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="result-completed-from" className="block tf-caption mb-1.5">
                               Completed from
                             </label>
                             <DateField
@@ -7646,7 +7670,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
 
                           <div>
-                            <label htmlFor="result-completed-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="result-completed-to" className="block tf-caption mb-1.5">
                               Completed to
                             </label>
                             <DateField
@@ -7671,7 +7695,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           outside this card. */}
                       {/* No title-strip skeleton either — the loaded card has
                           no title strip to stand in for. */}
-                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      <div className="tf-card overflow-hidden">
                         <div className="min-h-[320px] overflow-auto tf-table-shell">
                           {/* Same floor as the loaded table below, so the rows
                               do not shift sideways when the skeleton swaps
@@ -7680,40 +7704,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 {['Select', 'Candidate', 'Email', 'Timeline', 'Completed', 'Result Status', 'Tech Score', 'Coding Score', 'Invite Source', 'Phone', 'CID', 'JD ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Actions'].map((c) => (
-                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                                  <th key={c} className="tf-th-cell tf-th"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                               {Array.from({ length: 8 }).map((_, r) => (
                                 <tr key={r}>
-                                  <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10"><Skeleton className="h-4 w-4 rounded" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                                  <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10"><Skeleton className="h-4 w-4 rounded" /></td>
+                                  <td className="tf-td">
                                     <div className="flex items-center gap-3">
                                       <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
                                       <Skeleton className="h-4 w-28" />
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-40" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-40" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-24" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-5 w-20 rounded" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-28" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-20 rounded" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
                                   {/* Job ID — badge-shaped, like the CID chip
                                       in the first column. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-5 w-16 rounded" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-36" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-10" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-36" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-10" /></td>
                                   {/* Assessment Version — same width as the Job
                                       Version cell above it, since both settle
                                       into the same short `v3`. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-10" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-5 w-10 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-10" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-10 rounded-full" /></td>
+                                  <td className="tf-td"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -7803,7 +7827,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                         </div>
                       ) : (
-                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      <>
+                      <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
                         <div className="min-h-[320px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         {/* 1500 -> 1720 for the two version columns, then
                             1720 -> 1830 for Assessment Version, then
@@ -7821,7 +7846,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
                               {/* Select all — this page's rows. */}
-                              <th className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+                              <th className="tf-th-cell pl-3 sm:pl-4 lg:pl-6 pr-0 w-10 tf-th">
                                 {(() => {
                                   const allOnPage = pageItems.length > 0 && pageItems.every((row) => selectedResultKeys.has(resultRowKey(row)));
                                   return (
@@ -7842,22 +7867,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   );
                                 })()}
                               </th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Email</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result Status</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Phone</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Email</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result Status</span></th>
+                              <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                              <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Phone</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                               {/* Job ID leads the job group — the id first,
                                   then the name, then the versions — which is
                                   the order the Invitation Status rows and the
                                   All Assessments table both put them in. */}
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD Title</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD Title</span></th>
                               {/* The three version columns sit next to JD
                                   Title so the job, the version of it, the
                                   version of the assessment sat against it and
@@ -7873,10 +7898,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   and side by side in this order they read as
                                   the relationship they are, this assessment
                                   version on that job version. */}
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
-                              <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Resume Version</span></th>
-                              <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Resume Version</span></th>
+                              <th className="tf-th-cell text-center tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -7888,7 +7913,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   className="transition-colors hover:bg-brand-blue/5 cursor-pointer"
                                   title={`View ${result.candidate_name || 'candidate'}'s result`}
                                 >
-                                  <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                                  <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
                                     <button
                                       type="button"
                                       onClick={() => toggleResultSelected(result)}
@@ -7900,18 +7925,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         : <Square className="w-4 h-4 text-gray-400" />}
                                     </button>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                  <td className="tf-td">
                                     <div className="flex items-center gap-3">
                                       <NameAvatar name={result.candidate_name} fallback={result.candidate_email} size="md" />
-                                      <p className="min-w-0 max-w-[240px] font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={result.candidate_name || 'Unknown'}>
+                                      <p className="min-w-0 max-w-[240px] tf-row-name truncate" title={result.candidate_name || 'Unknown'}>
                                         {result.candidate_name || 'Unknown'}
                                       </p>
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                  <td className="tf-td tf-body-secondary whitespace-nowrap">
                                     <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '-'}</span>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-xs text-gray-500 dark:text-slate-500">
+                                  <td className="tf-td tf-meta">
                                     <div className="space-y-1">
                                       {result.started_at && (
                                         <div className="flex items-center gap-2 whitespace-nowrap">
@@ -7935,13 +7960,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       )}
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
-                                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                                  <td className="tf-td whitespace-nowrap">
+                                    <div className="flex items-center gap-2 tf-body-secondary">
                                       <Calendar className="w-4 h-4" />
                                       {result.completed_at ? formatISTDate(result.completed_at) : '-'}
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                  <td className="tf-td">
                                     {renderInviteBadgeForStatus(
                                       result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
                                       {},
@@ -7954,13 +7979,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   {/* Invite Source — how this candidate was
                                       actually invited, from the invitation's
                                       own resume_id. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                  <td className="tf-td tf-body whitespace-nowrap">
                                     <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" />
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                                  <td className="tf-td tf-body-secondary whitespace-nowrap">
                                     {result.candidate_phone || '-'}
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                  <td className="tf-td whitespace-nowrap">
                                     <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                                       {result.candidate_display_id || '-'}
                                     </span>
@@ -7978,15 +8003,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       a general assessment is not tied to one,
                                       which is the same case `jd_title` already
                                       falls back for. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                  <td className="tf-td whitespace-nowrap">
                                     {result._jd_short_id ? (
                                       <JobIdBadge>{result._jd_short_id}</JobIdBadge>
                                     ) : (
-                                      <span className="text-xs text-gray-400">—</span>
+                                      <span className="tf-hint">—</span>
                                     )}
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
-                                    <span className="block max-w-[16rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50" title={result.jd_title || result._assessment_title || undefined}>{result.jd_title || result._assessment_title || '—'}</span>
+                                  <td className="tf-td">
+                                    <span className="block max-w-[16rem] truncate tf-row-name" title={result.jd_title || result._assessment_title || undefined}>{result.jd_title || result._assessment_title || '—'}</span>
                                   </td>
                                   {/* Job Version / Assessment Version — the
                                       All Assessments table's blue / cyan
@@ -7994,18 +8019,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       rows draw the same two fields. A dash
                                       when the record carries no version,
                                       rather than an invented v1. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                  <td className="tf-td whitespace-nowrap">
                                     {result._jd_version ? (
                                       <VersionPill kind="job" version={result._jd_version} />
                                     ) : (
-                                      <span className="text-xs text-gray-400">—</span>
+                                      <span className="tf-hint">—</span>
                                     )}
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                  <td className="tf-td whitespace-nowrap">
                                     {result._assessment_version ? (
                                       <VersionPill kind="assessment" version={result._assessment_version} />
                                     ) : (
-                                      <span className="text-xs text-gray-400">—</span>
+                                      <span className="tf-hint">—</span>
                                     )}
                                   </td>
                                   {/* Resume Version — the blue pill that
@@ -8013,13 +8038,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       when the candidate has no scoring record
                                       for this job version; see the join in
                                       loadAllCompletedCandidates. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                  <td className="tf-td whitespace-nowrap">
                                     {result._resume_version ? (
                                       <span className="inline-flex shrink-0 whitespace-nowrap items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-400/30">
                                         V{result._resume_version}
                                       </span>
                                     ) : (
-                                      <span className="text-xs text-gray-400">—</span>
+                                      <span className="tf-hint">—</span>
                                     )}
                                   </td>
                                   {/* The Invitation Status kebab and its View
@@ -8027,7 +8052,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       the menu (portalled, but still inside this
                                       row in React's tree) never also fires the
                                       row's own open. */}
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                                  <td className="tf-td text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                                     <InvitationActionsMenu
                                       actions={[]}
                                       className="w-48"
@@ -8049,6 +8074,96 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </table>
                         </div>
                       </div>
+                      <MobileRecordList>
+                        {pageItems.map((result) => {
+                          const isSelected = selectedResultKeys.has(resultRowKey(result));
+                          return (
+                            <MobileRecordCard
+                              key={`${result._assessment_id}-${result.invitation_id}`}
+                              selected={isSelected}
+                              onClick={() => openCandidateResult(result, filteredResults)}
+                              select={
+                                <button
+                                  type="button"
+                                  onClick={() => toggleResultSelected(result)}
+                                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                                  aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
+                                >
+                                  {isSelected
+                                    ? <CheckSquare className="w-4 h-4 text-brand-blue" />
+                                    : <Square className="w-4 h-4 text-gray-400" />}
+                                </button>
+                              }
+                              idBadge={
+                                <>
+                                  <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                    {result.candidate_display_id || '-'}
+                                  </span>
+                                  {result._jd_short_id && <JobIdBadge>{result._jd_short_id}</JobIdBadge>}
+                                </>
+                              }
+                              badges={
+                                <>
+                                  {renderInviteBadgeForStatus(
+                                    result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
+                                    {},
+                                  )}
+                                </>
+                              }
+                              title={
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <NameAvatar name={result.candidate_name} fallback={result.candidate_email} size="md" />
+                                  <span className="truncate" title={result.candidate_name || 'Unknown'}>{result.candidate_name || 'Unknown'}</span>
+                                </span>
+                              }
+                              actions={
+                                <InvitationActionsMenu
+                                  actions={[]}
+                                  className="w-48"
+                                  extraItems={
+                                    <DropdownMenuItem
+                                      className={assessmentDropdownMenuItemClass}
+                                      onSelect={() => openCandidateResult(result, filteredResults)}
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
+                                    </DropdownMenuItem>
+                                  }
+                                />
+                              }
+                              meta={[
+                                { icon: <Mail className="w-3.5 h-3.5" />, label: result.candidate_email || '-' },
+                                { icon: <Briefcase className="w-3.5 h-3.5" />, label: result.jd_title || result._assessment_title || '—' },
+                                { label: <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" /> },
+                              ]}
+                              fields={[
+                                { label: 'Phone', value: result.candidate_phone || '-' },
+                                { label: 'Completed', value: result.completed_at ? formatISTDate(result.completed_at) : '-' },
+                                { label: 'Started', value: result.started_at ? formatIST(result.started_at) : null },
+                                { label: 'Completed at', value: result.completed_at ? formatIST(result.completed_at) : null },
+                                { label: 'Duration', value: formatTimeSpent(result.time_spent_seconds) !== '-' ? formatTimeSpent(result.time_spent_seconds) : null },
+                                { label: 'Job Version', value: result._jd_version ? <VersionPill kind="job" version={result._jd_version} /> : '—' },
+                                { label: 'Assessment Version', value: result._assessment_version ? <VersionPill kind="assessment" version={result._assessment_version} /> : '—' },
+                                {
+                                  label: 'Resume Version',
+                                  value: result._resume_version ? (
+                                    <span className="inline-flex shrink-0 whitespace-nowrap items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 bg-blue-50 text-blue-700 ring-blue-200 dark:bg-blue-500/15 dark:text-blue-300 dark:ring-blue-400/30">
+                                      V{result._resume_version}
+                                    </span>
+                                  ) : '—',
+                                },
+                              ]}
+                              footer={
+                                <>
+                                  {renderInviteScoreChip(result, 'technical')}
+                                  {renderInviteScoreChip(result, 'coding')}
+                                </>
+                              }
+                            />
+                          );
+                        })}
+                      </MobileRecordList>
+                      </>
                       )}
                       {/* Total Jobs' pagination, as that tab renders it. */}
                       <ListPagination
@@ -8454,7 +8569,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           }
                         >
                           <div>
-                            <label htmlFor="invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="invite-status-filter" className="block tf-caption mb-1.5">
                               Status
                             </label>
                             {/* One option per status tab, in tab order and
@@ -8473,7 +8588,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
 
                           <div>
-                            <label htmlFor="invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="invite-sent-from" className="block tf-caption mb-1.5">
                               Invited from
                             </label>
                             <DateField
@@ -8489,7 +8604,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
 
                           <div>
-                            <label htmlFor="invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            <label htmlFor="invite-sent-to" className="block tf-caption mb-1.5">
                               Invited to
                             </label>
                             <DateField
@@ -8529,7 +8644,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                       </div>
                       {/* Invitations card */}
-                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      <div className="tf-card overflow-hidden">
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 sm:gap-3">
                             <Skeleton className="h-5 w-24" />
@@ -8541,17 +8656,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
-                                <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
+                                <th className="tf-th-cell w-12"><Skeleton className="h-4 w-4 rounded" /></th>
                                 {['Candidate', 'Timeline', 'Status', 'Tech Score', 'Coding Score', 'Invite Source', 'CID', 'Job & Assessment', 'Action'].map((c) => (
-                                  <th key={c} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                                  <th key={c} className="tf-th-cell tf-th"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                               {Array.from({ length: 8 }).map((_, r) => (
                                 <tr key={r}>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                                  <td className="tf-td"><Skeleton className="h-4 w-4 rounded" /></td>
+                                  <td className="tf-td">
                                     <div className="flex items-center gap-3">
                                       <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
                                       <div className="space-y-1.5">
@@ -8560,19 +8675,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       </div>
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-40" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-4 w-24" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-5 w-16 rounded" /></td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                                  <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="tf-td">
                                     <div className="space-y-1.5">
                                       <Skeleton className="h-4 w-48" />
                                       <Skeleton className="h-3 w-32" />
                                     </div>
                                   </td>
-                                  <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
+                                  <td className="tf-td"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
                                 </tr>
                               ))}
                             </tbody>
@@ -8725,7 +8840,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             percentage says nothing about how big the sample
                             was. */}
                         <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
-                          <span className="text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <span className="tf-body-secondary whitespace-nowrap">Completion rate</span>
                           <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                             {/* Solid `bg-brand-blue`, not the blue→cyan gradient
                                 this started as: one brand colour, matching the
@@ -8739,10 +8854,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               style={{ width: `${totalInvites > 0 ? Math.round((completedInvites / totalInvites) * 100) : 0}%` }}
                             />
                           </div>
-                          <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">
+                          <span className="tf-row-title tabular-nums">
                             {totalInvites > 0 ? Math.round((completedInvites / totalInvites) * 100) : 0}%
                           </span>
-                          <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden sm:inline">
+                          <span className="tf-meta whitespace-nowrap hidden sm:inline">
                             {completedInvites.toLocaleString()} of {totalInvites.toLocaleString()} completed
                           </span>
                         </div>
@@ -8750,7 +8865,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                       {/* The list card, same treatment as the Candidate Results
                           tab's. */}
-                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                      <div className="tf-card overflow-hidden">
                         {/* Header — the Candidate Results card's title row, with
                             the popup's Refresh control, since invite statuses
                             move while the tab sits open.
@@ -8780,7 +8895,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               No invitations match the current filters.
                             </div>
                           ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+                          <div className="tf-grid-4 p-4">
                             {pageItems.map((inv: any) => {
                               const isSelected = selectedInviteIds.has(inv.id);
                               const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
@@ -8802,8 +8917,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <div className="flex items-center gap-3 min-w-0">
                                       <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                                       <div className="min-w-0">
-                                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
-                                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
+                                        <p className="tf-row-name truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
+                                        <p className="tf-meta truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
                                       </div>
                                     </div>
                                     <div className="flex items-center gap-1 flex-shrink-0">
@@ -8817,21 +8932,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </div>
                                   <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                     {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
-                                    <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0" title={inv._jd_title}>{inv._jd_title || '—'}</span>
+                                    <span className="tf-row-name truncate min-w-0" title={inv._jd_title}>{inv._jd_title || '—'}</span>
                                     {inv._jd_version ? <VersionPill kind="job" version={inv._jd_version} /> : null}
                                     {inv._assessment_version ? <VersionPill kind="assessment" version={inv._assessment_version} /> : null}
                                   </div>
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     {renderInviteBadgeForStatus(statusOf(inv), inv)}
-                                    <span className="text-xs text-gray-700 dark:text-slate-300">
+                                    <span className="tf-meta">
                                       <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3 h-3" />
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-slate-500">
+                                  <div className="flex items-center gap-4 tf-meta">
                                     <span>Tech <span className={`${SCORE_CELL_TEXT} text-gray-900 dark:text-slate-100`}>{scoreText(inv.technical_score)}</span></span>
                                     <span>Coding <span className={`${SCORE_CELL_TEXT} text-gray-900 dark:text-slate-100`}>{scoreText(inv.coding_score)}</span></span>
                                   </div>
-                                  <div className="pt-2 border-t border-gray-100 dark:border-slate-800 text-xs text-gray-500 dark:text-slate-500 space-y-1">
+                                  <div className="pt-2 border-t border-gray-100 dark:border-slate-800 tf-meta space-y-1">
                                     {timelineEvents(inv).length === 0 ? (
                                       <div className="flex items-center gap-2">
                                         <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
@@ -8855,7 +8970,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                           )
                         ) : (
-                        <div className="min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell">
+                        <>
+                        <div className={`${DESKTOP_TABLE_ONLY} min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
                           {/* 1200 -> 1400 for the two score columns. The shell
                               already scrolls sideways, so this only moves where
                               that scroll starts; leaving it at 1200 would have
@@ -8878,7 +8994,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     table), so the checkbox stays put while the
                                     wide table scrolls sideways. */}
                                 {showInviteSelection && (
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-12 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300">
+                                <th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
                                   <button
                                     onClick={toggleSelectAllInvites}
                                     className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"
@@ -8893,9 +9009,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </button>
                                 </th>
                                 )}
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
                                 {/* Centred, like the score columns on the
                                     Candidate Results table — a percentage over
                                     its Pass/Fail chip reads as a unit, and
@@ -8908,17 +9024,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     column that came and went would have to do
                                     it per row, which a table cannot. Rows
                                     without the round show a dash. */}
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                                <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                                <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                                 {/* Job ID / Job Role / Job Version / Assessment Version —
                                     the job group, after Invite Source: the same place the
                                     Track Invites popup and the Results page put it. */}
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Role</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                                <th className="text-left px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Role</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
                                 {/* Action — pinned to the right edge with
                                     `tf-sticky-col`, the mirror of the Select
                                     All column's `tf-sticky-col-left`, so on
@@ -8926,7 +9042,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     both stay reachable while the columns
                                     between them scroll. Same treatment as the
                                     Track Invites popup's own Actions column. */}
-                                <th className="text-center px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Action</span></th>
+                                <th className="tf-th-cell text-center tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Action</span></th>
                               </tr>
                             </thead>
                             )}
@@ -8943,7 +9059,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 return (
                                   <tr key={inv.id} className="transition-colors hover:bg-brand-blue/5">
                                     {showInviteSelection && (
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle tf-sticky-col-left">
+                                    <td className="tf-td tf-sticky-col-left">
                                       <button
                                         onClick={() => { if (!inviteJobLock(inv)) toggleSelectInvite(inv.id); }}
                                         disabled={!!inviteJobLock(inv)}
@@ -8959,7 +9075,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       </button>
                                     </td>
                                     )}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                    <td className="tf-td">
                                       <div className="flex items-center gap-3">
                                         <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                                         {/* Invited / Expired name the email on the
@@ -8973,13 +9089,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           >
                                             <span className="font-medium text-gray-900 dark:text-slate-50">{inv.candidate_name || '-'}</span>
                                             {inv.candidate_email && (
-                                              <span className="text-xs text-gray-500 dark:text-slate-500"> — {inv.candidate_email}</span>
+                                              <span className="tf-meta"> — {inv.candidate_email}</span>
                                             )}
                                           </p>
                                         ) : (
                                           <div className="min-w-0 max-w-[240px]">
-                                            <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
-                                            <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
+                                            <p className="tf-row-name truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
+                                            <p className="tf-meta truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
                                           </div>
                                         )}
                                       </div>
@@ -8989,7 +9105,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         AssessmentInviteActions) — not just the latest
                                         per milestone type, so a revoke followed by an
                                         edited resend shows both, not just the resend. */}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-xs text-gray-500 dark:text-slate-500">
+                                    <td className="tf-td tf-meta">
                                       <div className="space-y-1">
                                         {timelineEvents(inv).length === 0 ? (
                                           <div className="flex items-center gap-2 whitespace-nowrap">
@@ -9012,17 +9128,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     {/* The Timeline's latest status, on every
                                         tab — the same value that decided
                                         which tab this row is under. */}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                    <td className="tf-td">
                                       {renderInviteBadgeForStatus(statusOf(inv), inv)}
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
                                     {/* Invite Source — how this candidate was actually
                                         invited, from the invitation's own resume_id. */}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                    <td className="tf-td tf-body whitespace-nowrap">
                                       <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" />
                                     </td>
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                    <td className="tf-td whitespace-nowrap">
                                       <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                                         {inv.candidate_display_id || '-'}
                                       </span>
@@ -9035,36 +9151,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         hover), and that table's own blue / cyan
                                         VersionPill. A missing value is a dash,
                                         not an invented v1. */}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle whitespace-nowrap">
+                                    <td className="tf-td whitespace-nowrap">
                                       {inv._jd_short_id ? (
                                         <JobIdBadge>{inv._jd_short_id}</JobIdBadge>
                                       ) : (
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <span className="tf-hint">—</span>
                                       )}
                                     </td>
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                    <td className="tf-td">
                                       {/* The cap sits on the span: a table cell's own
                                           max-width is ignored, so on the td it let a
                                           long title widen the column uncut. */}
                                       <span
-                                        className="block max-w-[16rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50"
+                                        className="block max-w-[16rem] truncate tf-row-name"
                                         title={inv._jd_title}
                                       >
                                         {inv._jd_title || '—'}
                                       </span>
                                     </td>
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                    <td className="tf-td">
                                       {inv._jd_version ? (
                                         <VersionPill kind="job" version={inv._jd_version} />
                                       ) : (
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <span className="tf-hint">—</span>
                                       )}
                                     </td>
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                                    <td className="tf-td">
                                       {inv._assessment_version ? (
                                         <VersionPill kind="assessment" version={inv._assessment_version} />
                                       ) : (
-                                        <span className="text-xs text-gray-400">—</span>
+                                        <span className="tf-hint">—</span>
                                       )}
                                     </td>
                                     {/* Actions in a kebab, using Radix's
@@ -9079,7 +9195,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         so a row without one gets no trigger at
                                         all rather than a menu that opens onto
                                         nothing — the popup's rule. */}
-                                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center tf-sticky-col">
+                                    <td className="tf-td text-center tf-sticky-col">
                                       {renderInviteRowActions(inv)}
                                     </td>
                                   </tr>
@@ -9088,6 +9204,87 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </tbody>
                           </table>
                         </div>
+                        <MobileRecordList
+                          className="p-3"
+                          empty={
+                            <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
+                              No invitations match the current filters.
+                            </div>
+                          }
+                        >
+                          {total === 0 ? [] : pageItems.map((inv: any) => (
+                            <MobileRecordCard
+                              key={inv.id}
+                              selected={showInviteSelection && selectedInviteIds.has(inv.id)}
+                              select={showInviteSelection ? (
+                                <button
+                                  onClick={() => { if (!inviteJobLock(inv)) toggleSelectInvite(inv.id); }}
+                                  disabled={!!inviteJobLock(inv)}
+                                  title={inviteJobLock(inv) ?? undefined}
+                                  className="p-1 hover:bg-gray-200 dark:hover:bg-slate-700 rounded disabled:opacity-40 disabled:cursor-not-allowed"
+                                  aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
+                                >
+                                  {selectedInviteIds.has(inv.id) ? (
+                                    <CheckSquare className="w-4 h-4 text-gray-800 dark:text-slate-200" />
+                                  ) : (
+                                    <Square className="w-4 h-4 text-gray-400" />
+                                  )}
+                                </button>
+                              ) : undefined}
+                              idBadge={
+                                <>
+                                  <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                    {inv.candidate_display_id || '-'}
+                                  </span>
+                                  {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
+                                </>
+                              }
+                              badges={renderInviteBadgeForStatus(statusOf(inv), inv)}
+                              title={
+                                <span className="flex min-w-0 items-center gap-2">
+                                  <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
+                                  <span className="truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</span>
+                                </span>
+                              }
+                              actions={renderInviteRowActions(inv)}
+                              meta={[
+                                { icon: <Mail className="w-3.5 h-3.5" />, label: inv.candidate_email },
+                                { icon: <Briefcase className="w-3.5 h-3.5" />, label: inv._jd_title || '—' },
+                                { label: <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" /> },
+                              ]}
+                              fields={[
+                                { label: 'Job Version', value: inv._jd_version ? <VersionPill kind="job" version={inv._jd_version} /> : '—' },
+                                { label: 'Assessment Version', value: inv._assessment_version ? <VersionPill kind="assessment" version={inv._assessment_version} /> : '—' },
+                              ]}
+                              footer={
+                                <>
+                                  {renderInviteScoreChip(inv, 'technical')}
+                                  {renderInviteScoreChip(inv, 'coding')}
+                                </>
+                              }
+                            >
+                              <div className="mt-3 tf-meta space-y-1">
+                                {timelineEvents(inv).length === 0 ? (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                    <span>Created: {formatIST(inv.created_at)}</span>
+                                  </div>
+                                ) : (
+                                  timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                                    <div key={`${label}-${i}`} className="flex items-center gap-2">
+                                      <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                      <span className={tone}>{label}: {formatIST(at)}</span>
+                                    </div>
+                                  ))
+                                )}
+                                {hasMoreTimelineHistory(inv) && (
+                                  <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                )}
+                              </div>
+                            </MobileRecordCard>
+                          ))}
+                        </MobileRecordList>
+                        </>
                         )}
                       </div>
 
@@ -9161,10 +9358,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {!IS_PRODUCTION_ENV && (
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
-                    className={`pb-2.5 sm:pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 ${
+                    className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'proctoring'
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-brand-blue'
+                        ? 'tf-tab-line-active'
+                        : ''
                     }`}
                   >
                     <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -9174,10 +9371,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   )}
                   <button
                     onClick={() => setSettingsSubTab('topics')}
-                    className={`pb-2.5 sm:pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 ${
+                    className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'topics'
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-brand-blue'
+                        ? 'tf-tab-line-active'
+                        : ''
                     }`}
                   >
                     <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -9188,10 +9385,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {isTenantAdmin && (
                   <button
                     onClick={() => setSettingsSubTab('consent')}
-                    className={`pb-2.5 sm:pb-3 text-sm font-medium border-b-2 transition-colors flex items-center gap-1.5 sm:gap-2 whitespace-nowrap shrink-0 ${
+                    className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'consent'
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-brand-blue'
+                        ? 'tf-tab-line-active'
+                        : ''
                     }`}
                   >
                     <FileCheck className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -9210,11 +9407,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="space-y-4 sm:space-y-6">
                     {/* Header */}
                     <div>
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 flex items-center gap-1.5 sm:gap-2">
+                      <h2 className="tf-section-title flex items-center gap-1.5 sm:gap-2">
                         <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5" />
                         Assessment Topics Settings
                       </h2>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5 sm:mt-1">
+                      <p className="tf-body-secondary mt-0.5 sm:mt-1">
                         Enable or disable topics for all assessments. Disabled topics will not appear in the section distribution.
                       </p>
                     </div>
@@ -9223,7 +9420,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {isLoadingTopics ? (
                       <>
                         {/* Topic Availability banner */}
-                        <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                        <div className="tf-panel p-3 sm:p-4">
                           <div className="flex items-center gap-2 sm:gap-3">
                             <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
                             <div className="space-y-2">
@@ -9234,7 +9431,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                         {/* Section cards: HR, Technical, Coding */}
                         {Array.from({ length: 3 }).map((_, i) => (
-                          <div key={i} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                          <div key={i} className="tf-card-soft p-3 sm:p-5">
                             <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                 <Skeleton className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl flex-shrink-0" />
@@ -9297,14 +9494,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
 
                         {/* HR Section */}
-                        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
+                        <div className="tf-card-soft p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                               <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                 <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-blue" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-slate-50">HR</h4>
+                                <h4 className="tf-row-name">HR</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -9318,7 +9515,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="tf-caption">
                                 {topicSettings.hr_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -9343,20 +9540,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="tf-body-secondary pl-9 sm:pl-[52px]">
                             Behavioral questions, cultural fit, and soft skills evaluation.
                           </p>
                         </div>
 
                         {/* Technical Section */}
-                        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
+                        <div className="tf-card-soft p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                               <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                                 <Brain className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-cyan" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-slate-50">Technical</h4>
+                                <h4 className="tf-row-name">Technical</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -9370,7 +9567,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="tf-caption">
                                 {topicSettings.technical_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -9395,20 +9592,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="tf-body-secondary pl-9 sm:pl-[52px]">
                             Domain knowledge, tools, regulations, and workflows.
                           </p>
                         </div>
 
                         {/* Coding Section */}
-                        <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
+                        <div className="tf-card-soft p-3 sm:p-5">
                           <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
                             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                               <div className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                                 <Code className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-orange" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-sm font-medium text-gray-900 dark:text-slate-50">Coding</h4>
+                                <h4 className="tf-row-name">Coding</h4>
                                 <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -9422,7 +9619,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="tf-caption">
                                 {topicSettings.coding_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -9447,7 +9644,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="tf-body-secondary pl-9 sm:pl-[52px]">
                             Algorithms, data structures, frameworks, and patterns.
                           </p>
                         </div>
@@ -9471,7 +9668,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {isLoadingProctoring ? (
                   <>
                     {/* Settings header banner */}
-                    <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                    <div className="tf-panel p-3 sm:p-4">
                       <div className="flex items-center gap-2 sm:gap-3">
                         <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
                         <div className="space-y-2">
@@ -9481,7 +9678,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                     </div>
                     {/* Main proctoring toggle card */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                    <div className="tf-card-soft p-3 sm:p-5">
                       <div className="flex flex-col gap-3">
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -9500,9 +9697,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                     </div>
                     {/* Security Features grid */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-6">
+                    <div className="tf-card-soft p-3 sm:p-6">
                       <Skeleton className="h-4 w-32 mb-3 sm:mb-4" />
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                      <div className="tf-grid-2">
                         {Array.from({ length: 6 }).map((_, i) => (
                           <div key={i} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-gray-100 dark:border-slate-700/60">
                             <div className="flex items-center gap-2.5 min-w-0">
@@ -9544,7 +9741,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           {flaggedCount > 0 && (
-                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive text-white rounded-full text-xs font-medium whitespace-nowrap">
+                            <span className="tf-badge sm:px-3 sm:py-1 bg-destructive text-white">
                               {flaggedCount} Flagged
                             </span>
                           )}
@@ -9561,7 +9758,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     )}
 
                     {/* Main Proctoring Toggle */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-5">
+                    <div className="tf-card-soft p-3 sm:p-5">
                       <div className="flex flex-col gap-3">
                         {/* Top row: icon + title + toggle */}
                         <div className="flex items-center justify-between gap-2">
@@ -9570,7 +9767,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <Video className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
-                              <h4 className="text-sm font-medium text-gray-900 dark:text-slate-50">Proctoring Mode</h4>
+                              <h4 className="tf-row-name">Proctoring Mode</h4>
                               <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
                                 proctoringSettings.proctoring_enabled
                                   ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
@@ -9582,7 +9779,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                           {/* Toggle Switch */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">
+                            <span className="tf-caption">
                               {proctoringSettings.proctoring_enabled ? 'ON' : 'OFF'}
                             </span>
                             <button
@@ -9603,7 +9800,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                         </div>
                         {/* Description */}
-                        <p className="text-sm text-gray-600 dark:text-slate-400">
+                        <p className="tf-body-secondary">
                           {proctoringSettings.proctoring_enabled
                             ? 'Advanced monitoring is active for test integrity.'
                             : 'Standard mode — no advanced monitoring. Enable for high-stakes assessments.'
@@ -9613,7 +9810,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {proctoringSettings.proctoring_enabled && (
                           <div className="flex items-start gap-1.5 sm:gap-2 p-2 sm:p-3 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
                             <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                            <p className="text-xs text-gray-700 dark:text-slate-300">
+                            <p className="tf-meta">
                               <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings stored for {proctoringSettings.recording_retention_days} days.
                             </p>
                           </div>
@@ -9622,9 +9819,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Individual Security Features */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-6">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Security Features</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                    <div className="tf-card-soft p-3 sm:p-6">
+                      <h3 className="tf-row-name mb-3 sm:mb-4">Security Features</h3>
+                      <div className="tf-grid-2">
                         {[
                           { key: 'webcam_monitoring', name: 'Webcam Monitoring', description: 'Record and analyze candidate video during assessment', icon: Video },
                           { key: 'screen_recording', name: 'Screen Recording', description: 'Capture screen activity throughout the test', icon: Monitor },
@@ -9643,8 +9840,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <IconComponent className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400" />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-slate-50 leading-tight">{feature.name}</div>
-                                  <div className="text-xs text-gray-500 dark:text-slate-500 line-clamp-1 sm:line-clamp-2 hidden sm:block">{feature.description}</div>
+                                  <div className="tf-row-name leading-tight">{feature.name}</div>
+                                  <div className="tf-meta line-clamp-1 sm:line-clamp-2 hidden sm:block">{feature.description}</div>
                                 </div>
                               </div>
                               <button
@@ -9667,16 +9864,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Masking */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-4 tracking-tight">Masking</h3>
+                    <div className="tf-card-soft p-4 sm:p-6">
+                      <h3 className="tf-row-name mb-4 tracking-tight">Masking</h3>
                       <div className="flex items-start justify-between gap-3 p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
                         <div className="flex items-start gap-3 min-w-0">
                           <div className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                             <Mail className="w-4 h-4 text-brand-blue" />
                           </div>
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50">Email Masking in PDF</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">
+                            <div className="tf-row-name">Email Masking in PDF</div>
+                            <div className="tf-meta [overflow-wrap:anywhere]">
                               When enabled, candidate emails are masked (e.g. j******e@example.com) in downloaded Assessment PDFs.
                             </div>
                           </div>
@@ -9693,7 +9890,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               proctoringSettings.email_masking_enabled ? 'translate-x-7' : 'translate-x-0.5'
                             }`} />
                           </button>
-                          <span className="text-xs text-gray-500 dark:text-slate-500 font-medium">
+                          <span className="tf-caption">
                             {proctoringSettings.email_masking_enabled ? 'ON' : 'OFF'}
                           </span>
                         </div>
@@ -9701,41 +9898,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Threshold Settings */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
-                      <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-4 tracking-tight">Threshold Settings</h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+                    <div className="tf-card-soft p-4 sm:p-6">
+                      <h3 className="tf-row-name mb-4 tracking-tight">Threshold Settings</h3>
+                      <div className="tf-grid-3">
                         <div>
-                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1.5">Max Tab Switches Before Warning</label>
+                          <label className="block tf-meta mb-1.5">Max Tab Switches Before Warning</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_tab_switches}
                             onChange={(e) => updateProctoringSettings({ max_tab_switches: parseInt(e.target.value) || 3 })}
                             disabled={savingProctoringKeys.has('max_tab_switches') || !proctoringSettings.proctoring_enabled}
-                            className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
+                            className="tf-input disabled:bg-slate-100"
                             min="1"
                             max="10"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1.5">Max Violations Before Flag</label>
+                          <label className="block tf-meta mb-1.5">Max Violations Before Flag</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_violations_before_flag}
                             onChange={(e) => updateProctoringSettings({ max_violations_before_flag: parseInt(e.target.value) || 5 })}
                             disabled={savingProctoringKeys.has('max_violations_before_flag') || !proctoringSettings.proctoring_enabled}
-                            className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
+                            className="tf-input disabled:bg-slate-100"
                             min="1"
                             max="20"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1.5">Recording Retention (Days)</label>
+                          <label className="block tf-meta mb-1.5">Recording Retention (Days)</label>
                           <input
                             type="number"
                             value={proctoringSettings.recording_retention_days}
                             onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
                             disabled={savingProctoringKeys.has('recording_retention_days') || !proctoringSettings.proctoring_enabled}
-                            className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue disabled:bg-slate-100 disabled:cursor-not-allowed text-black"
+                            className="tf-input disabled:bg-slate-100"
                             min="7"
                             max="365"
                           />
@@ -9744,10 +9941,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </div>
 
                     {/* Recent Proctoring Events */}
-                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-6">
+                    <div className="tf-card-soft p-3 sm:p-6">
                       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 sm:mb-4">
-                        <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Recent Proctoring Events</h3>
-                        <span className="text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
+                        <h3 className="tf-row-name">Recent Proctoring Events</h3>
+                        <span className="tf-meta">{proctoringEventsTotal} total</span>
                       </div>
                       {isLoadingProctoringEvents ? (
                         <div className="space-y-2 sm:space-y-3">
@@ -9770,8 +9967,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8">
                           <Shield className="w-12 h-12 text-brand-blue/40 mx-auto mb-3" />
-                          <p className="text-sm text-gray-500 dark:text-slate-500">No proctoring events recorded yet</p>
-                          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">Events will appear here when candidates take proctored assessments</p>
+                          <p className="tf-body-muted">No proctoring events recorded yet</p>
+                          <p className="tf-hint mt-1">Events will appear here when candidates take proctored assessments</p>
                         </div>
                       ) : (
                         <div className="space-y-2 sm:space-y-3">
@@ -9788,10 +9985,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   }`} />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-gray-900 dark:text-slate-50 capitalize truncate">
+                                  <div className="tf-row-name capitalize truncate">
                                     {event.event_type.replace(/_/g, ' ')}
                                   </div>
-                                  <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
+                                  <div className="tf-meta truncate">
                                     {event.candidate_name || 'Unknown'} • {event.assessment_title || 'Assessment'}
                                   </div>
                                 </div>
@@ -9826,7 +10023,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               /* Loading State — mirrors the job-list rows (renderJobListRow) */
               <div className="space-y-3">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm">
+                  <div key={i} className="tf-card-soft relative p-3 sm:p-4">
                     <div className="flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4 lg:flex-row lg:items-center lg:gap-4">
                       {/* Identity */}
                       <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
@@ -9837,7 +10034,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* Status pill */}
                       <Skeleton className="h-6 w-20 rounded-full flex-shrink-0" />
                       {/* Metrics grid */}
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1">
+                      <div className="tf-grid-stats lg:flex-1">
                         {Array.from({ length: 4 }).map((_, m) => (
                           <div key={m} className="min-w-0 space-y-1.5 sm:px-3">
                             <div className="flex items-center gap-1.5">
@@ -9895,7 +10092,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         handleOpenCreation();
                       }}
                       aria-disabled={!canCreateAssessment}
-                      className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
+                      className={`${(!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
                       icon={<Sparkles className="w-4 h-4" />}
                     >
@@ -9908,7 +10105,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             : (
               /* List: one full-width card per job. Card: the same cards in a
                  grid — each reflows by its own width (@container/job-row). */
-              <div className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}>
+              <div className={listDisplayMode === 'grid' ? 'tf-grid-3 items-start' : 'space-y-3'}>
                 {/* Renders nothing — it counts each visible job's completed
                     candidates from their own records and hands the numbers
                     back, so the rows' Completed metric reads the whole JD
@@ -10022,7 +10219,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
                   </div>
                   <div className="min-w-0">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                    <h2 className="tf-section-title truncate tracking-tight">
                       <span className="hidden sm:inline">Assessments - Invite Status Tracking</span>
                       <span className="sm:hidden">Invite Status</span>
                     </h2>
@@ -10032,7 +10229,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         single assessment names itself, as before. */}
                     {trackingJob ? (
                       <p
-                        className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate"
+                        className="tf-body-muted mt-0.5 truncate"
                         title={`${trackingJob.jobId ? trackingJob.jobId + ' - ' : ''}${trackingJob.jobTitle}`}
                       >
                         {trackingJob.jobId ? `${trackingJob.jobId} - ` : ''}
@@ -10044,7 +10241,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </span>
                       </p>
                     ) : (
-                      <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
+                      <p className="tf-body-muted mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
                     )}
                   </div>
                 </div>
@@ -10200,17 +10397,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
+                        <th className="tf-th-cell w-8 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
                         {['Candidate', 'Timeline', 'Status', 'Invite Source', 'CID', 'Actions'].map((c) => (
-                          <th key={c} className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-16" /></th>
+                          <th key={c} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-16" /></th>
                         ))}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                       {Array.from({ length: 7 }).map((_, r) => (
                         <tr key={r}>
-                          <td className="py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></td>
-                          <td className="px-3 sm:px-4 py-3">
+                          <td className="tf-td pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></td>
+                          <td className="tf-td">
                             <div className="flex items-center gap-3">
                               <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
                               <div className="space-y-1.5">
@@ -10219,11 +10416,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                           </td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-40" /></td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
-                          <td className="px-3 sm:px-4 py-3"><Skeleton className="h-8 w-8 rounded-md" /></td>
+                          <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                          <td className="tf-td"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                          <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                          <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                          <td className="tf-td"><Skeleton className="h-8 w-8 rounded-md" /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -10246,7 +10443,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    scroll away with the content. Deliberately no overflow-hidden —
                    the shell's overflow:auto is what lets the wide auto-layout
                    table scroll sideways. */
-                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                <>
+                <div className={`${DESKTOP_TABLE_ONLY} tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg`}>
                   {/* Auto layout, not table-fixed. The colgroup widths summed
                       past the table's min-width, so every column was scaled
                       down; combined with the shell's white-space: nowrap the
@@ -10257,27 +10455,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <table className="w-max min-w-full">
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
+                        <th className="tf-th-cell w-8 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
+                        <th className="tf-th-cell text-left tf-th">Candidate</th>
                         {/* hidden md:table-cell mirrors this column's <td>. Without
                             it the header carried one more cell than the body between
                             sm and md, shifting every heading after Timeline off its
                             column. */}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                        <th className="tf-th-cell text-left tf-th hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                        <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
                         {/* Tech / Coding Score columns are conditional on the
                             assessment having that round enabled — same rule as
                             the Results page. Showing a "Coding Score" column
                             for a JD without a coding round produced a
                             permanent "—" column that confused recruiters. */}
                         {trackingTechEnabled && (
-                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
+                          <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
                         )}
                         {trackingCodingEnabled && (
-                          <th className="text-center px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                          <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
                         )}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                        <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                        <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
                         {/* Job scope only: with invites from several
                             assessments in one table, the row has to say which
                             job version its assessment belongs to - that is the
@@ -10293,12 +10491,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             relationship they are: this assessment version, on
                             that job version. */}
                         {trackingJob && (
-                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                          <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
                         )}
                         {trackingJob && (
-                          <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
+                          <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Assessment Version</span></th>
                         )}
-                        <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                        <th className="tf-th-cell text-left tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -10333,7 +10531,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Only bulk-actionable rows (Invited/Expired) get a
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
-                            <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                            <td className="tf-td pl-4 pr-0 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                               {isBulkActionable(invitation) && !trackingInviteArchived(invitation) ? (
                                 <button
                                   type="button"
@@ -10353,19 +10551,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <span className="inline-block w-5" />
                               )}
                             </td>
-                            <td className="px-3 sm:px-4 py-3 align-top">
+                            <td className="tf-td align-top">
                               <div className="flex items-center gap-3">
                                 <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                                 {/* Capped rather than free: under auto layout a
                                     single long email would otherwise set the
                                     column width for the whole table. */}
                                 <div className="min-w-0 max-w-[240px]">
-                                  <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
-                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
+                                  <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                  <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
                               </div>
                             </td>
-                                <td className="px-3 sm:px-4 py-3 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                                <td className="tf-td align-top tf-meta hidden md:table-cell">
                                   <div className="space-y-1">
                                     {/* Every audit-logged event on its own line, oldest
                                         first (timelineEvents/buildFullTimeline in
@@ -10390,7 +10588,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
                                   )}
                                 </td>
-                            <td className="px-3 sm:px-4 py-3 align-top">
+                            <td className="tf-td align-top">
                               {/* Status is the badge alone: the latest status in the
                                   row's Timeline (the bottom status line beside it),
                                   so the two cannot disagree. The failed row's
@@ -10424,7 +10622,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 && invitation.scoring_status !== 'processing'
                                 && invitation.scoring_status !== 'pending';
                               return (
-                                <td className="px-3 sm:px-4 py-3 align-top text-sm text-center">
+                                <td className="tf-td align-top text-sm text-center">
                                   {techReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`${SCORE_CELL_TEXT} ${invitation.technical_score >= 70 ? 'text-success' : 'text-destructive'}`}>
@@ -10446,7 +10644,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 && invitation.scoring_status !== 'processing'
                                 && invitation.scoring_status !== 'pending';
                               return (
-                                <td className="px-3 sm:px-4 py-3 align-top text-sm text-center">
+                                <td className="tf-td align-top text-sm text-center">
                                   {codingReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`${SCORE_CELL_TEXT} ${invitation.coding_score >= 70 ? 'text-success' : 'text-destructive'}`}>
@@ -10464,10 +10662,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             })()}
                             {/* Invite Source — how this candidate was actually
                                 invited, from the invitation's own resume_id. */}
-                            <td className="px-3 sm:px-4 py-3 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                            <td className="tf-td align-top tf-body whitespace-nowrap">
                               <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                             </td>
-                            <td className="px-3 sm:px-4 py-3 align-top">
+                            <td className="tf-td align-top">
                               <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                                 {invitation.candidate_display_id || '-'}
                               </span>
@@ -10477,7 +10675,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 chip, so V2 reads the same wherever a recruiter
                                 meets it. */}
                             {trackingJob && (
-                              <td className="px-3 sm:px-4 py-3 align-top">
+                              <td className="tf-td align-top">
                                 <VersionChip kind="job" version={invitation._jd_version} />
                               </td>
                             )}
@@ -10487,11 +10685,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 asked for a version; the assessment is named in
                                 the row's actions and on the page it opens. */}
                             {trackingJob && (
-                              <td className="px-3 sm:px-4 py-3 align-top">
+                              <td className="tf-td align-top">
                                 <VersionChip kind="assessment" version={invitation._assessment_version} />
                               </td>
                             )}
-                            <td className="px-3 sm:px-4 py-3 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                            <td className="tf-td align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                               {/* Actions collapse into a kebab menu. This uses Radix's
                                   DropdownMenu rather than the hand-rolled absolute
                                   dropdown the cards above use, because this table sits
@@ -10511,7 +10709,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     value={newEmailValue}
                                     onChange={e => setNewEmailValue(e.target.value)}
                                     placeholder="new@email.com"
-                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                    className="tf-input tf-input-sm h-auto rounded px-2 py-1"
                                     autoFocus
                                   />
                                   <div className="flex gap-1">
@@ -10551,6 +10749,122 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </tbody>
                   </table>
                 </div>
+                <MobileRecordList className="flex-1 min-h-0 overflow-y-auto">
+                  {trackingInvitations.map((invitation: any) => {
+                    const rowOpensDetails = opensTrackedDetails(invitation);
+                    const isSelected = trackingSelectedIds.has(invitation.id);
+                    return (
+                      <MobileRecordCard
+                        key={invitation.id}
+                        selected={isSelected}
+                        onClick={rowOpensDetails ? () => openTrackedInviteResult(invitation) : undefined}
+                        title={
+                          <span className="flex min-w-0 items-center gap-2">
+                            <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="md" />
+                            <span className="truncate" title={invitation.candidate_name}>{invitation.candidate_name}</span>
+                          </span>
+                        }
+                        select={isBulkActionable(invitation) && !trackingInviteArchived(invitation) ? (
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={isSelected}
+                            aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                            onClick={() => toggleTrackingSelectOne(invitation.id)}
+                            className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                              isSelected
+                                ? 'bg-brand-blue border-brand-blue'
+                                : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 text-white" />}
+                          </button>
+                        ) : undefined}
+                        idBadge={
+                          <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                            {invitation.candidate_display_id || '-'}
+                          </span>
+                        }
+                        badges={renderInviteBadgeForStatus(currentInviteStatus(invitation), invitation)}
+                        actions={editingEmailId === invitation.id ? undefined : (
+                          <InvitationActionsMenu
+                            actions={buildInvitationRowActions(invitation, {
+                              onResend: (target) => setResendTargetInvitation(target),
+                              resendingId: isResending ? resendTargetInvitation?.id : null,
+                              onEditEmail: (target) => { setEditingEmailId(target.id); setNewEmailValue(target.candidate_email); },
+                              onEdit: (target) => setEditInviteTarget(target),
+                              onRevoke: (target) => setRevokeInviteTarget(target),
+                              revokingId: revokeInviteTarget?.id,
+                              onViewResult: openTrackedInviteResult,
+                              archived: trackingInviteArchived(invitation),
+                              jdDisabled: trackingInviteJdDisabled(invitation),
+                            })}
+                          />
+                        )}
+                        meta={[
+                          { icon: <Mail className="w-3.5 h-3.5" />, label: invitation.candidate_email },
+                          { label: <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" /> },
+                        ]}
+                        fields={trackingJob ? [
+                          { label: 'Job Version', value: <VersionChip kind="job" version={invitation._jd_version} /> },
+                          { label: 'Assessment Version', value: <VersionChip kind="assessment" version={invitation._assessment_version} /> },
+                        ] : undefined}
+                        footer={(trackingTechEnabled || trackingCodingEnabled) ? (
+                          <>
+                            {trackingTechEnabled && renderInviteScoreChip(invitation, 'technical')}
+                            {trackingCodingEnabled && renderInviteScoreChip(invitation, 'coding')}
+                          </>
+                        ) : undefined}
+                      >
+                        <div className="mt-3 tf-meta space-y-1">
+                          {timelineEvents(invitation).length === 0 ? (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                              <span>Created: {formatIST(invitation.created_at)}</span>
+                            </div>
+                          ) : (
+                            timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                              <div key={`${label}-${i}`} className="flex items-center gap-2">
+                                <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                <span className={tone}>{label}: {formatIST(at)}</span>
+                              </div>
+                            ))
+                          )}
+                          {hasMoreTimelineHistory(invitation) && (
+                            <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                          )}
+                        </div>
+                        {editingEmailId === invitation.id && (
+                          <div className="mt-3 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <input
+                              type="email"
+                              value={newEmailValue}
+                              onChange={e => setNewEmailValue(e.target.value)}
+                              placeholder="new@email.com"
+                              className="tf-input tf-input-sm h-auto rounded px-2 py-1"
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <Button
+                                variant="primary"
+                                size="sm"
+                                onClick={() => handleUpdateEmail(invitation)}
+                                disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                                icon={<Send className="w-3 h-3" />}
+                              >
+                                {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                              </Button>
+                              <Button variant="secondary" size="sm" onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}>
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </MobileRecordCard>
+                    );
+                  })}
+                </MobileRecordList>
+                </>
               )}
 
               {/* Re-reading rows that are already on screen - Refresh, a page
@@ -10564,7 +10878,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
                   aria-live="polite"
                 >
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 tf-body-secondary shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                     <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                     Refreshing invite statuses...
                   </span>
@@ -10578,7 +10892,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 hidden below sm — Prev/Next and the page indicator are enough on a
                 phone, and the full set comes back from sm up. */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-              <p className="text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+              <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
                 {trackingResultsLabel}
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -10615,7 +10929,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       disabled={!!blockedReason && canShare}
                       aria-disabled={!!blockedReason}
                       title={blockedReason || 'Invite more candidates to this assessment'}
-                      className={!canShare ? 'opacity-50 cursor-not-allowed' : ''}
+                      className={`${(!canShare ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       onClick={() => {
                         if (blockedReason) return;
                         // Remember where we came from so closing the popup returns here.
@@ -10787,10 +11101,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue dark:text-blue-300" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
+                  <h3 className="tf-section-title sm:text-2xl tracking-tight leading-tight">
                     Create Version {nextVersion}?
                   </h3>
-                  <p className="text-sm sm:text-base text-gray-500 dark:text-slate-400 mt-1 leading-snug">
+                  <p className="tf-body-muted sm:text-base mt-1 leading-snug">
                     A new draft version of this assessment will be created for the same job.
                     Version {sourceVersion} will remain unchanged, and you can edit Version{' '}
                     {nextVersion} before publishing.
@@ -10801,7 +11115,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   size="sm"
                   onClick={closeIfIdle}
                   disabled={isCloning}
-                  className="px-2 -mr-1.5 -mt-1 flex-shrink-0"
+                  className="-mr-1.5 -mt-1 flex-shrink-0"
                   aria-label="Close"
                 >
                   <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -10817,7 +11131,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <Briefcase className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-500 dark:text-slate-400">Current Job</p>
+                    <p className="tf-body-muted">Current Job</p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
                       {cloneTargetAssessment.jd_short_id && (
                         <>
@@ -10829,11 +11143,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
                         </>
                       )}
-                      <span className="text-lg font-semibold text-gray-900 dark:text-slate-50 break-words">
+                      <span className="tf-section-title break-words">
                         {jobTitle}
                       </span>
                       <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
-                      <span className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+                      <span className="tf-section-title">
                         V{jobVersion}
                       </span>
                     </div>
@@ -10854,9 +11168,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <FileText className="w-5 h-5 text-warning" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm text-gray-500 dark:text-slate-400">New Assessment Version</p>
+                    <p className="tf-body-muted">New Assessment Version</p>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <span className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+                      <span className="tf-section-title">
                         Assessment Version {nextVersion}
                       </span>
                       <span className="px-2.5 py-1 rounded-lg bg-warning-subtle text-warning-strong text-sm font-semibold">

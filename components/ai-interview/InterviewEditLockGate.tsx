@@ -75,11 +75,11 @@ export default function InterviewEditLockGate({ configId }: { configId: string |
       onCancel={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(lock.id)}`)}
       actions={[{ label: 'Take over', onClick: () => void takeOver(), loading: takingOver, disabled: takingOver }]}
     >
-      <p className="text-sm text-gray-700 dark:text-slate-300">
+      <p className="tf-body">
         <span className="font-semibold">{editor}</span> is editing this AI interview
         {since ? ` (last change ${since})` : ''}.
       </p>
-      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-slate-400">
+      <ul className="mt-3 list-disc space-y-1 pl-5 tf-body-secondary">
         <li><span className="font-semibold">View only</span> — open the interview without editing it.</li>
         <li>
           <span className="font-semibold">Take over</span> — their unsaved changes are kept and you continue

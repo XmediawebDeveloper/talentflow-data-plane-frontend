@@ -503,7 +503,7 @@ export default function PricingPage() {
         {error && (
           <div className="text-center mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
             <p className="text-red-600 dark:text-red-400">Failed to load pricing plans</p>
-            <p className="text-sm text-gray-500 mt-2">{error}</p>
+            <p className="tf-body-muted mt-2">{error}</p>
           </div>
         )}
 
@@ -712,7 +712,7 @@ export default function PricingPage() {
                         </h3>
 
                         {/* Description */}
-                        <p className="text-gray-500 dark:text-gray-400 text-sm mb-5 min-h-[40px]">
+                        <p className="tf-body-muted mb-5 min-h-[40px]">
                           {plan.description}
                         </p>
 
@@ -721,7 +721,7 @@ export default function PricingPage() {
                           {isTrialPlan ? (
                             <div className="flex items-baseline gap-2">
                               <span className="text-3xl font-bold text-gray-900 dark:text-white">Free</span>
-                              <span className="text-gray-500 text-sm">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
+                              <span className="tf-body-muted">for {plan.trialDays} {plan.trialDays === 1 ? 'day' : 'days'}</span>
                             </div>
                           ) : (plan.monthlyPrice || plan.yearlyPrice) ? (
                             <>
@@ -732,13 +732,13 @@ export default function PricingPage() {
                                     plan.currency
                                   )}
                                 </span>
-                                <span className="text-gray-500 dark:text-gray-400 text-sm">
+                                <span className="tf-body-muted">
                                   {isYearly ? (plan.yearlyPrice ? '/year' : '/month') : (plan.monthlyPrice ? '/month' : '/year')}
                                 </span>
                               </div>
                               {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && (
                                 <div className="flex items-center gap-2 mt-1.5">
-                                  <span className="text-sm text-gray-400 line-through">
+                                  <span className="tf-body-muted line-through">
                                     {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                                   </span>
                                   {plan.discountPercentage && plan.discountPercentage > 0 && (
@@ -882,12 +882,12 @@ export default function PricingPage() {
                                   }}
                                 >
                                   <Check className={`w-4 h-4 flex-shrink-0 mt-0.5 ${tierStyle.text}`} />
-                                  <span className="text-gray-600 dark:text-gray-300 text-sm">{feature}</span>
+                                  <span className="tf-body-secondary">{feature}</span>
                                 </li>
                               ))}
                             </ul>
                             {!isHovered && plan.features.length > 4 && (
-                              <p className="text-gray-400 text-sm mt-2 pl-6">
+                              <p className="tf-body-muted mt-2 pl-6">
                                 +{plan.features.length - 4} more features
                               </p>
                             )}
@@ -1004,7 +1004,7 @@ export default function PricingPage() {
           {addonsError && (
             <div className="text-center mb-8 p-6 bg-red-50 dark:bg-red-900/20 rounded-xl">
               <p className="text-red-600 dark:text-red-400">Failed to load add-ons</p>
-              <p className="text-sm text-gray-500 mt-2">{addonsError}</p>
+              <p className="tf-body-muted mt-2">{addonsError}</p>
             </div>
           )}
 
@@ -1019,7 +1019,7 @@ export default function PricingPage() {
               {addons.map((addon) => (
                 <div
                   key={addon.id}
-                  className="flex items-center justify-between p-5 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                  className="flex items-center justify-between p-5 tf-panel hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
                 >
                   {/* Feature Name */}
                   <div className="flex items-center gap-3">
@@ -1035,7 +1035,7 @@ export default function PricingPage() {
                       <span className="text-2xl font-bold text-gray-900 dark:text-white">
                         {addon.credit_amount ?? addon.min_quantity ?? 0}
                       </span>
-                      <span className="ml-1 text-sm text-gray-500 dark:text-gray-400">Units</span>
+                      <span className="ml-1 tf-body-muted">Units</span>
                     </div>
                     <div className="text-right">
                       <span className="text-2xl font-bold text-gray-800 dark:text-gray-200">

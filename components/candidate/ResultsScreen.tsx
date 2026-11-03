@@ -58,7 +58,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
 
         {/* What Happens Next Section */}
         <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 sm:p-5 mb-6">
-          <h2 className="text-lg font-semibold text-gray-800 text-center mb-4">
+          <h2 className="tf-section-title text-center mb-4">
             What Happens Next?
           </h2>
           <div className="space-y-4">
@@ -66,7 +66,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">1</span>
               </div>
-              <p className="text-gray-700 text-sm">
+              <p className="tf-body">
                 Your assessment results are being analyzed by our AI system
               </p>
             </div>
@@ -74,7 +74,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">2</span>
               </div>
-              <p className="text-gray-700 text-sm">
+              <p className="tf-body">
                 Our recruitment team will review your performance and responses
               </p>
             </div>
@@ -82,7 +82,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">3</span>
               </div>
-              <p className="text-gray-700 text-sm">
+              <p className="tf-body">
                 You'll receive an email update within 3-5 business days
               </p>
             </div>
@@ -109,17 +109,17 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <FileText className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Questions</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-800 break-words">{totalQuestions}</p>
+            <p className="tf-body-muted mb-1">Questions</p>
+            <p className="tf-section-title sm:text-2xl break-words">{totalQuestions}</p>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <Clock className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Duration</p>
-            <p className="text-lg sm:text-2xl font-bold text-gray-800 break-words">{formatDuration(durationMinutes)}</p>
+            <p className="tf-body-muted mb-1">Duration</p>
+            <p className="tf-section-title sm:text-2xl break-words">{formatDuration(durationMinutes)}</p>
           </div>
           <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <CheckSquare className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Status</p>
+            <p className="tf-body-muted mb-1">Status</p>
             <div className="flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-success" />
             </div>
@@ -127,7 +127,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         </div>
 
         {/* Assessment ID and Date */}
-        <div className="text-center text-sm text-gray-400">
+        <div className="text-center tf-body-muted">
           <p>
             Assessment ID: {assessmentId} • Submitted on {completedAt.toLocaleDateString('en-US', {
               timeZone: 'Asia/Kolkata',

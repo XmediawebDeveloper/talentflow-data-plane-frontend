@@ -83,20 +83,20 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
   ];
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <main className="tf-page">
+      <div className="tf-page-pad w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />
         </div>
 
         {/* Read-only context strip */}
-        <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 text-xs">
+        <div className="mb-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-slate-800 tf-meta">
           <Eye className="w-3.5 h-3.5" />
           Read-only view · Hiring insights
         </div>
 
         {/* KPI tiles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6">
+        <div className="tf-grid-4 mb-6">
           <KpiTile
             label="Active JDs"
             value="42"
@@ -132,12 +132,12 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
         </div>
 
         {/* Pipeline + Hiring trends */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Hiring trends</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Last 6 months</p>
+                <h2 className="tf-section-title">Hiring trends</h2>
+                <p className="tf-meta mt-0.5">Last 6 months</p>
               </div>
               <div className="flex items-center gap-3 text-xs">
                 <span className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400">
@@ -164,15 +164,15 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Pipeline funnel</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mb-5">Aggregated across all JDs</p>
+          <div className="tf-card-soft p-6">
+            <h2 className="tf-section-title mb-1">Pipeline funnel</h2>
+            <p className="tf-meta mb-5">Aggregated across all JDs</p>
             <div className="space-y-4">
               {pipeline.map((stage) => (
                 <div key={stage.label}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{stage.label}</span>
-                    <span className="text-xs text-gray-500 dark:text-slate-500 tabular-nums">
+                    <span className="tf-caption">{stage.label}</span>
+                    <span className="tf-meta tabular-nums">
                       {stage.count} <span className="text-gray-400 dark:text-slate-500">· {stage.pct}%</span>
                     </span>
                   </div>
@@ -186,12 +186,12 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
         </div>
 
         {/* JD leaderboard + Source of hire */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2">
             <div className="p-6 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Top performing JDs</h2>
-                <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">By applicant volume + AI match score</p>
+                <h2 className="tf-section-title">Top performing JDs</h2>
+                <p className="tf-meta mt-0.5">By applicant volume + AI match score</p>
               </div>
               <button
                 onClick={() => router.push('/recruitment/job-openings')}
@@ -204,21 +204,21 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
               <table className="w-full">
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">#</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Job description</th>
-                    <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Department</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Applicants</th>
-                    <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Avg score</th>
+                    <th className="tf-th-cell text-left tf-th">#</th>
+                    <th className="tf-th-cell text-left tf-th">Job description</th>
+                    <th className="tf-th-cell text-left tf-th">Department</th>
+                    <th className="tf-th-cell text-right tf-th">Applicants</th>
+                    <th className="tf-th-cell text-right tf-th">Avg score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                   {topJDs.map((j, i) => (
                     <tr key={i} className="hover:bg-gray-50/60 dark:hover:bg-slate-800 transition-colors">
-                      <td className="px-6 py-4 text-sm text-gray-500 dark:text-slate-500 tabular-nums">{i + 1}</td>
-                      <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-slate-50">{j.title}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">{j.dept}</td>
-                      <td className="px-6 py-4 text-sm text-right tabular-nums text-gray-900 dark:text-slate-50">{j.applicants}</td>
-                      <td className="px-6 py-4 text-right">
+                      <td className="tf-td tf-body-muted tabular-nums">{i + 1}</td>
+                      <td className="tf-td tf-row-name">{j.title}</td>
+                      <td className="tf-td tf-body-secondary">{j.dept}</td>
+                      <td className="tf-td tf-body text-right tabular-nums">{j.applicants}</td>
+                      <td className="tf-td text-right">
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             j.score >= 85
@@ -239,9 +239,9 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Source of hire</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mb-3">% of total hires</p>
+          <div className="tf-card-soft p-6">
+            <h2 className="tf-section-title mb-1">Source of hire</h2>
+            <p className="tf-meta mb-3">% of total hires</p>
             <div className="h-44">
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
@@ -272,27 +272,27 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
         </div>
 
         {/* Recent assessments (read-only) */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm mb-6">
+        <div className="tf-card-soft mb-6">
           <div className="p-6 border-b border-gray-100 dark:border-slate-700/60">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Recent assessments</h2>
-            <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Latest scored candidates</p>
+            <h2 className="tf-section-title">Recent assessments</h2>
+            <p className="tf-meta mt-0.5">Latest scored candidates</p>
           </div>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Candidate</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">JD</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Score</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Date</th>
+                  <th className="tf-th-cell text-left tf-th">Candidate</th>
+                  <th className="tf-th-cell text-left tf-th">JD</th>
+                  <th className="tf-th-cell text-right tf-th">Score</th>
+                  <th className="tf-th-cell text-left tf-th">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                 {recentAssessments.map((a, i) => (
                   <tr key={i} className="hover:bg-gray-50/60 dark:hover:bg-slate-800 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-slate-50">{a.candidate}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">{a.jd}</td>
-                    <td className="px-6 py-4 text-sm text-right tabular-nums">
+                    <td className="tf-td tf-row-name">{a.candidate}</td>
+                    <td className="tf-td tf-body-secondary">{a.jd}</td>
+                    <td className="tf-td text-sm text-right tabular-nums">
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           a.score >= 85
@@ -305,7 +305,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                         {a.score}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm text-gray-600 dark:text-slate-400">{a.date}</td>
+                    <td className="tf-td tf-body-secondary">{a.date}</td>
                   </tr>
                 ))}
               </tbody>
@@ -335,7 +335,7 @@ function KpiTile({
   const trendUp = trend?.dir === 'up';
   const positive = trend?.positive ?? trendUp;
   return (
-    <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-6 hover:shadow-md transition-all">
+    <div className="tf-card-soft relative overflow-hidden p-6 hover:shadow-md transition-all">
       <div className="flex items-start justify-between mb-3">
         <div className={`w-12 h-12 rounded-xl ${accent} ring-1 flex items-center justify-center`}>{icon}</div>
         {trend && (
@@ -346,8 +346,8 @@ function KpiTile({
         )}
       </div>
       <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
-      <div className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">{label}</div>
-      {sub && <div className="text-2xs text-gray-500 dark:text-slate-500 mt-1">{sub}</div>}
+      <div className="tf-body-secondary mt-0.5">{label}</div>
+      {sub && <div className="tf-micro-hint mt-1">{sub}</div>}
     </div>
   );
 }

@@ -48,7 +48,7 @@ const DESCRIPTION_MAX = 1000;
 const COUNTER_FROM = 0.8;
 
 const fieldClassName =
-  'w-full rounded-lg border bg-white dark:bg-slate-900 px-3 py-2.5 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-4';
+  'w-full rounded-lg border bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:ring-4';
 const fieldOk = 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10';
 const fieldError = 'border-destructive/60 focus:border-destructive focus:ring-destructive/10';
 
@@ -170,10 +170,10 @@ export default function TeamFormModal({
       >
         {/* Two columns on the wider popup: profile left, members right — keeps
             the form short instead of stacking everything. */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <div className="tf-grid-split">
           <div className="space-y-5">
             <div>
-              <label htmlFor="team-name" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-name" className="mb-2 block tf-label">
                 Team Name <span className="text-brand-blue">*</span>
               </label>
               <input
@@ -209,7 +209,7 @@ export default function TeamFormModal({
             </div>
 
             <div>
-              <label htmlFor="team-description" className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">
+              <label htmlFor="team-description" className="mb-2 block tf-label">
                 Description
               </label>
               <textarea
@@ -222,7 +222,7 @@ export default function TeamFormModal({
                 className={`${fieldClassName} ${fieldOk} resize-y`}
               />
               {description.length >= DESCRIPTION_MAX * COUNTER_FROM && (
-                <p className="mt-1.5 text-right text-xs tabular-nums text-gray-500 dark:text-slate-500">
+                <p className="mt-1.5 text-right tf-meta tabular-nums">
                   {description.length}/{DESCRIPTION_MAX}
                 </p>
               )}

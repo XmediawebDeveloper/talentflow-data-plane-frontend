@@ -51,7 +51,7 @@ export default function RevokeLinkModal({
           <h2 id="revoke-link-title" className="mt-3 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
             {title}
           </h2>
-          <div className="mt-2 text-sm sm:text-base text-gray-600 dark:text-slate-400 leading-relaxed">
+          <div className="mt-2 tf-body-secondary sm:text-base leading-relaxed">
             <p>This will immediately expire the {kind} link sent to</p>
             {email && (
               <span className="inline-block max-w-full mt-1 px-2 py-0.5 rounded-md bg-destructive-subtle text-destructive font-medium break-all">
@@ -68,7 +68,7 @@ export default function RevokeLinkModal({
             </div>
             <ul className="mt-3 space-y-2.5">
               {effects.map(({ icon: Icon, text }) => (
-                <li key={text} className="flex items-start gap-3 text-sm text-gray-700 dark:text-slate-300">
+                <li key={text} className="flex items-start gap-3 tf-body">
                   <span className="w-9 h-9 shrink-0 rounded-full bg-destructive-subtle flex items-center justify-center">
                     <Icon className="w-4 h-4 text-destructive" />
                   </span>

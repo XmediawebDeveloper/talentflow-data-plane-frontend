@@ -1282,7 +1282,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           <div className="absolute inset-0 flex items-center justify-center bg-[#0a1020]/80 backdrop-blur-sm">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto mb-3" />
-              <p className="text-xs text-gray-400">Loading avatar...</p>
+              <p className="tf-hint">Loading avatar...</p>
             </div>
           </div>
         )}
@@ -1292,7 +1292,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
             <div className="text-center p-6 select-none">
               <div className="text-5xl mb-3">👤</div>
               <p className="text-sm font-medium text-gray-300 mb-1">Avatar Not Loaded</p>
-              <p className="text-xs text-gray-500">Model must be from Ready Player Me or Avaturn</p>
+              <p className="tf-meta">Model must be from Ready Player Me or Avaturn</p>
             </div>
           </div>
         )}

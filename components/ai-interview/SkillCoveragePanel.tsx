@@ -72,7 +72,7 @@ export default function SkillCoveragePanel({
     <div className="bg-gray-900 rounded-lg p-4 space-y-4">
       {/* Progress */}
       <div>
-        <div className="flex justify-between text-sm text-gray-400 mb-1">
+        <div className="flex justify-between tf-body-muted mb-1">
           <span>Progress</span>
           <span>{questionsAsked}/{totalQuestions} questions</span>
         </div>
@@ -116,7 +116,7 @@ export default function SkillCoveragePanel({
                       Active
                     </Badge>
                   )}
-                  <span className="text-xs text-gray-500">{coveredCount}/{totalSkills}</span>
+                  <span className="tf-meta">{coveredCount}/{totalSkills}</span>
                 </div>
               </div>
 
@@ -177,7 +177,7 @@ export default function SkillCoveragePanel({
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-gray-500 px-2 py-1 italic">No skills configured</p>
+                <p className="tf-meta px-2 py-1 italic">No skills configured</p>
               )}
             </div>
           );

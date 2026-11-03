@@ -56,8 +56,8 @@ export default function BulkActionProgress({
               <Loader2 className="w-5 h-5 text-gray-800 animate-spin" />
             )}
             <div>
-              <p className="text-sm text-gray-900">{title}</p>
-              <p className="text-xs text-gray-600">
+              <p className="tf-body">{title}</p>
+              <p className="tf-meta">
                 {successCount} completed, {errorCount} failed
               </p>
             </div>
@@ -106,10 +106,10 @@ export default function BulkActionProgress({
         {/* Progress Bar */}
         <div className="mt-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600">
+            <span className="tf-body-secondary">
               {successCount + errorCount} of {items.length} processed
             </span>
-            <span className="text-sm text-gray-900">{Math.round(progress)}%</span>
+            <span className="tf-body">{Math.round(progress)}%</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div
@@ -168,7 +168,7 @@ export default function BulkActionProgress({
 
                 {/* Item Details */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900 truncate">{item.name}</p>
+                  <p className="tf-body truncate">{item.name}</p>
                   {item.error && (
                     <p className="text-xs text-red-600 mt-0.5">{item.error}</p>
                   )}
@@ -176,7 +176,7 @@ export default function BulkActionProgress({
                     <p className="text-xs text-gray-800 mt-0.5">Processing...</p>
                   )}
                   {item.status === 'pending' && (
-                    <p className="text-xs text-gray-500 mt-0.5">Waiting...</p>
+                    <p className="tf-meta mt-0.5">Waiting...</p>
                   )}
                 </div>
               </div>

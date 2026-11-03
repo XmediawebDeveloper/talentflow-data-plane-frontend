@@ -16,6 +16,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -315,9 +316,9 @@ export default function InternalTicketAdmin() {
   const totalTickets = statCount(stats?.total_tickets);
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Internal Tickets' }]} />
       {/* SaaS Hero Header */}
       <div className="px-4 sm:px-6 lg:px-8 pt-4 sm:pt-6 lg:pt-8">
@@ -332,11 +333,11 @@ export default function InternalTicketAdmin() {
                   <Inbox className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <div className="tf-badge mb-2 gap-1.5 bg-white/10 text-2xs text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                     <Sparkles className="h-3 w-3 text-brand-orange" />
                     Internal helpdesk
                   </div>
-                  <h1 className="text-lg font-semibold tracking-tight sm:text-xl">Team Support Tickets</h1>
+                  <h1 className="tf-page-title">Team Support Tickets</h1>
                   <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Manage help requests from your team members in one place.</p>
                 </div>
               </div>
@@ -358,20 +359,20 @@ export default function InternalTicketAdmin() {
         {view === 'overview' && (
           <div className="space-y-6">
             {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 sm:gap-5">
+            <div className="tf-grid-stats-5">
               <button
                 type="button"
                 onClick={() => { setFilterStatus('open'); setView('tickets'); }}
                 className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Open</span>
+                  <span className="tf-eyebrow tracking-wide">Open</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                     <Circle className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{openTickets}</div>
-                <div className="text-xs text-gray-500">Awaiting action</div>
+                <div className="tf-meta">Awaiting action</div>
               </button>
 
               <button
@@ -380,13 +381,13 @@ export default function InternalTicketAdmin() {
                 className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">In Progress</span>
+                  <span className="tf-eyebrow tracking-wide">In Progress</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-warning-subtle text-warning ring-1 ring-warning-line">
                     <Clock3 className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{inProgressTickets}</div>
-                <div className="text-xs text-gray-500">Being handled</div>
+                <div className="tf-meta">Being handled</div>
               </button>
 
               <button
@@ -395,13 +396,13 @@ export default function InternalTicketAdmin() {
                 className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Resolved</span>
+                  <span className="tf-eyebrow tracking-wide">Resolved</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
                     <CheckCircle2 className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{resolvedTickets}</div>
-                <div className="text-xs text-gray-500">Successfully resolved</div>
+                <div className="tf-meta">Successfully resolved</div>
               </button>
 
               <button
@@ -410,13 +411,13 @@ export default function InternalTicketAdmin() {
                 className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Unassigned</span>
+                  <span className="tf-eyebrow tracking-wide">Unassigned</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
                     <Users className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{unassignedCount}</div>
-                <div className="text-xs text-gray-500">Need assignment</div>
+                <div className="tf-meta">Need assignment</div>
               </button>
 
               <button
@@ -425,19 +426,19 @@ export default function InternalTicketAdmin() {
                 className="text-left w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] transition hover:-translate-y-0.5 hover:shadow-md"
               >
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-medium uppercase tracking-wide text-gray-500">Total</span>
+                  <span className="tf-eyebrow tracking-wide">Total</span>
                   <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-cyan/15 to-brand-blue/10 text-brand-blue ring-1 ring-brand-cyan/15">
                     <Ticket className="w-4 h-4" />
                   </span>
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{totalTickets}</div>
-                <div className="text-xs text-gray-500">All time</div>
+                <div className="tf-meta">All time</div>
               </button>
             </div>
 
             {/* Category Breakdown */}
             {stats?.tickets_by_category && Object.keys(stats.tickets_by_category).length > 0 && (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              <div className="tf-card-soft p-6">
                 <h3 className="font-semibold text-gray-900 mb-4">Tickets by Category</h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                   {Object.entries(stats.tickets_by_category).map(([cat, count]) => {
@@ -446,8 +447,8 @@ export default function InternalTicketAdmin() {
                       <div key={cat} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                         <CategoryIcon className="w-5 h-5 text-gray-600" />
                         <div>
-                          <div className="text-lg font-semibold text-gray-900">{count}</div>
-                          <div className="text-xs text-gray-600">{getCategoryLabel(cat)}</div>
+                          <div className="tf-section-title">{count}</div>
+                          <div className="tf-meta">{getCategoryLabel(cat)}</div>
                         </div>
                       </div>
                     );
@@ -457,7 +458,7 @@ export default function InternalTicketAdmin() {
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5">
+            <div className="tf-grid-3">
               <button
                 onClick={() => { setFilterAssignment('unassigned'); setView('tickets'); }}
                 className="group relative overflow-hidden rounded-2xl bg-brand-orange text-white shadow-lg shadow-brand-orange/25 ring-1 ring-white/10 p-6 text-left transition-all hover:-translate-y-0.5 hover:shadow-xl"
@@ -489,15 +490,15 @@ export default function InternalTicketAdmin() {
                 <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   <Ticket className="w-5 h-5" />
                 </span>
-                <h3 className="text-lg font-semibold text-gray-900 mb-1">All Team Tickets</h3>
-                <p className="text-sm text-gray-600">
+                <h3 className="tf-section-title mb-1">All Team Tickets</h3>
+                <p className="tf-body-secondary">
                   View all team support requests
                 </p>
               </button>
             </div>
 
             {/* Recent Tickets */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="tf-card-soft p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-semibold text-gray-900">Recent Team Tickets</h3>
                 <button
@@ -515,7 +516,7 @@ export default function InternalTicketAdmin() {
               ) : tickets.length === 0 ? (
                 <div className="text-center py-12">
                   <Inbox className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="text-sm text-gray-600">No team tickets yet</p>
+                  <p className="tf-body-secondary">No team tickets yet</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -532,11 +533,11 @@ export default function InternalTicketAdmin() {
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="text-xs text-gray-600">{ticket.ticket_number}</span>
-                            <span className="text-xs text-gray-400">-</span>
-                            <span className="text-xs text-gray-600">from {ticket.created_by?.name}</span>
+                            <span className="tf-meta">{ticket.ticket_number}</span>
+                            <span className="tf-hint">-</span>
+                            <span className="tf-meta">from {ticket.created_by?.name}</span>
                           </div>
-                          <h4 className="text-sm font-medium text-gray-900">{ticket.title}</h4>
+                          <h4 className="tf-row-name">{ticket.title}</h4>
                         </div>
                         <div className="flex items-center gap-2">
                           {!ticket.assigned_to && (
@@ -547,7 +548,7 @@ export default function InternalTicketAdmin() {
                           {getStatusBadge(ticket.status)}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-xs text-gray-600">
+                      <div className="flex items-center gap-3 tf-meta">
                         <span>{getCategoryLabel(ticket.category)}</span>
                         <span>-</span>
                         {getPriorityBadge(ticket.priority)}
@@ -573,7 +574,7 @@ export default function InternalTicketAdmin() {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="tf-card-soft">
               {/* Filters */}
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col md:flex-row gap-4">
@@ -584,7 +585,7 @@ export default function InternalTicketAdmin() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search by ticket, title, or user..."
-                      className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                      className="tf-input pl-9 pr-4"
                     />
                   </div>
 
@@ -632,19 +633,20 @@ export default function InternalTicketAdmin() {
                   <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
                 </div>
               ) : (
-                <div className="overflow-x-auto tf-table-shell">
+                <>
+                <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Ticket #</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Title</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">From</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Category</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Priority</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Status</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Assigned</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600">Updated</th>
-                        <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 tf-sticky-col">Actions</th>
+                        <th className="tf-th-cell text-left tf-th">Ticket #</th>
+                        <th className="tf-th-cell text-left tf-th">Title</th>
+                        <th className="tf-th-cell text-left tf-th">From</th>
+                        <th className="tf-th-cell text-left tf-th">Category</th>
+                        <th className="tf-th-cell text-left tf-th">Priority</th>
+                        <th className="tf-th-cell text-left tf-th">Status</th>
+                        <th className="tf-th-cell text-left tf-th">Assigned</th>
+                        <th className="tf-th-cell text-left tf-th">Updated</th>
+                        <th className="tf-th-cell text-left tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -652,43 +654,43 @@ export default function InternalTicketAdmin() {
                         const CategoryIcon = getCategoryIcon(ticket.category);
                         return (
                           <tr key={ticket.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4">
-                              <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
+                            <td className="tf-td">
+                              <span className="tf-row-name">{ticket.ticket_number}</span>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900 max-w-xs truncate">{ticket.title}</div>
+                            <td className="tf-td">
+                              <div className="tf-body max-w-xs truncate">{ticket.title}</div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               <div className="flex items-center gap-2">
-                                <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center text-xs font-medium text-gray-700">
+                                <div className="w-6 h-6 bg-gray-200 rounded-full flex items-center justify-center tf-caption">
                                   {ticket.created_by?.name?.charAt(0) || 'U'}
                                 </div>
-                                <span className="text-sm text-gray-600">{ticket.created_by?.name}</span>
+                                <span className="tf-body-secondary">{ticket.created_by?.name}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               <div className="flex items-center gap-2">
                                 <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                <span className="text-sm text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                                <span className="tf-body-secondary">{getCategoryLabel(ticket.category)}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               {getPriorityBadge(ticket.priority)}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               {getStatusBadge(ticket.status)}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               {ticket.assigned_to ? (
-                                <span className="text-sm text-gray-600">{ticket.assigned_to.name}</span>
+                                <span className="tf-body-secondary">{ticket.assigned_to.name}</span>
                               ) : (
                                 <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">Unassigned</span>
                               )}
                             </td>
-                            <td className="px-6 py-4">
-                              <span className="text-sm text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                            <td className="tf-td">
+                              <span className="tf-body-secondary">{formatISTDate(ticket.updated_at)}</span>
                             </td>
-                            <td className="px-6 py-4 tf-sticky-col">
+                            <td className="tf-td tf-sticky-col">
                               <button
                                 onClick={() => {
                                   setSelectedTicket(ticket);
@@ -709,10 +711,67 @@ export default function InternalTicketAdmin() {
                   {filteredTickets.length === 0 && (
                     <div className="text-center py-12">
                       <Inbox className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                      <p className="text-sm text-gray-600">No tickets found</p>
+                      <p className="tf-body-secondary">No tickets found</p>
                     </div>
                   )}
                 </div>
+                <MobileRecordList
+                  className="p-3"
+                  empty={
+                    <div className="text-center py-12">
+                      <Inbox className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="tf-body-secondary">No tickets found</p>
+                    </div>
+                  }
+                >
+                  {filteredTickets.map(ticket => {
+                    const CategoryIcon = getCategoryIcon(ticket.category);
+                    return (
+                      <MobileRecordCard
+                        key={ticket.id}
+                        idBadge={<span className="tf-meta">{ticket.ticket_number}</span>}
+                        badges={
+                          <>
+                            {getPriorityBadge(ticket.priority)}
+                            {getStatusBadge(ticket.status)}
+                            {!ticket.assigned_to && (
+                              <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded">Unassigned</span>
+                            )}
+                          </>
+                        }
+                        title={ticket.title}
+                        meta={[
+                          {
+                            icon: (
+                              <span className="w-5 h-5 shrink-0 bg-gray-200 rounded-full flex items-center justify-center tf-caption">
+                                {ticket.created_by?.name?.charAt(0) || 'U'}
+                              </span>
+                            ),
+                            label: ticket.created_by?.name,
+                          },
+                          { icon: <CategoryIcon className="w-3.5 h-3.5 text-gray-600" />, label: getCategoryLabel(ticket.category) },
+                        ]}
+                        fields={[
+                          { label: 'Assigned', value: ticket.assigned_to?.name },
+                          { label: 'Updated', value: formatISTDate(ticket.updated_at) },
+                        ]}
+                        footer={
+                          <button
+                            onClick={() => {
+                              setSelectedTicket(ticket);
+                              fetchTicketDetail(ticket.id);
+                              setView('detail');
+                            }}
+                            className="text-sm text-gray-700 hover:text-gray-900"
+                          >
+                            View
+                          </button>
+                        }
+                      />
+                    );
+                  })}
+                </MobileRecordList>
+                </>
               )}
             </div>
           </div>
@@ -729,26 +788,26 @@ export default function InternalTicketAdmin() {
               Back to Tickets
             </button>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="tf-grid-3">
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="tf-card-soft p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <span className="text-xs text-gray-600 block mb-2">{selectedTicket.ticket_number}</span>
-                      <h2 className="text-lg font-semibold text-gray-900 mb-3">{selectedTicket.title}</h2>
+                      <span className="tf-meta block mb-2">{selectedTicket.ticket_number}</span>
+                      <h2 className="tf-section-title mb-3">{selectedTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-3">
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-xs text-gray-600">
+                        <span className="tf-meta">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
                       </div>
                     </div>
                   </div>
                   <div className="pt-4 border-t border-gray-200">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <div className="flex items-center gap-2 tf-body-secondary">
                       <User className="w-4 h-4" />
                       <span>Submitted by <strong>{selectedTicket.created_by?.name}</strong></span>
                       {selectedTicket.created_by?.email && (
@@ -759,7 +818,7 @@ export default function InternalTicketAdmin() {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="tf-card-soft p-6">
                   <h3 className="font-semibold text-gray-900 mb-6">Conversation</h3>
 
                   <div className="space-y-6">
@@ -784,12 +843,12 @@ export default function InternalTicketAdmin() {
                           )}
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-gray-900">
+                              <span className="tf-row-name">
                                 {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
                               </span>
-                              <span className="text-xs text-gray-500">{formatIST(response.created_at)}</span>
+                              <span className="tf-meta">{formatIST(response.created_at)}</span>
                             </div>
-                            <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
+                            <p className="tf-body leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
                         </div>
                       </div>
@@ -799,13 +858,13 @@ export default function InternalTicketAdmin() {
                   {/* Reply Box */}
                   {selectedTicket.status !== 'closed' && (
                     <div className="mt-6 pt-6 border-t border-gray-200">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Reply to User</label>
+                      <label className="block tf-label mb-2">Reply to User</label>
                       <textarea
                         value={replyMessage}
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your response..."
                         rows={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 resize-none"
+                        className="tf-textarea px-4 py-3 resize-none"
                       />
                       <div className="flex justify-end mt-3">
                         <button
@@ -825,28 +884,28 @@ export default function InternalTicketAdmin() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Ticket Information</h4>
+                <div className="tf-card-soft p-6">
+                  <h4 className="tf-row-title mb-4">Ticket Information</h4>
 
                   <div className="space-y-4">
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Created</div>
-                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.created_at)}</div>
+                      <div className="tf-meta mb-1">Created</div>
+                      <div className="tf-body">{formatIST(selectedTicket.created_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Last Updated</div>
-                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.updated_at)}</div>
+                      <div className="tf-meta mb-1">Last Updated</div>
+                      <div className="tf-body">{formatIST(selectedTicket.updated_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Assigned To</div>
+                      <div className="tf-meta mb-1">Assigned To</div>
                       {selectedTicket.assigned_to ? (
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-xs">
                             {selectedTicket.assigned_to.name.charAt(0)}
                           </div>
-                          <div className="text-sm text-gray-900">{selectedTicket.assigned_to.name}</div>
+                          <div className="tf-body">{selectedTicket.assigned_to.name}</div>
                         </div>
                       ) : (
                         <span className="text-sm text-orange-600">Not assigned</span>
@@ -854,16 +913,16 @@ export default function InternalTicketAdmin() {
                     </div>
 
                     <div>
-                      <div className="text-xs text-gray-600 mb-1">Responses</div>
-                      <div className="text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
+                      <div className="tf-meta mb-1">Responses</div>
+                      <div className="tf-body">{selectedTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
-                  <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-4">Update Priority</h4>
+                  <div className="tf-card-soft p-6">
+                    <h4 className="tf-row-title mb-4">Update Priority</h4>
                     <FilterSelect
                       value={selectedTicket.priority}
                       onChange={(v) => handleUpdatePriority(selectedTicket.id, v as InternalTicketPriority)}
@@ -874,8 +933,8 @@ export default function InternalTicketAdmin() {
                 )}
 
                 {/* Actions */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Actions</h4>
+                <div className="tf-card-soft p-6">
+                  <h4 className="tf-row-title mb-4">Actions</h4>
 
                   <div className="space-y-2">
                     {!selectedTicket.assigned_to && selectedTicket.status !== 'closed' && (

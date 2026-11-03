@@ -82,7 +82,7 @@ const stepLabel = (s: Step, singular: string) => (s === 'version' ? singular : S
 /* The page's sections: an intro over each step, a white block. */
 const INTRO_H = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 const INTRO_P = 'mt-1 text-sm text-gray-600 dark:text-slate-400';
-const BLOCK = 'rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4';
+const BLOCK = 'tf-panel p-4';
 
 /** A candidate's identity in the review — the backend's `review_key`. */
 const reviewKey = (c: { resume_id?: string | null; email?: string | null }) =>
@@ -781,10 +781,10 @@ export default function VersionInviteDialog({
                 <Icon className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h2 id="version-invite-title" className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 id="version-invite-title" className="tf-section-title sm:text-lg tracking-tight">
                   Invite to {label.singular}
                 </h2>
-                <p className="text-xs text-gray-500 dark:text-slate-400">Send the {label.singular.toLowerCase()} link to candidates</p>
+                <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
             {!off && (
@@ -883,7 +883,7 @@ export default function VersionInviteDialog({
               </div>
             )}
             {off ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{off}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-body-secondary">{off}</div>
             ) : !job ? (
               /* No job given: every published one, any job — the pick names
                  the job and the version. */
@@ -929,7 +929,7 @@ export default function VersionInviteDialog({
                         <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                         Choose a different {label.singular.toLowerCase()}
                       </button>
-                    ) : <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Select {label.singular.toLowerCase()} version</h4>}
+                    ) : <h4 className="tf-row-title">Select {label.singular.toLowerCase()} version</h4>}
                     {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
                   <VersionList
@@ -955,22 +955,22 @@ export default function VersionInviteDialog({
             ) : current === 'candidates' ? (
               <div className="space-y-4">
                 {recipients.length > 0 && (
-                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 text-sm text-gray-700 dark:text-slate-300">
+                  <p className="rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-3 py-2 tf-body">
                     {plural(recipients.length, 'candidate')} from the page {recipients.length === 1 ? 'is' : 'are'} already included.
                   </p>
                 )}
                 <section aria-label="Add people directly" className={BLOCK}>
                   <ExtraCandidatesInput onChange={setExtras} onCounts={setExtraCounts} disabled={pickingOff} onCopyLink={copyLinkFor} takenEmail={takenEmail} />
                 </section>
-                <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500" aria-hidden="true">
+                <div className="flex items-center gap-3 tf-eyebrow tracking-wider" aria-hidden="true">
                   <span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />or<span className="h-px flex-1 bg-gray-200 dark:bg-slate-700" />
                 </div>
                 <section aria-labelledby="pick-for-job" className={`${BLOCK} space-y-3`}>
                   <div>
-                    <h3 id="pick-for-job" className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h3 id="pick-for-job" className="tf-row-title">
                       Pick candidates for <span className="text-brand-blue">{[job.jdCode, jobName].filter(Boolean).join(' · ')}</span>
                     </h3>
-                    <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">Candidates matched, scored or saved for this job.</p>
+                    <p className="mt-0.5 tf-meta">Candidates matched, scored or saved for this job.</p>
                   </div>
                   <ServerCandidatePicker
                     jdId={job.jdId}
@@ -984,7 +984,7 @@ export default function VersionInviteDialog({
                 </section>
               </div>
             ) : current === 'review' && !perms.canInvite ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center text-sm text-gray-600 dark:text-slate-400">{deniedTitle}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-body-secondary">{deniedTitle}</div>
             ) : current === 'review' && reviewRequest ? (
               <div className="space-y-4">
                 <div>
@@ -1014,7 +1014,7 @@ export default function VersionInviteDialog({
                   <h3 className={INTRO_H}>Check the message and send</h3>
                   <p className={INTRO_P}>This is the email each candidate receives with their personal link.</p>
                 </div>
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <dl className="tf-grid-3">
                   {[
                     { term: label.singular, value: pickedName, bad: false },
                     {
@@ -1030,8 +1030,8 @@ export default function VersionInviteDialog({
                       bad: unitsAfter !== null && unitsAfter < 0,
                     },
                   ].map((d) => (
-                    <div key={d.term} className="min-w-0 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
-                      <dt className="text-xs text-gray-500 dark:text-slate-400">{d.term}</dt>
+                    <div key={d.term} className="min-w-0 tf-panel px-3 py-2.5">
+                      <dt className="tf-meta">{d.term}</dt>
                       <dd className={`mt-0.5 truncate text-[0.9375rem] font-semibold tabular-nums ${d.bad ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`} title={d.value}>{d.value}</dd>
                     </div>
                   ))}
@@ -1054,14 +1054,14 @@ export default function VersionInviteDialog({
               carries it on smaller ones). */}
           {inSteps && (
             <aside aria-label="Invite summary" className="hidden lg:flex w-[18.75rem] shrink-0 flex-col gap-4 overflow-y-auto border-l border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Invite summary</h3>
+              <h3 className="tf-row-title">Invite summary</h3>
               <dl className="space-y-3 text-sm">
                 <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">{label.singular}</dt>
+                  <dt className="tf-meta">{label.singular}</dt>
                   <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 break-words">{pickedName}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">Candidates</dt>
+                  <dt className="tf-meta">Candidates</dt>
                   <dd className="mt-0.5 font-medium text-gray-900 dark:text-slate-50 tabular-nums">
                     {selectedNow.toLocaleString()} selected{totalNow > selectedNow ? ` of ${totalNow.toLocaleString()}` : ''}
                     {SOURCE_ORDER.some((k) => bySource[k]) && (
@@ -1078,7 +1078,7 @@ export default function VersionInviteDialog({
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-gray-500 dark:text-slate-400">Units after send</dt>
+                  <dt className="tf-meta">Units after send</dt>
                   <dd className={`mt-0.5 font-medium tabular-nums ${quotaShort ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{unitsAfterText}</dd>
                 </div>
               </dl>
@@ -1098,13 +1098,13 @@ export default function VersionInviteDialog({
           </div>
 
           <div className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 shrink-0 ${inSteps ? 'max-sm:sticky max-sm:bottom-0 max-sm:z-10' : ''}`}>
-            <p className="min-w-0 sm:truncate text-sm text-gray-700 dark:text-slate-300">{footerText}</p>
+            <p className="min-w-0 sm:truncate tf-body">{footerText}</p>
             {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
             <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
               {bulkJob ? (
                 <button
                   onClick={onClose}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="tf-btn tf-btn-primary w-full sm:w-auto flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                 >
                   Done
                 </button>
@@ -1121,7 +1121,7 @@ export default function VersionInviteDialog({
                     <button
                       onClick={chooseFromList}
                       disabled={!listPicked}
-                      className="flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none min-w-0 flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                     >
                       Continue
                     </button>
@@ -1147,8 +1147,8 @@ export default function VersionInviteDialog({
           {confirm && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-white/80 dark:bg-slate-900/80 backdrop-blur-[1px] p-4 sm:p-6">
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
-                <h3 id="version-invite-confirm" className="text-base font-semibold text-gray-900 dark:text-slate-50">{confirm.title}</h3>
-                <p className="mt-1.5 text-sm text-gray-600 dark:text-slate-400">{confirm.message}</p>
+                <h3 id="version-invite-confirm" className="tf-section-title">{confirm.title}</h3>
+                <p className="mt-1.5 tf-body-secondary">{confirm.message}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">{confirm.cancelText ?? 'Cancel'}</Button>
                   <Button

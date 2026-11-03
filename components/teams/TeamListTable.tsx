@@ -3,6 +3,7 @@
 import { Crown, ChevronRight } from 'lucide-react';
 import { Team } from '@/lib/services/teamService';
 import { SortableHeader, ariaSort, type SortDir, type TableSort } from '@/components/ui/sortable-header';
+import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { MemberStack, TeamActionHandlers, formatTeamDateTime, AttentionChip, TeamSizeBar, TeamUnitsSummary, formatTeamUnits } from './TeamCard';
 
 /** The page's sort keys ('newest' is the Created column). `sortDir` is the true
@@ -28,41 +29,44 @@ const TH = 'px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300';
 export default function TeamListTable({ teams, onViewDetails, footer, sortKey, sortDir, onSort, maxMembers = 0, unitsByTeam = null, onOpenUsage, createdBy = null }: TeamListTableProps) {
   const sort: TableSort<TeamListSortKey> = { sortKey, sortDir, toggleSort: onSort };
   return (
-    <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
+    <section className="tf-card-soft overflow-hidden">
       {/* Phones: compact rows instead of the 820px-wide table. Sorting stays
           on the toolbar's Sort dropdown. */}
-      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+      <MobileRecordList className="p-3">
         {teams.map((team) => (
-          <li key={team.id}>
-            <button
-              type="button"
-              onClick={() => onViewDetails(team.id)}
-              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 dark:text-slate-50">{team.name}</span>
-                <span className="mt-0.5 flex min-w-0 items-center gap-1 text-xs text-gray-500 dark:text-slate-400">
-                  {team.team_lead ? (
-                    <>
-                      <Crown className="h-3 w-3 shrink-0 text-brand-blue/60 dark:text-blue-300/70" />
-                      <span className="truncate">{team.team_lead.name}</span>
-                    </>
-                  ) : (
-                    <AttentionChip>No lead</AttentionChip>
-                  )}
-                  {team.member_count === 0 && <AttentionChip>No members</AttentionChip>}
-                </span>
-                <span className="mt-0.5 block truncate text-2xs text-gray-400 dark:text-slate-500">
-                  {team.member_count} members
-                  {unitsByTeam?.[team.id] && ` · ${formatTeamUnits(unitsByTeam[team.id].total)} units (30 days)`}
-                </span>
-              </span>
-              <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-600" />
-            </button>
-          </li>
+          <MobileRecordCard
+            key={team.id}
+            onClick={() => onViewDetails(team.id)}
+            title={team.name}
+            badges={
+              <>
+                {!team.team_lead && <AttentionChip>No lead</AttentionChip>}
+                {team.member_count === 0 && <AttentionChip>No members</AttentionChip>}
+              </>
+            }
+            meta={[
+              {
+                icon: <Crown className="text-brand-blue/60 dark:text-blue-300/70" />,
+                label: team.team_lead ? team.team_lead.name : null,
+              },
+            ]}
+            footer={
+              <>
+                <MobileStatChip tone="info">{team.member_count} members</MobileStatChip>
+                {unitsByTeam?.[team.id] && (
+                  <MobileStatChip tone="neutral">{formatTeamUnits(unitsByTeam[team.id].total)} units (30 days)</MobileStatChip>
+                )}
+              </>
+            }
+            actions={
+              <button type="button" onClick={() => onViewDetails(team.id)} aria-label={`Open ${team.name}`} className="tf-icon-btn-outline">
+                <ChevronRight aria-hidden />
+              </button>
+            }
+          />
         ))}
-      </ul>
-      <div className="hidden overflow-x-auto tf-table-shell md:block">
+      </MobileRecordList>
+      <div className="hidden overflow-x-auto tf-table-shell lg:block">
         <table className="w-full min-w-[820px]">
           <thead className="bg-white dark:bg-slate-900">
             <tr className="text-left">
@@ -93,7 +97,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                 onClick={() => onViewDetails(team.id)}
                 className="group cursor-pointer transition-colors hover:bg-brand-blue/[0.04]"
               >
-                <td className="py-3 pl-5 pr-4">
+                <td className="tf-td pl-5 pr-4">
                   <div className="flex items-center gap-3">
                     <div className="min-w-0 max-w-xs">
                       <button
@@ -104,14 +108,14 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                         }}
                         // Name only in the row; the description shows on hover and in the Team popup.
                         title={team.description ? `${team.name} — ${team.description}` : team.name}
-                        className="block truncate text-left text-sm max-sm:text-[13px] font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
+                        className="block truncate text-left text-sm font-semibold text-gray-900 hover:text-brand-blue focus-visible:outline-none focus-visible:underline dark:text-slate-50"
                       >
                         {team.name}
                       </button>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm max-sm:text-[13px]">
+                <td className="tf-td text-sm">
                   {team.team_lead ? (
                     <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
                       <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
@@ -121,7 +125,7 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                     <AttentionChip>No lead</AttentionChip>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   {team.member_count > 0 ? (
                     <div className="w-fit">
                       <MemberStack members={team.members} total={team.member_count} max={3} size="sm" />
@@ -132,22 +136,22 @@ export default function TeamListTable({ teams, onViewDetails, footer, sortKey, s
                   )}
                 </td>
                 {unitsByTeam && (
-                  <td className="px-4 py-3">
+                  <td className="tf-td">
                     <TeamUnitsSummary
                       units={unitsByTeam[team.id]}
                       onOpen={onOpenUsage ? () => onOpenUsage(team.id) : undefined}
                     />
                   </td>
                 )}
-                <td className="whitespace-nowrap px-4 py-3">
-                  <p className="text-sm text-gray-600 dark:text-slate-300">{formatTeamDateTime(team.created_at) || '—'}</p>
+                <td className="tf-td whitespace-nowrap">
+                  <p className="tf-body-secondary">{formatTeamDateTime(team.created_at) || '—'}</p>
                   {createdBy?.[team.id] && (
-                    <p className="max-w-[12rem] truncate text-xs text-gray-400 dark:text-slate-500" title={`Created by ${createdBy[team.id]}`}>
+                    <p className="max-w-[12rem] truncate tf-hint" title={`Created by ${createdBy[team.id]}`}>
                       {createdBy[team.id]}
                     </p>
                   )}
                 </td>
-                <td className="py-3 pl-4 pr-5 text-right">
+                <td className="tf-td pl-4 pr-5 text-right">
                   <ChevronRight
                     aria-hidden
                     className="ml-auto h-4 w-4 text-gray-300 transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-brand-blue dark:text-slate-600"

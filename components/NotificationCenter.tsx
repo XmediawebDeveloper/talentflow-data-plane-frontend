@@ -150,11 +150,11 @@ export default function NotificationCenter({
                               <p className={`text-sm ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
                                 {notification.title}
                               </p>
-                              <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">
+                              <p className="tf-meta mt-0.5 line-clamp-2">
                                 {notification.message}
                               </p>
                               <div className="flex items-center gap-2 mt-2">
-                                <div className="flex items-center gap-1 text-xs text-gray-500">
+                                <div className="flex items-center gap-1 tf-meta">
                                   <Clock className="w-3 h-3" />
                                   {formatTime(notification.timestamp)}
                                 </div>

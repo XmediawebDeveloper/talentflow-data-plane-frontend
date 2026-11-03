@@ -51,7 +51,7 @@ export default function SessionExpiredModal() {
             Session Expired
           </h3>
 
-          <p id="session-expired-desc" className="text-sm text-gray-500 dark:text-slate-400 leading-relaxed">
+          <p id="session-expired-desc" className="tf-body-muted leading-relaxed">
             Your session has expired due to inactivity for security reasons.
             <br />
             Please log in again to continue.
@@ -63,7 +63,7 @@ export default function SessionExpiredModal() {
               <p className="text-sm font-semibold text-brand-blue dark:text-brand-blue">
                 Your data is safe and secure.
               </p>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5">
+              <p className="tf-body-muted mt-0.5">
                 For your security, we&apos;ve automatically signed you out.
               </p>
             </div>
@@ -75,7 +75,7 @@ export default function SessionExpiredModal() {
           <button
             onClick={performSessionLogout}
             autoFocus
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+            className="tf-btn tf-btn-primary w-full flex px-4 py-3 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal"
           >
             <Lock className="w-4 h-4" strokeWidth={2} />
             Log In Again

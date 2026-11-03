@@ -23,7 +23,7 @@ import { toast } from 'sonner';
 import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-
+import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -35,22 +35,22 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
   return (
     <div>
       {/* Desktop table — matches the real thead/tbody */}
-      <div className="hidden md:block overflow-hidden">
+      <div className="hidden lg:block overflow-hidden">
         <table className="w-full min-w-[1200px] table-auto">
           <thead className="[&_th]:bg-white [&_th]:border-b [&_th]:border-gray-200">
             <tr>
-              <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
+              <th className="tf-th-cell w-10"><Skeleton className="h-4 w-4 rounded" /></th>
               {headers.map((h) => (
-                <th key={h} className="px-4 py-3 text-left align-middle text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                <th key={h} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-20" /></th>
               ))}
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {Array.from({ length: rows }).map((_, r) => (
               <tr key={r}>
-                <td className="px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
+                <td className="tf-td"><Skeleton className="h-4 w-4 rounded" /></td>
                 {cellWidths.map((w, c) => (
-                  <td key={c} className="px-4 py-3 align-middle">
+                  <td key={c} className="tf-td">
                     {w === 'skills' ? (
                       <div className="flex gap-1">
                         <Skeleton className="h-5 w-12 rounded-full" />
@@ -73,9 +73,9 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
       </div>
 
       {/* Mobile cards — matches the real card layout */}
-      <div className="md:hidden space-y-3 py-3">
+      <div className="lg:hidden space-y-3 py-3">
         {Array.from({ length: Math.min(rows, 4) }).map((_, i) => (
-          <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 space-y-2">
+          <div key={i} className="tf-panel p-4 space-y-2">
             <div className="flex items-center gap-3">
               <Skeleton className="h-4 w-4 rounded" />
               <div className="flex-1 space-y-1.5">
@@ -647,7 +647,7 @@ export default function ResumeTable({
           grew to fit every row and never scrolled — `sticky top-0` had nothing
           to stick to, and the header scrolled away with the page. Capping the
           height makes the rows scroll inside it and pins the header. */}
-      <div className={`hidden md:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
+      <div className={`hidden lg:block overflow-auto min-h-[320px] max-h-[calc(100dvh-24rem)] tf-table-shell ${tableShellClassName}`}>
         <table className="w-full min-w-[1200px] table-auto">
         {/* Background goes on the cells, not just <thead>: with separate cell
             backgrounds the rows would otherwise show through as they pass under. */}
@@ -661,7 +661,7 @@ export default function ResumeTable({
             {/* Drag handle column — pinned too, so it stays beside the ticks.
                 Same hard 40px as the body cell. */}
             {draggable && (
-              <th className="sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] px-2 py-3 align-middle text-xs font-semibold text-gray-600 dark:text-slate-300">
+              <th className="tf-th-cell sticky left-0 z-20 w-10 min-w-[40px] max-w-[40px] tf-th">
                 <span className="sr-only">Drag</span>
               </th>
             )}
@@ -686,7 +686,7 @@ export default function ResumeTable({
                     title={allSelected ? 'Unselect all resumes on this page' : 'Select all resumes on this page'}
                   />
                   <span
-                    className="inline-block w-8 text-xs font-semibold text-gray-600 tabular-nums"
+                    className="inline-block w-8 tf-caption tabular-nums"
                     title={`${selectedResumes.length} resume${selectedResumes.length !== 1 ? 's' : ''} selected`}
                   >
                     {selectedResumes.length > 0 ? `(${selectedResumes.length})` : ''}
@@ -694,42 +694,42 @@ export default function ResumeTable({
                 </div>
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Candidate Name
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Role
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Email
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Phone
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Skills
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Experience
             </th>
             {getFolderName && (
-              <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+              <th className="tf-th-cell text-left tf-th">
                 Folder
               </th>
             )}
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Source
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Upload Date
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Uploaded By
             </th>
-            <th className="px-4 py-3 text-left text-xs text-gray-600 whitespace-nowrap align-middle font-semibold">
+            <th className="tf-th-cell text-left tf-th">
               Files
             </th>
-            <th className="w-[76px] min-w-[76px] max-w-[76px] px-3 py-3 text-right text-xs text-gray-600 whitespace-nowrap align-middle tf-sticky-col font-semibold">
+            <th className="tf-th-cell w-[76px] min-w-[76px] max-w-[76px] text-right tf-th tf-sticky-col">
               Actions
             </th>
           </tr>
@@ -772,7 +772,7 @@ export default function ResumeTable({
                   />
                 </td>
               )}
-              <td className="px-4 py-3 align-middle whitespace-nowrap">
+              <td className="tf-td whitespace-nowrap">
                 <div className="flex items-center">
                   <div>
                     <div className="flex items-center gap-2">
@@ -784,7 +784,7 @@ export default function ResumeTable({
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </button>
                       ) : (
-                        <div className="text-sm text-gray-900">
+                        <div className="tf-body">
                           {highlightQuery ? highlightText(resume.name, highlightQuery) : resume.name}
                         </div>
                       )}
@@ -798,19 +798,19 @@ export default function ResumeTable({
                   </div>
                 </div>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="tf-td whitespace-nowrap tf-body">
                 {resume.title
                   ? (highlightQuery ? highlightText(resume.title, highlightQuery) : resume.title)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="tf-td whitespace-nowrap tf-body">
                 {resume.email && resume.email !== 'No email'
                   ? (highlightQuery ? highlightText(resume.email, highlightQuery) : resume.email)
                   : <span className="text-gray-400">-</span>
                 }
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="tf-td whitespace-nowrap tf-body">
                 {(() => {
                   // Show each number on its own line; cap at two when a resume
                   // carries multiple numbers in a single field.
@@ -829,7 +829,7 @@ export default function ResumeTable({
                   );
                 })()}
               </td>
-              <td className="px-4 py-3 align-middle min-w-[220px] max-w-[260px]">
+              <td className="tf-td min-w-[220px] max-w-[260px]">
                 {/* `flex-wrap` let a row with longer skill names (or, before
                     SkillsList's own cap, more of them) wrap onto a second
                     line, growing that one row taller than the rest of the
@@ -854,15 +854,15 @@ export default function ResumeTable({
                   />
                 </div>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">{resume.experience}</td>
+              <td className="tf-td whitespace-nowrap tf-body">{resume.experience}</td>
               {getFolderName && (
-                <td className="px-4 py-3 align-middle whitespace-nowrap">
+                <td className="tf-td whitespace-nowrap">
                   {(() => {
                     // The folder the resume actually belongs to — one folder per
                     // resume, so the badge names its single home rather than the
                     // aggregated view it is being listed in.
                     const name = getFolderName(resume.folderId);
-                    if (!name) return <span className="text-gray-400 text-sm">-</span>;
+                    if (!name) return <span className="tf-body-muted">-</span>;
                     return (
                       <span
                         className="inline-flex max-w-[160px] items-center gap-1 px-2.5 py-1 rounded text-xs bg-slate-100 text-slate-700 ring-1 ring-slate-200"
@@ -875,7 +875,7 @@ export default function ResumeTable({
                   })()}
                 </td>
               )}
-              <td className="px-4 py-3 align-middle whitespace-nowrap">
+              <td className="tf-td whitespace-nowrap">
                 <span
                   className={`inline-flex items-center gap-1 px-2.5 py-1 rounded text-xs ring-1 ${
                     resume.source === 'Manual'
@@ -891,13 +891,13 @@ export default function ResumeTable({
                   {resume.source}
                 </span>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700">
+              <td className="tf-td whitespace-nowrap tf-body">
                 {formatISTDate(resume.uploadDate)}
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap">
-                <span className="text-sm text-gray-700">{resume.uploadedBy}</span>
+              <td className="tf-td whitespace-nowrap">
+                <span className="tf-body">{resume.uploadedBy}</span>
               </td>
-              <td className="px-4 py-3 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+              <td className="tf-td whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                 <button
                   onClick={() => handleShowVersionHistory(resume)}
                   disabled={isLoadingVersions}
@@ -1003,7 +1003,7 @@ export default function ResumeTable({
                                 app uses (VersionHistoryModal's field headings),
                                 so the menu names itself without competing with
                                 its own options. */}
-                            <div className="flex-none px-3 py-2 border-b border-gray-100 text-2xs font-medium uppercase tracking-wider text-gray-500">
+                            <div className="flex-none px-3 py-2 border-b border-gray-100 tf-micro-hint uppercase tracking-wider">
                               Actions
                             </div>
                             <div
@@ -1135,80 +1135,56 @@ export default function ResumeTable({
       </div>
 
       {/* FIX-008: Mobile Card View - visible only on mobile */}
-      <div className={`md:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
+      <div className={`lg:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
         {paginatedItems.map((resume) => (
-          <div
+          <MobileRecordCard
             key={resume.id}
-            className={`bg-white border rounded-xl p-4 ring-1 transition-all ${
-              selectedResumes.includes(resume.id) ? 'border-brand-blue/40 bg-brand-blue/5 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-100 ring-black/[0.02] shadow-sm shadow-brand-blue/5'
-            }`}
-          >
-            {/* Card Header */}
-            <div className="flex items-start gap-3 mb-3">
-              {!hideCheckboxes && (
-                <input
-                  type="checkbox"
-                  checked={selectedResumes.includes(resume.id)}
-                  onChange={() => onSelectResume(resume.id)}
-                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1"
-                />
-              )}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <div className="font-medium text-gray-900 truncate">{resume.name}</div>
-                  {resume.isArchived && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
-                      <Archive className="w-3 h-3" />
-                    </span>
-                  )}
-                </div>
-                <div className="text-sm text-gray-500 truncate">{resume.title}</div>
-              </div>
-            </div>
-
-            {/* Card Content */}
-            <div className="space-y-2 text-sm mb-3">
-              {resume.email && resume.email !== 'No email' && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Mail className="w-4 h-4 flex-shrink-0" />
-                  <span className="truncate">{resume.email}</span>
-                </div>
-              )}
-              {resume.experience && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Briefcase className="w-4 h-4 flex-shrink-0" />
-                  {/* Already formatted with its units ("6 years 3 months", "N/A")
-                      — the table cell shows it as-is; appending "years exp."
-                      here read "6 years 3 months years exp." on phones. */}
-                  <span>{resume.experience}</span>
-                </div>
-              )}
-              {getDisplaySkills(resume).length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  <SkillsList
-                    skills={getDisplaySkills(resume)}
-                    chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
-                    moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                  />
-                </div>
-              )}
-            </div>
-
-            {/* Card Actions */}
-            <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
+            selected={selectedResumes.includes(resume.id)}
+            select={!hideCheckboxes ? (
+              <input
+                type="checkbox"
+                checked={selectedResumes.includes(resume.id)}
+                onChange={() => onSelectResume(resume.id)}
+                className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+              />
+            ) : undefined}
+            title={resume.name}
+            badges={resume.isArchived ? (
+              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
+                <Archive className="w-3 h-3" />
+              </span>
+            ) : undefined}
+            meta={[
+              { label: resume.title },
+              { icon: <Mail className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.email && resume.email !== 'No email' ? resume.email : '' },
+              /* Already formatted with its units ("6 years 3 months", "N/A")
+                 — the table cell shows it as-is; appending "years exp."
+                 here read "6 years 3 months years exp." on phones. */
+              { icon: <Briefcase className="w-3.5 h-3.5 flex-shrink-0" />, label: resume.experience },
+            ]}
+            actions={
+              /* Apply to Job was dropped here too, to match the desktop ⋮
+                 menu — the action lives in the bulk actions bar. */
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={() => onQuickView(resume)}
                 icon={<Eye className="w-4 h-4" />}
-                className="flex-1"
               >
                 View
               </Button>
-              {/* Apply to Job was dropped here too, to match the desktop ⋮
-                  menu — the action lives in the bulk actions bar. */}
-            </div>
-          </div>
+            }
+          >
+            {getDisplaySkills(resume).length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                <SkillsList
+                  skills={getDisplaySkills(resume)}
+                  chipClassName="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs ring-1 ring-brand-blue/20"
+                  moreClassName="px-2 py-0.5 text-brand-blue text-xs font-medium rounded hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                />
+              </div>
+            )}
+          </MobileRecordCard>
         ))}
       </div>
 
@@ -1267,67 +1243,67 @@ export default function ResumeTable({
                   </div>
                   <h2 className="text-gray-900">Edit Candidate Details</h2>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-body-secondary">
                   Update information for {selectedResumeForAction.name}
                 </p>
               </div>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="tf-grid-2">
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Full Name</label>
+                  <label className="block tf-body mb-2">Full Name</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.name}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Job Title</label>
+                  <label className="block tf-body mb-2">Job Title</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.title}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Email</label>
+                  <label className="block tf-body mb-2">Email</label>
                   <input
                     type="email"
                     defaultValue={selectedResumeForAction.email}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Phone</label>
+                  <label className="block tf-body mb-2">Phone</label>
                   <input
                     type="tel"
                     defaultValue={selectedResumeForAction.phone}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div className="col-span-1 sm:col-span-2">
-                  <label className="block text-sm text-gray-700 mb-2">Skills (comma separated)</label>
+                  <label className="block tf-body mb-2">Skills (comma separated)</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.skills.join(', ')}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Experience</label>
+                  <label className="block tf-body mb-2">Experience</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.experience}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">Location</label>
+                  <label className="block tf-body mb-2">Location</label>
                   <input
                     type="text"
                     defaultValue={selectedResumeForAction.location}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input"
                   />
                 </div>
               </div>
@@ -1380,17 +1356,17 @@ export default function ResumeTable({
                   </div>
                   <h2 className="text-gray-900">Archive Resume</h2>
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-body-secondary">
                   Archive {selectedResumeForAction.name}'s resume?
                 </p>
               </div>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4">
-                <p className="text-sm text-gray-800">
+                <p className="tf-body">
                   <strong>What happens when you archive?</strong>
                 </p>
-                <ul className="text-sm text-gray-700 mt-2 space-y-1 ml-4 list-disc">
+                <ul className="tf-body mt-2 space-y-1 ml-4 list-disc">
                   <li>Resume moved to archived section</li>
                   <li>Removed from active database</li>
                   <li>All data preserved</li>

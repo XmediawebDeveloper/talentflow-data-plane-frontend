@@ -95,7 +95,7 @@ export function VersionUsage({ kind, used }: { kind: InviteKind; used: number })
   const atCap = used >= max;
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap tabular-nums">{used} of {max} used</span>
+      <span className="tf-meta whitespace-nowrap tabular-nums">{used} of {max} used</span>
       <div
         className="h-1.5 w-16 sm:w-24 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden"
         role="progressbar"
@@ -204,11 +204,11 @@ export default function VersionList({
       {versions.length === 0 ? (
         /* The version cards' own empty state. */
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-8 flex flex-col items-center gap-1.5 text-center px-4">
-          <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
+          <div className="tf-label">
             {used === 0 ? `No ${label.singular.toLowerCase()} for this job yet` : `No live ${label.singular.toLowerCase()} for this job version`}
           </div>
           {used === 0 && (
-            <div className="text-xs text-gray-500 dark:text-slate-400">
+            <div className="tf-meta">
               {kind === 'assessment'
                 ? 'Create v1 — configure it here, and it appears in this list.'
                 : 'Create v1 — set it up here, and it appears in this list.'}
@@ -273,14 +273,14 @@ export default function VersionList({
                         </span>
                       )}
                     </span>
-                    <span className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+                    <span className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
                       {v.createdAt && <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatIST(v.createdAt)}</span>}
                       {v.mode && <span className="inline-flex items-center gap-1"><Timer className="w-3.5 h-3.5" />{v.mode}</span>}
                       {v.rounds.length > 0 && (
                         <span className="inline-flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
                           {v.rounds.map((r) => (
-                            <span key={r.short} title={r.label} className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                            <span key={r.short} title={r.label} className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                               {r.short}
                             </span>
                           ))}
@@ -326,7 +326,7 @@ export default function VersionList({
                         <span className="flex flex-col">
                           <span className={MENU_ITEM_SCALE_CLASS}>{item.label}</span>
                           {item.disabledReason && (
-                            <span className="text-2xs text-gray-500 dark:text-slate-400 whitespace-normal">{item.disabledReason}</span>
+                            <span className="tf-micro-hint whitespace-normal">{item.disabledReason}</span>
                           )}
                         </span>
                       </DropdownMenuItem>
@@ -347,7 +347,7 @@ export default function VersionList({
           type="button"
           onClick={() => setExpanded((e) => !e)}
           aria-expanded={expanded}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
+          className="tf-btn tf-btn-secondary gap-1.5 h-8 px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors whitespace-normal justify-start"
         >
           {expanded ? (
             'Show less'
@@ -380,7 +380,7 @@ export default function VersionList({
             {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             {used === 0 ? `Create ${label.singular} (v1)` : `New version (v${nextVersionNumber(every)})`}
           </button>
-          {createBlocked && <span className="text-xs text-gray-500 dark:text-slate-400">{createBlocked}</span>}
+          {createBlocked && <span className="tf-meta">{createBlocked}</span>}
         </div>
       )}
     </div>

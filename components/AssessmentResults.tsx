@@ -1863,7 +1863,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const renderDetailValue = (id: string, candidate: CandidateResult) => {
     switch (id) {
       case 'timeline':
-        return <div className="text-xs text-gray-500 dark:text-slate-400">{renderTimeline(candidate)}</div>;
+        return <div className="tf-meta">{renderTimeline(candidate)}</div>;
       case 'inviteSource':
         return <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />;
       case 'phone':
@@ -1875,7 +1875,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </span>
         );
       case 'jobVersion':
-        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="text-xs text-gray-400">—</span>;
+        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="tf-hint">—</span>;
       default:
         return null;
     }
@@ -1894,9 +1894,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        ROUTE, and nothing at all when embedded, where the host has already drawn
        one around this view. The nesting is kept either way so the content tree
        below is the one tree, never a second copy written for the tab. */
-    <div ref={rootRef} className={embedded ? undefined : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <div ref={rootRef} className={embedded ? undefined : 'tf-page'}>
       <div className={embedded ? undefined : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? undefined : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? undefined : 'tf-page-sheet'}>
           {/* Previous / Next assessment navigation rides inside the breadcrumb
               bar, as on job-details, so users can step through assessments
               without going back to the list — and without it scrolling away
@@ -1945,7 +1945,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   /* The app's one Job ID badge — see JobIdBadge. */
                   <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>
                 )}
-                <h1 className="min-w-0 text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">
+                <h1 className="tf-page-title min-w-0 tf-section-title truncate">
                   {jdTitle || assessmentTitle}
                 </h1>
               </div>
@@ -1957,7 +1957,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   assessment version) in the same way. Wraps under itself on a
                   phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-gray-600">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-body-secondary">
                   <span className="shrink-0">
                     {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
                   </span>
@@ -2247,7 +2247,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         /* Embedded: the AI Talent Match tab's spacing — the row's own `mb-3`
            under the controls and the More Filters panel's `pb-4` under the
            fields, nothing on the block itself. */
-        <div className={toolbarPortal ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
+        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
             /* Keystroke-by-keystroke, as the search field always was. */
@@ -2438,7 +2438,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           ) : (
             <div className="mt-3 pt-3 border-t border-brand-blue/10">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {filterFields}
               </div>
             </div>
@@ -2470,7 +2470,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                      className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selectedRows.length} selected`}
                     >
                       <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -2507,7 +2507,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   type="button"
                   onClick={() => setSelectedRows([])}
                   title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
                 >
                   <X className="w-4 h-4" />
                   Clear
@@ -2546,7 +2546,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         })()}
 
         {/* Candidates Results Table */}
-        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+        <div className="tf-card overflow-hidden">
           {/* Heading + candidate count — standalone only. Embedded in Job
               Details this row is dropped entirely to match the AI Talent
               Match reference, whose table card has no heading/count row at
@@ -2559,7 +2559,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {!portaled && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
+              <h2 className="truncate tf-row-name sm:text-base tracking-tight">Candidate Results</h2>
               {isFetching && (
                 <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
               )}
@@ -2609,12 +2609,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {searchQuery || Object.keys(roundFilters).length > 0 || statusFilter !== 'all' || passFailFilter !== 'all' ? (
                     <>
                       <p className="text-gray-600 mb-1">No candidates match your search criteria</p>
-                      <p className="text-sm text-gray-500">Try adjusting your filters or search query</p>
+                      <p className="tf-body-muted">Try adjusting your filters or search query</p>
                     </>
                   ) : (
                     <>
                       <p className="text-gray-600 mb-1">No assessment results yet</p>
-                      <p className="text-sm text-gray-500">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
+                      <p className="tf-body-muted">{emptyStateText ?? 'Share the assessment link to invite candidates'}</p>
                       {emptyStateAction && <div className="mt-4">{emptyStateAction}</div>}
                     </>
                   )}
@@ -2693,7 +2693,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Select ${candidate.name || 'candidate'}`}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 shrink-0"
+                        className="tf-checkbox mt-1 focus:ring-brand-blue/40"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
@@ -2708,7 +2708,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </div>
                         {candidate.email && (
-                          <p className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">{candidate.email}</p>
+                          <p className="tf-meta [overflow-wrap:anywhere]">{candidate.email}</p>
                         )}
                         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                           {rounds.map(({ label, value }) => (
@@ -2721,7 +2721,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           ))}
                         </div>
                         {candidate.completedDate && candidate.completedDate !== '-' && (
-                          <p className="mt-2 text-xs text-gray-500 [overflow-wrap:anywhere]">
+                          <p className="mt-2 tf-meta [overflow-wrap:anywhere]">
                             Submitted {candidate.completedDate}
                             {candidate.duration && candidate.duration !== '-' ? <> &middot; {candidate.duration}</> : null}
                           </p>
@@ -2977,7 +2977,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             /* The AI Talent Match table's name over email, no avatar. */
                             <div className="min-w-0">
                               <p className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</p>
-                              {candidate.email && <p className="text-xs text-gray-500 dark:text-slate-500 truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
+                              {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                             </div>
                           ) : (
                           <div className="flex min-w-0 items-center gap-2">
@@ -2989,7 +2989,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 let the separate Email column go. */}
                             <div className="min-w-0">
                               <div className="truncate font-medium text-gray-900 dark:text-slate-50" title={showName(candidate.name) || 'Unknown'}>{showName(candidate.name) || 'Unknown'}</div>
-                              <div className="truncate text-xs text-gray-500 dark:text-slate-400" title={candidate.email || ''}>{candidate.email || '-'}</div>
+                              <div className="truncate tf-meta" title={candidate.email || ''}>{candidate.email || '-'}</div>
                             </div>
                           </div>
                           )}
@@ -3066,7 +3066,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {jdShortId ? (
                             <JobIdBadge>{jdShortId}</JobIdBadge>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3084,7 +3084,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.jobVersion != null ? (
                             <VersionPill kind="job" version={candidate.jobVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3100,7 +3100,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.assessmentVersion != null ? (
                             <VersionPill kind="assessment" version={candidate.assessmentVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}

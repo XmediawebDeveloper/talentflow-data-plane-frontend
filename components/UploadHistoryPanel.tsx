@@ -70,7 +70,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         <div className="flex items-center justify-between px-4 sm:px-6 lg:px-8 py-4 sm:py-6 border-b border-gray-200 bg-gradient-to-r from-brand-blue/5 to-white">
           <div className="min-w-0">
             <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload History</h2>
-            <p className="text-sm text-gray-600">
+            <p className="tf-body-secondary">
               View all past bulk upload reports for {currentSource === 'my-resumes' ? 'My Resumes' : 'Shared Database'}
             </p>
           </div>
@@ -90,7 +90,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                 <FileText className="w-7 h-7 sm:w-10 sm:h-10 text-brand-blue" />
               </div>
               <h3 className="text-base sm:text-xl text-gray-900 mb-1.5 sm:mb-2">No Upload History</h3>
-              <p className="text-sm text-gray-500 text-center max-w-md px-4">
+              <p className="tf-body-muted text-center max-w-md px-4">
                 Bulk upload reports will appear here. Upload multiple resumes to see detailed status reports.
               </p>
             </div>
@@ -104,7 +104,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                   <div
                     key={record.id}
                     onClick={() => setSelectedRecord(record)}
-                    className="bg-white border border-gray-200 rounded-xl p-4 sm:p-6 hover:border-brand-blue/30 hover:shadow-lg transition-all cursor-pointer"
+                    className="tf-panel p-4 sm:p-6 hover:border-brand-blue/30 hover:shadow-lg transition-all cursor-pointer"
                   >
                     {/* Header Row */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between mb-4 sm:mb-5 gap-3 sm:gap-4">
@@ -114,8 +114,8 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                             <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                           </div>
                           <div className="min-w-0">
-                            <h3 className="text-sm sm:text-base text-gray-900 mb-0.5 sm:mb-1 truncate">{record.fileName}</h3>
-                            <div className="flex items-center gap-1.5 sm:gap-2 text-sm text-gray-500">
+                            <h3 className="tf-body sm:text-base mb-0.5 sm:mb-1 truncate">{record.fileName}</h3>
+                            <div className="flex items-center gap-1.5 sm:gap-2 tf-body-muted">
                               <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                               <span className="truncate">{formatDate(record.date)}</span>
                             </div>
@@ -124,7 +124,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
                       <div className="flex items-center gap-3 sm:gap-4 ml-10 sm:ml-0">
                         {hasIssues && (
-                          <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-brand-blue/10 text-brand-blue text-xs rounded-full border border-brand-blue/20">
+                          <span className="tf-badge flex sm:gap-1.5 sm:px-3 sm:py-1.5 bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
                             <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                             Needs Review
                           </span>
@@ -137,7 +137,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           }`}>
                             {successRate}%
                           </div>
-                          <div className="text-xs text-gray-500">Success Rate</div>
+                          <div className="tf-meta">Success Rate</div>
                         </div>
                         <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                       </div>
@@ -151,7 +151,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
                             <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Completed</span>
+                          <span className="tf-meta truncate">Completed</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-green-700">{record.completed}</div>
                       </div>
@@ -162,7 +162,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
                             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Pending</span>
+                          <span className="tf-meta truncate">Pending</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue">{record.pending}</div>
                       </div>
@@ -173,7 +173,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
                             <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Error</span>
+                          <span className="tf-meta truncate">Error</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-red-700">{record.errors}</div>
                       </div>
@@ -184,7 +184,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                             <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Duplicate</span>
+                          <span className="tf-meta truncate">Duplicate</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-cyan">{record.duplicated}</div>
                       </div>
@@ -195,7 +195,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
                             <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Versioned</span>
+                          <span className="tf-meta truncate">Versioned</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue-2">{record.versioned}</div>
                       </div>
@@ -206,7 +206,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0">
                             <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-xs text-gray-700 truncate">Total Files</span>
+                          <span className="tf-meta truncate">Total Files</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-gray-700">{record.totalFiles}</div>
                       </div>
@@ -214,7 +214,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Progress Bar */}
                     <div className="mt-3 sm:mt-5">
-                      <div className="flex items-center justify-between text-xs text-gray-600 mb-1.5 sm:mb-2">
+                      <div className="flex items-center justify-between tf-meta mb-1.5 sm:mb-2">
                         <span>Upload Progress</span>
                         <span>{record.completed} of {record.totalFiles} processed</span>
                       </div>
@@ -232,7 +232,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Click to view hint */}
                     <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
-                      <p className="text-xs text-gray-500 text-center">
+                      <p className="tf-meta text-center">
                         Click to view detailed file-by-file status
                       </p>
                     </div>
@@ -246,7 +246,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 bg-white">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0">
-            <p className="text-sm text-gray-600 text-center sm:text-left">
+            <p className="tf-body-secondary text-center sm:text-left">
               Showing <span className="text-gray-900">{filteredRecords.length}</span> upload record{filteredRecords.length !== 1 ? 's' : ''}
             </p>
           </div>

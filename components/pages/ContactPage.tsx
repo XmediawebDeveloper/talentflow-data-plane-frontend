@@ -312,7 +312,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
             <MessageSquare style={{ width: 16, height: 16 }} />
             Contact Us
           </div>
-          <h1 style={titleStyle}>Get in touch</h1>
+          <h1 className="tf-page-title" style={titleStyle}>Get in touch</h1>
           <p style={subtitleStyle}>
             Have questions? We'd love to hear from you. Send us a message and we'll respond as soon as possible.
           </p>

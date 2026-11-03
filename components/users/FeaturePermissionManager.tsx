@@ -314,7 +314,7 @@ export default function FeaturePermissionManager({
       subtitle={
         <span className="inline-flex items-center gap-2">
           <span className="truncate">{userName}</span>
-          <span className="text-2xs uppercase tracking-wider font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30">
+          <span className="tf-badge text-2xs uppercase tracking-wider bg-white/20 text-white ring-1 ring-white/30">
             {userRole}
           </span>
         </span>
@@ -343,7 +343,7 @@ export default function FeaturePermissionManager({
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900">Permission Expansion Blocked</h3>
-                  <p className="text-sm max-sm:text-[13px] text-gray-700 mt-1">
+                  <p className="tf-body mt-1">
                     Users with the "{userRole}" role cannot have their permissions expanded.
                     This role is read-only by design.
                   </p>
@@ -353,16 +353,16 @@ export default function FeaturePermissionManager({
           ) : (
             <>
               {/* Auto-enable dependencies toggle */}
-              <div className="mb-6 flex items-center justify-between bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <div className="tf-card-soft mb-6 flex items-center justify-between p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/20 flex-shrink-0">
                     <Link2 className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <p className="text-sm max-sm:text-[13px] font-semibold text-gray-900">
+                    <p className="tf-row-title">
                       Auto-enable dependencies
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
+                    <p className="tf-meta mt-0.5">
                       Automatically enable required features when enabling a dependent feature
                     </p>
                   </div>
@@ -392,7 +392,7 @@ export default function FeaturePermissionManager({
                   const enabledCount = categoryFeatures.filter(f => isFeatureEnabled(f.code)).length;
 
                   return (
-                    <div key={category} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md hover:border-brand-blue/30 transition-all">
+                    <div key={category} className="tf-card-soft overflow-hidden hover:shadow-md hover:border-brand-blue/30 transition-all">
                       <button
                         onClick={() => toggleCategory(category)}
                         className="w-full px-4 py-3 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white hover:from-brand-blue/[0.04] hover:to-brand-cyan/[0.03] transition-colors"
@@ -431,7 +431,7 @@ export default function FeaturePermissionManager({
                               >
                                 <div className="flex-1 pr-4">
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-sm max-sm:text-[13px] font-medium text-gray-900">
+                                    <span className="tf-row-name">
                                       {feature.name}
                                     </span>
                                     {feature.locked && (
@@ -453,7 +453,7 @@ export default function FeaturePermissionManager({
                                       </Badge>
                                     )}
                                   </div>
-                                  <p className="text-xs text-gray-500 mt-0.5">
+                                  <p className="tf-meta mt-0.5">
                                     {feature.description}
                                   </p>
                                 </div>
@@ -491,7 +491,7 @@ export default function FeaturePermissionManager({
                       <div className="w-9 h-9 rounded-lg bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 flex-shrink-0">
                         <Info className="w-4 h-4 text-white" />
                       </div>
-                      <span className="text-sm max-sm:text-[13px] font-semibold text-brand-blue">
+                      <span className="text-sm font-semibold text-brand-blue">
                         {Object.keys(pendingChanges).length} change(s) pending
                       </span>
                     </div>

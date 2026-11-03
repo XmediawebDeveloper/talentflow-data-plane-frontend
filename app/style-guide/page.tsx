@@ -149,8 +149,8 @@ function Swatch({ name, varName, hex }: { name: string; varName: string; hex?: s
         style={{ background: `var(${varName})` }}
       />
       <span className="min-w-0">
-        <div className="text-xs font-medium text-gray-900 dark:text-slate-100 truncate">{name}</div>
-        <div className="text-2xs text-gray-500 dark:text-slate-400 truncate">
+        <div className="tf-caption truncate">{name}</div>
+        <div className="tf-micro-hint truncate">
           {copied ? 'copied!' : hex ?? varName}
         </div>
       </span>
@@ -261,7 +261,7 @@ export default function StyleGuidePage() {
             </GuidelineNote>
             <div className="space-y-5">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+                <div className="tf-eyebrow tracking-wide mb-2">
                   1 of 3 — CTA color (main call-to-action buttons only)
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -272,7 +272,7 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+                <div className="tf-eyebrow tracking-wide mb-2">
                   2 of 3 — Neutral (backgrounds, borders, text — counts as ONE color for the budget)
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -288,7 +288,7 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+                <div className="tf-eyebrow tracking-wide mb-2">
                   3 of 3 — Semantic status (red / green / amber — use only the ones a screen needs)
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
@@ -306,7 +306,7 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+                <div className="tf-eyebrow tracking-wide mb-2">
                   Decorative accents — must stay non-dominant (icon glyphs / thin rings only, never a card or button fill)
                 </div>
                 <GuidelineNote tone="warning">
@@ -345,37 +345,37 @@ export default function StyleGuidePage() {
                 <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
                   Page title — text-2xl font-semibold
                 </h1>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">Dashboard / top-level page name</div>
+                <div className="tf-micro-hint">Dashboard / top-level page name</div>
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                <h2 className="tf-section-title tracking-tight">
                   Heading — text-lg / text-xl font-semibold
                 </h2>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">PageHeader title, card titles</div>
+                <div className="tf-micro-hint">PageHeader title, card titles</div>
               </div>
               <div>
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                <h3 className="tf-section-title">
                   Subheading — text-base font-semibold
                 </h3>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">SectionHeading inside a page or card</div>
+                <div className="tf-micro-hint">SectionHeading inside a page or card</div>
               </div>
               <div>
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-body-secondary">
                   Body — text-sm (the app's default body size)
                 </p>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">Standard content, descriptions, form labels</div>
+                <div className="tf-micro-hint">Standard content, descriptions, form labels</div>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-slate-500">
+                <p className="tf-meta">
                   Meta — text-xs
                 </p>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">Timestamps, counts, captions</div>
+                <div className="tf-micro-hint">Timestamps, counts, captions</div>
               </div>
               <div>
-                <p className="text-2xs text-gray-500 dark:text-slate-500">
+                <p className="tf-micro-hint">
                   Micro — text-2xs (10px) · dense data only
                 </p>
-                <div className="text-2xs text-gray-400 dark:text-slate-500">Table cells, chips, badges in high-density recruiter views — nothing below this</div>
+                <div className="tf-micro-hint">Table cells, chips, badges in high-density recruiter views — nothing below this</div>
               </div>
               <code className="text-sm font-mono bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded inline-block">
                 font-mono — tabular numbers &amp; code only
@@ -399,10 +399,10 @@ export default function StyleGuidePage() {
 
             <div className="space-y-6">
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-1">
+                <div className="tf-eyebrow tracking-wide mb-1">
                   1 · Primary — <code>variant=&quot;primary&quot;</code>
                 </div>
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mb-2">
+                <div className="tf-micro-hint mb-2">
                   The single main CTA. Top-right / bottom-right. "Create JD", "Upload Resume", "Export".
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -416,15 +416,15 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-1">
+                <div className="tf-eyebrow tracking-wide mb-1">
                   2 · Secondary — <code>variant=&quot;secondary&quot;</code>
                 </div>
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mb-2">
+                <div className="tf-micro-hint mb-2">
                   Neutral supporting actions. Renders three ways — labeled, icon-only, or a kebab
                   dropdown — but it is one variant. "Edit", "Download", "Duplicate".
                 </div>
                 <div className="mb-3">
-                  <div className="text-2xs uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1.5">Labeled</div>
+                  <div className="tf-micro-hint uppercase tracking-wide mb-1.5">Labeled</div>
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="secondary" size="sm">Small</Button>
                     <Button variant="secondary" size="md">Medium</Button>
@@ -434,13 +434,13 @@ export default function StyleGuidePage() {
                   </div>
                 </div>
                 <div className="mb-3">
-                  <div className="text-2xs uppercase tracking-wide text-gray-400 dark:text-slate-500 mb-1.5">Icon-only + kebab dropdown</div>
+                  <div className="tf-micro-hint uppercase tracking-wide mb-1.5">Icon-only + kebab dropdown</div>
                   <div className="flex flex-wrap items-center gap-3">
-                    <Button variant="secondary" size="sm" aria-label="Download" className="px-2"><Download className="w-4 h-4" /></Button>
-                    <Button variant="secondary" size="sm" aria-label="Edit" className="px-2"><Pencil className="w-4 h-4" /></Button>
+                    <Button variant="secondary" size="sm" aria-label="Download"><Download className="w-4 h-4" /></Button>
+                    <Button variant="secondary" size="sm" aria-label="Edit"><Pencil className="w-4 h-4" /></Button>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="secondary" size="sm" aria-label="More actions" className="px-2"><MoreVertical className="w-4 h-4" /></Button>
+                        <Button variant="secondary" size="sm" aria-label="More actions"><MoreVertical className="w-4 h-4" /></Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem><Pencil className="w-4 h-4 mr-2" />Edit</DropdownMenuItem>
@@ -459,10 +459,10 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-1">
+                <div className="tf-eyebrow tracking-wide mb-1">
                   3 · Destructive — <code>variant=&quot;destructive&quot;</code>
                 </div>
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mb-2">
+                <div className="tf-micro-hint mb-2">
                   Always red. Never fires directly — must be wrapped in a confirmation step
                   (see AlertDialog under Popups). "Delete JD", "Delete Resume".
                 </div>
@@ -477,10 +477,10 @@ export default function StyleGuidePage() {
               </div>
 
               <div>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-1">
+                <div className="tf-eyebrow tracking-wide mb-1">
                   Modifier · <code>tone=&quot;onColor&quot;</code>
                 </div>
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mb-2">
+                <div className="tf-micro-hint mb-2">
                   A <strong>modifier</strong>, not a 4th variant — the same three variants, restyled for
                   buttons that sit on a dark, gradient, on-video, or colored-header surface (candidate
                   exam screens, colored page banners, floating overlays). Primary inverts to white;
@@ -490,7 +490,7 @@ export default function StyleGuidePage() {
                   <div className="flex flex-wrap items-center gap-3">
                     <Button variant="primary" tone="onColor">Primary</Button>
                     <Button variant="secondary" tone="onColor" icon={<Download className="w-4 h-4" />}>Secondary</Button>
-                    <Button variant="secondary" tone="onColor" aria-label="More" className="px-2"><MoreVertical className="w-4 h-4" /></Button>
+                    <Button variant="secondary" tone="onColor" aria-label="More"><MoreVertical className="w-4 h-4" /></Button>
                     <Button variant="destructive" tone="onColor" icon={<Trash2 className="w-4 h-4" />}>Delete</Button>
                     <Button variant="primary" tone="onColor" disabled>Disabled</Button>
                   </div>
@@ -529,7 +529,7 @@ export default function StyleGuidePage() {
             </GuidelineNote>
 
             <div className="mb-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+              <div className="tf-eyebrow tracking-wide mb-2">
                 Inline validation — error shows as you type, not on submit
               </div>
               <div className="max-w-sm space-y-1.5">
@@ -552,7 +552,7 @@ export default function StyleGuidePage() {
                   </p>
                 )}
               </div>
-              <div className="text-2xs text-gray-400 dark:text-slate-500 mt-2">
+              <div className="tf-micro-hint mt-2">
                 No app form currently ships this (every form validates via toast-on-submit
                 today) — this is the target pattern, wired with plain state here to demonstrate
                 the behavior without pulling in react-hook-form.
@@ -560,13 +560,13 @@ export default function StyleGuidePage() {
             </div>
 
             <div className="mb-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+              <div className="tf-eyebrow tracking-wide mb-2">
                 Collapsible section — long forms split into groups, not one scroll
               </div>
               <Collapsible open={sectionOpen} onOpenChange={setSectionOpen} className="max-w-sm rounded-lg border border-gray-200 dark:border-slate-700">
-                <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2.5 text-sm font-medium text-gray-800 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg">
+                <CollapsibleTrigger className="w-full flex items-center justify-between px-3 py-2.5 tf-label hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg">
                   <span className="flex items-center gap-2"><Layers className="w-4 h-4 text-gray-400" /> Compensation & Benefits</span>
-                  <span className="text-2xs text-gray-400">{sectionOpen ? 'Hide' : 'Show'}</span>
+                  <span className="tf-micro-hint">{sectionOpen ? 'Hide' : 'Show'}</span>
                 </CollapsibleTrigger>
                 <CollapsibleContent className="px-3 pb-3 space-y-2 border-t border-gray-100 dark:border-slate-800">
                   <Input placeholder="Min salary" className="mt-2" />
@@ -606,7 +606,7 @@ export default function StyleGuidePage() {
             </div>
 
             <div className="mt-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+              <div className="tf-eyebrow tracking-wide mb-2">
                 Tabs
               </div>
               <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
@@ -615,16 +615,16 @@ export default function StyleGuidePage() {
                   <TabsTrigger value="active">Active</TabsTrigger>
                   <TabsTrigger value="archived">Archived</TabsTrigger>
                 </TabsList>
-                <TabsContent value={tab} className="text-sm text-gray-600 dark:text-slate-400 pt-2">
+                <TabsContent value={tab} className="tf-body-secondary pt-2">
                   Showing “{tab}” tab content.
                 </TabsContent>
               </Tabs>
             </div>
 
             <div className="mt-6 flex items-center gap-2">
-              <span className="text-sm text-gray-700 dark:text-slate-300">Info tooltip:</span>
+              <span className="tf-body">Info tooltip:</span>
               <InfoTooltip content="This is a portalled, viewport-clamped tooltip." />
-              <span className="ml-4 text-sm text-gray-700 dark:text-slate-300">Custom tooltip:</span>
+              <span className="ml-4 tf-body">Custom tooltip:</span>
               <Tooltip content="Custom tooltip content">
                 <span className="underline decoration-dotted cursor-help text-sm">hover me</span>
               </Tooltip>
@@ -643,7 +643,7 @@ export default function StyleGuidePage() {
                   </CardAction>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-sm text-gray-600 dark:text-slate-400">
+                  <p className="tf-body-secondary">
                     Card / CardHeader / CardTitle / CardDescription / CardAction / CardContent / CardFooter —
                     components/ui/card.tsx
                   </p>
@@ -655,7 +655,7 @@ export default function StyleGuidePage() {
 
               <SurfaceCard>
                 <SectionHeading title="Surface card" description="Plain panel — used for generic content blocks inside a page." />
-                <p className="text-sm text-gray-600 dark:text-slate-400">
+                <p className="tf-body-secondary">
                   components/ui/section-container.tsx — same border/ring/shadow recipe as PageToolbar.
                 </p>
               </SurfaceCard>
@@ -671,7 +671,7 @@ export default function StyleGuidePage() {
               must always appear at the top."
             </GuidelineNote>
 
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+            <div className="tf-eyebrow tracking-wide mb-2">
               SaaS shell — persistent sidebar + fixed top bar + content area
             </div>
             <div className="flex h-56 rounded-lg border border-dashed border-gray-300 dark:border-slate-700 overflow-hidden mb-6">
@@ -683,35 +683,35 @@ export default function StyleGuidePage() {
               </div>
               <div className="flex-1 flex flex-col">
                 <div className="h-9 shrink-0 flex items-center justify-between px-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-                  <span className="text-2xs font-medium text-gray-500 dark:text-slate-400">Job Descriptions</span>
+                  <span className="tf-micro-hint">Job Descriptions</span>
                   <div className="flex items-center gap-2 text-gray-400"><Bell className="w-3.5 h-3.5" /><div className="w-5 h-5 rounded-full bg-gray-200 dark:bg-slate-700" /></div>
                 </div>
-                <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-3 text-2xs text-gray-400 dark:text-slate-500">Content area — every workflow renders here, no full-page reloads for primary actions</div>
+                <div className="flex-1 bg-slate-50 dark:bg-slate-950 p-3 tf-micro-hint">Content area — every workflow renders here, no full-page reloads for primary actions</div>
               </div>
             </div>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-6">
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-green-600 dark:text-green-400 mb-2 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> OK — 2 levels</div>
-                <div className="text-sm text-gray-700 dark:text-slate-300 font-mono">JD → Scored Resumes</div>
+                <div className="tf-body font-mono">JD → Scored Resumes</div>
               </div>
               <div>
                 <div className="text-xs font-semibold uppercase tracking-wide text-red-600 dark:text-red-400 mb-2 flex items-center gap-1"><XIcon className="w-3.5 h-3.5" /> Not allowed — 3 levels</div>
-                <div className="text-sm text-gray-700 dark:text-slate-300 font-mono">JD → Details → History → Export</div>
+                <div className="tf-body font-mono">JD → Details → History → Export</div>
               </div>
             </div>
 
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+            <div className="tf-eyebrow tracking-wide mb-2">
               Context always visible — entity name pinned at the top of every sub-view
             </div>
             <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 mb-6">
-              <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">
+              <div className="flex items-center gap-2 tf-row-name mb-1">
                 <Briefcase className="w-4 h-4 text-brand-blue" /> Senior Backend Engineer <Badge variant="outline" className="ml-1">JD-0142</Badge>
               </div>
-              <div className="text-2xs text-gray-400 dark:text-slate-500">Scored Resumes tab — the JD name stays pinned however deep the recruiter scrolls, so it's never ambiguous which JD this data belongs to.</div>
+              <div className="tf-micro-hint">Scored Resumes tab — the JD name stays pinned however deep the recruiter scrolls, so it's never ambiguous which JD this data belongs to.</div>
             </div>
 
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">
+            <div className="tf-eyebrow tracking-wide mb-2">
               Page shell — PageContainer → PageHeader → PageToolbar → SurfaceCard
             </div>
             <div className="rounded-lg border border-dashed border-gray-300 dark:border-slate-700 p-3 sm:p-4 bg-slate-50/60 dark:bg-slate-950/40">
@@ -794,8 +794,8 @@ export default function StyleGuidePage() {
                   <Button variant="outline">Popover</Button>
                 </PopoverTrigger>
                 <PopoverContent>
-                  <div className="text-sm font-medium text-gray-900 dark:text-slate-100 mb-1">Quick filters</div>
-                  <p className="text-xs text-gray-500 dark:text-slate-400">components/ui/popover.tsx — anchored, non-modal.</p>
+                  <div className="tf-row-name mb-1">Quick filters</div>
+                  <p className="tf-meta">components/ui/popover.tsx — anchored, non-modal.</p>
                 </PopoverContent>
               </Popover>
 
@@ -822,7 +822,7 @@ export default function StyleGuidePage() {
                     <SheetTitle>Filters</SheetTitle>
                     <SheetDescription>components/ui/sheet.tsx — slides in from a screen edge.</SheetDescription>
                   </SheetHeader>
-                  <div className="px-4 sm:px-5 text-sm text-gray-600 dark:text-slate-400">
+                  <div className="px-4 sm:px-5 tf-body-secondary">
                     Panel content goes here.
                   </div>
                   <SheetFooter>
@@ -840,10 +840,10 @@ export default function StyleGuidePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Candidate</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Role</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Score</th>
-                    <th className="px-3 py-2 text-left font-semibold text-gray-600 dark:text-slate-300 text-xs">Status</th>
+                    <th className="px-3 py-2 text-left tf-th">Candidate</th>
+                    <th className="px-3 py-2 text-left tf-th">Role</th>
+                    <th className="px-3 py-2 text-left tf-th">Score</th>
+                    <th className="px-3 py-2 text-left tf-th">Status</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -886,7 +886,7 @@ export default function StyleGuidePage() {
                   into a drawer. Bulk Operations — checkbox-based selection, one-click bulk
                   upload/score/invite/download."
                 </GuidelineNote>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Resume Database</div>
+                <div className="tf-eyebrow tracking-wide mb-2">Resume Database</div>
                 <Tabs defaultValue="my-resumes">
                   <TabsList>
                     <TabsTrigger value="my-resumes"><FolderOpen className="w-3.5 h-3.5" /> My Resumes</TabsTrigger>
@@ -895,11 +895,11 @@ export default function StyleGuidePage() {
                 </Tabs>
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-900">
                   <Search className="w-4 h-4 text-gray-400 shrink-0" />
-                  <span className="text-sm text-gray-400 dark:text-slate-500">Sticky search — stays visible while the list scrolls</span>
+                  <span className="tf-body-muted">Sticky search — stays visible while the list scrolls</span>
                 </div>
                 <div className="mt-3 flex items-center gap-2 rounded-lg bg-brand-blue/5 border border-brand-blue/20 px-3 py-2">
                   <Checkbox checked className="pointer-events-none" />
-                  <span className="text-sm text-gray-700 dark:text-slate-300">3 selected</span>
+                  <span className="tf-body">3 selected</span>
                   <span className="ml-auto flex gap-2">
                     <Button size="sm" variant="outline" icon={<Send className="w-3.5 h-3.5" />}>Submit for Scoring</Button>
                     <Button size="sm" variant="outline" icon={<Download className="w-3.5 h-3.5" />}>Download</Button>
@@ -913,16 +913,16 @@ export default function StyleGuidePage() {
                   JDs. Dynamic Column Selection — column count adapts to screen width. Export
                   Without Navigation — happens in the same screen."
                 </GuidelineNote>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Resume Scoring — dynamic columns</div>
+                <div className="tf-eyebrow tracking-wide mb-2">Resume Scoring — dynamic columns</div>
                 <div className="flex flex-wrap gap-3">
                   {(Object.keys(columns) as (keyof typeof columns)[]).map((key) => (
-                    <label key={key} className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                    <label key={key} className="flex items-center gap-1.5 tf-body">
                       <Checkbox checked={columns[key]} onCheckedChange={(v) => setColumns((c) => ({ ...c, [key]: !!v }))} />
                       <span className="capitalize">{key === 'matchType' ? 'Match Type' : key}</span>
                     </label>
                   ))}
                 </div>
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mt-2 flex items-center gap-1"><Columns3 className="w-3 h-3" /> {Object.values(columns).filter(Boolean).length} of {Object.keys(columns).length} columns shown — same idea as the table below adapting its visible columns to viewport width</div>
+                <div className="tf-micro-hint mt-2 flex items-center gap-1"><Columns3 className="w-3 h-3" /> {Object.values(columns).filter(Boolean).length} of {Object.keys(columns).length} columns shown — same idea as the table below adapting its visible columns to viewport width</div>
               </div>
 
               <div>
@@ -932,7 +932,7 @@ export default function StyleGuidePage() {
                   Status Panels — Invitation Sent, Link Opened, Test Started, Completed,
                   Failed/Abandoned."
                 </GuidelineNote>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Assessment — real-time status panel</div>
+                <div className="tf-eyebrow tracking-wide mb-2">Assessment — real-time status panel</div>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
                   {[
                     { label: 'Invited', icon: Send, cls: 'text-status-invited bg-status-invited/10 ring-status-invited/20' },
@@ -955,14 +955,14 @@ export default function StyleGuidePage() {
                   as the question, no tab switching. Split View — Left: Question, Right:
                   Compiler, Bottom: Output. Run & Submit Always Visible."
                 </GuidelineNote>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Coding Assessment — split view</div>
+                <div className="tf-eyebrow tracking-wide mb-2">Coding Assessment — split view</div>
                 <div className="rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
                   <div className="grid grid-cols-2 h-24">
-                    <div className="p-2.5 border-r border-gray-200 dark:border-slate-700 text-2xs text-gray-500 dark:text-slate-400 flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Question</div>
+                    <div className="p-2.5 border-r border-gray-200 dark:border-slate-700 tf-micro-hint flex items-center gap-1.5"><FileText className="w-3.5 h-3.5" /> Question</div>
                     <div className="p-2.5 bg-gray-900 text-2xs text-gray-300 flex items-center gap-1.5"><Code2 className="w-3.5 h-3.5" /> Compiler</div>
                   </div>
                   <div className="flex items-center justify-between px-2.5 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
-                    <span className="text-2xs text-gray-400">Output & Errors</span>
+                    <span className="tf-micro-hint">Output & Errors</span>
                     <span className="flex gap-1.5">
                       <Button size="sm" variant="outline">Run</Button>
                       <Button size="sm" variant="primary">Submit</Button>
@@ -977,14 +977,14 @@ export default function StyleGuidePage() {
                   convert into card views, each card shows primary information only. Bottom
                   Sheet Actions — secondary actions open as bottom sheets."
                 </GuidelineNote>
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> Mobile — table row becomes a card, not a scroll-only table</div>
+                <div className="tf-eyebrow tracking-wide mb-2 flex items-center gap-1.5"><Smartphone className="w-3.5 h-3.5" /> Mobile — table row becomes a card, not a scroll-only table</div>
                 <div className="max-w-xs rounded-lg border border-gray-200 dark:border-slate-700 p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Aditi Rao</span>
+                    <span className="tf-row-name">Aditi Rao</span>
                     <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ color: 'var(--score-high)', background: 'var(--score-high-bg)' }}>92</span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-slate-400">Backend Engineer</div>
-                  <div className="text-2xs text-gray-400 mt-1">Tap for secondary actions → opens a Sheet from the bottom (see Popups), not a hidden row of buttons.</div>
+                  <div className="tf-meta">Backend Engineer</div>
+                  <div className="tf-micro-hint mt-1">Tap for secondary actions → opens a Sheet from the bottom (see Popups), not a hidden row of buttons.</div>
                 </div>
               </div>
             </div>
@@ -1001,7 +1001,7 @@ export default function StyleGuidePage() {
             </GuidelineNote>
 
             <div className="mb-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Toast feedback — sonner, wired to real actions elsewhere in the app</div>
+              <div className="tf-eyebrow tracking-wide mb-2">Toast feedback — sonner, wired to real actions elsewhere in the app</div>
               <div className="flex flex-wrap gap-3">
                 <Button variant="secondary" size="sm" onClick={() => toast.success('Resume uploaded successfully')}>Trigger success</Button>
                 <Button variant="secondary" size="sm" onClick={() => toast.error('Upload failed — file exceeds 10MB. Try a smaller file.')}>Trigger error</Button>
@@ -1021,22 +1021,22 @@ export default function StyleGuidePage() {
                 </Button>
               </div>
               {autosaveDemo !== 'idle' && (
-                <div className="text-2xs text-gray-400 dark:text-slate-500 mt-2">
+                <div className="tf-micro-hint mt-2">
                   Demo state: <span className="font-mono">{autosaveDemo}</span> — errors must explain what went wrong AND what to do next (see the error toast copy above), not just "Failed".
                 </div>
               )}
             </div>
 
             <div className="mb-6">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Progress indicator — bulk upload / AI generation / large exports</div>
+              <div className="tf-eyebrow tracking-wide mb-2">Progress indicator — bulk upload / AI generation / large exports</div>
               <div className="max-w-sm space-y-1.5">
                 <Progress value={64} />
-                <div className="text-2xs text-gray-400 dark:text-slate-500">Scoring 27 of 42 resumes…</div>
+                <div className="tf-micro-hint">Scoring 27 of 42 resumes…</div>
               </div>
             </div>
 
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 mb-2">Skeleton loaders — no white screen while data loads</div>
+              <div className="tf-eyebrow tracking-wide mb-2">Skeleton loaders — no white screen while data loads</div>
               <div className="flex flex-wrap items-start gap-4">
                 <div className="space-y-2 w-40">
                   <Skeleton className="h-4 w-full" />
@@ -1058,25 +1058,25 @@ export default function StyleGuidePage() {
             </GuidelineNote>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-3">
-                <div className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Keyboard navigable + focus indicators</div>
-                <p className="text-2xs text-gray-400 dark:text-slate-500 mb-2">Tab to this button — the ring is a global rule in app/globals.css, not styled per-component.</p>
+                <div className="tf-caption mb-2">Keyboard navigable + focus indicators</div>
+                <p className="tf-micro-hint mb-2">Tab to this button — the ring is a global rule in app/globals.css, not styled per-component.</p>
                 <Button variant="outline" size="sm">Tab to me</Button>
               </div>
               <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-3">
-                <div className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Readable contrast</div>
-                <p className="text-2xs text-gray-400 dark:text-slate-500 mb-2">The accent hover pair (Colors §2.2/2.3 in DESIGN_SYSTEM.md) was fixed from 2.35:1 to 7.56:1 specifically for this rule.</p>
+                <div className="tf-caption mb-2">Readable contrast</div>
+                <p className="tf-micro-hint mb-2">The accent hover pair (Colors §2.2/2.3 in DESIGN_SYSTEM.md) was fixed from 2.35:1 to 7.56:1 specifically for this rule.</p>
                 <div className="inline-block rounded-md bg-accent text-accent-foreground px-3 py-1.5 text-sm">Hovered menu item</div>
               </div>
               <div className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 sm:col-span-2">
-                <div className="text-xs font-semibold text-gray-700 dark:text-slate-300 mb-2">Descriptive tooltips on icon-only controls</div>
-                <p className="text-2xs text-gray-400 dark:text-slate-500 mb-2">Every icon-only trigger (kebab menus, info glyphs — see Popups and Form controls above) needs both <code>aria-label</code> and a visible tooltip, not just one.</p>
+                <div className="tf-caption mb-2">Descriptive tooltips on icon-only controls</div>
+                <p className="tf-micro-hint mb-2">Every icon-only trigger (kebab menus, info glyphs — see Popups and Form controls above) needs both <code>aria-label</code> and a visible tooltip, not just one.</p>
                 <div className="flex items-center gap-3">
                   <Tooltip content="More actions">
                     <button aria-label="More actions" className="h-8 w-8 flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800">
                       <MoreVertical className="w-4 h-4 text-gray-600 dark:text-slate-300" />
                     </button>
                   </Tooltip>
-                  <span className="text-2xs text-gray-400 dark:text-slate-500">aria-label="More actions" + Tooltip, together</span>
+                  <span className="tf-micro-hint">aria-label="More actions" + Tooltip, together</span>
                 </div>
               </div>
             </div>

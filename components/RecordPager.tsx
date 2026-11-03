@@ -50,7 +50,7 @@ export default function RecordPager({
         <ChevronLeft className="w-4 h-4 flex-shrink-0" />
         {!iconOnly && <span className="hidden sm:inline">Previous</span>}
       </button>
-      <span className="text-sm text-gray-500 dark:text-slate-400 font-medium px-1 tabular-nums whitespace-nowrap">
+      <span className="tf-label px-1 tabular-nums whitespace-nowrap">
         {(currentIndex ?? 0) + 1} / {totalCount}
       </span>
       <button

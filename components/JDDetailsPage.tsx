@@ -17,6 +17,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -123,15 +124,15 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
     // cards, the filter bar, then the results table with this tab's own columns.
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+        <div className="tf-grid-stats-5">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+            <div key={i} className="tf-panel p-4 space-y-2">
               <Skeleton className="h-7 w-12" />
               <Skeleton className="h-4 w-24" />
             </div>
           ))}
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 flex-1 rounded-lg" />
             <Skeleton className="h-10 w-36 rounded-lg" />
@@ -139,40 +140,40 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
             <Skeleton className="h-10 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="tf-table-shell hidden md:block">
+        <div className="tf-panel overflow-hidden">
+          <div className="tf-table-shell hidden lg:block">
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r}>
-                    <td className="px-4 py-4">
+                    <td className="tf-td">
                       <div className="space-y-1.5">
                         <Skeleton className="h-4 w-28" />
                         <Skeleton className="h-3 w-36" />
                       </div>
                     </td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-14" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-14" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {/* Mobile skeleton — §10: cards on phones */}
-          <div className="md:hidden divide-y divide-gray-200">
+          <div className="lg:hidden divide-y divide-gray-200">
             {Array.from({ length: 6 }).map((_, r) => (
               <div key={r} className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -191,7 +192,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
 
   if (!results || results.assessments_count === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+      <div className="tf-panel p-12 text-center">
         <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Assessments Found</h3>
         <p className="text-gray-500">No assessments have been created for this job description yet.</p>
@@ -213,33 +214,33 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   return (
     <div className="space-y-6">
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="tf-grid-stats-5">
+        <div className="tf-panel p-4">
           <div className="text-2xl font-bold text-gray-900">{results.assessments_count}</div>
-          <div className="text-sm text-gray-500">Total Assessments</div>
+          <div className="tf-body-muted">Total Assessments</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="text-2xl font-bold text-blue-600">{results.completed_count}</div>
-          <div className="text-sm text-gray-500">Completed</div>
+          <div className="tf-body-muted">Completed</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="text-2xl font-bold text-success">{results.passed_count}</div>
-          <div className="text-sm text-gray-500">Passed</div>
+          <div className="tf-body-muted">Passed</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="text-2xl font-bold text-destructive">{results.failed_count}</div>
-          <div className="text-sm text-gray-500">Failed</div>
+          <div className="tf-body-muted">Failed</div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="text-2xl font-bold text-purple-600">
             {results.average_score !== null ? `${results.average_score}%` : '-'}
           </div>
-          <div className="text-sm text-gray-500">Avg Score</div>
+          <div className="tf-body-muted">Avg Score</div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="tf-panel p-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
           {/* Search */}
           <div className="flex-1 relative">
@@ -250,7 +251,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="tf-input pl-10 pr-4"
             />
           </div>
 
@@ -298,34 +299,34 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       </div>
 
       {/* Results Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="tf-panel overflow-hidden">
         {loading ? (
-          <div className="tf-table-shell hidden md:block">
+          <div className="tf-table-shell hidden lg:block">
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r}>
-                    <td className="px-4 py-4">
+                    <td className="tf-td">
                       <div className="space-y-1.5">
                         <Skeleton className="h-4 w-28" />
                         <Skeleton className="h-3 w-36" />
                       </div>
                     </td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-14" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-14" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -339,35 +340,35 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
           </div>
         ) : (
           <>
-            <div className="tf-table-shell hidden md:block">
+            <div className="tf-table-shell hidden lg:block">
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Assessment
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-center tf-th">
                       HR
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-center tf-th">
                       Technical
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-center tf-th">
                       Coding
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-center tf-th">
                       Overall
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Duration
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Completed
                     </th>
                   </tr>
@@ -375,54 +376,54 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                 <tbody className="divide-y divide-gray-200">
                   {results.items.map((item) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4">
+                      <td className="tf-td">
                         <div className="flex flex-col">
                           <span className="font-medium text-gray-900">{item.candidate_name}</span>
-                          <span className="text-sm text-gray-500 flex items-center gap-1">
+                          <span className="tf-body-muted flex items-center gap-1">
                             <Mail className="w-3 h-3" />
                             {item.candidate_email}
                           </span>
                           {item.candidate_phone && (
-                            <span className="text-sm text-gray-500 flex items-center gap-1">
+                            <span className="tf-body-muted flex items-center gap-1">
                               <Phone className="w-3 h-3" />
                               {item.candidate_phone}
                             </span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-700">{item.assessment_title}</span>
+                      <td className="tf-td">
+                        <span className="tf-body">{item.assessment_title}</span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="tf-td">
                         {getStatusBadge(item.status, item.passed)}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.hr_score)}`}>
                           {item.hr_score !== null ? `${item.hr_score}%` : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.technical_score)}`}>
                           {item.technical_score !== null ? `${item.technical_score}%` : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.coding_score)}`}>
                           {item.coding_score !== null ? `${item.coding_score}%` : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <span className={`${SCORE_CELL_TEXT} ${getScoreColor(item.overall_score)}`}>
                           {item.overall_score !== null ? `${item.overall_score}%` : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                      <td className="tf-td">
+                        <span className="tf-body-secondary">
                           {formatDuration(item.time_spent_seconds)}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                      <td className="tf-td">
+                        <span className="tf-body-secondary">
                           {formatIST(item.completed_at)}
                         </span>
                       </td>
@@ -433,45 +434,42 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
             </div>
 
             {/* Mobile cards — §10: tables become cards on phones */}
-            <div className="md:hidden divide-y divide-gray-200">
+            <MobileRecordList className="p-3">
               {results.items.map((item) => (
-                <div key={item.id} className="p-4 space-y-2.5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-medium text-gray-900 text-sm truncate">{item.candidate_name}</div>
-                      <div className="text-xs text-gray-500 flex items-center gap-1 min-w-0">
-                        <Mail className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{item.candidate_email}</span>
-                      </div>
-                    </div>
-                    <div className="shrink-0">{getStatusBadge(item.status, item.passed)}</div>
-                  </div>
-                  <div className="text-xs text-gray-600 truncate">{item.assessment_title}</div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {([['HR', item.hr_score], ['Tech', item.technical_score], ['Code', item.coding_score], ['Overall', item.overall_score]] as [string, number | null][]).map(([label, score]) => (
-                      <div key={label} className="rounded-lg bg-gray-50 border border-gray-100 px-1.5 py-1 text-center">
-                        <div className="text-2xs uppercase tracking-wide text-gray-400">{label}</div>
-                        <div className={`text-sm font-semibold ${getScoreColor(score)}`}>{score !== null ? `${score}%` : '-'}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-gray-500">
-                    <span>{formatDuration(item.time_spent_seconds)}</span>
-                    <span>{formatIST(item.completed_at)}</span>
-                  </div>
-                </div>
+                <MobileRecordCard
+                  key={item.id}
+                  title={item.candidate_name}
+                  badges={getStatusBadge(item.status, item.passed)}
+                  meta={[
+                    { icon: <Mail className="w-3.5 h-3.5 shrink-0" />, label: item.candidate_email },
+                    { icon: <ClipboardList className="w-3.5 h-3.5 shrink-0" />, label: item.assessment_title },
+                  ]}
+                  fields={[
+                    { label: 'Duration', value: formatDuration(item.time_spent_seconds) },
+                    { label: 'Completed', value: formatIST(item.completed_at) },
+                  ]}
+                  footer={
+                    <>
+                      {([['HR', item.hr_score], ['Tech', item.technical_score], ['Code', item.coding_score], ['Overall', item.overall_score]] as [string, number | null][]).map(([label, score]) => (
+                        <MobileStatChip key={label} tone={score === null ? 'neutral' : score >= 80 ? 'success' : score >= 60 ? 'warning' : 'danger'}>
+                          {label} {score !== null ? `${score}%` : '-'}
+                        </MobileStatChip>
+                      ))}
+                    </>
+                  }
+                />
               ))}
-            </div>
+            </MobileRecordList>
 
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
+                <div className="tf-body-muted">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, results.total)} of {results.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -486,24 +484,24 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                      className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                     />
                   </div>
                   <button
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                    className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                     aria-label="Previous page" title="Previous page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
-                  <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                  <span className="tf-label px-1 whitespace-nowrap">
                     <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                    className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                     aria-label="Next page" title="Next page"
                   >
                     <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -577,36 +575,36 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
     // then the results table with this tab's own columns.
     return (
       <div className="space-y-6">
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="tf-panel p-4">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 flex-1 rounded-lg" />
             <Skeleton className="h-10 w-24 rounded-lg" />
           </div>
         </div>
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="tf-table-shell hidden md:block">
+        <div className="tf-panel overflow-hidden">
+          <div className="tf-table-shell hidden lg:block">
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r}>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-32" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
           {/* Mobile skeleton — §10: cards on phones */}
-          <div className="md:hidden divide-y divide-gray-200">
+          <div className="lg:hidden divide-y divide-gray-200">
             {Array.from({ length: 6 }).map((_, r) => (
               <div key={r} className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -625,7 +623,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
 
   if (!resumes || resumes.total === 0) {
     return (
-      <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+      <div className="tf-panel p-12 text-center">
         <FileText className="w-16 h-16 text-gray-300 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-gray-900 mb-2">No Scored Resumes</h3>
         <p className="text-gray-500">No resumes have been scored against this job description yet.</p>
@@ -647,7 +645,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   return (
     <div className="space-y-6">
       {/* Search */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="tf-panel p-4">
         <div className="flex items-center gap-4">
           <div className="flex-1 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -657,7 +655,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="tf-input pl-10 pr-4"
             />
           </div>
           <Button
@@ -670,24 +668,24 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       </div>
 
       {/* Results Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="tf-panel overflow-hidden">
         {loading ? (
-          <div className="tf-table-shell hidden md:block">
+          <div className="tf-table-shell hidden lg:block">
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
                   {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
-                    <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-20" /></th>
+                    <th key={h} className="tf-th-cell text-left tf-th"><Skeleton className="h-3 w-20" /></th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {Array.from({ length: 8 }).map((_, r) => (
                   <tr key={r}>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
-                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-32" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="tf-td text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -701,20 +699,20 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
           </div>
         ) : (
           <>
-            <div className="tf-table-shell hidden md:block">
+            <div className="tf-table-shell hidden lg:block">
               <table className="w-full">
                 <thead className="bg-white border-b border-gray-200">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Candidate
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Match Status
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-center tf-th">
                       Score
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+                    <th className="tf-th-cell text-left tf-th">
                       Scored At
                     </th>
                   </tr>
@@ -722,19 +720,19 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                 <tbody className="divide-y divide-gray-200">
                   {resumes.items.map((item: any) => (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-4">
+                      <td className="tf-td">
                         <span className="font-medium text-gray-900">{item.candidate_name || 'Unknown'}</span>
                       </td>
-                      <td className="px-4 py-4">
+                      <td className="tf-td">
                         {getMatchBadge(item.match_status)}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <span className={`${SCORE_CELL_TEXT} text-gray-900`}>
                           {item.overall_score !== null ? `${item.overall_score}%` : '-'}
                         </span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="text-sm text-gray-600">
+                      <td className="tf-td">
+                        <span className="tf-body-secondary">
                           {item.scored_at ? formatISTDate(item.scored_at) : '-'}
                         </span>
                       </td>
@@ -745,31 +743,33 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
             </div>
 
             {/* Mobile cards — §10: tables become cards on phones */}
-            <div className="md:hidden divide-y divide-gray-200">
+            <MobileRecordList className="p-3">
               {resumes.items.map((item: any) => (
-                <div key={item.id} className="p-4 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-medium text-gray-900 text-sm truncate">{item.candidate_name || 'Unknown'}</div>
-                    <div className="text-xs text-gray-500 mt-0.5">{item.scored_at ? formatISTDate(item.scored_at) : '-'}</div>
-                    <div className="mt-1">{getMatchBadge(item.match_status)}</div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <div className="text-lg font-semibold text-gray-900">{item.overall_score !== null ? `${item.overall_score}%` : '-'}</div>
-                    <div className="text-2xs uppercase tracking-wide text-gray-400">Score</div>
-                  </div>
-                </div>
+                <MobileRecordCard
+                  key={item.id}
+                  title={item.candidate_name || 'Unknown'}
+                  badges={getMatchBadge(item.match_status)}
+                  fields={[
+                    { label: 'Scored At', value: item.scored_at ? formatISTDate(item.scored_at) : '-' },
+                  ]}
+                  footer={
+                    <MobileStatChip tone="info">
+                      Score {item.overall_score !== null ? `${item.overall_score}%` : '-'}
+                    </MobileStatChip>
+                  }
+                />
               ))}
-            </div>
+            </MobileRecordList>
 
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="text-sm text-gray-500">
+                <div className="tf-body-muted">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, resumes.total)} of {resumes.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                    <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                     <input
                       type="number"
                       min={1}
@@ -784,24 +784,24 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                      className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                     />
                   </div>
                   <button
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                    className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                     aria-label="Previous page" title="Previous page"
                   >
                     <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   </button>
-                  <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                  <span className="tf-label px-1 whitespace-nowrap">
                     <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                    className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                     aria-label="Next page" title="Next page"
                   >
                     <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -920,9 +920,9 @@ export default function JDDetailsPage() {
     // status, meta row, action buttons), the tabs bar, and the grid-cols-3
     // body (Description card + the sidebar's Statistics/Job Details/Metadata).
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
@@ -964,10 +964,10 @@ export default function JDDetailsPage() {
             </div>
 
             {/* Overview body */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+            <div className="tf-grid-3">
               {/* Description */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                <div className="tf-panel p-6 space-y-3">
                   <Skeleton className="h-6 w-40 mb-2" />
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-full" />
@@ -979,7 +979,7 @@ export default function JDDetailsPage() {
               {/* Sidebar — Statistics, Job Details, Metadata */}
               <div className="space-y-6">
                 {Array.from({ length: 3 }).map((_, card) => (
-                  <div key={card} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+                  <div key={card} className="tf-panel p-6 space-y-4">
                     <Skeleton className="h-6 w-28 mb-2" />
                     {Array.from({ length: 3 }).map((_, i) => (
                       <div key={i} className="flex items-center justify-between">
@@ -1014,9 +1014,9 @@ export default function JDDetailsPage() {
   }
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -1043,10 +1043,10 @@ export default function JDDetailsPage() {
                     {jd.job_id}
                   </span>
                 )}
-                <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">{jd.title}</h1>
+                <h1 className="tf-page-title">{jd.title}</h1>
                 {getStatusBadge(jd.status)}
               </div>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted">
                 {jd.department && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-4 h-4" />
@@ -1142,7 +1142,7 @@ export default function JDDetailsPage() {
             >
               Scored Resumes
               {jd.scored_resumes_count > 0 && (
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">
+                <span className="tf-badge bg-gray-100 text-gray-600">
                   {jd.scored_resumes_count}
                 </span>
               )}
@@ -1157,7 +1157,7 @@ export default function JDDetailsPage() {
             >
               Assessment Results
               {jd.assessments_count > 0 && (
-                <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full text-xs">
+                <span className="tf-badge bg-gray-100 text-gray-600">
                   {jd.assessments_count}
                 </span>
               )}
@@ -1167,13 +1167,13 @@ export default function JDDetailsPage() {
 
         {/* Tab Content */}
         {activeTab === 'overview' && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
+          <div className="tf-grid-3">
             {/* Main Content */}
             <div className="lg:col-span-2 space-y-6">
               {/* Description */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
-                <div className="markdown-content text-gray-700 text-sm leading-relaxed">
+              <div className="tf-panel p-6">
+                <h2 className="tf-section-title mb-4">Job Description</h2>
+                <div className="markdown-content tf-body leading-relaxed">
                   <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                     {(jd.description || '')}
                   </ReactMarkdown>
@@ -1182,8 +1182,8 @@ export default function JDDetailsPage() {
 
               {/* Assessment Guidance */}
               {jd.assessment_guidance && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Assessment Guidance</h2>
+                <div className="tf-panel p-6">
+                  <h2 className="tf-section-title mb-4">Assessment Guidance</h2>
                   <p className="text-gray-700">{jd.assessment_guidance}</p>
                 </div>
               )}
@@ -1200,8 +1200,8 @@ export default function JDDetailsPage() {
             {/* Sidebar */}
             <div className="space-y-6">
               {/* Stats */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Statistics</h2>
+              <div className="tf-panel p-6">
+                <h2 className="tf-section-title mb-4">Statistics</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <span className="flex items-center gap-2 text-gray-600">
@@ -1228,8 +1228,8 @@ export default function JDDetailsPage() {
               </div>
 
               {/* Job Details */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Details</h2>
+              <div className="tf-panel p-6">
+                <h2 className="tf-section-title mb-4">Job Details</h2>
                 <div className="space-y-4">
                   {jd.employment_type && (
                     <div className="flex items-center justify-between">
@@ -1286,8 +1286,8 @@ export default function JDDetailsPage() {
               </div>
 
               {/* Metadata */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 mb-4">Metadata</h2>
+              <div className="tf-panel p-6">
+                <h2 className="tf-section-title mb-4">Metadata</h2>
                 <div className="space-y-4 text-sm">
                   <div>
                     <span className="text-gray-500 block mb-1">Posted By</span>
@@ -1329,7 +1329,7 @@ export default function JDDetailsPage() {
 
               {/* Version History */}
               {versions.length > 0 && (
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="tf-panel p-6">
                   <button
                     onClick={() => setShowVersionHistory(!showVersionHistory)}
                     className="w-full flex items-center justify-between text-lg font-semibold text-gray-900"
@@ -1356,13 +1356,13 @@ export default function JDDetailsPage() {
                             <span className="font-medium text-gray-900">
                               Version {version.version_number}
                               {version.version_number === currentVersion && (
-                                <span className="ml-2 text-xs bg-success-subtle text-success px-2 py-0.5 rounded-full">
+                                <span className="tf-badge ml-2 bg-success-subtle text-success">
                                   Current
                                 </span>
                               )}
                             </span>
                           </div>
-                          <div className="text-xs text-gray-500 space-y-1">
+                          <div className="tf-meta space-y-1">
                             <div className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
                               {formatIST(version.published_at)}

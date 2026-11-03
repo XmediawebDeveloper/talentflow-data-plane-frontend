@@ -10,7 +10,7 @@ export default function Loading() {
       <HeaderSkeleton actions={2} breadcrumb={false} />
       <StatsGridSkeleton count={4} className="grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" />
 
-      <div className="rounded-xl border border-gray-100 bg-white p-3 sm:p-4 md:p-6 dark:border-slate-700/60 dark:bg-slate-900">
+      <div className="tf-panel p-3 sm:p-4 md:p-6">
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex items-center justify-between gap-4 rounded-xl border border-gray-100 p-4 dark:border-slate-700/60">

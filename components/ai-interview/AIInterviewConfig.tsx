@@ -645,7 +645,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+    <div className="tf-card-soft">
       {/* Header — skipped entirely when a host card draws its own (the
           Nice-to-Have wrapper does), so the card does not open with an empty
           bordered strip. */}
@@ -663,11 +663,11 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             tone={category === 'mth' ? 'blue' : 'cyan'}
             trailing={
               mode === 'fixed' ? (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                   {questionCount} questions
                 </span>
               ) : (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                   ~{flexibleMinutes} min
                 </span>
               )
@@ -680,7 +680,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           /* Own right-aligned line below sm: beside the title the Weight label
              crowded into the subtitle column on a phone. */
           <div className="flex flex-wrap items-center justify-end gap-1.5 flex-shrink-0 w-full sm:w-auto">
-            <label className="text-xs text-gray-500">Weight</label>
+            <label className="tf-meta">Weight</label>
             <div className="flex items-center">
               <input
                 type="number"
@@ -744,8 +744,8 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
         ) : (
         <div>
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Add Skill</span>
-            <span className="text-xs text-gray-400">Free text only</span>
+            <span className="tf-eyebrow tracking-wide">Add Skill</span>
+            <span className="tf-hint">Free text only</span>
           </div>
           <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
@@ -765,7 +765,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                   }
                 }}
                 placeholder={category === 'mth' ? 'Add a must-have skill' : 'Add a nice-to-have skill'}
-                className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
+                className={`w-full px-3 h-9 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
                   addSkillError
                     ? (pendingOverride
                         ? 'border-warning-line focus:ring-warning-line'
@@ -802,9 +802,9 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <Layers className="w-3.5 h-3.5 text-brand-blue" />
-                <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skill Clusters</span>
+                <span className="tf-eyebrow tracking-wide">Skill Clusters</span>
               </div>
-              <span className="text-xs text-gray-400">
+              <span className="tf-hint">
                 {config.clusters.length} cluster{config.clusters.length !== 1 ? 's' : ''} · {config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}
               </span>
             </div>
@@ -830,19 +830,19 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                           : <ChevronUp className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         }
-                        <span className="flex-1 min-w-0 text-sm font-medium text-gray-800 break-words">{cluster.name || 'Unnamed Topic'}</span>
+                        <span className="flex-1 min-w-0 tf-label break-words">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
-                        <span className="text-2xs text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
+                        <span className="tf-micro-hint">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
                       </button>
 
                       {/* Cluster body */}
                       {!isCollapsed && (
                         <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
                           {cluster.reason && (
-                            <p className="text-2xs text-gray-500 italic mb-1">{cluster.reason}</p>
+                            <p className="tf-micro-hint italic mb-1">{cluster.reason}</p>
                           )}
                           {clusterSkills.length === 0 && (
-                            <p className="text-xs text-gray-400 italic">No matching skills</p>
+                            <p className="tf-hint italic">No matching skills</p>
                           )}
                           {clusterSkills.map(skill => renderSkillTag(skill))}
                         </div>
@@ -872,15 +872,15 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
         {!hasClusters && (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Skills</span>
-              <span className="text-xs text-gray-400">{config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}</span>
+              <span className="tf-eyebrow tracking-wide">Skills</span>
+              <span className="tf-hint">{config.skills.length} skill{config.skills.length !== 1 ? 's' : ''}</span>
             </div>
 
             <div className="space-y-1.5">
               {config.skills.map(skill => renderSkillTag(skill))}
 
               {config.skills.length === 0 && (
-                <p className="text-xs text-gray-400 italic py-1">No skills yet — will be auto-populated from JD.</p>
+                <p className="tf-hint italic py-1">No skills yet — will be auto-populated from JD.</p>
               )}
             </div>
           </div>
@@ -1038,7 +1038,7 @@ function HRSection({
   return (
     /* The same card on or off, as the Nice-To-Have Skills section — off is
        told by the switch and the hidden body, not by greying the card. */
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+    <div className="tf-card-soft">
       <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
         <SectionHeader
           icon={Users}
@@ -1057,16 +1057,16 @@ function HRSection({
           }
           trailing={
             <>
-              <span className="px-2 py-0.5 text-2xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">
+              <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                 Qualitative Only — Non-Scoring
               </span>
               {enabled && mode === 'fixed' && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                   {questionCount} questions
                 </span>
               )}
               {enabled && mode === 'flexible' && (
-                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                   ~{flexibleMinutes} min
                 </span>
               )}
@@ -1075,7 +1075,7 @@ function HRSection({
         />
         {enabled && mode === 'flexible' && (
           <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
-            <label className="text-xs text-gray-500">Weight</label>
+            <label className="tf-meta">Weight</label>
             <div className="flex items-center">
               <input
                 type="number"
@@ -1117,12 +1117,12 @@ function HRSection({
           <>
             <div className="flex items-start justify-between gap-3">
               <div className="space-y-0.5 min-w-0">
-                <span className="block text-xs font-medium text-gray-600">
+                <span className="block tf-caption">
                   {mode === 'fixed'
                     ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`
                     : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`}
                 </span>
-                <span className="block text-2xs text-gray-400">
+                <span className="block tf-micro-hint">
                   Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.
                 </span>
               </div>
@@ -1146,7 +1146,7 @@ function HRSection({
             <PermissionLockedOverlay locked={!canViewQuestionBank} message='You do not have permission to view the HR Question Bank'>
             <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
               {bankQuestions.length === 0 ? (
-                <p className="text-xs text-gray-400 text-center py-6">No questions in the bank yet. Add your first question below.</p>
+                <p className="tf-hint text-center py-6">No questions in the bank yet. Add your first question below.</p>
               ) : (
                 bankQuestions.map(q => {
                   const isSelected = selectedIds.includes(q.id);
@@ -1171,7 +1171,7 @@ function HRSection({
                       checked={isSelected}
                       disabled={isDisabled}
                       onChange={() => toggleQuestion(q.id)}
-                      className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                      className="tf-checkbox mt-0.5 w-3.5 h-3.5 focus:ring-brand-blue/40"
                     />
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed break-words">{q.question_text}</p>
@@ -1260,7 +1260,7 @@ function HRSection({
                           </span>
                         )}
                         {!isSelected && (
-                          <span className="text-2xs text-gray-400">Select the question to include it in the interview.</span>
+                          <span className="tf-micro-hint">Select the question to include it in the interview.</span>
                         )}
                       </div>
                     </div>
@@ -1275,8 +1275,8 @@ function HRSection({
           {addingQuestion ? (
             <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
-                <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
-                <span className="text-2xs text-gray-400">Saved to database</span>
+                <span className="tf-caption">Add Question To HR Question Bank</span>
+                <span className="tf-micro-hint">Saved to database</span>
               </div>
               <textarea
                 autoFocus
@@ -3273,9 +3273,9 @@ export default function AIInterviewConfig() {
   /* ─────────────────────────────────────────────────────────────────── */
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
+    <main className="tf-page" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             barRef={breadcrumbBarRef}
             /* Inside the wizard popup the popup's header names the flow. */
@@ -3322,7 +3322,7 @@ export default function AIInterviewConfig() {
             status, version, then role / location / type and the dates. Full
             width above the columns, where it reads as the page's subject
             rather than as the first setting. */}
-        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
+        <div className="mb-5 tf-card-soft px-4 py-3.5">
           {/* Stacks on phones: the summary takes the full card width and the
               two actions sit in a row beneath it, instead of a column that
               squeezed the summary beside it. */}
@@ -3363,20 +3363,20 @@ export default function AIInterviewConfig() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="tf-grid-3">
 
           {/* ── Left: main config ── */}
           <div className="lg:col-span-2 space-y-5">
 
             {/* ── Interview Mode + Make Clusters ── */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-4">
+            <div className="tf-card-soft p-4 space-y-4">
               <div>
                 <SectionHeader
                   icon={Clock}
                   title="Interview Mode"
                   subtitle="Choose how the interview will be conducted"
                 />
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div className="tf-grid-2 mt-3">
                   {/* The two modes read as one choice: a radio dot, the mode's
                       name, what it does, then the per-round breakdown that
                       mode actually produces — so the split is visible before
@@ -3437,7 +3437,7 @@ export default function AIInterviewConfig() {
                             </span>
                           </div>
                           {option.recommended && (
-                            <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25 flex-shrink-0">
+                            <span className="tf-badge text-2xs bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25 flex-shrink-0">
                               Recommended
                             </span>
                           )}
@@ -3466,10 +3466,10 @@ export default function AIInterviewConfig() {
                   <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">Buffer Time</span>
+                        <span className="tf-row-name">Buffer Time</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">+5 min</span>
                       </div>
-                      <p className="text-xs text-gray-500 mt-0.5">
+                      <p className="tf-meta mt-0.5">
                         {bufferEnabled
                           ? 'Total interview time: 35 min (30 min + 5 min buffer)'
                           : 'Total interview time: 30 min — hard stop at limit'}
@@ -3497,7 +3497,7 @@ export default function AIInterviewConfig() {
             </div>
 
             {/* ── Speech-to-Text Model ── */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-3">
+            <div className="tf-card-soft p-4 space-y-3">
               <SectionHeader
                 icon={Mic}
                 title="Speech-to-Text Model"
@@ -3516,11 +3516,11 @@ export default function AIInterviewConfig() {
                   return (
                     <>
                       {sel.recommended && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                        <span className="tf-badge text-2xs bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
                           Recommended
                         </span>
                       )}
-                      {sel.note && <span className="text-xs text-gray-500">{sel.note}</span>}
+                      {sel.note && <span className="tf-meta">{sel.note}</span>}
                     </>
                   );
                 })()}
@@ -3547,7 +3547,7 @@ export default function AIInterviewConfig() {
             />
 
             {/* ── NTH ── */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="tf-card-soft">
               <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100">
                 <div className="flex flex-1 items-start gap-2.5 min-w-0 sm:min-w-[12rem]">
                   <span className="flex items-center h-10 flex-shrink-0">
@@ -3578,18 +3578,18 @@ export default function AIInterviewConfig() {
                     <Sparkles className="w-5 h-5 text-brand-cyan" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</div>
-                    <p className="text-xs text-gray-500 mt-0.5">Optional skills that add value to the role.</p>
+                    <div className="tf-row-title tracking-tight">Nice-To-Have Skills</div>
+                    <p className="tf-meta mt-0.5">Optional skills that add value to the role.</p>
                   </div>
                 </div>
                 {nth.enabled && (
                   <div className="flex items-center sm:h-10 flex-shrink-0">
                     {mode === 'fixed' ? (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                      <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                         {timedQDist.nth} questions
                       </span>
                     ) : (
-                      <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                      <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                         ~{flexNthMin} min
                       </span>
                     )}
@@ -3664,7 +3664,7 @@ export default function AIInterviewConfig() {
                 Three optional extras that each held a card of their own,
                 which pushed the page's actual work further down for settings
                 most interviews never touch. Tabs keep them to one card. */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="tf-card-soft">
               <div className="p-4 pb-0">
                 <SectionHeader
                   icon={Settings2}
@@ -3686,10 +3686,10 @@ export default function AIInterviewConfig() {
                       role="tab"
                       aria-selected={active}
                       onClick={() => setAdditionalTab(tab.key)}
-                      className={`flex-1 sm:flex-none flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-3 py-2 text-sm font-medium text-center sm:whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                      className={`tf-tab-line flex-1 sm:flex-none flex-col sm:flex-row justify-center text-center sm:whitespace-nowrap -mb-px ${
                         active
-                          ? 'border-brand-blue text-brand-blue'
-                          : 'border-transparent text-gray-500 hover:text-brand-blue hover:border-brand-blue/30'
+                          ? 'tf-tab-line-active'
+                          : ''
                       }`}
                     >
                       <tab.icon className="w-4 h-4 flex-shrink-0" />
@@ -3701,16 +3701,16 @@ export default function AIInterviewConfig() {
 
               {additionalTab === 'video' && (
                 <div role="tabpanel" className="p-4 space-y-2">
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     Upload or record a short video introducing the role — candidates see it before the interview starts. Optional, max 1 min.
                   </p>
                   {introVideoFile || introVideoUrl ? (
                     <div className="flex items-center gap-3 p-3 bg-slate-50 border border-gray-100 rounded-lg ring-1 ring-black/[0.02]">
                     <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
+                      <p className="tf-body truncate">{introVideoFile?.name || 'Uploaded video'}</p>
                       {introVideoFile && (
-                        <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                        <p className="tf-hint">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                       )}
                     </div>
                     {uploadingVideo ? (
@@ -3749,7 +3749,7 @@ export default function AIInterviewConfig() {
                         button, the other stays outlined — the segmented control
                         this replaced read as a filter, not as a choice of how to
                         supply the video. */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="tf-grid-2">
                       <button
                         onClick={() => setVideoMode('upload')}
                         className={`flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-colors ${
@@ -3802,10 +3802,10 @@ export default function AIInterviewConfig() {
                           <span className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                             <Upload className="w-4 h-4 text-brand-blue" />
                           </span>
-                          <span className="text-sm text-gray-600">
+                          <span className="tf-body-secondary">
                             Drag and drop a video here, or <span className="text-brand-blue font-medium">click to upload</span> (max 1 min)
                           </span>
-                          <span className="text-xs text-gray-400">MP4, MOV or WEBM</span>
+                          <span className="tf-hint">MP4, MOV or WEBM</span>
                           <input
                             type="file"
                             accept="video/*"
@@ -3867,7 +3867,7 @@ export default function AIInterviewConfig() {
                           {!cameraReady && !recordedPreviewUrl && !cameraError && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
                               <Camera className="w-8 h-8 text-gray-500 mb-2" />
-                              <p className="text-xs text-gray-400">Camera preview will appear here</p>
+                              <p className="tf-hint">Camera preview will appear here</p>
                             </div>
                           )}
 
@@ -3885,7 +3885,7 @@ export default function AIInterviewConfig() {
                           {!cameraReady && !isRecording && !recordedPreviewUrl && (
                             <button
                               onClick={startCamera}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                              className="tf-btn tf-btn-primary flex gap-1.5 px-3 py-1.5 text-xs bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal justify-start"
                             >
                               <Camera className="w-3.5 h-3.5" />
                               Open Camera
@@ -3894,7 +3894,7 @@ export default function AIInterviewConfig() {
                           {cameraReady && !isRecording && (
                             <button
                               onClick={startRecording}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
+                              className="tf-btn tf-btn-destructive flex gap-1.5 px-3 py-1.5 text-xs bg-destructive hover:bg-destructive transition-colors whitespace-normal shadow-none justify-start"
                             >
                               <span className="w-2.5 h-2.5 rounded-full bg-white" />
                               Start Recording
@@ -3903,7 +3903,7 @@ export default function AIInterviewConfig() {
                           {isRecording && (
                             <button
                               onClick={stopRecordingAndSave}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                              className="tf-btn tf-btn-primary flex gap-1.5 px-3 py-1.5 text-xs bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal justify-start"
                             >
                               <span className="w-2.5 h-2.5 rounded-sm bg-white" />
                               Stop & Save
@@ -3916,7 +3916,7 @@ export default function AIInterviewConfig() {
                                 setRecordingSeconds(0);
                                 startCamera();
                               }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                              className="tf-btn tf-btn-secondary flex gap-1.5 px-3 py-1.5 text-xs border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-normal justify-start"
                             >
                               Re-record
                             </button>
@@ -3924,14 +3924,14 @@ export default function AIInterviewConfig() {
                           {cameraReady && !isRecording && (
                             <button
                               onClick={stopCamera}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                              className="tf-btn tf-btn-secondary flex gap-1.5 px-3 py-1.5 text-xs border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-normal justify-start"
                             >
                               <X className="w-3.5 h-3.5" />
                               Cancel
                             </button>
                           )}
                         </div>
-                        <p className="text-2xs text-gray-400 text-center">Recording auto-stops at 1 minute</p>
+                        <p className="tf-micro-hint text-center">Recording auto-stops at 1 minute</p>
                       </div>
                     )}
                     </>
@@ -3941,7 +3941,7 @@ export default function AIInterviewConfig() {
 
               {additionalTab === 'languages' && (
                 <div role="tabpanel" className="p-4 space-y-2">
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     The language the AI conducts the interview in.
                   </p>
                   {/* One dropdown rather than a row of chips: the interview runs
@@ -3964,7 +3964,7 @@ export default function AIInterviewConfig() {
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                         <QrCode className="w-5 h-5 text-brand-blue" />
                       </div>
-                      <span className="text-sm font-medium text-gray-900 tracking-tight">Enable Proxy Integrity Verification</span>
+                      <span className="tf-row-name tracking-tight">Enable Proxy Integrity Verification</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                       <input
@@ -3976,7 +3976,7 @@ export default function AIInterviewConfig() {
                       <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                     </label>
                   </div>
-                  <p className="text-xs text-gray-500">
+                  <p className="tf-meta">
                     Pause the interview once, after the first must-have-skills question, to verify the candidate&apos;s physical environment via a QR code and their phone&apos;s camera.
                   </p>
                 </div>
@@ -3988,7 +3988,7 @@ export default function AIInterviewConfig() {
           <div className="space-y-4">
 
             {/* Weightage distribution */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto scrollbar-auto-hide">
+            <div className="tf-card-soft p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto scrollbar-auto-hide">
               <div className="mb-4">
                 <SectionHeader
                   icon={ClipboardList}
@@ -4004,71 +4004,71 @@ export default function AIInterviewConfig() {
                 </div>
                 <div className="divide-y divide-gray-50">
                   <div className="px-3 py-2 flex items-start justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
-                    <span className="text-xs font-semibold text-gray-900 text-right break-words min-w-0">{selectedJd.title}</span>
+                    <span className="tf-meta flex-shrink-0">Role Title</span>
+                    <span className="tf-caption text-right break-words min-w-0">{selectedJd.title}</span>
                   </div>
                   {experienceSummary && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Experience</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">
+                      <span className="tf-meta flex-shrink-0">Experience</span>
+                      <span className="tf-caption text-right">
                         {experienceSummary}
                       </span>
                     </div>
                   )}
                   {selectedJd.industry_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Industry</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(selectedJd.industry_type)}</span>
+                      <span className="tf-meta flex-shrink-0">Industry</span>
+                      <span className="tf-caption text-right">{formatIndustryType(selectedJd.industry_type)}</span>
                     </div>
                   )}
                   {selectedJd.location && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                      <span className="tf-meta flex-shrink-0">Location</span>
                       <SummaryLocation value={selectedJd.location} locations={selectedJdLocations} />
                     </div>
                   )}
                   {selectedJd.employment_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Employment Type</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">{formatEmploymentType(selectedJd.employment_type)}</span>
+                      <span className="tf-meta flex-shrink-0">Employment Type</span>
+                      <span className="tf-caption text-right">{formatEmploymentType(selectedJd.employment_type)}</span>
                     </div>
                   )}
                   {(selectedJd.version_number ?? selectedJd.current_version) != null && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">v{selectedJd.version_number ?? 1}</span>
+                      <span className="tf-meta flex-shrink-0">JD Version</span>
+                      <span className="tf-caption text-right">v{selectedJd.version_number ?? 1}</span>
                     </div>
                   )}
                   {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (
                     <div className="px-3 py-2">
-                      <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
+                      <span className="tf-meta block mb-1.5">Domain Context</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedJd.domain_keywords.slice(0, 6).map(kw => (
                           <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
                         ))}
                         {selectedJd.domain_keywords.length > 6 && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-2xs bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded tf-micro-hint bg-slate-100 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
                         )}
                       </div>
                     </div>
                   )}
                   <div className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
-                    <span className="text-xs font-semibold text-gray-900 text-right">
+                    <span className="tf-meta flex-shrink-0">Interview Mode</span>
+                    <span className="tf-caption text-right">
                       {mode === 'flexible' ? 'Conversational' : 'Timed'}
                     </span>
                   </div>
                   {mode === 'flexible' && (
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 flex-shrink-0">Buffer Time</span>
+                      <span className="tf-meta flex-shrink-0">Buffer Time</span>
                       <span className={`text-xs font-semibold text-right ${bufferEnabled ? 'text-brand-blue' : 'text-gray-400'}`}>
                         {bufferEnabled ? 'Enabled (+5 min)' : 'Disabled'}
                       </span>
                     </div>
                   )}
                   <div className="px-3 py-2 flex items-center justify-between gap-2">
-                    <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">
+                    <span className="tf-meta flex-shrink-0">Total Duration</span>
+                      <span className="tf-caption text-right">
                       {mode === 'flexible'
                         ? '30 min'
                         : `${totalFixed} min`}
@@ -4083,39 +4083,39 @@ export default function AIInterviewConfig() {
                   <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
                     <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
-                      <span className="text-xs text-gray-400">{totalFixed} min</span>
+                      <span className="tf-hint">{totalFixed} min</span>
                     </div>
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-100">
-                            <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Q</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
-                            <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
+                            <th className="tf-th-cell text-left tf-th">Round</th>
+                            <th className="tf-th-cell text-right tf-th">Q</th>
+                            <th className="tf-th-cell text-right tf-th">Clusters</th>
+                            <th className="tf-th-cell text-right tf-th">Time</th>
                           </tr>
                         </thead>
                         <tbody>
                           <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.mth}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
+                            <td className="tf-td text-gray-600">Must-to-Have</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{timedQDist.mth}</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{timedAllocation.mthMaxClusters}</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                           </tr>
                           {nth.enabled && (
                             <tr className="border-b border-gray-50">
-                              <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.nth}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                              <td className="tf-td text-gray-600">Nice-to-Have</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{timedQDist.nth}</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{timedAllocation.nthMaxClusters}</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                             </tr>
                           )}
                           {hrEnabled && (
                             <tr>
-                              <td className="px-3 py-2 text-gray-600">HR Round</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedQDist.hr}</td>
-                              <td className="px-3 py-2 text-right text-gray-400">—</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                              <td className="tf-td text-gray-600">HR Round</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{timedQDist.hr}</td>
+                              <td className="tf-td text-right text-gray-400">—</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{fixedHrMin}m</td>
                             </tr>
                           )}
                         </tbody>
@@ -4129,7 +4129,7 @@ export default function AIInterviewConfig() {
               {mode === 'flexible' && (
                 <div className="space-y-3 mb-4">
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
+                    <div className="flex items-center justify-between tf-meta mb-1">
                       <span>Scoring Weight Distribution</span>
                       <span className={`font-semibold ${pctValid ? 'text-advice-positive' : 'text-red-500'}`}>
                         {totalPct}% / 100%
@@ -4161,7 +4161,7 @@ export default function AIInterviewConfig() {
                     <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
                       <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                         <span className="text-xs font-medium text-brand-blue">Time Allocation</span>
-                        <span className="text-xs font-semibold text-gray-700">
+                        <span className="tf-caption">
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
@@ -4169,43 +4169,43 @@ export default function AIInterviewConfig() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100">
-                              <th className="px-3 py-1.5 text-left font-semibold text-gray-600 text-xs">Round</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Clusters</th>
-                              <th className="px-3 py-1.5 text-right font-semibold text-gray-600 text-xs">Time</th>
+                              <th className="tf-th-cell text-left tf-th">Round</th>
+                              <th className="tf-th-cell text-right tf-th">Clusters</th>
+                              <th className="tf-th-cell text-right tf-th">Time</th>
                             </tr>
                           </thead>
                           <tbody>
                             <tr className="border-b border-gray-50">
-                              <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveMthMax}</td>
-                              <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexMthMin} min</td>
+                              <td className="tf-td text-gray-600">Must-to-Have</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">{effectiveMthMax}</td>
+                              <td className="tf-td text-right font-semibold text-gray-900">~{flexMthMin} min</td>
                             </tr>
                             {nth.enabled && (
                               <tr className="border-b border-gray-50">
-                                <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                                <td className="px-3 py-2 text-right font-semibold text-gray-900">{effectiveNthMax}</td>
-                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexNthMin} min</td>
+                                <td className="tf-td text-gray-600">Nice-to-Have</td>
+                                <td className="tf-td text-right font-semibold text-gray-900">{effectiveNthMax}</td>
+                                <td className="tf-td text-right font-semibold text-gray-900">~{flexNthMin} min</td>
                               </tr>
                             )}
                             {hrEnabled && (
                               <tr className={bufferEnabled ? 'border-b border-gray-50' : ''}>
-                                <td className="px-3 py-2 text-gray-600">HR Round</td>
-                                <td className="px-3 py-2 text-right text-gray-400">—</td>
-                                <td className="px-3 py-2 text-right font-semibold text-gray-900">~{flexHrMin} min</td>
+                                <td className="tf-td text-gray-600">HR Round</td>
+                                <td className="tf-td text-right text-gray-400">—</td>
+                                <td className="tf-td text-right font-semibold text-gray-900">~{flexHrMin} min</td>
                               </tr>
                             )}
                             {bufferEnabled && (
                               <tr className="border-b border-gray-50 bg-brand-blue/5">
-                                <td className="px-3 py-2 text-brand-blue font-medium">Buffer Time</td>
-                                <td className="px-3 py-2 text-right text-gray-400">—</td>
-                                <td className="px-3 py-2 text-right font-semibold text-brand-blue">+5 min</td>
+                                <td className="tf-td text-brand-blue font-medium">Buffer Time</td>
+                                <td className="tf-td text-right text-gray-400">—</td>
+                                <td className="tf-td text-right font-semibold text-brand-blue">+5 min</td>
                               </tr>
                             )}
                             {bufferEnabled && (
                               <tr className="bg-slate-50">
-                                <td className="px-3 py-2 text-gray-700 font-semibold">Max</td>
-                                <td className="px-3 py-2 text-right text-gray-400">—</td>
-                                <td className="px-3 py-2 text-right font-bold text-gray-900">35 min</td>
+                                <td className="tf-td text-gray-700 font-semibold">Max</td>
+                                <td className="tf-td text-right text-gray-400">—</td>
+                                <td className="tf-td text-right font-bold text-gray-900">35 min</td>
                               </tr>
                             )}
                           </tbody>
@@ -4247,7 +4247,7 @@ export default function AIInterviewConfig() {
                     setPendingNavigation(LIST_TARGET);
                     setShowUnsavedDialog(true);
                   }}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                  className="tf-btn tf-btn-secondary px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-normal font-normal"
                 >
                   <ArrowLeft className="w-4 h-4" />
                   Exit
@@ -4265,7 +4265,7 @@ export default function AIInterviewConfig() {
               <button
                 onClick={handleSaveAsDraft}
                 disabled={savingDraft}
-                className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="tf-btn tf-btn-secondary flex-1 sm:flex-none px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors font-normal"
               >
                 {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {savingDraft ? 'Saving…' : 'Save as Draft'}
@@ -4336,7 +4336,7 @@ export default function AIInterviewConfig() {
               </div>
               <div>
                 <DialogTitle className="text-sm font-semibold tracking-tight">Video Preview</DialogTitle>
-                <DialogDescription className="text-xs text-gray-500">Introduction video for candidates</DialogDescription>
+                <DialogDescription className="tf-meta">Introduction video for candidates</DialogDescription>
               </div>
             </div>
           </DialogHeader>

@@ -66,7 +66,7 @@ export default function FeaturesPage() {
       <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Hero */}
         <div className="text-center mb-10 sm:mb-12 md:mb-16">
-          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 tf-body border-0">
             <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
             Features
           </Badge>
@@ -92,7 +92,7 @@ export default function FeaturesPage() {
                 <h3 className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-3">
                   {feature.title}
                 </h3>
-                <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p className="tf-body-secondary sm:text-base leading-relaxed">
                   {feature.description}
                 </p>
               </Card>
@@ -105,7 +105,7 @@ export default function FeaturesPage() {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4">
             Ready to see it in action?
           </h2>
-          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-6 sm:mb-8 max-w-md mx-auto px-4 sm:px-0">
+          <p className="tf-body-secondary sm:text-base mb-6 sm:mb-8 max-w-md mx-auto px-4 sm:px-0">
             Start your free trial today and experience the future of recruiting.
           </p>
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 max-w-md sm:max-w-none mx-auto px-4 sm:px-0">

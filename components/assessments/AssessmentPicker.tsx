@@ -17,6 +17,7 @@ import { assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 /**
  * The "pick one assessment to invite to" list, drawn exactly as
@@ -318,15 +319,15 @@ export default function AssessmentPicker({
         <div className="min-w-0">
           {multiple ? (
             <>
-              <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One or more assessments per invite</p>
-              <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+              <p className="tf-caption">One or more assessments per invite</p>
+              <p className="mt-0.5 tf-meta">
                 You can pick several assessments, and everyone you invite gets each of them. To send different assessments to different people, send separate invites.
               </p>
             </>
           ) : (
             <>
-              <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One assessment per invite</p>
-              <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+              <p className="tf-caption">One assessment per invite</p>
+              <p className="mt-0.5 tf-meta">
                 You can pick only one assessment at a time, so everyone you invite gets the same assessment. To invite people to a different assessment, send another invite.
               </p>
             </>
@@ -373,11 +374,11 @@ export default function AssessmentPicker({
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
               placeholder={searchPlaceholder}
-              className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+              className="tf-input pl-10 pr-4"
             />
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <span className="tf-body-secondary">View:</span>
             {/* The Job Openings page's All / AI Generated / Manual segmented
                 toggle: tinted track, the active option a white chip. */}
             <div className={SEGMENT_TOGGLE}>
@@ -424,12 +425,13 @@ export default function AssessmentPicker({
              it, single-line cells and the overlay scrollbars — in the
              dialog-sized `--compact` form, so the rows scroll inside the
              table instead of stretching the dialog. */
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <>
+          <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
             <div className="tf-table-shell tf-table-shell--compact">
               <table className="w-full table-auto text-sm">
                 <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select" />
+                    <th className="tf-th-cell w-10 tf-sticky-col-left tf-th" aria-label="Select" />
                     <th className={PICKER_TH}>JD ID</th>
                     <th className={PICKER_TH}>Job Name</th>
                     <th className={PICKER_TH}>Job Version</th>
@@ -464,7 +466,7 @@ export default function AssessmentPicker({
                             : 'hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer'
                         } ${isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
                       >
-                        <td className="px-4 py-3 align-middle tf-sticky-col-left">
+                        <td className="tf-td tf-sticky-col-left">
                           <input
                             type={multiple ? 'checkbox' : 'radio'}
                             name="assessment-invite-picker-selection"
@@ -476,10 +478,10 @@ export default function AssessmentPicker({
                             className={`${multiple ? 'rounded ' : ''}border-gray-300 cursor-pointer`}
                           />
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {a.jd_short_id ? <JobIdBadge>{a.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
+                        <td className="tf-td whitespace-nowrap">
+                          {a.jd_short_id ? <JobIdBadge>{a.jd_short_id}</JobIdBadge> : <span className="tf-hint">—</span>}
                         </td>
-                        <td className="px-4 py-3 align-middle max-w-[16rem]">
+                        <td className="tf-td max-w-[16rem]">
                           {/* The job's name; the assessment's own title (version
                               suffix stripped) on hover. */}
                           <div className="flex items-center gap-2 min-w-0">
@@ -489,50 +491,50 @@ export default function AssessmentPicker({
                             {jobBadge(a)}
                           </div>
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : <span className="text-xs text-gray-400">—</span>}
+                        <td className="tf-td whitespace-nowrap">
+                          {a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : <span className="tf-hint">—</span>}
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          {version ? <VersionPill kind="assessment" version={version} /> : <span className="text-xs text-gray-400">—</span>}
+                        <td className="tf-td whitespace-nowrap">
+                          {version ? <VersionPill kind="assessment" version={version} /> : <span className="tf-hint">—</span>}
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
+                        <td className="tf-td whitespace-nowrap">
+                          <span className="tf-badge gap-1.5 ring-1 bg-success-subtle text-success ring-success-line">
                             <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                             {statusLabel(a.status)}
                           </span>
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {rounds.length > 0 ? (
                             <div className="flex items-center gap-1.5 flex-nowrap">
                               {rounds.map((round) => (
                                 <span
                                   key={round.key}
                                   title={round.label}
-                                  className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                  className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
                                 >
                                   {round.short}
                                 </span>
                               ))}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <span className="tabular-nums text-gray-600 dark:text-slate-400">{a.duration_minutes || 0}</span>
-                          <span className="text-xs text-gray-400 ml-1">min</span>
+                          <span className="tf-hint ml-1">min</span>
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <span className="tabular-nums text-gray-600 dark:text-slate-400">{(a.invitations_count ?? 0).toLocaleString()}</span>
-                          <span className="text-xs text-gray-400 ml-1">sent</span>
+                          <span className="tf-hint ml-1">sent</span>
                         </td>
-                        <td className="px-4 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
+                        <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
                           {a.created_at ? formatIST(a.created_at) : '—'}
                         </td>
-                        <td className="px-4 pr-6 py-3 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
+                        <td className="tf-td pr-6 whitespace-nowrap text-gray-600 dark:text-slate-400">
                           {a.created_by_name || '—'}
                         </td>
-                        <td className="px-4 py-3 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                        <td className="tf-td text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => setPreviewAssessment(a)}
@@ -550,6 +552,88 @@ export default function AssessmentPicker({
               </table>
             </div>
           </div>
+          <MobileRecordList>
+            {pagedRows.map((a) => {
+              const isSelected = isPicked(a.id);
+              const version = versionOf(a);
+              const rounds = ROUND_CHIPS.filter((r) => a[`${r.key}_enabled`]);
+              const pick = () => toggle(a);
+              const lockReason = lockReasonOf(a);
+              return (
+                <MobileRecordCard
+                  key={a.id}
+                  onClick={pick}
+                  selected={isSelected}
+                  aria-selected={isSelected}
+                  aria-disabled={lockReason ? true : undefined}
+                  className={lockReason ? 'cursor-not-allowed opacity-50' : undefined}
+                  select={
+                    <input
+                      type={multiple ? 'checkbox' : 'radio'}
+                      name="assessment-invite-picker-selection-mobile"
+                      checked={isSelected}
+                      disabled={!!lockReason}
+                      onChange={pick}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${jobNameOf(a)}`}
+                      className={`${multiple ? 'rounded ' : ''}border-gray-300 cursor-pointer`}
+                    />
+                  }
+                  idBadge={a.jd_short_id ? <JobIdBadge>{a.jd_short_id}</JobIdBadge> : undefined}
+                  badges={
+                    <span className="tf-badge gap-1.5 ring-1 bg-success-subtle text-success ring-success-line">
+                      <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                      {statusLabel(a.status)}
+                    </span>
+                  }
+                  title={<span title={lockReason ?? (cleanTitleOf(a) || jobNameOf(a))}>{jobNameOf(a)}</span>}
+                  titleAddon={jobBadge(a)}
+                  actions={
+                    <button
+                      type="button"
+                      onClick={() => setPreviewAssessment(a)}
+                      className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
+                      aria-label="Preview assessment"
+                      title="Preview"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                  }
+                  fields={[
+                    { label: 'Job Version', value: a.jd_version ? <VersionPill kind="job" version={a.jd_version} /> : '—' },
+                    { label: 'Assessment Version', value: version ? <VersionPill kind="assessment" version={version} /> : '—' },
+                    {
+                      label: 'Rounds',
+                      value: rounds.length > 0 ? (
+                        <span className="inline-flex items-center gap-1.5 flex-wrap">
+                          {rounds.map((round) => (
+                            <span
+                              key={round.key}
+                              title={round.label}
+                              className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                            >
+                              {round.short}
+                            </span>
+                          ))}
+                        </span>
+                      ) : '—',
+                    },
+                    { label: 'Created', value: a.created_at ? formatIST(a.created_at) : '—' },
+                    { label: 'By', value: a.created_by_name || '—' },
+                  ]}
+                  footer={
+                    <>
+                      <MobileStatChip tone="neutral">{a.duration_minutes || 0} min</MobileStatChip>
+                      <MobileStatChip tone="info" icon={<Send className="w-3.5 h-3.5" />}>
+                        {(a.invitations_count ?? 0).toLocaleString()} sent
+                      </MobileStatChip>
+                    </>
+                  }
+                />
+              );
+            })}
+          </MobileRecordList>
+          </>
         )
       ) : jobRows.length === 0 ? (
         <div className="text-center py-8 text-gray-500 dark:text-slate-400">
@@ -610,7 +694,7 @@ export default function AssessmentPicker({
                       <Briefcase className="h-4 w-4 text-brand-blue" />
                     </div>
                     {a.jd_short_id && <JobIdBadge className="flex-shrink-0">{a.jd_short_id}</JobIdBadge>}
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0" title={jobNameOf(a)}>
+                    <h3 className="tf-row-name truncate min-w-0" title={jobNameOf(a)}>
                       {jobNameOf(a)}
                     </h3>
                     {jobBadge(a)}
@@ -618,21 +702,21 @@ export default function AssessmentPicker({
 
                   {/* Status */}
                   <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 bg-success-subtle text-success ring-success-line">
+                    <span className="tf-badge gap-1.5 ring-1 bg-success-subtle text-success ring-success-line">
                       <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
                       {statusLabel(a.status)}
                     </span>
                   </div>
 
                   {/* Metrics */}
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                  <div className="tf-grid-stats @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                     {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                       <div key={key} className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                          <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
+                          <span className="tf-row-title truncate">{value}</span>
                         </div>
-                        <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+                        <p className="tf-micro-hint truncate mt-0.5">{label}</p>
                       </div>
                     ))}
                   </div>

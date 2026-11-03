@@ -35,6 +35,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface ConsentLogsProps {
   compact?: boolean;
@@ -203,7 +204,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+    <div className="tf-card-soft">
       {/* Header */}
       <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
         {/* `gap-3` + `min-w-0` + `shrink-0`, which this row did without while
@@ -220,11 +221,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-gray-900">Candidate Consent Logs</h2>
+              <h2 className="tf-section-title">Candidate Consent Logs</h2>
               {/* The count moved to the toolbar's badge, which also states what
                   the filters narrowed away ("12 of 340"). It stays here in
                   `compact`, where there is no toolbar to carry it. */}
-              <p className="text-sm text-gray-500">
+              <p className="tf-body-muted">
                 {compact
                   ? `${total} consent records`
                   : 'Every consent a candidate has given or declined, with the record behind it.'}
@@ -293,7 +294,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               }
             >
               <div>
-                <label htmlFor="consent-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                <label htmlFor="consent-status" className="block tf-caption mb-1.5">
                   Status
                 </label>
                 <FilterSelect
@@ -308,12 +309,12 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     { value: 'accepted', label: 'Accepted' },
                     { value: 'declined', label: 'Declined' },
                   ]}
-                  className="w-full sm:w-full min-w-0 h-[38px] data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
+                  className="w-full sm:w-full min-w-0 h-9 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100"
                 />
               </div>
 
               <div>
-                <label htmlFor="consent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                <label htmlFor="consent-from" className="block tf-caption mb-1.5">
                   Consented from
                 </label>
                 <DateField
@@ -328,7 +329,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               </div>
 
               <div>
-                <label htmlFor="consent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                <label htmlFor="consent-to" className="block tf-caption mb-1.5">
                   Consented to
                 </label>
                 <DateField
@@ -372,7 +373,8 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           onReset={clearFilters}
         />
       ) : (
-        <div className="overflow-x-auto">
+        <>
+        <div className={`overflow-x-auto ${DESKTOP_TABLE_ONLY}`}>
           {/* Every column on screen at every width, the table scrolling
               sideways instead. No height cap and no vertical scroller: the
               page's rows show in full and the pagination below reaches the
@@ -380,15 +382,15 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           <table className={`w-full table-auto ${showAssessmentColumns ? 'min-w-[1200px]' : 'min-w-[960px]'}`}>
             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">JD ID</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
-                {showAssessmentColumns && <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Assessment Version</th>}
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Candidate</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Feature</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Status</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Device</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">IP Address</th>
-                <th className="text-left px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle">Date</th>
+                {showAssessmentColumns && <th className="tf-th-cell text-left tf-th">JD ID</th>}
+                <th className="tf-th-cell text-left tf-th">{showAssessmentColumns ? 'Job Role' : 'Assessment'}</th>
+                {showAssessmentColumns && <th className="tf-th-cell text-left tf-th">Assessment Version</th>}
+                <th className="tf-th-cell text-left tf-th">Candidate</th>
+                <th className="tf-th-cell text-left tf-th">Feature</th>
+                <th className="tf-th-cell text-left tf-th">Status</th>
+                <th className="tf-th-cell text-left tf-th">Device</th>
+                <th className="tf-th-cell text-left tf-th">IP Address</th>
+                <th className="tf-th-cell text-left tf-th">Date</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -397,11 +399,11 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 return (
                 <tr key={log.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800">
                   {showAssessmentColumns && (
-                    <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <td className="tf-td whitespace-nowrap">
                       {meta?.jdShortId ? (
                         <JobIdBadge>{meta.jdShortId}</JobIdBadge>
                       ) : (
-                        <span className="text-xs text-gray-400">—</span>
+                        <span className="tf-hint">—</span>
                       )}
                     </td>
                   )}
@@ -416,9 +418,9 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       ? meta?.jdTitle || (log.assessment_title || '').split(' - ')[0].trim()
                       : log.assessment_title;
                     return (
-                      <td className="px-3 sm:px-4 py-4 align-middle">
+                      <td className="tf-td">
                         <span
-                          className="block max-w-[16rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50"
+                          className="block max-w-[16rem] truncate tf-row-name"
                           title={label || undefined}
                         >
                           {label || '—'}
@@ -427,26 +429,26 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     );
                   })()}
                   {showAssessmentColumns && (
-                    <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                    <td className="tf-td whitespace-nowrap">
                       {meta?.version ? (
                         <VersionPill kind="assessment" version={meta.version} />
                       ) : (
-                        <span className="text-xs text-gray-400">—</span>
+                        <span className="tf-hint">—</span>
                       )}
                     </td>
                   )}
-                  <td className="px-3 sm:px-4 py-4 align-middle">
+                  <td className="tf-td">
                     <div className="flex items-center gap-3">
                       <NameAvatar name={log.candidate_name} fallback={log.candidate_email} size="md" />
                       <div className="min-w-0 max-w-[240px]">
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={log.candidate_name || 'Unknown'}>
+                        <p className="tf-row-name truncate" title={log.candidate_name || 'Unknown'}>
                           {log.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={log.candidate_email}>{log.candidate_email}</p>
+                        <p className="tf-meta truncate" title={log.candidate_email}>{log.candidate_email}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                  <td className="tf-td whitespace-nowrap">
                     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
                       log.feature_name === 'ASSESSMENT'
                         ? 'bg-blue-100 text-blue-700'
@@ -455,7 +457,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       {log.feature_name === 'ASSESSMENT' ? 'Assessment' : 'AI Interview'}
                     </span>
                   </td>
-                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
+                  <td className="tf-td whitespace-nowrap">
                     {log.consent_status ? (
                       <div className="flex items-center gap-2 text-sm text-success">
                         <CheckCircle className="w-4 h-4 flex-shrink-0" />
@@ -468,20 +470,20 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       </div>
                     )}
                   </td>
-                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                  <td className="tf-td whitespace-nowrap">
+                    <div className="flex items-center gap-2 tf-body-secondary">
                       <Monitor className="w-4 h-4 flex-shrink-0" />
                       {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                  <td className="tf-td whitespace-nowrap">
+                    <div className="flex items-center gap-2 tf-body-secondary">
                       <Globe className="w-4 h-4 flex-shrink-0" />
                       {log.ip_address}
                     </div>
                   </td>
-                  <td className="px-3 sm:px-4 py-4 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                  <td className="tf-td whitespace-nowrap">
+                    <div className="flex items-center gap-2 tf-body-secondary">
                       <Calendar className="w-4 h-4 flex-shrink-0" />
                       {new Date(log.created_at).toLocaleDateString()}
                     </div>
@@ -492,6 +494,60 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             </tbody>
           </table>
         </div>
+        <MobileRecordList>
+          {logs.map((log) => {
+            const meta = log.feature_context_id ? assessmentMeta[log.feature_context_id] : undefined;
+            const label = showAssessmentColumns
+              ? meta?.jdTitle || (log.assessment_title || '').split(' - ')[0].trim()
+              : log.assessment_title;
+            return (
+              <MobileRecordCard
+                key={log.id}
+                idBadge={showAssessmentColumns && meta?.jdShortId ? <JobIdBadge>{meta.jdShortId}</JobIdBadge> : undefined}
+                badges={
+                  <>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ${
+                      log.feature_name === 'ASSESSMENT'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-purple-100 text-purple-700'
+                    }`}>
+                      {log.feature_name === 'ASSESSMENT' ? 'Assessment' : 'AI Interview'}
+                    </span>
+                    {log.consent_status ? (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+                        <CheckCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        Accepted
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-xs font-medium text-destructive">
+                        <XCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                        Declined
+                      </span>
+                    )}
+                  </>
+                }
+                title={label || '—'}
+                titleAddon={showAssessmentColumns && meta?.version ? <VersionPill kind="assessment" version={meta.version} /> : undefined}
+                meta={[
+                  { icon: <Monitor className="w-3.5 h-3.5 flex-shrink-0" />, label: `${log.device_type || 'Unknown'} / ${log.browser_name || 'Unknown'}` },
+                  { icon: <Globe className="w-3.5 h-3.5 flex-shrink-0" />, label: log.ip_address },
+                  { icon: <Calendar className="w-3.5 h-3.5 flex-shrink-0" />, label: new Date(log.created_at).toLocaleDateString() },
+                ]}
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <NameAvatar name={log.candidate_name} fallback={log.candidate_email} size="md" />
+                  <div className="min-w-0">
+                    <p className="tf-row-name truncate" title={log.candidate_name || 'Unknown'}>
+                      {log.candidate_name || 'Unknown'}
+                    </p>
+                    <p className="tf-meta truncate" title={log.candidate_email}>{log.candidate_email}</p>
+                  </div>
+                </div>
+              </MobileRecordCard>
+            );
+          })}
+        </MobileRecordList>
+        </>
       )}
 
       {/* Candidate Results / Draft / Archived pagination — the shared
@@ -522,7 +578,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             />
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[85dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Consent Log Details</h3>
+                <h3 className="tf-section-title">Consent Log Details</h3>
                 <button
                   onClick={() => {
                     setSelectedLog(null);
@@ -535,46 +591,46 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 [&>div]:min-w-0">
+                <div className="tf-grid-2 [&>div]:min-w-0">
                   <div>
-                    <p className="text-sm text-gray-500">Candidate</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900 break-all">{selectedLog.candidate_email}</p>
+                    <p className="tf-body-muted">Candidate</p>
+                    <p className="tf-row-name sm:text-base break-all">{selectedLog.candidate_email}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Feature</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">{selectedLog.feature_name}</p>
+                    <p className="tf-body-muted">Feature</p>
+                    <p className="tf-row-name sm:text-base">{selectedLog.feature_name}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Status</p>
+                    <p className="tf-body-muted">Status</p>
                     <p className={`text-sm sm:text-base font-medium ${selectedLog.consent_status ? 'text-success' : 'text-destructive'}`}>
                       {selectedLog.consent_status ? 'Accepted' : 'Declined'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Proctoring Consent</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">
+                    <p className="tf-body-muted">Proctoring Consent</p>
+                    <p className="tf-row-name sm:text-base">
                       {selectedLog.proctoring_consent ? 'Yes' : 'No'}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">IP Address</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">{selectedLog.ip_address}</p>
+                    <p className="tf-body-muted">IP Address</p>
+                    <p className="tf-row-name sm:text-base [overflow-wrap:anywhere]">{selectedLog.ip_address}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Device</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900 [overflow-wrap:anywhere]">
+                    <p className="tf-body-muted">Device</p>
+                    <p className="tf-row-name sm:text-base [overflow-wrap:anywhere]">
                       {selectedLog.device_type} / {selectedLog.browser_name} {selectedLog.browser_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">OS</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">
+                    <p className="tf-body-muted">OS</p>
+                    <p className="tf-row-name sm:text-base">
                       {selectedLog.os_name} {selectedLog.os_version}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Date</p>
-                    <p className="text-sm sm:text-base font-medium text-gray-900">
+                    <p className="tf-body-muted">Date</p>
+                    <p className="tf-row-name sm:text-base">
                       {formatIST(selectedLog.created_at)}
                     </p>
                   </div>
@@ -582,7 +638,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
 
                 {/* Audit Trail */}
                 <div className="mt-4 sm:mt-6">
-                  <h4 className="text-sm sm:text-base font-medium text-gray-900 mb-2 sm:mb-3">Audit Trail</h4>
+                  <h4 className="tf-row-name sm:text-base mb-2 sm:mb-3">Audit Trail</h4>
                   <div className="space-y-2">
                     {auditTrail.map((audit) => (
                       <div
@@ -591,7 +647,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <span className="font-medium text-gray-900">{audit.action}</span>
-                          <span className="text-gray-500 text-xs">
+                          <span className="tf-meta">
                             {formatIST(audit.created_at)}
                           </span>
                         </div>

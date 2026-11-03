@@ -230,19 +230,19 @@ function UnifiedFolderResumeSearch({
       {isOpen && query.trim() && (
         <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[420px] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02]">
           {isLoading && !hasResults ? (
-            <div className="flex items-center justify-center py-8 text-sm text-gray-500">
+            <div className="flex items-center justify-center py-8 tf-body-muted">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Searching...
             </div>
           ) : !hasResults ? (
-            <div className="py-8 text-center text-sm text-gray-500">
+            <div className="py-8 text-center tf-body-muted">
               No results found
             </div>
           ) : (
             <>
               {folderResults.length > 0 && (
                 <div>
-                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 tf-eyebrow">
                     Folders ({folderResults.length})
                   </div>
                   {folderResults.map(({ folder, path }) => (
@@ -257,12 +257,12 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                        <span className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15">
                           Folder
                         </span>
-                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">{folder.name}</span>
+                        <span className="min-w-0 truncate tf-row-name">{folder.name}</span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-gray-500">{path}</div>
+                      <div className="mt-0.5 truncate tf-meta">{path}</div>
                     </button>
                   ))}
                 </div>
@@ -270,7 +270,7 @@ function UnifiedFolderResumeSearch({
 
               {resumeResults.length > 0 && (
                 <div>
-                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 tf-eyebrow">
                     Resumes ({resumeResults.length})
                   </div>
                   {resumeResults.map((resume) => (
@@ -285,14 +285,14 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-2xs font-medium text-green-700 ring-1 ring-green-200">
+                        <span className="tf-badge bg-green-50 text-2xs text-green-700 ring-1 ring-green-200">
                           Resume
                         </span>
-                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                        <span className="min-w-0 truncate tf-row-name">
                           {resume.name || resume.candidate_name || resume.fileName || 'Resume'}
                         </span>
                       </div>
-                      <div className="mt-0.5 truncate text-xs text-gray-500">
+                      <div className="mt-0.5 truncate tf-meta">
                         {[resume.title, resume.email, resume.location].filter(Boolean).join(' / ') || resume.fileName || resume.file_name}
                       </div>
                     </button>
@@ -577,10 +577,10 @@ function DroppableFolderCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-semibold text-sm text-gray-900 truncate">
+          <h3 className="tf-row-title truncate">
             {isRoot ? 'Root (Default)' : folder.name}
           </h3>
-          <p className="text-xs text-gray-500">
+          <p className="tf-meta">
             {hasSubfolders && `${subfolders.length} subfolder${subfolders.length !== 1 ? 's' : ''} • `}
             {resumeCount} resume{resumeCount !== 1 ? 's' : ''}
           </p>
@@ -644,7 +644,7 @@ function DroppableFolderCard({
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
-                {canUpload && !canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
+                {canUpload && !canCreateSubfolder && <span className="ml-auto tf-hint">(max)</span>}
               </button>
               <button
                 type="button"
@@ -743,7 +743,7 @@ function DroppableFolderCard({
                 <span className={`flex-1 min-w-0 truncate text-xs ${
                   peekChild?.id === child.id ? 'font-medium text-brand-blue' : 'text-gray-700'
                 }`}>{child.name}</span>
-                <span className="text-2xs text-gray-500 flex-shrink-0">
+                <span className="tf-micro-hint flex-shrink-0">
                   {childSubfolders > 0 && `${childSubfolders} sub • `}
                   {child.count || 0}
                 </span>
@@ -768,7 +768,7 @@ function DroppableFolderCard({
           style={{ width: `${SUBFOLDER_PEEK_PANEL_WIDTH}px`, maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1.5 text-2xs font-medium text-gray-500 bg-slate-50 border-b border-gray-100 truncate">
+          <div className="px-3 py-1.5 tf-micro-hint bg-slate-50 border-b border-gray-100 truncate">
             {peekChild.name}
           </div>
           {(peekChild.children ?? []).map((grandChild) => (
@@ -785,8 +785,8 @@ function DroppableFolderCard({
               className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 border-l-2 border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40 transition-colors cursor-pointer"
             >
               <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
-              <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
-              <span className="text-2xs text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
+              <span className="flex-1 min-w-0 truncate tf-meta">{grandChild.name}</span>
+              <span className="tf-micro-hint flex-shrink-0">{grandChild.count || 0}</span>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             </button>
           ))}
@@ -838,12 +838,12 @@ function CardFolderNameInput({
           className="min-w-0 flex-1 rounded-md border border-brand-blue px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
         />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
+          <span className="tf-hint">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
           <button
             type="button"
             onClick={onSubmit}
             disabled={!value.trim()}
-            className="rounded bg-brand-blue px-3 py-1.5 text-xs text-white shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="tf-btn tf-btn-primary rounded bg-brand-blue px-3 py-1.5 text-xs shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:bg-gray-300 whitespace-normal gap-0 font-normal"
           >
             {submitLabel}
           </button>
@@ -880,7 +880,7 @@ function CardFolderNameInput({
           type="button"
           onClick={onSubmit}
           disabled={!value.trim()}
-          className="px-3 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+          className="tf-btn tf-btn-primary px-3 py-1 text-xs bg-brand-blue rounded hover:bg-brand-blue-2 disabled:bg-gray-300 whitespace-normal shadow-none gap-0 font-normal"
         >
           {submitLabel}
         </button>
@@ -891,7 +891,7 @@ function CardFolderNameInput({
         >
           Cancel
         </button>
-        <span className="text-xs text-gray-400 ml-auto">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
+        <span className="tf-hint ml-auto">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
       </div>
     </div>
   );
@@ -3882,9 +3882,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     // count chip, subtitle, the two action buttons), the search toolbar row,
     // then the shared ResumeTableSkeleton in place of the ResumeTable.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             {/* Breadcrumb + tab strip — rendered for real even while the list
                 loads, so switching tabs stays possible and nothing shifts. */}
             {header}
@@ -3906,7 +3906,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               </div>
             </div>
             {/* Search / toolbar card */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+            <div className="tf-card-soft p-3 sm:p-4 mb-4">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-10 flex-1 rounded-lg" />
                 <Skeleton className="h-10 w-28 rounded-lg" />
@@ -3933,9 +3933,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {header}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto min-w-0 flex items-start gap-3">
@@ -3944,15 +3944,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">My Resume Database</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+              <h1 className="tf-page-title">My Resume Database</h1>
+              <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
                 {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
                   <> ({totalIncludingVersions - totalItems} versions)</>
                 )}
               </span>
             </div>
-            <p className="text-sm text-gray-600">Resumes uploaded by you</p>
+            <p className="tf-body-secondary">Resumes uploaded by you</p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
@@ -4143,9 +4143,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
             {viewMode === 'card' && gridToolbarFilterChips.length > 0 && (
               <div className="flex flex-wrap items-center gap-1.5">
-                <span className="text-xs text-gray-500">Grid filters:</span>
+                <span className="tf-meta">Grid filters:</span>
                 {gridToolbarFilterChips.map((chip) => (
-                  <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/5 px-2 py-0.5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
+                  <span key={chip.key} className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                     {chip.label}
                     <button
                       type="button"
@@ -4167,7 +4167,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           <div className="px-3 sm:px-4 py-2 sm:py-3 bg-gray-50 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-gray-500" />
-              <span className="text-sm text-gray-700">
+              <span className="tf-body">
                 Found <span className="font-semibold">{totalItems}</span> matching resume{totalItems !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
@@ -4535,12 +4535,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg truncate">
+                        <h2 className="tf-section-title sm:text-lg truncate">
                           {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                             ? 'Root (Default)'
                             : currentFolderData.name}
                         </h2>
-                        <p className="text-sm text-gray-500">
+                        <p className="tf-body-muted">
                           {foldersToDisplay.length > 0 && `${foldersToDisplay.length} subfolder${foldersToDisplay.length !== 1 ? 's' : ''}`}
                           {foldersToDisplay.length > 0 && visibleFolderResumes.length > 0 && ' • '}
                           {visibleFolderResumes.length > 0 && `${visibleFolderResumes.length} resume${visibleFolderResumes.length !== 1 ? 's' : ''}`}
@@ -4565,7 +4565,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             New Subfolder
                           </button>
                         ) : currentFolderDepth >= MAX_FOLDER_DEPTH ? (
-                          <span className="text-sm text-gray-500 sm:self-start">
+                          <span className="tf-body-muted sm:self-start">
                             Maximum depth reached ({MAX_FOLDER_DEPTH} levels)
                           </span>
                         ) : null}
@@ -4591,8 +4591,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="font-semibold text-gray-900 text-base sm:text-lg">All Resumes</h2>
-                        <p className="text-sm text-gray-500">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
+                        <h2 className="tf-section-title sm:text-lg">All Resumes</h2>
+                        <p className="tf-body-muted">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
                   )}
@@ -4628,7 +4628,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                   markup (p-3, 36px icon tile, text-sm title) so
                                   they match to the pixel rather than roughly. */}
                               {/* 2-up below lg: three across a tablet truncated "Root (Default)" / "Archived Resumes" to a few letters. */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-stretch">
+                              <div className="tf-grid-3 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
                                   <div
                                     className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
@@ -4642,8 +4642,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <LayoutGrid className="w-4 h-4 text-[var(--raw-155dfc)]" />
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h3 className="font-semibold text-sm text-gray-900 truncate">All Resumes</h3>
-                                        <p className="text-xs text-gray-500">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
+                                        <h3 className="tf-row-title truncate">All Resumes</h3>
+                                        <p className="tf-meta">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
                                       <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
                                     </div>
@@ -4694,15 +4694,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             // other card in the row to match — grid items default
                             // to filling the row height, which left the
                             // neighbours padded with blank space.
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                            <div className="tf-grid-3 items-start">
                               {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
-                            <p className="text-sm text-gray-500">No folders match the current search or filter.</p>
+                            <p className="tf-body-muted">No folders match the current search or filter.</p>
                           ) : systemFolders.length > 0 ? (
                             // Skipped when there are no folders at all — the
                             // page-level empty state below covers that case.
-                            <p className="text-sm text-gray-500">No folders yet. Create one to organize your resumes.</p>
+                            <p className="tf-body-muted">No folders yet. Create one to organize your resumes.</p>
                           ) : null}
                           </>
                         )
@@ -4710,7 +4710,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <>
                           {hasCurrentSubfolders && (
                             <div className="flex items-center mb-2 sm:mb-3">
-                              <h3 className="text-sm font-medium text-gray-700">Subfolders</h3>
+                              <h3 className="tf-label">Subfolders</h3>
                             </div>
                           )}
 
@@ -4721,12 +4721,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           )}
 
                           {visibleFoldersToDisplay.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                            <div className="tf-grid-3 items-start">
                               {visibleFoldersToDisplay.map(folder => renderFolderCard(folder))}
                             </div>
                           )}
                           {foldersToDisplay.length > 0 && visibleFoldersToDisplay.length === 0 && folderControlsActive && (
-                            <p className="mt-3 text-sm text-gray-500">No subfolders match the current search or filter.</p>
+                            <p className="mt-3 tf-body-muted">No subfolders match the current search or filter.</p>
                           )}
                         </>
                       )}
@@ -4738,11 +4738,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       classes, six cards each shaped like DroppableFolderCard
                       (icon box + name line + count line + action dot). */}
                   {loading && cardViewFolder === null && foldersToDisplay.length === 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                    <div className="tf-grid-3 items-start">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div
                           key={i}
-                          className="bg-white border border-gray-100 rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]"
+                          className="tf-card-soft"
                         >
                           <div className="flex items-center gap-3 p-3">
                             <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
@@ -4774,7 +4774,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {visibleFolderResumes.length > 0 && (
                         <div>
                           {foldersToDisplay.length > 0 && (
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
+                            <h3 className="tf-label mb-3">Resumes in this folder</h3>
                           )}
                           {/* The list view's table, not a copy of it: one
                               component means the two views cannot drift, and a
@@ -4847,7 +4847,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           fetched. Skeleton mirrors the ResumeTable that renders
                           here once loaded, framed by the same white card. */}
                       {loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && (
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="tf-panel overflow-hidden">
                           <ResumeTableSkeleton rows={8} />
                         </div>
                       )}
@@ -5003,8 +5003,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   <AlertCircle className="w-6 h-6 text-yellow-600" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900">Already Scored - Duplicate Warning</h3>
-                  <p className="text-sm text-gray-500">{duplicateScoringWarning.jobTitle}</p>
+                  <h3 className="tf-section-title">Already Scored - Duplicate Warning</h3>
+                  <p className="tf-body-muted">{duplicateScoringWarning.jobTitle}</p>
                 </div>
               </div>
 
@@ -5016,7 +5016,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                 {/* List of duplicate candidates */}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <h4 className="text-sm font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                  <h4 className="tf-row-title mb-3 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-red-600" />
                     Already Scored - Will NOT be Re-scored:
                   </h4>
@@ -5030,15 +5030,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <div className="min-w-0">
                             <div className="font-medium text-gray-900 truncate">{score.candidate_name}</div>
                             {score.scored_at && (
-                              <div className="text-xs text-gray-500">
+                              <div className="tf-meta">
                                 Scored on {formatDateTimeIST(score.scored_at)}
                               </div>
                             )}
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className="text-sm font-semibold text-gray-900">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
-                          <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
+                          <div className="tf-row-title">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
+                          <div className="tf-meta capitalize">{score.match_status}</div>
                         </div>
                       </div>
                     ))}
@@ -5047,13 +5047,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                 {duplicateScoringWarning.newCount > 0 ? (
                   <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-700">
+                    <p className="tf-body">
                       <span className="font-semibold text-green-700">{duplicateScoringWarning.newCount} new candidate(s)</span> will be scored if you continue.
                     </p>
                   </div>
                 ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="text-sm text-gray-600">
+                    <p className="tf-body-secondary">
                       All selected candidates are already scored. No new candidates to score.
                     </p>
                   </div>
@@ -5064,7 +5064,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
                 <button
                   onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="tf-btn tf-btn-secondary px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors whitespace-normal gap-0 font-normal"
                 >
                   Cancel
                 </button>
@@ -5102,7 +5102,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 tracking-tight">Download as ZIP</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Multiple files selected</p>
+                    <p className="tf-body-muted mt-0.5">Multiple files selected</p>
                   </div>
                 </div>
               </div>
@@ -5115,9 +5115,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div>
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
                   </p>
                 </div>
@@ -5128,7 +5128,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Info className="w-4 h-4 text-brand-blue" />
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   Do you want to download all selected resumes as a ZIP file?
                 </p>
               </div>
@@ -5138,14 +5138,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <button
                   onClick={() => setIsZipDownloadModalOpen(false)}
                   disabled={isDownloadingZip}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isDownloadingZip ? (
                     <>
@@ -5184,7 +5184,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 tracking-tight">Archive Resumes</h3>
-                    <p className="text-sm text-gray-500 mt-0.5">Move selected resumes to archive</p>
+                    <p className="tf-body-muted mt-0.5">Move selected resumes to archive</p>
                   </div>
                 </div>
               </div>
@@ -5197,9 +5197,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div>
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="tf-body-muted mt-1">
                     The selected resumes will be moved to archive and hidden from the active list.
                   </p>
                 </div>
@@ -5210,7 +5210,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div className="w-7 h-7 bg-brand-blue/10 rounded-full flex items-center justify-center flex-shrink-0">
                   <Info className="w-4 h-4 text-brand-blue" />
                 </div>
-                <p className="text-sm text-gray-700">
+                <p className="tf-body">
                   Are you sure you want to archive all selected resumes?
                 </p>
               </div>
@@ -5220,14 +5220,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <button
                   onClick={() => setIsArchiveModalOpen(false)}
                   disabled={isArchivingResumes}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmBulkArchive}
                   disabled={isArchivingResumes}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isArchivingResumes ? (
                     <>
@@ -5293,8 +5293,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
-                    <p className="text-sm text-gray-600 mt-0.5">View all past bulk upload reports</p>
+                    <h2 className="tf-section-title sm:text-xl tracking-tight">Upload History</h2>
+                    <p className="tf-body-secondary mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -5355,7 +5355,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   return (
                     <>
                       {/* Tabs */}
-                      <div className="inline-flex items-center bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-1 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/5">
+                      <div className="tf-card-soft inline-flex items-center p-1 mb-4 sm:mb-6">
                         <button
                           onClick={() => setUploadHistoryTab('current')}
                           className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
@@ -5474,15 +5474,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                         if (allZero) {
                           return (
-                            <div className="flex items-center gap-3 mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl p-4">
+                            <div className="flex items-center gap-3 mb-4 sm:mb-6 tf-panel p-4">
                               <div className="w-9 h-9 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
                                 <Clock className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900">
+                                <p className="tf-row-name">
                                   {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
                                 </p>
-                                <p className="text-xs text-gray-600">
+                                <p className="tf-meta">
                                   {uploadHistoryTab === 'current'
                                     ? 'Upload resumes to see live progress and status counts here.'
                                     : 'Finished upload batches and their status counts will appear here.'}
@@ -5517,7 +5517,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
                                       <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className="text-xs text-gray-600 truncate">{label}</span>
+                                    <span className="tf-meta truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5528,12 +5528,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 Hidden when nothing was attempted: 0% would read
                                 as a total failure rather than "no data". */}
                             {attemptedFiles > 0 && (
-                            <div className="bg-white border border-gray-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                            <div className="tf-panel p-2.5 sm:p-3 lg:p-4">
                               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </div>
-                                <span className="text-xs text-gray-600 truncate">Success Rate</span>
+                                <span className="tf-meta truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5545,7 +5545,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {/* Active Filter Indicator */}
                       {uploadHistoryFilter && (
                         <div className="flex items-center gap-2 mb-4 px-3 py-2 bg-white rounded-lg shadow-sm shadow-black/[0.03]">
-                          <span className="text-xs text-gray-500">Filtering by:</span>
+                          <span className="tf-meta">Filtering by:</span>
                           <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                             uploadHistoryFilter === 'completed' ? 'bg-brand-blue/10 text-brand-blue' :
                             uploadHistoryFilter === 'duplicated' ? 'bg-brand-orange/15 text-brand-orange-deep' :
@@ -5613,10 +5613,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {/* Upload History List */}
                       {!showFullEmptyState && (
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="text-sm font-semibold text-gray-900">
+                          <h3 className="tf-row-title">
                             {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
                           </h3>
-                          <span className="text-xs text-gray-500">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
+                          <span className="tf-meta">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
                         </div>
                       )}
 
@@ -5648,7 +5648,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               so it reads as guidance rather than a warning. */}
                           <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2.5">
                             <Lightbulb className="w-4 h-4 text-brand-orange flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-gray-700 dark:text-slate-300">
+                            <p className="tf-body">
                               <span className="font-semibold">Tip:</span> You can upload a single resume or bulk upload multiple resumes at once.
                             </p>
                           </div>
@@ -5689,7 +5689,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                   key={record.id}
                                   /* One subtle border, nothing else: the card is not
                                      clickable, so no hover lift or chevron either. */
-                                  className="bg-white border border-gray-200 rounded-xl pb-4 sm:pb-5"
+                                  className="tf-panel pb-4 sm:pb-5"
                                 >
                                   {/* Header Row */}
                                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-5 pt-4 sm:pt-5">
@@ -5698,9 +5698,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="min-w-0">
-                                        <span className="font-semibold text-gray-900 text-sm block truncate">{record.fileName}</span>
+                                        <span className="tf-row-title block truncate">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                          <span className="tf-meta flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
                                             <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
@@ -5719,7 +5719,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                               ? `${m}m ${s}s`
                                               : `${s}s`;
                                           return (
-                                            <span className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <span className="tf-meta flex items-center gap-1 mt-0.5">
                                               <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
                                               <span className="truncate">
                                                 Finished {formatDateTimeIST(record.completedAt)}
@@ -5733,13 +5733,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     </div>
                                     <div className="flex items-center gap-3 ml-12 sm:ml-0">
                                       {isUploading && (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-blue/10 text-brand-blue text-xs font-medium rounded-full">
+                                        <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue">
                                           <Loader2 className="w-3 h-3 animate-spin" />
                                           Uploading…
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep text-xs font-medium rounded-full">
+                                        <span className="tf-badge gap-1.5 bg-brand-orange/10 text-brand-orange-deep">
                                           <AlertCircle className="w-3 h-3 flex-shrink-0" />
                                           Needs review
                                         </span>
@@ -5754,7 +5754,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           }`}>
                                             {percentage}%
                                           </div>
-                                          <div className="text-2xs text-gray-500 mt-1 uppercase tracking-wide">Success</div>
+                                          <div className="tf-micro-hint mt-1 uppercase tracking-wide">Success</div>
                                         </div>
                                       )}
                                     </div>
@@ -5774,7 +5774,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     ].map(({ label, value, tone }) => (
                                       <div key={label} className="text-center px-1">
                                         <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
-                                        <div className="text-2xs text-gray-500 mt-0.5">{label}</div>
+                                        <div className="tf-micro-hint mt-0.5">{label}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -5814,7 +5814,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                       const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                       if (processed <= 0 || elapsed <= 0) {
                                         return (
-                                          <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                          <div className="flex items-center gap-1.5 mt-2 tf-meta">
                                             <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
                                             <span>Estimating time remaining…</span>
                                           </div>
@@ -5828,7 +5828,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                                         : `Approx. ${lowMins}–${highMins} mins remaining`;
                                       return (
-                                        <div className="flex items-center gap-1.5 mt-2 text-xs text-gray-500">
+                                        <div className="flex items-center gap-1.5 mt-2 tf-meta">
                                           <Clock className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" />
                                           <span>{etaText}</span>
                                           <span className="text-gray-300">·</span>
@@ -5945,7 +5945,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                   type="checkbox"
                                                   checked={allSelected}
                                                   readOnly
-                                                  className="w-3 h-3 rounded border-brand-blue-2/40 text-brand-blue-2 pointer-events-none"
+                                                  className="tf-checkbox w-3 h-3 pointer-events-none"
                                                 />
                                                 Select All
                                               </button>
@@ -5977,7 +5977,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                       {filesOpen && (<>
                                       {/* Short note: cancel only for queued items */}
                                       {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="flex items-center gap-1.5 text-2xs text-gray-500 mb-2.5">
+                                        <p className="flex items-center gap-1.5 tf-micro-hint mb-2.5">
                                           <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
                                           Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
@@ -6047,7 +6047,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                   }
                                                   setSelectedVersionedItems(newSelected);
                                                 }}
-                                                className="w-4 h-4 rounded border-brand-blue-2/40 text-brand-blue-2 focus:ring-brand-blue-2/40 cursor-pointer flex-shrink-0"
+                                                className="tf-checkbox focus:ring-brand-blue-2/40"
                                               />
                                             )}
                                             {/* Status Icon */}
@@ -6071,8 +6071,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
-                                              <div className="text-xs text-gray-500 mt-0.5 truncate">
+                                              <div className="tf-row-name truncate">{file.fileName}</div>
+                                              <div className="tf-meta mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
                                                 {file.status === 'processing' && 'Processing…'}
@@ -6140,7 +6140,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     </div>
                                     ) : uploadHistoryFilter ? (
                                       <div className="mt-4 border-t border-gray-100 pt-4 px-4 sm:px-5">
-                                        <p className="text-xs text-gray-400 text-center py-3">No {
+                                        <p className="tf-hint text-center py-3">No {
                                           uploadHistoryFilter === 'completed' ? 'completed' :
                                           uploadHistoryFilter === 'duplicated' ? 'duplicate' :
                                           uploadHistoryFilter === 'versioned' ? 'versioned' :
@@ -6184,7 +6184,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
                     >
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
@@ -6269,14 +6269,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <AlertDialogTitle className="text-2xl font-bold text-gray-900">
                   Cancel {cancelBatchConfirm.pendingCount} queued file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''}?
                 </AlertDialogTitle>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 tf-body-muted">
                   This stops {cancelBatchConfirm.pendingCount} file{cancelBatchConfirm.pendingCount !== 1 ? 's' : ''} that
                   {cancelBatchConfirm.pendingCount !== 1 ? ' have' : ' has'} not finished processing.
                 </p>
               </div>
             </div>
             <AlertDialogDescription asChild>
-              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 text-sm text-gray-800">
+              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 tf-body">
                 <p>Files already completed are kept</p>
                 <p>Their Resume Storage units are refunded</p>
                 <p>You can re-queue cancelled files later with Retry</p>
@@ -6313,7 +6313,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   Cancel this file?
                 </AlertDialogTitle>
                 <AlertDialogDescription asChild>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 tf-body-muted">
                     <span className="font-medium text-gray-900">{cancelItemConfirm.fileName}</span> will not
                     be processed. Its unit is refunded and you can re-queue it later with Retry.
                   </p>
@@ -6439,16 +6439,16 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         value="move-parent"
                                         checked={deleteFolderConfirm.contentAction === 'move-parent'}
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                                        className="w-4 h-4 text-brand-blue"
+                                        className="tf-radio"
                                       />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <FolderOpen className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                                          <span className="text-sm font-medium text-gray-900 truncate">
+                                          <span className="tf-row-name truncate">
                                             Move to {parentIsRoot ? 'My Resumes (root)' : deleteFolderConfirm.parentFolderName}
                                           </span>
                                         </div>
-                                        <p className="text-xs text-gray-500 mt-0.5">
+                                        <p className="tf-meta mt-0.5">
                                           All resumes will be moved to {parentIsRoot ? 'the root folder' : 'the parent folder'}
                                         </p>
                                       </div>
@@ -6469,16 +6469,16 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           value="move-root"
                                           checked={deleteFolderConfirm.contentAction === 'move-root'}
                                           onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
-                                          className="w-4 h-4 text-brand-blue"
+                                          className="tf-radio"
                                         />
                                         <div className="flex-1">
                                           <div className="flex items-center gap-2">
                                             <Folder className="w-4 h-4 text-gray-600" />
-                                            <span className="text-sm font-medium text-gray-900">
+                                            <span className="tf-row-name">
                                               Move to My Resumes (root)
                                             </span>
                                           </div>
-                                          <p className="text-xs text-gray-500 mt-0.5">
+                                          <p className="tf-meta mt-0.5">
                                             All resumes will be moved to the root folder
                                           </p>
                                         </div>
@@ -6499,7 +6499,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         value="delete-all"
                                         checked={deleteFolderConfirm.contentAction === 'delete-all'}
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'delete-all' }))}
-                                        className="w-4 h-4 text-red-600"
+                                        className="tf-radio"
                                       />
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">

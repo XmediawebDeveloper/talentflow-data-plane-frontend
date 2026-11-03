@@ -11,9 +11,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from './utils';
 
-/* Toolbar size (h-[38px]) — the same as More Filters / Export beside it. */
+/* Toolbar size (h-9) — the same as More Filters / Export beside it. */
 const TRIGGER_CLASS =
-  'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap border';
+  'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap border';
 
 /**
  * The Job Openings list's "Select All ▾" control: one button whose menu holds
@@ -141,7 +141,7 @@ export function SortByControl<T extends string>({
       {/* Styled to the AI Talent Match reference's tinted "Sort by" pill: no
           border, the label always shown, and a single ArrowUpDown that flips
           180° on descending. */}
-      <span className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
+      <span className="tf-body whitespace-nowrap">Sort by</span>
       {/* One size at every width: p-1 + h-7 = 36px, the toolbar's h-9 band,
           14px text like the search box and dropdowns beside it. It used to
           drop to 12px / 24px below sm, which read as a smaller, odd control
@@ -155,7 +155,7 @@ export function SortByControl<T extends string>({
             // Fixed width: a native select sizes to its longest option, so the
             // two views' option lists made the row (and search box) shift.
             // Narrower below 375px only, where the 9.5rem box clipped at 320.
-            className="appearance-none w-[7.5rem] min-[375px]:w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+            className="appearance-none w-[7.5rem] 2xs:w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 tf-body cursor-pointer"
           >
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>

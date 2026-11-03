@@ -105,7 +105,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
         <div className="space-y-5">
           {/* Email Address */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="email" className="block tf-label mb-2">
               Email Address <span className="text-destructive">*</span>
             </label>
             <div className="relative">
@@ -120,11 +120,11 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
                 onKeyPress={handleKeyPress}
                 placeholder="your.email@example.com"
                 disabled={isVerifying}
-                className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="tf-input h-auto block pl-10 pr-3 py-3 disabled:bg-gray-100"
                 autoFocus
               />
             </div>
-            <p className="mt-1.5 text-xs text-gray-500">
+            <p className="mt-1.5 tf-meta">
               Use the email address where you received the invitation
             </p>
           </div>
@@ -133,7 +133,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
           <Button
             onClick={handleVerify}
             disabled={isVerifying || !candidateEmail.trim()}
-            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed items-center justify-center gap-2"
           >
             {isVerifying ? (
               <>
@@ -154,8 +154,8 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
           <div className="flex items-start gap-2">
             <Shield className="w-4 h-4 text-gray-600 flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-xs font-medium text-gray-900 mb-1">Security Notice</p>
-              <p className="text-xs text-gray-600">
+              <p className="tf-caption mb-1">Security Notice</p>
+              <p className="tf-meta">
                 This verification ensures that only the invited candidate can access this assessment.
                 Your email must match the address where you received the invitation.
               </p>

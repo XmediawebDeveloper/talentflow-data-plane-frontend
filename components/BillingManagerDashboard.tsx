@@ -124,14 +124,14 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
   }, [usageBars]);
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <main className="tf-page">
+      <div className="tf-page-pad w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />
         </div>
 
         {/* Top row: Invoice + Plan card */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        <div className="tf-grid-3 mb-6">
           {/* Current invoice — prominent */}
           <div className="lg:col-span-2 relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal text-white p-6 shadow-lg shadow-brand-blue/20">
             <div className="pointer-events-none absolute -right-16 -top-16 h-48 w-48 rounded-full bg-brand-cyan/30 blur-3xl" />
@@ -148,7 +148,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                     Due {renewalDate ? formatISTDate(renewalDate) : 'on next cycle'}
                   </div>
                 </div>
-                <span className="inline-flex items-center gap-1.5 self-start rounded-full bg-green-400/15 px-3 py-1 text-xs font-medium ring-1 ring-green-300/30 text-green-100">
+                <span className="tf-badge gap-1.5 self-start bg-green-400/15 ring-1 ring-green-300/30 text-green-100">
                   <CheckCircle2 className="w-3.5 h-3.5" />
                   On track
                 </span>
@@ -173,15 +173,15 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
           </div>
 
           {/* Plan card */}
-          <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6">
+          <div className="tf-card-soft p-6">
             <div className="flex items-start justify-between mb-4">
               <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Crown className="w-5 h-5 text-brand-blue" />
               </div>
-              <span className="text-xs text-gray-500">Active</span>
+              <span className="tf-meta">Active</span>
             </div>
             <div className="text-2xl font-bold text-gray-900 tracking-tight">{planName}</div>
-            <div className="text-xs text-gray-500 mt-1">Current plan</div>
+            <div className="tf-meta mt-1">Current plan</div>
             <div className="mt-5 space-y-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-gray-600 inline-flex items-center gap-2">
@@ -220,8 +220,8 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                 <AlertTriangle className="w-5 h-5 text-brand-orange-deep" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-gray-900 mb-1">Quota burndown</h3>
-                <p className="text-sm text-gray-700">
+                <h3 className="tf-row-title mb-1">Quota burndown</h3>
+                <p className="tf-body">
                   At current pace, <span className="font-semibold">{projectedExhaustion.name}</span> will be exhausted in
                   <span className="font-semibold text-brand-orange-deep"> {projectedExhaustion.daysLeft} days</span>.
                 </p>
@@ -239,11 +239,11 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
         )}
 
         {/* Usage vs plan */}
-        <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6 mb-6">
+        <div className="tf-card-soft p-6 mb-6">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Usage vs Plan</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Current billing cycle</p>
+              <h2 className="tf-section-title">Usage vs Plan</h2>
+              <p className="tf-meta mt-0.5">Current billing cycle</p>
             </div>
             {canExportUsage && (
               <button
@@ -255,7 +255,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-5">
+          <div className="tf-grid-2">
             {usageBars.map((q, i: number) => {
               const used = q.used;
               const limit = q.limit;
@@ -265,7 +265,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
               return (
                 <div key={i}>
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-gray-900">{q.name}</span>
+                    <span className="tf-row-name">{q.name}</span>
                     <span className={`text-sm tabular-nums ${isHigh ? 'text-brand-orange-deep font-semibold' : 'text-gray-600'}`}>
                       {used.toLocaleString()} / {limit.toLocaleString()}
                     </span>
@@ -276,7 +276,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between mt-1.5 text-2xs text-gray-500">
+                  <div className="flex items-center justify-between mt-1.5 tf-micro-hint">
                     <span>{pct}% used</span>
                     <span>{(limit - used).toLocaleString()} remaining</span>
                   </div>
@@ -287,12 +287,12 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
         </div>
 
         {/* Spend trend + Top consumers */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2 p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Spend trend</h2>
-                <p className="text-xs text-gray-500 mt-0.5">Last 6 months</p>
+                <h2 className="tf-section-title">Spend trend</h2>
+                <p className="tf-meta mt-0.5">Last 6 months</p>
               </div>
               <div className="flex items-center gap-2 text-xs">
                 <span className="inline-flex items-center gap-1 text-gray-600">
@@ -332,9 +332,9 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6">
+          <div className="tf-card-soft p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">Top consumers</h2>
+              <h2 className="tf-section-title">Top consumers</h2>
               <button
                 onClick={() => router.push('/organization/usage')}
                 className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
@@ -350,10 +350,10 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                   <div key={i}>
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">{c.name}</div>
-                        <div className="text-2xs text-gray-500">{c.team}</div>
+                        <div className="tf-row-name truncate">{c.name}</div>
+                        <div className="tf-micro-hint">{c.team}</div>
                       </div>
-                      <span className="text-sm tabular-nums text-gray-700 ml-3">{c.credits}</span>
+                      <span className="tf-body tabular-nums ml-3">{c.credits}</span>
                     </div>
                     <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full ${c.color}`} style={{ width: `${pct}%` }} />
@@ -366,11 +366,11 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
         </div>
 
         {/* Invoice history */}
-        <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm mb-6">
+        <div className="tf-card-soft mb-6">
           <div className="flex items-center justify-between p-6 border-b border-gray-100">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Invoice history</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Last 4 invoices</p>
+              <h2 className="tf-section-title">Invoice history</h2>
+              <p className="tf-meta mt-0.5">Last 4 invoices</p>
             </div>
             <button
               onClick={() => router.push('/subscription/billing-history')}
@@ -383,26 +383,26 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
             <table className="w-full">
               <thead className="bg-white border-b border-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Invoice</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Date</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600">Amount</th>
-                  <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-semibold text-gray-600">Action</th>
+                  <th className="tf-th-cell text-left tf-th">Invoice</th>
+                  <th className="tf-th-cell text-left tf-th">Date</th>
+                  <th className="tf-th-cell text-right tf-th">Amount</th>
+                  <th className="tf-th-cell text-left tf-th">Status</th>
+                  <th className="tf-th-cell text-right tf-th">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {invoices.map((inv) => (
                   <tr key={inv.id} className="hover:bg-gray-50/60 transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900">{inv.id}</td>
-                    <td className="px-6 py-4 text-sm text-gray-600">{formatISTDate(inv.date)}</td>
-                    <td className="px-6 py-4 text-sm text-right tabular-nums text-gray-900">${inv.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                    <td className="tf-td tf-row-name">{inv.id}</td>
+                    <td className="tf-td tf-body-secondary">{formatISTDate(inv.date)}</td>
+                    <td className="tf-td tf-body text-right tabular-nums">${inv.amount.toLocaleString()}</td>
+                    <td className="tf-td">
+                      <span className="tf-badge text-2xs bg-success-subtle text-success ring-1 ring-success-line">
                         <CheckCircle2 className="w-3 h-3" />
                         Paid
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="tf-td text-right">
                       <button className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium inline-flex items-center gap-1">
                         <Download className="w-3.5 h-3.5" />
                         PDF

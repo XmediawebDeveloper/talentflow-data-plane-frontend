@@ -510,9 +510,9 @@ export default function JDListPage() {
   const canCreateJD = accessCheck?.can_create_jd !== false;
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -565,8 +565,8 @@ export default function JDListPage() {
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Job Descriptions</h1>
-            <p className="text-sm text-gray-600 mt-1">
+            <h1 className="tf-page-title">Job Descriptions</h1>
+            <p className="tf-body-secondary mt-1">
               Manage your job descriptions ({total} total)
             </p>
           </div>
@@ -595,7 +595,7 @@ export default function JDListPage() {
               aria-disabled={!canCreateJD}
               icon={<Plus className="w-4 h-4" />}
               title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
-              className={!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}
+              className={`${(!canCreateJD ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
             >
               Create New JD
             </Button>
@@ -603,7 +603,7 @@ export default function JDListPage() {
         </div>
 
         {/* JD03: Status Tabs */}
-        <div className="flex items-center gap-1 mb-6 bg-white rounded-lg border border-gray-200 p-1 overflow-x-auto scrollbar-hide">
+        <div className="tf-panel flex items-center gap-1 mb-6 p-1 overflow-x-auto scrollbar-hide">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.id}
@@ -681,7 +681,7 @@ export default function JDListPage() {
         )}
 
         {/* Search Bar */}
-        <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
+        <div className="tf-panel p-4 mb-6">
           <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Select All Checkbox */}
             {jds.length > 0 && (
@@ -701,7 +701,7 @@ export default function JDListPage() {
                 placeholder="Search job descriptions..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent"
+                className="tf-input pl-10 pr-4"
               />
             </div>
             {/* JD04: Sort dropdown */}
@@ -723,7 +723,7 @@ export default function JDListPage() {
               />
             </div>
             {/* Results count */}
-            <div className="flex items-center gap-2 text-sm text-gray-500">
+            <div className="flex items-center gap-2 tf-body-muted">
               <span className="px-2 py-1 bg-gray-100 rounded">
                 {total} results
               </span>
@@ -740,7 +740,7 @@ export default function JDListPage() {
              right-hand View / Edit / more-actions controls. */
           <div className="space-y-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+              <div key={i} className="tf-panel p-6">
                 <div className="flex items-start gap-4">
                   <div className="flex items-start gap-4 flex-1 min-w-0 overflow-hidden">
                     <Skeleton className="w-4 h-4 mt-1 rounded" />
@@ -781,7 +781,7 @@ export default function JDListPage() {
             ))}
           </div>
         ) : jds.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-12 text-center">
+          <div className="tf-panel p-8 sm:p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No job descriptions found</h3>
             <p className="text-gray-500 mb-6">
@@ -803,7 +803,7 @@ export default function JDListPage() {
                 }}
                 aria-disabled={!canCreateJD}
                 title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
-                className={!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}
+                className={`${(!canCreateJD ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                 icon={<Plus className="w-4 h-4" />}
               >
                 Create New JD
@@ -824,7 +824,7 @@ export default function JDListPage() {
                       type="checkbox"
                       checked={selectedJds.includes(jd.id)}
                       onChange={() => handleSelectJd(jd.id)}
-                      className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
+                      className="tf-checkbox mt-1 focus:ring-gray-500"
                     />
                     <div className="flex-1">
                       <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
@@ -833,12 +833,12 @@ export default function JDListPage() {
                             {jd.job_id}
                           </span>
                         )}
-                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words min-w-0">{jd.title}</h3>
+                        <h3 className="tf-section-title sm:text-lg break-words min-w-0">{jd.title}</h3>
                         {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
                       {/* FIX-008: Responsive metadata - primary info visible, secondary hidden on mobile */}
-                      <div className="flex items-center gap-4 text-sm text-gray-500 mb-3 flex-wrap">
+                      <div className="flex items-center gap-4 tf-body-muted mb-3 flex-wrap">
                         <span className="flex items-center gap-1">
                           <FileText className="w-4 h-4" />
                           {jd.industry_type || '-'}
@@ -879,7 +879,7 @@ export default function JDListPage() {
                           </span>
                         )}
                       </div>
-                      <p className="text-gray-600 text-sm line-clamp-2">
+                      <p className="tf-body-secondary line-clamp-2">
                         {jd.description?.substring(0, 200)}...
                       </p>
                       {/* Stats */}
@@ -1114,12 +1114,12 @@ export default function JDListPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-            <p className="text-sm text-gray-600">
+            <p className="tf-body-secondary">
               Showing {(currentPage - 1) * 20 + 1} to {Math.min(currentPage * 20, total)} of {total}
             </p>
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -1134,24 +1134,24 @@ export default function JDListPage() {
                   }}
                   onBlur={commitGoToPage}
                   aria-label="Go to page"
-                  className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                 />
               </div>
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                 aria-label="Previous page" title="Previous page"
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
-              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+              <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                 aria-label="Next page" title="Next page"
               >
                 <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />

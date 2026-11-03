@@ -143,7 +143,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
 
           {/* Row 2: Location + Experience + Employment Type + Work Mode +
               Salary + Posted Date + Posted By + Version */}
-          <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+          <div className="flex flex-wrap items-center gap-1.5 tf-meta">
             {jd.location && (
               <>
                 {formatLocationGroups(jd.locations, jd.location).map((label) => (
@@ -157,7 +157,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
             )}
 
             {(jd.job_level || jd.experience_level) && (
-              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {formatJobExperienceBadge({
                   jobLevel: jd.job_level || jd.experience_level,
                   /* The years, formatted by the same helper the Requirements
@@ -173,13 +173,13 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
                 is shown there only. */}
 
             {employment && (
-              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {employment}
               </span>
             )}
 
             {workMode && (
-              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {workMode}
               </span>
             )}
@@ -203,7 +203,7 @@ export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdenti
                 <span className="text-gray-300">&bull;</span>
                 {/* The page's purple version pill, as a label. Nothing opens
                     from it here — see the note on read-only above. */}
-                <span className="inline-flex items-center px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium">
+                <span className="tf-badge bg-purple-600 text-white">
                   v{version}.0
                 </span>
               </>

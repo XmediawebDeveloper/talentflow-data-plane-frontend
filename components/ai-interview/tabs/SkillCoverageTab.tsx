@@ -116,7 +116,7 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
             </div>
             <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
               <LevelBadge level={entry.state} />
-              {entry.q_num > 0 && <span className="text-2xs font-mono text-gray-400">Q{entry.q_num}</span>}
+              {entry.q_num > 0 && <span className="tf-micro-hint font-mono">Q{entry.q_num}</span>}
               {(() => {
                 const intent = (entry.question_intent || '').toLowerCase();
                 const isDd = intent === 'deep_dive';
@@ -191,7 +191,7 @@ function TruncatedText({ text, limit = 180, className = '' }: { text: string; li
 function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
   const [openRow, setOpenRow] = useState<Set<number>>(new Set());
   if (groups.length === 0) {
-    return <div className="text-xs text-gray-400 italic px-4 py-3">No questions recorded for this skill.</div>;
+    return <div className="tf-hint italic px-4 py-3">No questions recorded for this skill.</div>;
   }
   const toggle = (i: number) => {
     setOpenRow(p => {
@@ -207,12 +207,12 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
           and long responses get more room. */}
       <div className="tf-table-shell">
         <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-          <thead className="bg-white text-gray-600 text-xs">
+          <thead className="bg-white tf-meta">
             <tr>
-              <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
-              <th className="px-3 py-2 text-left font-semibold">Question</th>
-              <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
-              <th className="px-3 py-2 text-left font-semibold w-32 whitespace-nowrap">Coverage</th>
+              <th className="tf-th-cell text-left font-semibold w-12">Q #</th>
+              <th className="tf-th-cell text-left font-semibold">Question</th>
+              <th className="tf-th-cell text-left font-semibold">Candidate Response</th>
+              <th className="tf-th-cell text-left font-semibold w-32">Coverage</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 bg-white">
@@ -225,13 +225,13 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
               const isOpen = openRow.has(i);
               return (
                 <tr key={i} className="align-top">
-                  <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <td className="tf-td align-top whitespace-nowrap">
                     <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                       Q{g.q_num}
                     </span>
                   </td>
-                  <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
-                    <div className="text-xs font-medium text-gray-800 leading-snug break-words">
+                  <td className="tf-td align-top" style={{ maxWidth: '28rem' }}>
+                    <div className="tf-caption leading-snug break-words">
                       <TruncatedText text={g.question || ''} limit={160} />
                     </div>
                     {hasClarif && isOpen && (
@@ -298,14 +298,14 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
-                    <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                  <td className="tf-td align-top" style={{ maxWidth: '40rem' }}>
+                    <div className="tf-meta leading-snug whitespace-pre-wrap break-words">
                       <TruncatedText text={g.answer || ''} limit={220} />
                     </div>
                     {hasClarif && isOpen && (
                       <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
                         {clarifs.map((cl, ci) => (
-                          <div key={`cl-a-${ci}`} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                          <div key={`cl-a-${ci}`} className="tf-micro-hint leading-snug whitespace-pre-wrap break-words">
                             <span className="text-2xs font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
                             <TruncatedText text={cl.answer || ''} limit={180} />
                           </div>
@@ -321,7 +321,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                             const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
                             const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
                             return (
-                              <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                              <div key={fi} className="tf-micro-hint leading-snug whitespace-pre-wrap break-words">
                                 <span className={`text-2xs font-semibold ${tagColor} mr-1`}>{tag}:</span>
                                 <TruncatedText text={fu.answer || ''} limit={180} />
                               </div>
@@ -331,7 +331,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-2 align-top whitespace-nowrap">
+                  <td className="tf-td align-top whitespace-nowrap">
                     <CovBadge level={mainLevel} />
                     {hasFu && isOpen && (
                       <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
@@ -393,7 +393,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
               );
             })()}
           </div>
-          <p className="text-sm text-gray-800 leading-snug line-clamp-2">{group.question || 'Question not recorded'}</p>
+          <p className="tf-body leading-snug line-clamp-2">{group.question || 'Question not recorded'}</p>
         </div>
         <LevelBadge level={coverageLevel} />
       </div>
@@ -405,7 +405,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
           {group.answer && (
             <div className="px-4 py-3 bg-white">
               <p className="text-2xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
-              <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{group.answer}</p>
+              <p className="tf-body-secondary leading-relaxed whitespace-pre-wrap">{group.answer}</p>
             </div>
           )}
           {group.response_type === 'skipped' && (
@@ -435,11 +435,11 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
                       </span>
                       <ScorePill score={fu.score} />
                     </div>
-                    <p className="text-sm text-gray-700 leading-snug">{fu.question || 'Question'}</p>
+                    <p className="tf-body leading-snug">{fu.question || 'Question'}</p>
                   </div>
                   {fu.answer && (
                     <div className="px-4 py-3 bg-white pl-8">
-                      <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
+                      <p className="tf-body-secondary leading-relaxed whitespace-pre-wrap">{fu.answer}</p>
                     </div>
                   )}
                 </div>
@@ -624,7 +624,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
     <div className="space-y-6">
       {/* ── Download bar ──────────────────────────────────────────── */}
       <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-gray-400 mr-auto">
+        <span className="tf-hint mr-auto">
           {coveredPct}% skills at medium+ coverage
         </span>
         {['pdf', 'excel', 'json'].map(fmt => (
@@ -650,12 +650,12 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
           { label: 'Low', count: counts.low, dot: 'bg-orange-400', text: 'text-orange-700' },
           { label: 'Not Covered', count: counts.skipped, dot: 'bg-gray-300', text: 'text-gray-500' },
         ].map(item => (
-          <div key={item.label} className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+          <div key={item.label} className="tf-panel p-3 text-center">
             <div className="flex items-center justify-center gap-2 mb-1">
               <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
               <span className={`text-xl font-bold ${item.text}`}>{item.count}</span>
             </div>
-            <p className="text-2xs text-gray-500">{item.label}</p>
+            <p className="tf-micro-hint">{item.label}</p>
           </div>
         ))}
       </div>
@@ -788,7 +788,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                     {hrGroups.length > 0 ? (
                       <QuestionTable groups={hrGroups} />
                     ) : (
-                      <div className="text-xs text-gray-400 italic px-2 py-4">No HR questions recorded.</div>
+                      <div className="tf-hint italic px-2 py-4">No HR questions recorded.</div>
                     )}
                   </div>
                 ) : (
@@ -815,7 +815,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2">
                                 <span className={`w-2 h-2 rounded-full flex-shrink-0 ${cfg.dot}`} />
-                                <span className="text-sm font-semibold text-gray-900 truncate">{skill}</span>
+                                <span className="tf-row-title truncate">{skill}</span>
                               </div>
                             </div>
                             <LevelBadge level={level} />
@@ -835,7 +835,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                                   <QuestionTable groups={groups} />
                                 </div>
                               ) : (
-                                <div className="px-5 py-4 text-center text-xs text-gray-400 italic">
+                                <div className="px-5 py-4 text-center tf-hint italic">
                                   No questions recorded for this skill
                                 </div>
                               )}

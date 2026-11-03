@@ -87,7 +87,7 @@ export function ScreenRecordingBlockedModal() {
           <h2 id="screen-recording-blocked-title" className="mb-2 text-xl font-bold text-gray-900">
             Screen Recording Not Allowed
           </h2>
-          <p id="screen-recording-blocked-body" className="mb-2 text-sm text-gray-600">
+          <p id="screen-recording-blocked-body" className="mb-2 tf-body-secondary">
             Screen recording is not allowed during the interview.{' '}
             {wasBlocked
               ? 'The recording was blocked and did not start.'
@@ -111,12 +111,12 @@ export function ScreenRecordingBlockedModal() {
             type="button"
             onClick={dismiss}
             autoFocus
-            className="w-full rounded-xl bg-red-600 py-3 font-semibold text-white transition-all hover:bg-red-700"
+            className="tf-btn tf-btn-destructive w-full rounded-xl bg-red-600 py-3 font-semibold hover:bg-red-700 whitespace-normal shadow-none gap-0"
           >
             I Understand
           </button>
 
-          <p className="mt-4 text-2xs text-gray-400">
+          <p className="mt-4 tf-micro-hint">
             {wasBlocked ? 'Blocked' : 'Detected'}: {current.source}
           </p>
         </div>

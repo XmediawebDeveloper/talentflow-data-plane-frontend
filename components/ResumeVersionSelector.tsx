@@ -114,14 +114,14 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="text-base sm:text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+                <h2 className="tf-section-title sm:text-lg tracking-tight">
                   Select Resume Version
                 </h2>
-                <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   {sortedVersions.length} version{sortedVersions.length !== 1 ? 's' : ''}
                 </span>
               </div>
-              <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate">
+              <p className="tf-body-muted mt-0.5 truncate">
                 Which version of {resume.name}&apos;s resume to use
               </p>
             </div>
@@ -155,7 +155,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
 
         {/* One line where a four-line notice used to sit — the default is
             already visible in the list, so it only needs saying once. */}
-        <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 text-xs text-gray-600 dark:text-slate-400">
+        <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta">
           <CheckCircle2 className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
           <span>
             The latest version is selected by default
@@ -200,7 +200,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                       checked={isTicked}
                       onChange={() => toggleCompareCheck(version.id)}
                       onClick={(e) => e.stopPropagation()}
-                      className="h-4 w-4 flex-shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                      className="tf-checkbox focus:ring-brand-blue/40"
                       aria-label={`Select version ${versionNumber} to compare`}
                     />
                   )}
@@ -227,9 +227,9 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                       )}
                     </div>
                     {version.name && (
-                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate mt-0.5">{version.name}</p>
+                      <p className="tf-meta truncate mt-0.5">{version.name}</p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-gray-500 dark:text-slate-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 tf-micro-hint">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 flex-shrink-0" />
                         {formatISTDate(version.uploadDate)}
@@ -272,7 +272,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                         <span className="hidden sm:inline">View Changes</span>
                       </button>
                     ) : (
-                      <span className="hidden sm:inline text-2xs italic text-gray-400 dark:text-slate-500">First version</span>
+                      <span className="hidden sm:inline tf-micro-hint italic">First version</span>
                     )}
                     {/* A radio, not a tick: exactly one version is applied, and
                         the checkbox on the left already means something else. */}
@@ -290,7 +290,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
 
         {/* Footer */}
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
-          <p className="text-sm text-gray-600 dark:text-slate-400">
+          <p className="tf-body-secondary">
             {compareChecked.length > 0
               ? `${compareChecked.length} of 2 selected to compare`
               : `Version ${numberFor(selectedVersionId) ?? '-'} will be used`}
@@ -301,7 +301,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                 type="button"
                 onClick={compareSelected}
                 disabled={compareChecked.length !== 2 || loadingCompare}
-                className="sm:hidden inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
+                className="tf-btn tf-btn-primary sm:hidden flex-1 gap-1.5 px-4 py-2 text-sm bg-brand-blue disabled:bg-slate-200 disabled:text-gray-400 whitespace-normal shadow-none hover:bg-brand-blue"
               >
                 {loadingCompare && <Loader2 className="w-4 h-4 animate-spin" />}
                 Compare
@@ -310,7 +310,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
             <button
               onClick={handleConfirm}
               disabled={!selectedVersionId}
-              className="flex-1 sm:flex-none px-5 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-primary flex-1 sm:flex-none px-5 py-2 text-sm bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 whitespace-normal gap-0"
             >
               Confirm &amp; Continue
             </button>

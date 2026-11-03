@@ -47,7 +47,7 @@ export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; on
   if (isUnlimitedQuota(stats)) {
     return (
       <div className={`${shell} border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40`}>
-        <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{noun} units · Unlimited</span>
+        <span className="tf-caption">{noun} units · Unlimited</span>
       </div>
     );
   }
@@ -77,7 +77,7 @@ export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; on
           {free}% free
         </span>
       </div>
-      <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-4 text-gray-500 dark:text-slate-400 tabular-nums">
+      <p className="flex flex-wrap gap-x-3 gap-y-0.5 tf-micro-hint leading-4 tabular-nums">
         <span>Total {total_quota.toLocaleString()} · Attended (consumed) {consumed.toLocaleString()} · Pending invitations (held) {pending.toLocaleString()}</span>
         {pending > 0 && (
           <span className="inline-flex items-center gap-1">

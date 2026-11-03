@@ -11,7 +11,7 @@ export default function HomePage() {
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-xl sm:text-2xl">💼</span>
-              <span className="text-base sm:text-xl font-bold text-gray-900 truncate">TalentFlow</span>
+              <span className="tf-section-title sm:text-xl truncate">TalentFlow</span>
             </div>
             <div className="flex items-center gap-1.5 sm:gap-3">
               <Link
@@ -63,39 +63,39 @@ export default function HomePage() {
         </div>
 
         {/* Features */}
-        <div className="mt-12 sm:mt-16 md:mt-20 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all">
+        <div className="tf-grid-3 mt-12 sm:mt-16 md:mt-20">
+          <div className="tf-panel shadow-sm p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all">
             <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
               <span className="text-2xl sm:text-3xl">📄</span>
             </div>
-            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="tf-section-title sm:text-lg md:text-xl mb-2">
               Smart Resume Scoring
             </h3>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+            <p className="tf-body-secondary sm:text-base leading-relaxed">
               Automatically score and rank candidates based on job requirements
             </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all">
+          <div className="tf-panel shadow-sm p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all">
             <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
               <span className="text-2xl sm:text-3xl">✨</span>
             </div>
-            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="tf-section-title sm:text-lg md:text-xl mb-2">
               AI Talent Matching
             </h3>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+            <p className="tf-body-secondary sm:text-base leading-relaxed">
               Find the perfect candidates with intelligent AI-powered matching
             </p>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all sm:col-span-2 md:col-span-1">
+          <div className="tf-panel shadow-sm p-5 sm:p-6 md:p-8 text-center hover:shadow-md hover:border-[var(--border-dark)] transition-all sm:col-span-2 md:col-span-1">
             <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
               <span className="text-2xl sm:text-3xl">📋</span>
             </div>
-            <h3 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 mb-2">
+            <h3 className="tf-section-title sm:text-lg md:text-xl mb-2">
               Automated Assessments
             </h3>
-            <p className="text-sm sm:text-base text-gray-600 leading-relaxed">
+            <p className="tf-body-secondary sm:text-base leading-relaxed">
               Create and manage technical assessments effortlessly
             </p>
           </div>
@@ -105,7 +105,7 @@ export default function HomePage() {
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-12 sm:mt-16 md:mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
-          <p className="text-center text-sm text-gray-600">
+          <p className="text-center tf-body-secondary">
             © 2026 TalentFlow. All rights reserved.
           </p>
         </div>

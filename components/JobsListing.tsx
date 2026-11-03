@@ -180,7 +180,7 @@ interface JobsListingProps {
  * abstracted because that is how every other caller carries it.
  */
 const StatVersions = ({ count }: { count: number }) => (
-  <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+  <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
     {count} {count === 1 ? 'version' : 'versions'}
   </span>
 );
@@ -1104,9 +1104,9 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb barRef={breadcrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
@@ -1116,8 +1116,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <Briefcase className="h-4 w-4 text-brand-blue" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">Job Openings</h1>
-                <p className="text-sm text-gray-600">Create and manage your job postings</p>
+                <h1 className="tf-page-title mb-1">Job Openings</h1>
+                <p className="tf-body-secondary">Create and manage your job postings</p>
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
@@ -1138,7 +1138,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       aria-disabled
                       onClick={() => { /* locked: tooltip only */ }}
                       title="You do not have permission to manage job configuration"
-                      className="w-full sm:w-auto opacity-50 cursor-not-allowed"
+                      className="w-full sm:w-auto opacity-50 cursor-not-allowed disabled:opacity-50"
                     >
                       <Settings className="w-4 h-4" />
                       Config
@@ -1196,7 +1196,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
-        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+        <div className="tf-card p-3 sm:p-4 mb-4">
           {/* Row 1: Search + More Filters — the canonical toolbar, now shared
               via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
@@ -1255,7 +1255,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             afterFiltersActions={
             sortedJobs.length > 0 ? (
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-700">Sort by</span>
+                <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. One size at
                     every width (36px, 14px text) — the toolbar type standard. */}
@@ -1305,12 +1305,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <select> option (e.g. a full "City, State, Country" location) would
                   force its cell wider than the screen and overflow. min-w-0 lets the
                   cells (and the w-full selects inside) shrink to the grid track. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {/* Location and Industry now live inline with Search (see the
                     toolbar's leadingActions above). Department was removed. */}
                 {uniqueEmploymentTypes.length > 0 && (
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
+                    <label className="block tf-label mb-1.5">Job Type</label>
                     <SearchableSelect
                       value={employmentTypeFilter === 'all' ? '' : employmentTypeFilter}
                       onChange={(v) => search.setFilter('employmentType', v || 'all')}
@@ -1323,7 +1323,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   </div>
                 )}
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
+                  <label className="block tf-label mb-1.5">Experience</label>
                   <SearchableSelect
                     value={experienceFilter === 'all' ? '' : experienceFilter}
                     onChange={(v) => search.setFilter('experience', v || 'all')}
@@ -1342,7 +1342,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
+                  <label className="block tf-label mb-1.5">Posted From</label>
                   {/* No className override — uses DateField's shared chrome, the
                       same as Search and the SearchableSelect filters. */}
                   <DateField
@@ -1352,7 +1352,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted To</label>
+                  <label className="block tf-label mb-1.5">Posted To</label>
                   <DateField
                     value={datePostedToFilter}
                     onChange={(v) => search.setFilter('datePostedTo', v)}
@@ -1786,19 +1786,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
                         {applicantsCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-info-subtle text-info-strong">
-                            <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Users className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-success-subtle text-success-strong">
-                            <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <ClipboardCheck className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {assessedCount} Assessed
                           </span>
                         )}
                         {interviewedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
-                            <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Video className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {interviewedCount} Interviewed
                           </span>
                         )}
@@ -2302,7 +2302,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             </div>
         ) : (
           // Empty State
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+          <div className="tf-card-soft p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
@@ -2311,10 +2311,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <Briefcase className="w-5 h-5 text-brand-blue" />
                 )}
               </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">
+              <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="text-sm text-gray-600 mb-4 leading-relaxed">
+              <p className="tf-body-secondary mb-4 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -2335,12 +2335,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
         {/* Pagination Controls */}
         {sortedJobs.length > 5 && (
-          <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mt-4">
+          <div className="tf-card p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-600">Show:</span>
+                  <span className="tf-body-secondary">Show:</span>
                   <FilterSelect
                     value={String(itemsPerPage)}
                     onChange={(v) => handleItemsPerPageChange(Number(v))}
@@ -2348,12 +2348,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
                     options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
                   />
-                  <span className="text-sm text-gray-600">per page</span>
+                  <span className="tf-body-secondary">per page</span>
                 </div>
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="text-sm text-gray-600">
+                <span className="tf-body-secondary">
                   Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
@@ -2362,7 +2362,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -2377,7 +2377,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                    className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                   />
                 </div>
 
@@ -2385,14 +2385,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
                 {/* Current / total */}
-                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
                 </span>
 
@@ -2400,7 +2400,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -2465,7 +2465,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Insufficient Units</h3>
+              <h3 className="tf-section-title sm:text-lg tracking-tight">Insufficient Units</h3>
               <button
                 onClick={() => setShowQuotaModal(false)}
                 className="text-gray-400 hover:text-gray-600 p-1"
@@ -2481,7 +2481,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                   <Briefcase className="w-5 h-5 text-destructive" />
                 </div>
-                <p className="text-sm text-gray-600">
+                <p className="tf-body-secondary">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
                 </p>
               </div>

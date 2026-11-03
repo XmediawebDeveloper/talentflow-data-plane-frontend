@@ -126,7 +126,7 @@ export default function ListPagination({
     ? 'p-2'
     : attached
       ? 'rounded-b-xl border-t border-gray-200 bg-gray-50/60 px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-800/40'
-      : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
+      : 'tf-panel p-3 sm:p-4 mt-4 sm:mt-6';
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
@@ -183,7 +183,7 @@ export default function ListPagination({
           <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
           {minimalOnMobile && (
-            <span className="text-xs text-gray-600 sm:hidden">
+            <span className="tf-meta sm:hidden">
               <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
               <span className="font-medium text-gray-900">{totalItems}</span>
             </span>

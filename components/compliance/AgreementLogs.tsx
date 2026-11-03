@@ -163,7 +163,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+    <div className="tf-card-soft">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
@@ -172,8 +172,8 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               <FileText className="w-5 h-5 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Tenant Agreement Logs</h2>
-              <p className="text-sm text-gray-500">
+              <h2 className="tf-section-title">Tenant Agreement Logs</h2>
+              <p className="tf-body-muted">
                 {total} agreement acceptance records for compliance reporting
               </p>
             </div>
@@ -194,7 +194,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
               <Filter className="w-4 h-4 text-gray-400" />
-              <span className="text-sm font-medium text-gray-700">Filters:</span>
+              <span className="tf-label">Filters:</span>
             </div>
 
             <FilterSelect
@@ -233,7 +233,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               placeholder="User email..."
               value={emailFilter}
               onChange={(e) => setEmailFilter(e.target.value)}
-              className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm w-48 focus:ring-2 focus:ring-blue-500"
+              className="tf-input h-auto py-1.5 w-48"
             />
 
             <DateField
@@ -272,28 +272,28 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
         <table className="w-full">
           <thead className="bg-white">
             <tr>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 User
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Agreement Type
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Version
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Status
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Context
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 IP Address
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Date
               </th>
-              <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">
+              <th className="tf-th-cell text-left tf-th">
                 Actions
               </th>
             </tr>
@@ -301,48 +301,48 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
           <tbody className="divide-y divide-gray-200">
             {logs.map((log) => (
               <tr key={log.id} className="hover:bg-gray-50">
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
                     <div>
-                      <p className="text-sm font-medium text-gray-900">
+                      <p className="tf-row-name">
                         {log.user_name || 'Unknown'}
                       </p>
-                      <p className="text-xs text-gray-500">{log.user_email}</p>
+                      <p className="tf-meta">{log.user_email}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   {getAgreementTypeBadge(log.agreement_type)}
                 </td>
-                <td className="px-4 py-3">
-                  <span className="text-sm text-gray-600 font-mono">
+                <td className="tf-td">
+                  <span className="tf-body-secondary font-mono">
                     {log.agreement_version}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   {getStatusBadge(log.agreement_status, log.agreement_action)}
                 </td>
-                <td className="px-4 py-3">
-                  <span className="text-sm text-gray-600">
+                <td className="tf-td">
+                  <span className="tf-body-secondary">
                     {log.context_type || '-'}
                   </span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <div className="flex items-center gap-1.5">
                     <Globe className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">{log.ip_address}</span>
+                    <span className="tf-body-secondary">{log.ip_address}</span>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <div className="flex items-center gap-1.5">
                     <Calendar className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm text-gray-600">
+                    <span className="tf-body-secondary">
                       {formatIST(log.created_at)}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <button
                     onClick={() => {
                       setSelectedLog(log);
@@ -370,12 +370,12 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
+          <p className="tf-body-muted">
             Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
           </p>
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-1.5">
-              <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+              <span className="tf-body-secondary whitespace-nowrap">Go to</span>
               <input
                 type="number"
                 min={1}
@@ -390,18 +390,18 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                 }}
                 onBlur={commitGoToPage}
                 aria-label="Go to page"
-                className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
               />
             </div>
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+              className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
               aria-label="Previous page" title="Previous page"
             >
               <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             </button>
-            <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+            <span className="tf-label px-1 whitespace-nowrap">
               <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
             </span>
             <button
@@ -429,7 +429,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
             />
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col overflow-hidden">
               <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-gray-900">Agreement Log Details</h3>
+                <h3 className="tf-section-title">Agreement Log Details</h3>
                 <button
                   onClick={() => {
                     setSelectedLog(null);
@@ -444,22 +444,22 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
               <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <p className="text-sm text-gray-500">User</p>
+                    <p className="tf-body-muted">User</p>
                     <p className="font-medium">{selectedLog.user_email}</p>
                     {selectedLog.user_name && (
-                      <p className="text-sm text-gray-600">{selectedLog.user_name}</p>
+                      <p className="tf-body-secondary">{selectedLog.user_name}</p>
                     )}
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Agreement Type</p>
+                    <p className="tf-body-muted">Agreement Type</p>
                     <p className="font-medium">{getAgreementTypeName(selectedLog.agreement_type)}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Version</p>
+                    <p className="tf-body-muted">Version</p>
                     <p className="font-medium font-mono">{selectedLog.agreement_version}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Status</p>
+                    <p className="tf-body-muted">Status</p>
                     <p className={`font-medium ${
                       selectedLog.agreement_action === 'ACCEPT' ? 'text-success' :
                       selectedLog.agreement_action === 'DECLINE' ? 'text-destructive' :
@@ -471,34 +471,34 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Context</p>
+                    <p className="tf-body-muted">Context</p>
                     <p className="font-medium">{selectedLog.context_type || '-'}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">IP Address</p>
+                    <p className="tf-body-muted">IP Address</p>
                     <p className="font-medium">{selectedLog.ip_address}</p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Device</p>
+                    <p className="tf-body-muted">Device</p>
                     <p className="font-medium">
                       {selectedLog.device_type || 'Unknown'} / {selectedLog.browser_name || 'Unknown'} {selectedLog.browser_version || ''}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">OS</p>
+                    <p className="tf-body-muted">OS</p>
                     <p className="font-medium">
                       {selectedLog.os_name || 'Unknown'} {selectedLog.os_version || ''}
                     </p>
                   </div>
                   <div>
-                    <p className="text-sm text-gray-500">Date</p>
+                    <p className="tf-body-muted">Date</p>
                     <p className="font-medium">
                       {formatIST(selectedLog.created_at)}
                     </p>
                   </div>
                   {selectedLog.agreement_document_url && (
                     <div>
-                      <p className="text-sm text-gray-500">Document URL</p>
+                      <p className="tf-body-muted">Document URL</p>
                       <a
                         href={selectedLog.agreement_document_url}
                         target="_blank"
@@ -516,7 +516,7 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                   <h4 className="font-medium text-gray-900 mb-3">Audit Trail</h4>
                   <div className="space-y-2">
                     {auditTrail.length === 0 ? (
-                      <p className="text-sm text-gray-500">No audit trail entries</p>
+                      <p className="tf-body-muted">No audit trail entries</p>
                     ) : (
                       auditTrail.map((audit) => (
                         <div

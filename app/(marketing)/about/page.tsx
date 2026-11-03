@@ -15,7 +15,7 @@ export default function AboutPage() {
       <div className="container mx-auto max-w-[1400px] px-4 md:px-8">
         {/* Hero */}
         <div className="text-center mb-8 sm:mb-12 md:mb-16">
-          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
+          <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 tf-body border-0">
             About Us
           </Badge>
           <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-6xl font-bold text-gray-900 dark:text-white mb-3 sm:mb-4 px-2 sm:px-0">
@@ -53,18 +53,18 @@ export default function AboutPage() {
             Our Story
           </h2>
           <div className="prose prose-sm sm:prose-base md:prose-lg dark:prose-invert">
-            <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4 sm:mb-5 md:mb-6">
+            <p className="tf-body-secondary sm:text-base md:text-lg mb-4 sm:mb-5 md:mb-6">
               TalentFlow started when our founders experienced firsthand the
               challenges of modern recruitment. As hiring managers at growing
               tech companies, they spent countless hours sifting through
               resumes, coordinating interviews, and managing candidate pipelines.
             </p>
-            <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400 mb-4 sm:mb-5 md:mb-6">
+            <p className="tf-body-secondary sm:text-base md:text-lg mb-4 sm:mb-5 md:mb-6">
               They knew there had to be a better way. So they built TalentFlow
               &mdash; an AI-powered platform that automates the tedious parts of
               recruiting while keeping the human element at its core.
             </p>
-            <p className="text-sm sm:text-base md:text-lg text-gray-600 dark:text-gray-400">
+            <p className="tf-body-secondary sm:text-base md:text-lg">
               Today, TalentFlow helps thousands of companies around the world
               find and hire the best talent. Our platform processes millions of
               resumes annually and has helped place candidates in roles at

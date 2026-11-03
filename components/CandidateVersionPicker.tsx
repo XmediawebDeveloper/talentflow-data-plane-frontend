@@ -66,16 +66,16 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
     <div className="mb-4 sm:mb-5">
       <div className="flex items-center gap-2 mb-2">
         <Layers className="w-4 h-4 text-brand-blue" />
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Candidate &amp; Resume Version</h3>
+        <h3 className="tf-row-title">Candidate &amp; Resume Version</h3>
       </div>
 
-      <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div className="tf-panel">
         {/* Candidate */}
         <div className="flex items-center gap-3 p-3 border-b border-gray-100 dark:border-slate-800">
           <NameAvatar name={resume.name} fallback={resume.email || resume.candidate_email} size="md" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{name}</p>
-            <p className="text-xs text-gray-500 dark:text-slate-400">
+            <p className="tf-row-name truncate">{name}</p>
+            <p className="tf-meta">
               {versions ? `${total} resume version${total === 1 ? '' : 's'} · latest selected by default` : 'Loading versions…'}
             </p>
           </div>
@@ -83,7 +83,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
 
         {/* Versions */}
         {!versions ? (
-          <div className="flex items-center justify-center gap-2 py-6 text-xs text-gray-500 dark:text-slate-400">
+          <div className="flex items-center justify-center gap-2 py-6 tf-meta">
             <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
             Loading resume versions…
           </div>
@@ -103,7 +103,7 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
                     name={`resume-version-${resume.id}`}
                     checked={checked}
                     onChange={() => onChoose({ id: version.id, number, total })}
-                    className="w-4 h-4 flex-shrink-0 text-brand-blue border-gray-300 dark:border-slate-600 focus:ring-brand-blue/40"
+                    className="tf-radio focus:ring-brand-blue/40"
                   />
                   <span className="inline-flex items-center rounded-md bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15 tabular-nums flex-shrink-0">
                     v{number}
@@ -111,15 +111,15 @@ export default function CandidateVersionPicker({ resume, choice, onChoose }: Can
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 min-w-0">
                       <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                      <span className="text-sm text-gray-800 dark:text-slate-200 truncate">{version.file_name || `Version ${number}`}</span>
+                      <span className="tf-body truncate">{version.file_name || `Version ${number}`}</span>
                       {isLatest && (
-                        <span className="inline-flex items-center rounded-full bg-success-subtle px-2 py-0.5 text-2xs font-semibold text-success ring-1 ring-success-line flex-shrink-0">
+                        <span className="tf-badge bg-success-subtle text-2xs text-success ring-1 ring-success-line flex-shrink-0">
                           Latest
                         </span>
                       )}
                     </div>
                     {(version.created_at || version.uploaded_by_name) && (
-                      <p className="text-2xs text-gray-500 dark:text-slate-500 mt-0.5 truncate">
+                      <p className="tf-micro-hint mt-0.5 truncate">
                         {version.created_at && `Uploaded ${formatISTDate(version.created_at)}`}
                         {version.uploaded_by_name && ` · by ${version.uploaded_by_name}`}
                       </p>

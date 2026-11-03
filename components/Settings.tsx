@@ -422,9 +422,9 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-20" />
@@ -447,7 +447,7 @@ export default function Settings() {
             <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
               {/* Left Sidebar - Tabs */}
               <div className="w-full lg:w-64 flex-shrink-0">
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-2">
+                <div className="tf-card-soft p-2">
                   <nav className="flex lg:flex-col gap-1">
                     {Array.from({ length: 5 }).map((_, i) => (
                       <div key={i} className="w-full flex items-center gap-3 px-4 py-2">
@@ -467,14 +467,14 @@ export default function Settings() {
 
               {/* Right Content Area */}
               <div className="flex-1">
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   {/* Section heading */}
                   <div className="mb-6 space-y-2">
                     <Skeleton className="h-6 w-40" />
                     <Skeleton className="h-4 w-72 max-w-full" />
                   </div>
                   {/* Form fields */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                  <div className="tf-grid-2">
                     {Array.from({ length: 6 }).map((_, i) => (
                       <div key={i} className="space-y-2">
                         <Skeleton className="h-3.5 w-24" />
@@ -496,9 +496,9 @@ export default function Settings() {
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings' }]} />
 
       {/* Header panel — design-flow gray header (icon tile + title + subtitle) */}
@@ -508,8 +508,8 @@ export default function Settings() {
             <SlidersHorizontal className="h-5 w-5 text-brand-blue" />
           </div>
           <div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Profile Settings</h1>
-            <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Manage your personal preferences, notifications, and workflow defaults.</p>
+            <h1 className="tf-page-title">Profile Settings</h1>
+            <p className="mt-0.5 tf-body-secondary">Manage your personal preferences, notifications, and workflow defaults.</p>
           </div>
         </div>
       </div>
@@ -520,7 +520,7 @@ export default function Settings() {
       <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
         {/* Left Sidebar - Tabs */}
         <div className="w-full lg:w-64 flex-shrink-0">
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-2 lg:sticky lg:top-8">
+          <div className="tf-card-soft p-2 lg:sticky lg:top-8">
             <nav className="flex lg:flex-col gap-1 overflow-x-auto lg:overflow-x-visible">
               {shownTabs.map((tab) => {
                 const Icon = tab.icon;
@@ -583,15 +583,15 @@ export default function Settings() {
             {/* Role Info — hidden on request; drop `hidden` and restore `lg:block` to bring it back. */}
             <div className="hidden mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
               <div className="text-2xs font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
-              <div className="text-sm text-gray-900 dark:text-slate-50 font-semibold">{user?.role || 'Recruiter'}</div>
-              <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">Access Level: {(user?.role as string) === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
+              <div className="tf-row-title">{user?.role || 'Recruiter'}</div>
+              <div className="tf-meta mt-1">Access Level: {(user?.role as string) === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>
           </div>
         </div>
 
         {/* Right Content Area */}
         <div className="flex-1">
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
+          <div className="tf-card-soft p-4 sm:p-5">
             {!canEditCurrentTab && activeTab !== 'change-password' && !isAdminTab && (
               <div className="mb-6 rounded-lg ring-1 ring-brand-orange/20 bg-brand-orange/5 px-4 py-3 text-sm text-brand-orange-deep">
                 View-only access. You can review these settings, but you do not have permission to edit them.
@@ -632,8 +632,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">My Profile</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Update your personal information and recruiter profile</p>
+                    <h2 className="tf-section-title mb-1">My Profile</h2>
+                    <p className="tf-body-secondary">Update your personal information and recruiter profile</p>
                   </div>
                 </div>
 
@@ -693,14 +693,14 @@ export default function Settings() {
                             </Button>
                           )}
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">JPG, PNG</p>
+                        <p className="tf-meta mt-2">JPG, PNG</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Form Fields */}
                   <div className="space-y-6">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="tf-grid-2">
                       <div>
                         <Label className="mb-1.5">Full Name <span className="text-red-500">*</span></Label>
                         <Input
@@ -718,12 +718,12 @@ export default function Settings() {
                           value={profileData.email || ''}
                           disabled
                         />
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Email cannot be changed</p>
+                        <p className="tf-meta mt-1">Email cannot be changed</p>
                       </div>
                     </div>
 
                     <div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="tf-grid-2">
                         <div>
                           <Label className="mb-1.5">Phone Number</Label>
                           <CountryPhoneInput
@@ -744,7 +744,7 @@ export default function Settings() {
                               className="pl-10"
                             />
                           </div>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Assigned in User Management</p>
+                          <p className="tf-meta mt-1">Assigned in User Management</p>
                         </div>
                       </div>
                     </div>
@@ -781,8 +781,8 @@ export default function Settings() {
                         className="w-full"
                       />
 
-                      <HoverCardContent align="start" collisionPadding={8} className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-3 text-sm text-gray-600 dark:text-slate-400">
-                          <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">How does the time zone work?</h3>
+                      <HoverCardContent align="start" collisionPadding={8} className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-3 tf-body-secondary">
+                          <h3 className="tf-row-title">How does the time zone work?</h3>
                           <div>
                             <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What this setting is</h4>
                             <p>
@@ -837,8 +837,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Notification Settings</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Choose how you want to be notified about recruitment activities</p>
+                    <h2 className="tf-section-title mb-1">Notification Settings</h2>
+                    <p className="tf-body-secondary">Choose how you want to be notified about recruitment activities</p>
                   </div>
                 </div>
 
@@ -846,7 +846,7 @@ export default function Settings() {
                   <div className="space-y-6">
                     {/* Email Notifications */}
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                      <h3 className="tf-section-title mb-4 flex items-center gap-2">
                         <Mail className="w-5 h-5 text-brand-blue" />
                         Email Notifications
                       </h3>
@@ -858,10 +858,10 @@ export default function Settings() {
                           { key: 'email_candidate_message', label: 'Candidate messages', desc: 'Get emails when candidates send you messages' },
                           { key: 'email_job_expiring', label: 'Job expiring soon', desc: 'Reminders when your job postings are about to expire' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                          <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                             <div className="flex-1">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                              <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                              <div className="tf-row-title mb-1">{item.label}</div>
+                              <div className="tf-meta">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
                               <input
@@ -879,7 +879,7 @@ export default function Settings() {
 
                     {/* Push Notifications */}
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                      <h3 className="tf-section-title mb-4 flex items-center gap-2">
                         <Bell className="w-5 h-5 text-brand-blue" />
                         Push Notifications
                       </h3>
@@ -890,10 +890,10 @@ export default function Settings() {
                           { key: 'push_interview_reminder', label: 'Interview reminders', desc: 'Get reminded 15 minutes before interviews' },
                           { key: 'push_candidate_viewed', label: 'Candidate profile views', desc: 'When candidates view your job postings' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                          <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                             <div className="flex-1">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                              <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                              <div className="tf-row-title mb-1">{item.label}</div>
+                              <div className="tf-meta">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
                               <input
@@ -911,7 +911,7 @@ export default function Settings() {
 
                     {/* Digest Notifications */}
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                      <h3 className="tf-section-title mb-4 flex items-center gap-2">
                         <Calendar className="w-5 h-5 text-brand-blue" />
                         Digest & Reports
                       </h3>
@@ -920,10 +920,10 @@ export default function Settings() {
                           { key: 'weekly_digest', label: 'Weekly activity digest', desc: 'Summary of weekly recruitment activity' },
                           { key: 'monthly_report', label: 'Monthly performance report', desc: 'Detailed monthly analytics and insights' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                          <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                             <div className="flex-1">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                              <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                              <div className="tf-row-title mb-1">{item.label}</div>
+                              <div className="tf-meta">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
                               <input
@@ -948,8 +948,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Job Posting Preferences</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Set default values for new job postings</p>
+                    <h2 className="tf-section-title mb-1">Job Posting Preferences</h2>
+                    <p className="tf-body-secondary">Set default values for new job postings</p>
                   </div>
                 </div>
 
@@ -960,7 +960,7 @@ export default function Settings() {
                         <Target className="w-5 h-5 text-brand-blue mt-0.5" />
                         <div>
                           <div className="text-sm font-semibold text-brand-blue mb-1">Quick Tip</div>
-                          <div className="text-sm text-gray-900 dark:text-slate-50">These settings will be pre-filled when you create a new job posting, saving you time.</div>
+                          <div className="tf-body">These settings will be pre-filled when you create a new job posting, saving you time.</div>
                         </div>
                       </div>
                     </div>
@@ -1006,7 +1006,7 @@ export default function Settings() {
                         min="1"
                         max="90"
                       />
-                      <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">Job postings will automatically expire after this many days</p>
+                      <p className="tf-meta mt-1">Job postings will automatically expire after this many days</p>
                     </div>
 
                     <div className="space-y-3">
@@ -1015,10 +1015,10 @@ export default function Settings() {
                         { key: 'require_assessment', label: 'Require assessment by default', desc: 'Automatically require candidates to complete an assessment' },
                         { key: 'auto_publish', label: 'Auto-publish jobs', desc: 'Automatically publish jobs after creation (skip draft)' },
                       ].map((item) => (
-                        <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                        <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                           <div className="flex-1">
-                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                            <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                            <div className="tf-row-title mb-1">{item.label}</div>
+                            <div className="tf-meta">{item.desc}</div>
                           </div>
                           <label className="relative inline-flex items-center cursor-pointer ml-4">
                             <input
@@ -1042,15 +1042,15 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Workflow Preferences</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Customize how you interact with the platform</p>
+                    <h2 className="tf-section-title mb-1">Workflow Preferences</h2>
+                    <p className="tf-body-secondary">Customize how you interact with the platform</p>
                   </div>
                 </div>
 
                 <fieldset disabled={!canEditSettings} className={!canEditSettings ? 'opacity-60' : ''}>
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Resume Management</h3>
+                      <h3 className="tf-section-title mb-4">Resume Management</h3>
                       <div className="space-y-3">
                         {[
                           { key: 'auto_screen_resumes', label: 'AI-powered auto-screening', desc: 'Automatically screen and rank resumes using AI' },
@@ -1058,10 +1058,10 @@ export default function Settings() {
                           { key: 'bulk_action_confirmation', label: 'Confirm bulk actions', desc: 'Show confirmation dialog for bulk operations' },
                           { key: 'show_advanced_filters', label: 'Show advanced filters by default', desc: 'Display advanced filter options when searching resumes' },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                          <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                             <div className="flex-1">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                              <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                              <div className="tf-row-title mb-1">{item.label}</div>
+                              <div className="tf-meta">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
                               <input
@@ -1078,7 +1078,7 @@ export default function Settings() {
                     </div>
 
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Default Sort Order</h3>
+                      <h3 className="tf-section-title mb-4">Default Sort Order</h3>
                       <Select
                         value={settings.default_sort_order || 'latest'}
                         onValueChange={(value) => setSettings({ ...settings, default_sort_order: value })}
@@ -1104,8 +1104,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Privacy & Security</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Manage your privacy settings and account security</p>
+                    <h2 className="tf-section-title mb-1">Privacy & Security</h2>
+                    <p className="tf-body-secondary">Manage your privacy settings and account security</p>
                   </div>
                 </div>
 
@@ -1113,12 +1113,12 @@ export default function Settings() {
                   <div className="space-y-6">
                     {/* Privacy Settings */}
                     <div>
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                      <h3 className="tf-section-title mb-4 flex items-center gap-2">
                         <Shield className="w-5 h-5 text-brand-blue" />
                         Privacy Settings
                       </h3>
                       <div className="space-y-4">
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                        <div className="p-4 tf-card-muted">
                           <Label className="mb-1.5">Profile Visibility</Label>
                           <Select
                             value={settings.profile_visibility || 'team'}
@@ -1130,7 +1130,7 @@ export default function Settings() {
                               <SelectItem value="private">Private - Only visible to me</SelectItem>
                             </SelectContent>
                           </Select>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-2">Controls who can see your recruiter profile</p>
+                          <p className="tf-meta mt-2">Controls who can see your recruiter profile</p>
                         </div>
 
                         {[
@@ -1138,10 +1138,10 @@ export default function Settings() {
                           { key: 'show_phone', label: 'Show phone number', desc: 'Display your phone number on your profile' },
                           { key: 'show_activity_status', label: 'Show activity status', desc: "Let team members see when you're online" },
                         ].map((item) => (
-                          <div key={item.key} className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                          <div key={item.key} className="flex items-start justify-between p-4 tf-card-muted">
                             <div className="flex-1">
-                              <div className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-1">{item.label}</div>
-                              <div className="text-xs text-gray-600 dark:text-slate-400">{item.desc}</div>
+                              <div className="tf-row-title mb-1">{item.label}</div>
+                              <div className="tf-meta">{item.desc}</div>
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer ml-4">
                               <input
@@ -1159,11 +1159,11 @@ export default function Settings() {
 
                   {/* Security Settings */}
                   <div className="pt-6 border-t border-gray-200 dark:border-slate-700">
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4 flex items-center gap-2">
+                    <h3 className="tf-section-title mb-4 flex items-center gap-2">
                       <Lock className="w-5 h-5 text-destructive" />
                       Security Settings
                     </h3>
-                    <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+                    <p className="tf-body-secondary mb-4">
                       For advanced security settings including password change, 2FA, and session management,
                       please visit the{' '}
                       {visibleAdminSettingsLinks.some(link => link.id === 'security') ? (
@@ -1184,8 +1184,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Appearance Settings</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Customize how TalentFlow looks and feels</p>
+                    <h2 className="tf-section-title mb-1">Appearance Settings</h2>
+                    <p className="tf-body-secondary">Customize how TalentFlow looks and feels</p>
                   </div>
                 </div>
 
@@ -1255,7 +1255,7 @@ export default function Settings() {
                         <SelectItem value="internal-db">Shared Database</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">The page you'll see first when you log in</p>
+                    <p className="tf-meta mt-1">The page you'll see first when you log in</p>
                   </div>
                 </div>
                 </fieldset>
@@ -1267,8 +1267,8 @@ export default function Settings() {
               <div>
                 <div className="flex items-center justify-between mb-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-1">Change Password</h2>
-                    <p className="text-sm text-gray-600 dark:text-slate-400">Update your password. You will be logged out after changing it.</p>
+                    <h2 className="tf-section-title mb-1">Change Password</h2>
+                    <p className="tf-body-secondary">Update your password. You will be logged out after changing it.</p>
                   </div>
                 </div>
 
@@ -1376,7 +1376,7 @@ export default function Settings() {
                 hidden) when the user lacks settings:general. */}
             {activeTab !== 'change-password' && !isAdminTab && (
             <div className="mt-6 sm:mt-8 pt-4 sm:pt-6 border-t border-gray-200 dark:border-slate-700 flex flex-col-reverse sm:flex-row items-center justify-between gap-4">
-              <div className="text-sm text-gray-600 dark:text-slate-400">
+              <div className="tf-body-secondary">
                 {saveSuccess ? (
                   <div className="flex items-center gap-2 text-brand-cyan font-semibold">
                     <Check className="w-4 h-4" />

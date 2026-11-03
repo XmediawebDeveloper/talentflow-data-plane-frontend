@@ -281,7 +281,7 @@ export default function AddSeatsModal({
       title={
         <span className="inline-flex items-center gap-2">
           Add User Seats
-          <span className="inline-flex items-center gap-1 text-2xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
+          <span className="tf-badge text-2xs bg-white/20 text-white ring-1 ring-white/30 backdrop-blur-sm">
             <Sparkles className="w-2.5 h-2.5" />
             INSTANT
           </span>
@@ -290,7 +290,7 @@ export default function AddSeatsModal({
       subtitle="Add seats to your team capacity"
       bodyClassName="bg-white dark:bg-slate-900"
       footerStart={
-        <span className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+        <span className="flex items-center gap-1.5 tf-meta">
           <ShieldCheck className="w-3 h-3 text-brand-cyan" />
           Secured by Razorpay · 256-bit SSL encryption
         </span>
@@ -311,7 +311,7 @@ export default function AddSeatsModal({
             {isLoading ? (
               <>
                 {/* Addon Details Card skeleton */}
-                <div className="relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm">
+                <div className="tf-card-soft relative p-4 sm:p-5 overflow-hidden">
                   <div className="relative flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 sm:gap-4 min-w-0">
                       <Skeleton className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex-shrink-0" />
@@ -340,7 +340,7 @@ export default function AddSeatsModal({
                 </div>
 
                 {/* Order Summary skeleton */}
-                <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                <div className="tf-card-soft overflow-hidden">
                   <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Skeleton className="w-8 h-8 rounded-lg" />
@@ -374,7 +374,7 @@ export default function AddSeatsModal({
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-success-strong text-sm max-sm:text-[13px]">Purchase Successful!</p>
+                      <p className="font-semibold text-success-strong text-sm">Purchase Successful!</p>
                       <p className="text-xs text-success mt-0.5">{purchaseSuccess}</p>
                     </div>
                   </div>
@@ -387,7 +387,7 @@ export default function AddSeatsModal({
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-destructive-strong text-sm max-sm:text-[13px]">Purchase Failed</p>
+                      <p className="font-semibold text-destructive-strong text-sm">Purchase Failed</p>
                       <p className="text-xs text-destructive mt-0.5">{error}</p>
                     </div>
                   </div>
@@ -395,7 +395,7 @@ export default function AddSeatsModal({
 
                 {/* Addon Details Card */}
                 {pricing && (
-                  <div className="relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm hover:shadow-md hover:border-brand-blue/30 transition-all">
+                  <div className="tf-card-soft relative p-4 sm:p-5 overflow-hidden hover:shadow-md hover:border-brand-blue/30 transition-all">
                     <div className="absolute top-0 right-0 w-28 h-28 bg-brand-blue/5 rounded-full -translate-y-10 translate-x-10" />
                     <div className="relative flex items-center justify-between gap-4">
                       <div className="flex items-center gap-3 sm:gap-4 min-w-0">
@@ -403,14 +403,14 @@ export default function AddSeatsModal({
                           <Users className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
                         </div>
                         <div className="min-w-0">
-                          <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-base max-sm:text-sm leading-tight truncate">
+                          <h3 className="tf-section-title max-sm:text-sm leading-tight truncate">
                             {addonDisplayName}
                           </h3>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
+                          <p className="tf-meta mt-0.5">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''} per pack</p>
                         </div>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-xs text-gray-500 dark:text-slate-500">Per pack</p>
+                        <p className="tf-meta">Per pack</p>
                         <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{pricePerPack}</p>
                       </div>
                     </div>
@@ -421,15 +421,15 @@ export default function AddSeatsModal({
                 {pricing && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <label className="text-sm max-sm:text-[13px] font-medium text-gray-800 dark:text-slate-100">Select Quantity</label>
+                      <label className="tf-label">Select Quantity</label>
                       <Badge variant="muted">Max {maxPacks} packs</Badge>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-1 gap-1 shadow-sm focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
+                      <div className="tf-card-soft flex items-center p-1 gap-1 focus-within:ring-2 focus-within:ring-brand-blue/40 focus-within:border-brand-blue transition-all">
                         <button
                           onClick={() => setQuantity(Math.max(1, quantity - 1))}
                           aria-label="Decrease quantity"
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg max-sm:text-base text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="tf-btn tf-btn-primary w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue flex hover:bg-brand-blue-2 active:scale-95 font-bold text-lg max-sm:text-base shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
                         >
                           −
                         </button>
@@ -444,7 +444,7 @@ export default function AddSeatsModal({
                         <button
                           onClick={() => setQuantity(Math.min(maxPacks, quantity + 1))}
                           aria-label="Increase quantity"
-                          className="w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue rounded-lg flex items-center justify-center hover:bg-brand-blue-2 active:scale-95 transition-all font-bold text-lg max-sm:text-base text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                          className="tf-btn tf-btn-primary w-10 h-10 sm:w-11 sm:h-11 bg-brand-blue flex hover:bg-brand-blue-2 active:scale-95 font-bold text-lg max-sm:text-base shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
                         >
                           +
                         </button>
@@ -463,37 +463,37 @@ export default function AddSeatsModal({
 
                 {/* Order Summary */}
                 {pricing && (
-                  <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                  <div className="tf-card-soft overflow-hidden">
                     <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center shadow-sm shadow-brand-cyan/25 ring-1 ring-white/10">
                           <Receipt className="w-4 h-4 text-white" />
                         </div>
-                        <h4 className="font-semibold text-gray-800 dark:text-slate-100 text-base max-sm:text-sm">Order Summary</h4>
+                        <h4 className="tf-section-title max-sm:text-sm">Order Summary</h4>
                       </div>
                       <Badge variant="secondary">{quantity} pack{quantity > 1 ? 's' : ''}</Badge>
                     </div>
                     <div className="p-4 sm:p-5 space-y-3">
-                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
+                      <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 dark:text-slate-500">Pack size</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">{unitsPerPack} seat{unitsPerPack !== 1 ? 's' : ''}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
+                      <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 dark:text-slate-500">Quantity</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">×{quantity}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
+                      <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 dark:text-slate-500">Subtotal</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">₹{subtotal.toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between items-center text-sm max-sm:text-[13px]">
+                      <div className="flex justify-between items-center text-sm">
                         <span className="text-gray-500 dark:text-slate-500">GST (18%)</span>
                         <span className="font-medium text-gray-800 dark:text-slate-100">₹{gst.toFixed(2)}</span>
                       </div>
                       <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
                         <div>
-                          <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Total Amount</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500">Incl. all taxes</p>
+                          <p className="tf-row-title">Total Amount</p>
+                          <p className="tf-meta">Incl. all taxes</p>
                         </div>
                         <div className="text-right">
                           <p className="text-xl max-sm:text-lg font-bold text-brand-blue">₹{total.toFixed(2)}</p>

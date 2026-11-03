@@ -243,8 +243,8 @@ export default function ScoredResumesExportModal({
               <FileDown className="w-5 h-5 text-blue-600" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-gray-900">Export Scored Resumes</h3>
-              <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+              <h3 className="tf-section-title sm:text-lg">Export Scored Resumes</h3>
+              <p className="tf-body-muted mt-1 flex items-center gap-1.5">
                 {rows.length} {rows.length === 1 ? 'record' : 'records'}
                 <span className="w-1 h-1 rounded-full bg-blue-500" />
                 {exportColumns.length} columns
@@ -270,7 +270,7 @@ export default function ScoredResumesExportModal({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-gray-900">CSV Format</div>
-                <div className="text-sm text-gray-500">Compatible with Excel, Google Sheets, and most spreadsheet apps.</div>
+                <div className="tf-body-muted">Compatible with Excel, Google Sheets, and most spreadsheet apps.</div>
               </div>
               <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                 exportFormat === 'csv' ? 'border-blue-600' : 'border-gray-300'
@@ -292,7 +292,7 @@ export default function ScoredResumesExportModal({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-bold text-gray-900">Excel Format (.xlsx)</div>
-                <div className="text-sm text-gray-500">Native Excel format with formatting and styling.</div>
+                <div className="tf-body-muted">Native Excel format with formatting and styling.</div>
               </div>
               <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                 exportFormat === 'xls' ? 'border-blue-600' : 'border-gray-300'
@@ -317,14 +317,14 @@ export default function ScoredResumesExportModal({
                 {allExportColumnsOn ? 'Clear all' : 'Select all'}
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+            <div className="tf-grid-2">
               {exportColumnOptions.map(col => (
-                <label key={col.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer min-w-0">
+                <label key={col.id} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                   <input
                     type="checkbox"
                     checked={col.enabled}
                     onChange={() => toggleExportColumn(col.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    className="tf-checkbox focus:ring-blue-500"
                   />
                   <span className="truncate">{col.label}</span>
                 </label>

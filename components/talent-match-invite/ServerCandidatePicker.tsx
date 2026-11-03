@@ -445,10 +445,10 @@ export default function ServerCandidatePicker({
               aria-disabled={locked}
               onClick={() => switchTab(s)}
               title={locked ? `You do not have permission to access ${TAB_LABEL[s]}` : undefined}
-              className={`-mb-px shrink-0 whitespace-nowrap px-3 py-2 text-xs font-medium border-b-2 transition-colors ${source === s
-                ? 'border-brand-blue text-brand-blue'
-                : locked ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed'
-                : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-100'}`}
+              className={`tf-tab-line -mb-px shrink-0 ${source === s
+                ? 'tf-tab-line-active'
+                : locked ? 'tf-tab-line-disabled'
+                : ''}`}
             >
               {locked && <Lock className="inline w-3 h-3 mr-1 -mt-px" aria-hidden="true" />}
               {TAB_LABEL[s]}
@@ -534,7 +534,7 @@ export default function ServerCandidatePicker({
           ]}
           className={SELECT_CONTROL}
         />
-        <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
+        <label className="inline-flex items-center gap-1.5 tf-meta cursor-pointer">
           <input type="checkbox" checked={!!filters.exclude_invited} onChange={(e) => setFilter('exclude_invited', e.target.checked || undefined)} disabled={!versionId} className="m-0 rounded border-gray-300" />
           Hide already invited
         </label>
@@ -577,8 +577,8 @@ export default function ServerCandidatePicker({
               );
             })}
           </ul>
-          {folders === null && <p className="px-3 py-1.5 text-xs text-gray-400 inline-flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Loading folders…</p>}
-          <p className="shrink-0 px-3 pt-1.5 border-t border-gray-200/70 dark:border-slate-700/60 text-2xs text-gray-500 dark:text-slate-400">Tick a folder to select everyone in it.</p>
+          {folders === null && <p className="px-3 py-1.5 tf-hint inline-flex items-center gap-1.5"><Loader2 className="w-3 h-3 animate-spin" />Loading folders…</p>}
+          <p className="shrink-0 px-3 pt-1.5 border-t border-gray-200/70 dark:border-slate-700/60 tf-micro-hint">Tick a folder to select everyone in it.</p>
         </nav>
       )}
       <div className="min-w-0 space-y-2">
@@ -590,7 +590,7 @@ export default function ServerCandidatePicker({
           <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
         </div>
       ) : rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center text-sm text-gray-600 dark:text-slate-400">
+        <p className="rounded-lg border border-dashed border-gray-200 dark:border-slate-700 px-3 py-4 text-center tf-body-secondary">
           {counts && counts[source] === 0
             ? (source === 'talent-match' ? 'No AI Talent Match candidates for this job yet.'
               : source === 'score-resume' ? 'No scored resumes for this job outside AI Talent Match.'
@@ -631,10 +631,10 @@ export default function ServerCandidatePicker({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={r.name}>{shownName}</span>
+                      <span className="tf-row-name truncate" title={r.name}>{shownName}</span>
                       {isDbTab(source) && versionChip(r)}
                     </span>
-                    <span className="flex items-center gap-1 min-w-0 text-xs text-gray-500 dark:text-slate-400">
+                    <span className="flex items-center gap-1 min-w-0 tf-meta">
                       {r.title && (
                         <>
                           <Briefcase className="w-3 h-3 shrink-0" aria-hidden="true" />
@@ -648,7 +648,7 @@ export default function ServerCandidatePicker({
                     </span>
                   </span>
                   {r.already_invited && (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Invited</span>
                   )}
                   {on && picked && picked.source !== source && (
                     <span title="Ticked once; it counts for every tab it appears in" className="max-md:hidden shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border border-brand-blue/20 bg-brand-blue/5 text-brand-blue">
@@ -660,7 +660,7 @@ export default function ServerCandidatePicker({
                       {r.score.percent}%<span className="hidden sm:inline font-medium">&nbsp;· {SERVER_MATCH_LABEL[r.score.match_status]}</span>
                     </span>
                   ) : (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Not scored</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Not scored</span>
                   )}
                   {(r.rating || !r.score) && r.source === 'talent-match' && (
                     <span title="Match rating" className={`shrink-0 inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-md text-xs font-bold border ${ratingTone(r.rating || 0)}`}>
@@ -681,14 +681,14 @@ export default function ServerCandidatePicker({
             );
           })}
           {hasMore && (
-            <li ref={sentinelRef} className="flex items-center justify-center gap-2 px-3 py-2.5 text-xs text-gray-500 dark:text-slate-400">
+            <li ref={sentinelRef} className="flex items-center justify-center gap-2 px-3 py-2.5 tf-meta">
               <Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading more…
             </li>
           )}
         </ul>
       )}
       {isDbTab(source) && rows.length > 0 && (
-        <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
+        <p className="flex items-start gap-1.5 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/70 dark:bg-amber-500/10 px-3 py-2 tf-meta">
           <Lightbulb className="w-3.5 h-3.5 mt-px shrink-0 text-amber-500" aria-hidden="true" />
           <span>
             <b className="font-semibold">Tip:</b> For multi-version resumes, the latest version is selected by default. Click the{' '}
@@ -700,7 +700,7 @@ export default function ServerCandidatePicker({
       </div>
 
       {filterModeHere && (
-        <p role="note" className="text-xs text-gray-600 dark:text-slate-400">
+        <p role="note" className="tf-meta">
           Every candidate matching {describeFilters(selection.filters) || 'this tab'} is selected ({fmt(selectionCount(selection))}). Untick a row to leave them out; the list is re-checked when you send.
         </p>
       )}

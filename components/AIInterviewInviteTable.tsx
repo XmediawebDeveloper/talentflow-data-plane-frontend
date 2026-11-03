@@ -17,6 +17,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import NameAvatar from '@/components/ui/name-avatar';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { Button } from '@/components/ui/button';
 import {
@@ -231,7 +232,7 @@ export const timelineEvents = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT)
 export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; duration?: string | null; limit?: number }) => {
   const events = timelineEvents(inv, limit);
   if (events.length === 0 && !duration) {
-    return <span className="text-xs text-gray-400 dark:text-slate-500">—</span>;
+    return <span className="tf-hint">—</span>;
   }
   return (
     <div className="space-y-1 text-xs">
@@ -849,7 +850,7 @@ export default function AIInterviewInviteTable({
           {hasActiveFilters ? 'No candidates match the current filters.' : 'No candidates invited yet.'}
         </p>
         {!hasActiveFilters && emptyHint && (
-          <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
+          <p className="tf-hint mt-1">{emptyHint}</p>
         )}
       </div>
     );
@@ -862,7 +863,7 @@ export default function AIInterviewInviteTable({
          The Candidate Results tab's card, filled with this row's fields.
          A div rather than a <button>: the card carries its own action
          buttons, which can't nest inside one. */
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4 content-start flex-1 min-h-0 overflow-y-auto">
+      <div className="tf-grid-4 p-4 content-start flex-1 min-h-0 overflow-y-auto">
         {invitations.map((inv: any) => {
           const score = displayInviteScore(inv);
           const events = timelineEvents(inv);
@@ -898,7 +899,7 @@ export default function AIInterviewInviteTable({
                   <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={inv.candidate_name || 'Unknown'}>
                     {inv.candidate_name || 'Unknown'}
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 truncate" title={inv.candidate_email}>
+                  <p className="tf-meta truncate" title={inv.candidate_email}>
                     {inv.candidate_email || '—'}
                   </p>
                 </div>
@@ -912,13 +913,13 @@ export default function AIInterviewInviteTable({
               {showJobColumn && (inv._jd_short_id || inv._config_title) && (
                 <div className="flex items-center gap-1.5 min-w-0">
                   {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
-                  <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={inv._config_title || ''}>
+                  <p className="tf-meta truncate" title={inv._config_title || ''}>
                     {inv._config_title}
                   </p>
                 </div>
               )}
               {(cardJobVersion != null || cardInterviewVersion != null) && (
-                <div className="flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500">
+                <div className="flex items-center gap-1.5 tf-micro-hint">
                   {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} /></>}
                   {cardInterviewVersion != null && <><span className="ml-1">Interview</span><VersionPill kind="interview" version={cardInterviewVersion} /></>}
                 </div>
@@ -927,13 +928,13 @@ export default function AIInterviewInviteTable({
               <div className="flex items-center gap-1.5 flex-wrap">
                 <AIInviteStatusBadge inv={inv} />
                 {isInviteExpired(inv) && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium whitespace-nowrap">
+                  <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                     <Clock className="w-3 h-3" /> Expired
                   </span>
                 )}
               </div>
 
-              <div className="flex items-center justify-between gap-2 text-xs text-gray-600 dark:text-slate-400">
+              <div className="flex items-center justify-between gap-2 tf-meta">
                 <span className="inline-flex items-center gap-1.5">
                   {score != null ? (
                     <>
@@ -947,7 +948,7 @@ export default function AIInterviewInviteTable({
                 {inviteSourceLabel(inv) && <InviteSourceValue inv={inv} iconClassName="w-3 h-3" />}
               </div>
 
-              <div className="pt-2 border-t border-gray-100 dark:border-slate-800 text-2xs text-gray-500 dark:text-slate-500 space-y-0.5">
+              <div className="pt-2 border-t border-gray-100 dark:border-slate-800 tf-micro-hint space-y-0.5">
                 {events.length > 0 ? events.map(({ label, at, Icon, tone }, i) => (
                   <div key={`${label}-${i}`} className="flex items-center gap-1.5 min-w-0">
                     <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
@@ -993,129 +994,129 @@ export default function AIInterviewInviteTable({
       ) : (
       <>
       {/* ── Mobile cards ──────────────────────────────────────────────── */}
-      <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
+      <div className="tf-record-list lg:hidden flex-1 min-h-0 overflow-y-auto">
         {invitations.map((inv: any) => {
           const score = displayInviteScore(inv);
           const actions = rowActions(inv);
           const openable = canOpenDetails(inv);
+          const cardJobVersion = jobVersion ?? (showRowVersions ? inv._jd_version : undefined);
+          const cardInterviewVersion = interviewVersion ?? (showRowVersions ? inv._interview_version : undefined);
+          const showJobLine = showJobColumn && inv._config_title;
           return (
-            <div
+            <MobileRecordCard
               key={inv.id}
               onClick={openable ? () => onViewDetails?.(inv) : undefined}
               onKeyDown={openable ? onRowKeyDown(inv) : undefined}
               role={openable ? 'button' : undefined}
               tabIndex={openable ? 0 : undefined}
-              title={openable ? 'View candidate details' : undefined}
-              className={`p-2.5 border border-gray-100 dark:border-slate-700/60 rounded-xl bg-white dark:bg-slate-900${
-                openable
-                  ? ' cursor-pointer transition-colors hover:border-brand-blue/30 hover:bg-brand-blue/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40'
-                  : ''
-              }`}
+              aria-description={openable ? 'View candidate details' : undefined}
+              tooltip={openable ? 'View candidate details' : undefined}
+              className={openable ? 'focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : undefined}
+              select={selectable ? <SelectBox inv={inv} /> : undefined}
+              idBadge={
+                (inv.candidate_cid || (showJobLine && inv._jd_short_id)) ? (
+                  <>
+                    {inv.candidate_cid && (
+                      <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                        {inv.candidate_cid}
+                      </span>
+                    )}
+                    {showJobLine && inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
+                  </>
+                ) : undefined
+              }
+              title={
+                <span className="flex min-w-0 items-center gap-2">
+                  <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="sm" />
+                  <span className="truncate">{inv.candidate_name || 'Unknown'}</span>
+                </span>
+              }
+              badges={
+                <>
+                  {inv.candidate_cid && cardJobVersion != null && <VersionPill kind="job" version={cardJobVersion} />}
+                  {inv.candidate_cid && cardInterviewVersion != null && <VersionPill kind="interview" version={cardInterviewVersion} />}
+                  <AIInviteStatusBadge inv={inv} />
+                  {isInviteExpired(inv) && (
+                    <span className="tf-badge text-2xs ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 flex-shrink-0">
+                      <Clock className="w-2.5 h-2.5" /> Expired
+                    </span>
+                  )}
+                </>
+              }
+              meta={[
+                { icon: <Mail />, label: inv.candidate_email ? <span className="break-all">{inv.candidate_email}</span> : null },
+                { icon: <FileText />, label: showJobLine ? inv._config_title : null },
+              ]}
+              fields={[
+                {
+                  label: 'Invite Source',
+                  value: inviteSourceLabel(inv)
+                    ? <span className="inline-flex items-center gap-1 font-medium"><InviteSourceValue inv={inv} iconClassName="w-3 h-3" /></span>
+                    : null,
+                },
+              ]}
+              footer={
+                <>
+                  {/* Score only — the per-round Tech and Coding figures were
+                      dropped from this tracker; the interview result view is
+                      where a round-by-round breakdown belongs. */}
+                  {score != null ? (
+                    <>
+                      <MobileStatChip tone={score >= 60 ? 'success' : 'danger'}>Score: {score}%</MobileStatChip>
+                      <ResultBadge result={inviteResult(inv, score)} />
+                    </>
+                  ) : (
+                    <MobileStatChip tone="neutral">Score: —</MobileStatChip>
+                  )}
+                </>
+              }
+              actions={
+                actions.length > 0 ? (
+                  <>
+                    {/* Inline buttons rather than a kebab: the card has the room, and
+                        a menu on a card is one extra tap for no gain. */}
+                    {actions.map(({ key, label, Icon, run, disabled, title, destructive, busy }) => (
+                      <button
+                        key={key}
+                        onClick={(e) => { e.stopPropagation(); run(); }}
+                        disabled={disabled}
+                        title={title || label}
+                        className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                          destructive
+                            ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
+                            : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        }`}
+                      >
+                        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
+                        {label}
+                      </button>
+                    ))}
+                  </>
+                ) : undefined
+              }
             >
-              <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                <SelectBox inv={inv} />
-                <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">
-                    {inv.candidate_name || 'Unknown'}
-                  </p>
-                  <p className="text-2xs text-gray-500 dark:text-slate-500 truncate break-all">
-                    {inv.candidate_email}
-                  </p>
-                  {inv.candidate_cid && (
-                    <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
-                      {inv.candidate_cid}
-                      {(jobVersion ?? (showRowVersions ? inv._jd_version : undefined)) != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Job V{jobVersion ?? inv._jd_version}</span>}
-                      {(interviewVersion ?? (showRowVersions ? inv._interview_version : undefined)) != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Interview V{interviewVersion ?? inv._interview_version}</span>}
-                    </p>
-                  )}
-                  {showJobColumn && inv._config_title && (
-                    <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">
-                      {inv._jd_short_id && <span className="font-medium text-gray-600 dark:text-slate-400">{inv._jd_short_id} · </span>}
-                      {inv._config_title}
-                    </p>
-                  )}
+              {/* Timeline — two columns from sm so entries line up instead of
+                  staggering by label width; one column on a phone. */}
+              {timelineEvents(inv).length > 0 && (
+                <div className="tf-grid-2 mt-2 text-xs text-gray-500 dark:text-slate-400">
+                  {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                    <div key={`${label}-${i}`} className="flex items-center gap-1.5 min-w-0">
+                      <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                      <span className="truncate">{label}: {formatIST(at)}</span>
+                    </div>
+                  ))}
                 </div>
-                <AIInviteStatusBadge inv={inv} />
-              </div>
-
-              {/* Two-column grid rather than a free wrap, so entries line up
-                  instead of staggering by label width. One column below sm:
-                  two columns cut every date short on a phone ("01:3…"). */}
-              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
-                {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
-                  <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
-                    <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
-                    <span className="truncate">{label}: {formatIST(at)}</span>
-                  </div>
-                ))}
-              </div>
+              )}
               {hasMoreTimelineHistory(inv) && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                  className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline mb-1.5"
+                  className="mt-1.5 flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline"
                 >
-                  <History className="w-2.5 h-2.5" /> View full history
+                  <History className="w-3 h-3" /> View full history
                 </button>
               )}
-
-              <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
-                <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
-                  {/* Score only — the per-round Tech and Coding figures were
-                      dropped from this tracker; the interview result view is
-                      where a round-by-round breakdown belongs. */}
-                  {([
-                    { label: 'Score', value: score },
-                  ] as const).map(({ label, value }) => (
-                    <span key={label} className="text-2xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                      {label}:{' '}
-                      {value != null ? (
-                        <>
-                          <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>{' '}
-                          <ResultBadge result={inviteResult(inv, value)} />
-                        </>
-                      ) : (
-                        <span className="text-gray-400 dark:text-slate-500">—</span>
-                      )}
-                    </span>
-                  ))}
-                  {inviteSourceLabel(inv) && (
-                    <span className="inline-flex items-center gap-1 text-2xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                      Invite Source:{' '}
-                      <span className="font-medium">
-                        <InviteSourceValue inv={inv} iconClassName="w-2.5 h-2.5" />
-                      </span>
-                    </span>
-                  )}
-                  {isInviteExpired(inv) && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
-                      <Clock className="w-2.5 h-2.5" /> Expired
-                    </span>
-                  )}
-                </div>
-                {/* Inline buttons rather than a kebab: the card has the room, and
-                    a menu on a card is one extra tap for no gain. */}
-                <div className="flex items-center gap-1 flex-wrap justify-end">
-                  {actions.map(({ key, label, Icon, run, disabled, title, destructive, busy }) => (
-                    <button
-                      key={key}
-                      onClick={(e) => { e.stopPropagation(); run(); }}
-                      disabled={disabled}
-                      title={title || label}
-                      className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-                        destructive
-                          ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
-                          : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                      }`}
-                    >
-                      {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : <Icon className="w-3 h-3" />}
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
+            </MobileRecordCard>
           );
         })}
       </div>
@@ -1126,7 +1127,7 @@ export default function AIInterviewInviteTable({
           content. tf-table-shell--fill + flex-1/min-h-0 makes this shell the one
           vertical scroller, which is what keeps the sticky header and the pinned
           Actions column in place. */}
-      <div className="hidden sm:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+      <div className="hidden lg:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
         {/* Auto layout, not table-fixed: columns size to their own content and the
             shell scrolls sideways, rather than every column being scaled down
             until the sticky header stops lining up with the rows. */}
@@ -1134,7 +1135,7 @@ export default function AIInterviewInviteTable({
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && (
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Select">
+                <th className="tf-th-cell w-8 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select">
                   {onToggleSelectAll && (
                     <button
                       type="button"
@@ -1154,7 +1155,7 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
@@ -1163,24 +1164,24 @@ export default function AIInterviewInviteTable({
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
-              {inRow('status') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
-              {inRow('score') && <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
-              {inRow('inviteSource') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
-              {inRow('cid') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
+              {inRow('timeline') && <th className="tf-th-cell text-left tf-th hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
+              {inRow('status') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
+              {inRow('score') && <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
+              {inRow('inviteSource') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
+              {inRow('cid') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
               {showJobColumn && (
                 <>
-                  {inRow('jobId') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
-                  {inRow('jobTitle') && <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
+                  {inRow('jobId') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
+                  {inRow('jobTitle') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
                 </>
               )}
               {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
               )}
               {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
               )}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+              <th className="tf-th-cell text-left tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1201,10 +1202,10 @@ export default function AIInterviewInviteTable({
                       {/* Capped rather than free: with auto layout a single long
                           email would otherwise set the column width. */}
                       <div className="min-w-0 max-w-[220px]">
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name || 'Unknown'}>
+                        <p className="tf-row-name truncate" title={inv.candidate_name || 'Unknown'}>
                           {inv.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>
+                        <p className="tf-meta truncate" title={inv.candidate_email}>
                           {inv.candidate_email}
                         </p>
                       </div>
@@ -1216,7 +1217,7 @@ export default function AIInterviewInviteTable({
                   // the first line sits level with the other columns.
                   id: 'timeline', label: 'Timeline', className: 'py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell',
                   content: (
-                    <div className="text-xs text-gray-500 dark:text-slate-500">
+                    <div className="tf-meta">
                       {events.length > 0 ? (
                         <div className="space-y-1">
                           {events.map(({ label, at, Icon, tone }, i) => (
@@ -1247,7 +1248,7 @@ export default function AIInterviewInviteTable({
                     <div className="flex items-center gap-1.5 flex-nowrap">
                       <AIInviteStatusBadge inv={inv} />
                       {isInviteExpired(inv) && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0">
+                        <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
                           <Clock className="w-3 h-3" /> Expired
                         </span>
                       )}
@@ -1278,7 +1279,7 @@ export default function AIInterviewInviteTable({
                   {
                     id: 'jobTitle' as const, label: 'Job Title', className: 'py-3 px-4 align-middle max-w-[200px]',
                     content: (
-                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                      <p className="tf-body truncate" title={inv._config_title || ''}>
                         {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
                       </p>
                     ),
@@ -1321,7 +1322,7 @@ export default function AIInterviewInviteTable({
                   } ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''}`}
                 >
                   {selectable && (
-                    <td className="py-3 pl-4 pr-0 align-middle tf-sticky-col-left">
+                    <td className="tf-td pl-4 pr-0 tf-sticky-col-left">
                       <SelectBox inv={inv} />
                     </td>
                   )}
@@ -1330,7 +1331,7 @@ export default function AIInterviewInviteTable({
                     <td key={c.id} className={c.className}>{c.content}</td>
                   ))}
 
-                  <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                  <td className="tf-td tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                     {/* Radix's DropdownMenu rather than a hand-rolled absolute menu:
                         this table sits inside tf-table-shell (overflow: auto), which
                         would clip an absolutely positioned menu. Radix portals it out. */}
@@ -1344,13 +1345,13 @@ export default function AIInterviewInviteTable({
                         aria-expanded={isExpanded}
                         aria-label={isExpanded ? 'Hide details' : 'Show details'}
                         title={isExpanded ? 'Hide details' : 'Show details'}
-                        className="h-8 w-8 p-0"
+                        className="h-8 w-8"
                       >
                         <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                       </Button>
                     )}
                     {actions.length === 0 ? (
-                      <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                      <span className="tf-hint">—</span>
                     ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -1389,14 +1390,14 @@ export default function AIInterviewInviteTable({
                     expanded full-width row. */}
                 {isExpanded && (
                   <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                    <td colSpan={(selectable ? 1 : 0) + rowColumns.length + 1} className="px-4 lg:px-6 pt-3 pb-4">
-                      <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                    <td colSpan={(selectable ? 1 : 0) + rowColumns.length + 1} className="tf-td pt-3 pb-4">
+                      <dl className="tf-grid-stats">
                         {detailColumns.map((c) => (
                           <div key={c.id} className="min-w-0">
                             <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
                               {c.label}
                             </dt>
-                            <dd className="text-sm min-w-0 text-gray-600 dark:text-slate-400">{c.content}</dd>
+                            <dd className="tf-body-secondary min-w-0">{c.content}</dd>
                           </div>
                         ))}
                       </dl>
@@ -1441,14 +1442,14 @@ export default function AIInterviewInviteTable({
                       <entry.Icon className="w-3.5 h-3.5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
-                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                      <p className="tf-row-name">{entry.label}</p>
+                      <p className="tf-meta">{formatIST(entry.at)}</p>
                     </div>
                   </li>
                 ))}
               </ol>
             ) : (
-              <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+              <p className="tf-body-muted py-6 text-center">No history recorded yet.</p>
             )}
           </div>
         </DialogContent>

@@ -84,7 +84,7 @@ export function FilterDateRange({
           onChange={onFromChange}
           className="sm:flex-1 sm:min-w-0"
         />
-        <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+        <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
         <DateField
           aria-label={`${label} to`}
           value={to}

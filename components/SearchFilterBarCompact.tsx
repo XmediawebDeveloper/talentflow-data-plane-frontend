@@ -318,11 +318,11 @@ export default function SearchFilterBarCompact({
                   <div>
                     {/* Experience */}
                     <div>
-                      <label className="flex items-center gap-2 text-sm font-semibold text-gray-900 mb-2 sm:mb-3">
+                      <label className="flex items-center gap-2 tf-row-title mb-2 sm:mb-3">
                         <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue" />
                         Experience
                       </label>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="tf-grid-stats">
                         {[
                           { label: '0-2y', min: 0, max: 2 },
                           { label: '2-5y', min: 2, max: 5 },
@@ -355,30 +355,30 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('location-education')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-row-title">
                       <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Location & Education</span>
                       {(tempFilters.location || (tempFilters.education && tempFilters.education !== 'Any')) && (
-                        <span className="text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20">Active</span>
+                        <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('location-education') ? 'rotate-180' : ''}`} />
                   </button>
                   {expandedSections.includes('location-education') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                      <div className="tf-grid-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Location</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Location</label>
                           <input
                             type="text"
                             placeholder="e.g., San Francisco"
                             value={tempFilters.location || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value || null })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Education</label>
                           <FilterSelect
                             value={mapBackendCodeToDisplay(tempFilters.education)}
                             onChange={(v) => {
@@ -401,30 +401,30 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('company-notice')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-row-title">
                       <Building2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Company & Notice Period</span>
                       {(tempFilters.currentCompany || (tempFilters.noticePeriod && tempFilters.noticePeriod !== 'Any')) && (
-                        <span className="text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20">Active</span>
+                        <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('company-notice') ? 'rotate-180' : ''}`} />
                   </button>
                   {expandedSections.includes('company-notice') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                      <div className="tf-grid-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Current Company</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Current Company</label>
                           <input
                             type="text"
                             placeholder="e.g., Google"
                             value={tempFilters.currentCompany || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value || null })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Notice Period</label>
                           <FilterSelect
                             value={tempFilters.noticePeriod || 'Any'}
                             onChange={(v) => setTempFilters({ ...tempFilters, noticePeriod: v === 'Any' ? null : v })}
@@ -444,19 +444,19 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('dates')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-row-title">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Date Filters</span>
                       {(tempFilters.uploadDateRange?.start || tempFilters.uploadDateRange?.end) && (
-                        <span className="text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20">Active</span>
+                        <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('dates') ? 'rotate-180' : ''}`} />
                   </button>
                   {expandedSections.includes('dates') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                      <label className="block tf-meta mb-1 sm:mb-1.5">Upload Date Range</label>
+                      <div className="tf-grid-2">
                         <DateField
                           aria-label="Upload date from"
                           value={tempFilters.uploadDateRange?.start || ''}
@@ -484,30 +484,30 @@ export default function SearchFilterBarCompact({
                     onClick={() => toggleSection('upload-source')}
                     className="w-full px-3 sm:px-5 py-2.5 sm:py-3 flex items-center justify-between hover:bg-gray-50 transition-colors"
                   >
-                    <div className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                    <div className="flex items-center gap-2 tf-row-title">
                       <Upload className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                       <span>Uploaded By & Source</span>
                       {(tempFilters.uploadedBy || tempFilters.sourceType) && (
-                        <span className="text-xs bg-brand-blue/10 text-brand-blue px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20">Active</span>
+                        <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">Active</span>
                       )}
                     </div>
                     <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${expandedSections.includes('upload-source') ? 'rotate-180' : ''}`} />
                   </button>
                   {expandedSections.includes('upload-source') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                      <div className="tf-grid-2">
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Uploaded By</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Uploaded By</label>
                           <input
                             type="text"
                             placeholder="Enter name..."
                             value={tempFilters.uploadedBy || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, uploadedBy: e.target.value || null })}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
+                            className="w-full px-3 h-9 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-gray-50 text-black placeholder:text-gray-400"
                           />
                         </div>
                         <div>
-                          <label className="block text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
+                          <label className="block tf-meta mb-1 sm:mb-1.5">Source Type</label>
                           <FilterSelect
                             value={tempFilters.sourceType || ''}
                             onChange={(v) => setTempFilters({ ...tempFilters, sourceType: v || null })}
@@ -538,7 +538,7 @@ export default function SearchFilterBarCompact({
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
                   <button
                     onClick={handleApplyFilters}
-                    className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                    className="tf-btn tf-btn-primary flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
                   >
                     Apply Filters
                   </button>
@@ -556,7 +556,7 @@ export default function SearchFilterBarCompact({
             title={inline ? 'Sort by' : 'Sort'}
             className={`flex items-center gap-1.5 ${inline ? 'h-10' : 'h-9'} px-3 bg-slate-100 border border-gray-200 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors`}
           >
-            <span className="hidden sm:inline text-sm text-gray-700 font-medium">{inline ? 'Sort by' : 'Sort'}</span>
+            <span className="hidden sm:inline tf-label">{inline ? 'Sort by' : 'Sort'}</span>
             <ChevronDown className="w-4 h-4 text-gray-500" />
           </button>
 
@@ -594,11 +594,11 @@ export default function SearchFilterBarCompact({
       {/* Active Filter Chips */}
       {activeFilterCount > 0 && (
         <div className={inline ? "mt-2 flex flex-wrap gap-1.5 sm:gap-2 items-center" : "pb-3 sm:pb-4 flex flex-wrap gap-1.5 sm:gap-2 items-center"}>
-          <span className="text-sm text-gray-500 mr-1">Active filters:</span>
+          <span className="tf-body-muted mr-1">Active filters:</span>
           {getActiveFilterChips().map((chip) => (
             <div
               key={chip.key}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20"
+              className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
             >
               <span className="truncate max-w-[120px] sm:max-w-none">{chip.label}</span>
               <button

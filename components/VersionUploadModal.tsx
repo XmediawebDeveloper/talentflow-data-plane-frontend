@@ -152,8 +152,8 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   <GitBranch className="w-5 h-5 text-brand-blue" />
                 </div>
                 <div>
-                  <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Version Upload</h2>
-                  <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">
+                  <h2 className="tf-section-title sm:text-lg">Version Upload</h2>
+                  <p className="tf-body-muted mt-0.5">
                     Upload new versions of existing resumes
                   </p>
                 </div>
@@ -174,10 +174,10 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                 <GitBranch className="w-5 h-5 text-brand-blue flex-shrink-0 mt-0.5" />
                 <div>
                   <h3 className="text-sm font-semibold text-brand-blue mb-1">Version Management</h3>
-                  <p className="text-xs text-gray-700 dark:text-slate-300">
+                  <p className="tf-meta">
                     Upload updated versions of candidate resumes. You'll be able to choose how to handle each version:
                   </p>
-                  <ul className="text-xs text-gray-700 dark:text-slate-300 mt-2 space-y-1 ml-4">
+                  <ul className="tf-meta mt-2 space-y-1 ml-4">
                     <li>• <strong>Discard New Resume</strong> - Keep only the existing version</li>
                     <li>• <strong>Overwrite Existing</strong> - Replace with the new version</li>
                     <li>• <strong>Save as New Version</strong> - Keep both versions</li>
@@ -202,10 +202,10 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
               <p className="text-gray-900 dark:text-slate-50 mb-2">
                 Drop updated resumes here or click to browse
               </p>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
+              <p className="tf-body-secondary mb-4">
                 Supported formats: PDF, DOCX, DOC
               </p>
-              <div className="flex items-center justify-center gap-4 text-xs text-gray-500 dark:text-slate-500">
+              <div className="flex items-center justify-center gap-4 tf-meta">
                 <span>• Max file size: 3MB</span>
               </div>
               <input
@@ -222,7 +222,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             {selectedFiles.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-700 dark:text-slate-300">
+                  <span className="tf-body">
                     {selectedFiles.length} file{selectedFiles.length !== 1 ? 's' : ''} selected
                   </span>
                   <button
@@ -240,12 +240,12 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                   {selectedFiles.map((file, index) => (
                     <div
                       key={index}
-                      className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl"
+                      className="flex items-center gap-3 p-3 tf-card-soft"
                     >
                       <File className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500">{formatFileSize(file.size)}</div>
+                        <div className="tf-body truncate">{file.name}</div>
+                        <div className="tf-meta">{formatFileSize(file.size)}</div>
                       </div>
                       <button
                         onClick={(e) => {
@@ -266,7 +266,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             {validationErrors.length > 0 && (
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm text-gray-700 dark:text-slate-300">
+                  <span className="tf-body">
                     Validation Errors
                   </span>
                 </div>
@@ -278,8 +278,8 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
                     >
                       <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{error.fileName}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-500">{error.error}</div>
+                        <div className="tf-body truncate">{error.fileName}</div>
+                        <div className="tf-meta">{error.error}</div>
                       </div>
                     </div>
                   ))}
@@ -293,7 +293,7 @@ export default function VersionUploadModal({ onClose, onComplete }: VersionUploa
             <button
               onClick={handleProceedToResolution}
               disabled={selectedFiles.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-primary flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal justify-start font-normal"
             >
               <GitBranch className="w-4 h-4" />
               Proceed to Version Resolution

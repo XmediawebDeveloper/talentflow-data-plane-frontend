@@ -5,11 +5,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 // card shell.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Hero */}
-          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
+          <section className="tf-panel relative mb-4 sm:mb-6 overflow-hidden p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="space-y-2">
@@ -26,9 +26,9 @@ export default function Loading() {
             ))}
           </div>
           {/* Integration cards grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+          <div className="tf-grid-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
+              <div key={i} className="tf-panel p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-4 min-w-0 flex-1">
                     <Skeleton className="w-12 h-12 shrink-0 rounded-lg" />

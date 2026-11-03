@@ -411,9 +411,9 @@ export default function HRQuestionBank() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -426,7 +426,7 @@ export default function HRQuestionBank() {
           />
           <div className="space-y-4 sm:space-y-6">
       {!canViewHRQuestionBank ? (
-        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+        <div className="rounded-xl border border-gray-200 bg-white p-8 text-center tf-body-muted shadow-sm">
           You do not have permission to view the HR Question Bank.
         </div>
       ) : (
@@ -438,8 +438,8 @@ export default function HRQuestionBank() {
             <MessageSquare className="w-4 h-4" />
           </div>
           <div>
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">HR Question Bank</h2>
-            <p className="text-sm text-gray-500 mt-0.5">
+            <h2 className="tf-section-title sm:text-xl tracking-tight">HR Question Bank</h2>
+            <p className="tf-body-muted mt-0.5">
               Manage reusable HR questions for AI Assessments and AI Interviews. The same questions can be used across both.
             </p>
           </div>
@@ -467,7 +467,7 @@ export default function HRQuestionBank() {
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue text-white shadow-sm shrink-0">
           <AlertCircle className="w-4 h-4" />
         </div>
-        <p className="text-xs text-gray-700 leading-relaxed pt-1">
+        <p className="tf-meta leading-relaxed pt-1">
           <span className="font-semibold text-gray-900">Note:</span> HR questions are <strong className="text-gray-900">informational only</strong> — not scored in AI Assessments or AI Interviews. Responses are shared with the recruiter for review.
         </p>
       </div>
@@ -480,7 +480,7 @@ export default function HRQuestionBank() {
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search questions..."
-          className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white shadow-sm transition-all"
+          className="tf-input pl-9 pr-3 shadow-sm"
         />
       </div>
 
@@ -501,11 +501,11 @@ export default function HRQuestionBank() {
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 {editingId ? <Edit2 className="w-4 h-4 text-brand-blue" /> : <Plus className="w-4 h-4 text-brand-blue" />}
               </div>
-              <h3 id="hr-question-form-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
+              <h3 id="hr-question-form-title" className="tf-section-title sm:text-lg tracking-tight min-w-0 truncate">
                 {editingId ? 'Edit Question' : 'Add New Question'}
               </h3>
             </div>
-            <Button variant="secondary" size="sm" type="button" onClick={closeForm} disabled={saving} className="px-2 flex-shrink-0" aria-label="Close">
+            <Button variant="secondary" size="sm" type="button" onClick={closeForm} disabled={saving} className="flex-shrink-0" aria-label="Close">
               <X className="w-5 h-5" />
             </Button>
           </div>
@@ -513,20 +513,20 @@ export default function HRQuestionBank() {
           <div className="flex-1 min-h-0 overflow-y-auto space-y-5 px-4 sm:px-6 py-4">
             {/* Question Text */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Question Text *</label>
+              <label className="block tf-label mb-1.5">Question Text *</label>
               <input
                 type="text"
                 value={formData.question_text}
                 onChange={(e) => setFormData(prev => ({ ...prev, question_text: e.target.value }))}
                 placeholder="Enter the HR question..."
                 autoFocus
-                className="w-full px-3 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 bg-white transition-all"
+                className="tf-input"
               />
             </div>
 
             {/* Answer Type */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1.5">Answer Type</label>
+              <label className="block tf-label mb-1.5">Answer Type</label>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   type="button"
@@ -578,7 +578,7 @@ export default function HRQuestionBank() {
           stat cards that filtered the list too but read as plain figures, so
           few people found the filter in them. */}
       <div className="flex items-center gap-2 flex-wrap" role="group" aria-label="Filter by answer type">
-        <span className="text-sm text-gray-600">Show:</span>
+        <span className="tf-body-secondary">Show:</span>
         {([
           { id: 'all', label: 'All Questions', count: questions.length },
           { id: 'text', label: 'Text Answer', count: questions.filter(q => q.answer_type !== 'yes_no').length },
@@ -614,7 +614,7 @@ export default function HRQuestionBank() {
            question text + badge row, with trailing action buttons. */
         <div className="space-y-3">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div key={i} className="tf-panel overflow-hidden">
               <div className="flex items-start gap-3 p-4">
                 <Skeleton className="h-9 w-9 rounded-lg shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0 space-y-2">
@@ -634,14 +634,14 @@ export default function HRQuestionBank() {
           ))}
         </div>
       ) : filteredQuestions.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-16 px-4 bg-white border border-gray-200 rounded-xl shadow-sm">
+        <div className="tf-card-soft flex flex-col items-center justify-center py-16 px-4">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">
             <AlertCircle className="w-7 h-7 text-brand-blue" />
           </div>
-          <p className="text-gray-700 text-sm font-medium mb-1">
+          <p className="tf-label mb-1">
             {questions.length === 0 ? 'No questions yet' : 'No matches found'}
           </p>
-          <p className="text-gray-500 text-xs text-center max-w-md">
+          <p className="tf-meta text-center max-w-md">
             {questions.length === 0 ? 'Add your first HR question to start building the bank.' : 'Try adjusting your search to find what you need.'}
           </p>
         </div>
@@ -650,7 +650,7 @@ export default function HRQuestionBank() {
           {paginatedQuestions.map((question) => (
             <div
               key={question.id}
-              className="bg-white border border-gray-200 rounded-xl overflow-hidden hover:border-brand-blue/40 hover:shadow-md hover:shadow-brand-blue/5 transition-all"
+              className="tf-panel overflow-hidden hover:border-brand-blue/40 hover:shadow-md hover:shadow-brand-blue/5 transition-all"
             >
               {/* Question Header */}
               <div className="flex items-start gap-3 p-4">
@@ -662,7 +662,7 @@ export default function HRQuestionBank() {
                   {question.answer_type === 'yes_no' ? <CheckCircle2 className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 leading-relaxed">{question.question_text}</p>
+                  <p className="tf-row-name leading-relaxed">{question.question_text}</p>
                   <div className="flex flex-wrap items-center gap-2 mt-2">
                     <span className={`px-2 py-0.5 rounded-lg sm:rounded-full text-xs font-medium ring-1 ${
                       question.answer_type === 'yes_no'
@@ -742,18 +742,18 @@ export default function HRQuestionBank() {
                 <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-red-50 ring-1 ring-red-100 flex-shrink-0">
                   <Trash2 className="w-4 h-4 text-red-600" />
                 </div>
-                <h3 id="hr-question-delete-title" className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight min-w-0 truncate">
+                <h3 id="hr-question-delete-title" className="tf-section-title sm:text-lg tracking-tight min-w-0 truncate">
                   Delete Question
                 </h3>
               </div>
-              <Button variant="secondary" size="sm" type="button" onClick={() => setDeleteTarget(null)} className="px-2 flex-shrink-0" aria-label="Close">
+              <Button variant="secondary" size="sm" type="button" onClick={() => setDeleteTarget(null)} className="flex-shrink-0" aria-label="Close">
                 <X className="w-5 h-5" />
               </Button>
             </div>
 
             <div id="hr-question-delete-desc" className="px-4 sm:px-6 py-4 space-y-2">
-              <p className="text-sm font-semibold text-gray-900 break-words">&ldquo;{deleteTarget.question_text}&rdquo;</p>
-              <p className="text-sm text-gray-500">
+              <p className="tf-row-title break-words">&ldquo;{deleteTarget.question_text}&rdquo;</p>
+              <p className="tf-body-muted">
                 This question will be removed from the HR Question Bank. This cannot be undone.
               </p>
             </div>

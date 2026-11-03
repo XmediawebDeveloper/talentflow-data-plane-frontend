@@ -132,11 +132,11 @@ export default function ApiManagementPage() {
   if (isLoading) {
     return (
       <FeatureGate feature="api_access">
-        <main className="flex-1 overflow-x-clip bg-slate-50">
+        <main className="tf-page">
           <div className="mx-auto w-full max-w-[1400px]">
-            <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <div className="tf-page-sheet">
               {/* Hero */}
-              <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
+              <section className="tf-panel relative mb-4 sm:mb-6 overflow-hidden p-4 sm:p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
                   <div className="flex items-start gap-3">
                     <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -152,7 +152,7 @@ export default function ApiManagementPage() {
               {/* API key cards */}
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
+                  <div key={i} className="tf-panel p-4 sm:p-6">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3 mb-2">
@@ -186,25 +186,25 @@ export default function ApiManagementPage() {
 
   return (
     <FeatureGate feature="api_access">
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'API Management' }]} />
 
         {/* SaaS Hero Header */}
-        <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+        <section className="relative mb-4 sm:mb-6 overflow-hidden tf-card-soft p-4 sm:p-6">
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div className="flex items-start gap-3">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Key className="h-5 w-5 text-brand-blue" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
+                <div className="tf-badge mb-2 gap-1.5 bg-brand-orange/5 ring-1 ring-brand-orange/20 text-2xs text-brand-orange-deep">
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Developer access
                 </div>
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">API Management</h1>
-                <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
+                <h1 className="tf-page-title">API Management</h1>
+                <p className="mt-2 max-w-2xl tf-body-secondary">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
             <Button
@@ -214,7 +214,7 @@ export default function ApiManagementPage() {
                 setShowCreateModal(true);
               }}
               aria-disabled={!canManage}
-              className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+              className={`${(!canManage ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               title={!canManage ? 'You do not have permission to create API keys' : ''}
             >
               <Plus className="w-4 h-4" />
@@ -226,11 +226,11 @@ export default function ApiManagementPage() {
         {/* API Keys List */}
         <div className="space-y-4">
           {apiKeys.length === 0 ? (
-            <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-10 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="tf-card-soft p-10 text-center">
               <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Key className="w-6 h-6 text-brand-blue" />
               </span>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No API Keys</h3>
+              <h3 className="tf-section-title mb-2">No API Keys</h3>
               <p className="text-gray-500 dark:text-slate-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
               <Button
                 variant="primary"
@@ -239,7 +239,7 @@ export default function ApiManagementPage() {
                   setShowCreateModal(true);
                 }}
                 aria-disabled={!canManage}
-                className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+                className={`${(!canManage ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                 title={!canManage ? 'You do not have permission to create API keys' : ''}
               >
                 <Plus className="w-4 h-4" />
@@ -250,7 +250,7 @@ export default function ApiManagementPage() {
             apiKeys.map((apiKey) => (
               <div
                 key={apiKey.id}
-                className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition hover:shadow-md sm:p-6"
+                className="tf-card-soft p-4 sm:p-6 transition hover:shadow-md sm:p-6"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
@@ -259,7 +259,7 @@ export default function ApiManagementPage() {
                         <Key className="w-4 h-4" />
                       </span>
                       <h3 className="font-semibold text-gray-900 dark:text-slate-50">{apiKey.name}</h3>
-                      <span className="px-2 py-0.5 bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
+                      <span className="tf-badge bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20">
                         {apiKey.status}
                       </span>
                     </div>
@@ -271,13 +271,13 @@ export default function ApiManagementPage() {
                         variant="secondary"
                         size="sm"
                         onClick={() => copyKey(apiKey.key_prefix)}
-                        className="px-2"
+                        className=""
                         aria-label="Copy key prefix" title="Copy key prefix"
                       >
                         <Copy className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-slate-500">
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted">
                       <span className="flex items-center gap-1">
                         <Clock className="w-4 h-4 text-brand-blue/70" />
                         Created: {formatISTDate(apiKey.created_at)}
@@ -297,7 +297,7 @@ export default function ApiManagementPage() {
                         regenerateKey(apiKey.id);
                       }}
                       disabled={regeneratingId === apiKey.id || !canManage}
-                      className="px-2"
+                      className=""
                       aria-label="Regenerate key" title={!canManage ? 'You do not have permission to regenerate API keys' : 'Regenerate key'}
                     >
                       <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
@@ -310,7 +310,7 @@ export default function ApiManagementPage() {
                         deleteKey(apiKey.id);
                       }}
                       disabled={deletingId === apiKey.id || !canManage}
-                      className="px-2"
+                      className=""
                       aria-label="Delete key" title={!canManage ? 'You do not have permission to delete API keys' : 'Delete key'}
                     >
                       {deletingId === apiKey.id ? (
@@ -327,14 +327,14 @@ export default function ApiManagementPage() {
         </div>
 
         {/* API Documentation Link */}
-        <div className="mt-8 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-6 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="mt-8 tf-card-soft p-6">
           <div className="flex items-start gap-4">
             <span className="h-9 w-9 shrink-0 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <BookOpen className="w-5 h-5 text-brand-blue" />
             </span>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">API Documentation</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+              <h3 className="tf-row-title">API Documentation</h3>
+              <p className="tf-body-secondary mt-1">
                 Learn how to integrate TalentFlow into your applications. View our comprehensive API documentation for endpoints, authentication, and examples.
               </p>
               <button className="mt-3 text-sm font-semibold text-brand-blue hover:text-brand-blue-2">
@@ -357,11 +357,11 @@ export default function ApiManagementPage() {
                   <span className="h-9 w-9 flex items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                     <Key className="w-5 h-5 text-brand-blue" />
                   </span>
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                  <h2 className="tf-section-title">
                     {newlyCreatedKey ? 'API Key Created' : 'Create API Key'}
                   </h2>
                 </div>
-                <Button variant="secondary" size="sm" onClick={closeCreateModal} className="px-2" aria-label="Close">
+                <Button variant="secondary" size="sm" onClick={closeCreateModal} aria-label="Close">
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -376,14 +376,14 @@ export default function ApiManagementPage() {
                   </p>
                 </div>
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-row-title mb-2">
                     Your API Key
                   </label>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 px-3 py-2 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono break-all">
                       {newlyCreatedKey}
                     </code>
-                    <Button variant="secondary" size="sm" onClick={() => copyKey(newlyCreatedKey)} className="px-2 flex-shrink-0" aria-label="Copy API key">
+                    <Button variant="secondary" size="sm" onClick={() => copyKey(newlyCreatedKey)} className="flex-shrink-0" aria-label="Copy API key">
                       <Copy className="w-4 h-4" />
                     </Button>
                   </div>
@@ -395,7 +395,7 @@ export default function ApiManagementPage() {
             ) : (
               <div>
                 <div className="mb-4">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
+                  <label className="block tf-row-title mb-1.5">
                     Key Name
                   </label>
                   <input
@@ -403,11 +403,11 @@ export default function ApiManagementPage() {
                     value={newKeyName}
                     onChange={(e) => setNewKeyName(e.target.value)}
                     placeholder="e.g., Production API Key"
-                    className="w-full rounded-lg border border-gray-200 dark:border-slate-700 px-4 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input px-4"
                   />
                 </div>
                 <div className="mb-6">
-                  <label className="block text-sm font-semibold text-gray-700 dark:text-slate-300 mb-1.5">
+                  <label className="block tf-row-title mb-1.5">
                     Expiry (optional)
                   </label>
                   <FilterSelect

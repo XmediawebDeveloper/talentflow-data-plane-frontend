@@ -83,9 +83,9 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Activity Logs' }]} />
         <ExportFormatModal
           open={showExportModal}
@@ -104,8 +104,8 @@ export default function ActivityLogsPage() {
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Activity Logs</h1>
-                <p className="text-sm text-gray-600 dark:text-slate-400">Track all activities across your organization</p>
+                <h1 className="tf-page-title">Activity Logs</h1>
+                <p className="tf-body-secondary">Track all activities across your organization</p>
               </div>
             </div>
             <button
@@ -117,7 +117,7 @@ export default function ActivityLogsPage() {
                 }
                 setShowExportModal(true);
               }}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors self-end sm:self-auto">
+              className="tf-btn tf-btn-secondary px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors self-end sm:self-auto whitespace-normal">
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Export Logs</span>
               <span className="sm:hidden">Export</span>
@@ -134,7 +134,7 @@ export default function ActivityLogsPage() {
               placeholder="Search activities..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-10 pl-9 sm:pl-10 pr-3 sm:pr-4 text-sm bg-white dark:bg-slate-800 text-black dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none"
+              className="tf-input h-10 pl-9 sm:pl-10 pr-3 sm:pr-4"
             />
           </div>
           <FilterSelect
@@ -147,7 +147,7 @@ export default function ActivityLogsPage() {
         </div>
 
         {/* Activity Timeline */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="tf-card">
           <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
             {filteredLogs.map((log) => (
               <div key={log.id} className="p-3 sm:p-4 hover:bg-brand-blue/[0.04] dark:hover:bg-brand-blue/10 transition-colors">
@@ -158,12 +158,12 @@ export default function ActivityLogsPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{log.action}</p>
-                        <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{log.details}</p>
+                        <p className="tf-row-name sm:text-base truncate">{log.action}</p>
+                        <p className="tf-body-muted truncate">{log.details}</p>
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
-                        <p className="text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
+                        <p className="tf-body-muted whitespace-nowrap">{log.timestamp}</p>
+                        <p className="tf-hint whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>
@@ -177,7 +177,7 @@ export default function ActivityLogsPage() {
           <div className="text-center py-12">
             <BarChart3 className="w-12 h-12 text-gray-300 dark:text-slate-600 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No activities found</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400">Try adjusting your search or filters.</p>
+            <p className="tf-body-muted">Try adjusting your search or filters.</p>
           </div>
         )}
       </div>

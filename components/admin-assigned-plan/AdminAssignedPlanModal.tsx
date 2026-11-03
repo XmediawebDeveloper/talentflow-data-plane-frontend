@@ -202,12 +202,12 @@ export default function AdminAssignedPlanModal() {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-xl font-bold text-gray-900">{planName}</span>
                   {tierLabel && (
-                    <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-700">
+                    <span className="tf-badge bg-indigo-100 text-indigo-700">
                       {tierLabel}
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500">
+                <p className="tf-body-muted">
                   Billing: <span className="font-medium text-gray-700">{billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}</span>
                 </p>
               </div>
@@ -224,34 +224,34 @@ export default function AdminAssignedPlanModal() {
                   <span className="text-gray-900">{formatINR(previewGst)}</span>
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-gray-200">
-                  <span className="text-base font-semibold text-gray-900">Total</span>
-                  <span className="text-lg font-bold text-gray-900">{formatINR(previewTotal)}</span>
+                  <span className="tf-section-title">Total</span>
+                  <span className="tf-section-title">{formatINR(previewTotal)}</span>
                 </div>
               </div>
             )}
 
             {pendingPlan.plan_description && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <p className="text-sm text-gray-700">{pendingPlan.plan_description}</p>
+                <p className="tf-body">{pendingPlan.plan_description}</p>
               </div>
             )}
 
             {pendingPlan.notes && (
               <div className="mt-4 pt-4 border-t border-gray-200">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Admin note</p>
-                <p className="text-sm text-gray-700">{pendingPlan.notes}</p>
+                <p className="tf-eyebrow tracking-wide mb-1">Admin note</p>
+                <p className="tf-body">{pendingPlan.notes}</p>
               </div>
             )}
           </div>
 
           {/* Quotas — what the tenant gets with this plan */}
           {pendingPlan.plan_quotas && Object.keys(pendingPlan.plan_quotas).length > 0 && (
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <div className="tf-panel p-4">
               <div className="flex items-center gap-2 mb-3">
                 <Package className="w-4 h-4 text-indigo-600" />
-                <p className="text-sm font-semibold text-gray-900">What&rsquo;s included</p>
+                <p className="tf-row-title">What&rsquo;s included</p>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              <div className="tf-grid-2">
                 {Object.entries(pendingPlan.plan_quotas)
                   .filter(([, value]) => value !== null && value !== undefined && value !== '')
                   .map(([key, value]) => (
@@ -270,7 +270,7 @@ export default function AdminAssignedPlanModal() {
           {/* Apply-mode choice — only shown when there's an active paid plan to queue against */}
           {canQueue && (
             <div className="space-y-2">
-              <p className="text-sm font-semibold text-gray-700">When should this take effect?</p>
+              <p className="tf-row-title">When should this take effect?</p>
 
               <label
                 className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
@@ -291,9 +291,9 @@ export default function AdminAssignedPlanModal() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <Zap className="w-4 h-4 text-indigo-600" />
-                    <span className="text-sm font-medium text-gray-900">Apply now (override current plan)</span>
+                    <span className="tf-row-name">Apply now (override current plan)</span>
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="tf-meta mt-1">
                     {currentPlanInfo?.current_plan_name ? (
                       <>
                         Replaces <span className="font-medium">{currentPlanInfo.current_plan_name}</span> immediately.
@@ -325,12 +325,12 @@ export default function AdminAssignedPlanModal() {
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
                     <CalendarClock className="w-4 h-4 text-indigo-600" />
-                    <span className="text-sm font-medium text-gray-900">
+                    <span className="tf-row-name">
                       Apply when current plan expires
                       {formattedExpiry && <> ({formattedExpiry})</>}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-600 mt-1">
+                  <p className="tf-meta mt-1">
                     Payment is captured now. The new plan activates automatically on the expiry date so you don&rsquo;t lose any remaining time.
                   </p>
                 </div>
@@ -339,7 +339,7 @@ export default function AdminAssignedPlanModal() {
           )}
 
           {/* Reassurance copy */}
-          <div className="flex items-start gap-2 text-xs text-gray-600">
+          <div className="flex items-start gap-2 tf-meta">
             <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
             <span>
               {effectiveApplyMode === 'immediate'

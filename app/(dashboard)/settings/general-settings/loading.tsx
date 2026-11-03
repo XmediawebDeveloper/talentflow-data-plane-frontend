@@ -5,9 +5,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // role box, right form panel) inside the max-w-[1400px] white card shell.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 flex items-center gap-2">
             <Skeleton className="h-3 w-20" />
@@ -16,7 +16,7 @@ export default function Loading() {
           </div>
 
           {/* Hero Header */}
-          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+          <section className="relative mb-4 sm:mb-6 overflow-hidden tf-card-soft p-4 sm:p-6">
             <div className="flex items-start gap-3">
               <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
               <div className="space-y-2">
@@ -31,7 +31,7 @@ export default function Loading() {
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
             {/* Left Sidebar - Tabs */}
             <div className="w-full lg:w-64 flex-shrink-0">
-              <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-2">
+              <div className="tf-card-soft p-2">
                 <nav className="flex lg:flex-col gap-1">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <div key={i} className="w-full flex items-center gap-3 px-4 py-2">
@@ -51,14 +51,14 @@ export default function Loading() {
 
             {/* Right Content Area */}
             <div className="flex-1">
-              <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] p-4 sm:p-6 lg:p-8">
+              <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
                 {/* Section heading */}
                 <div className="mb-6 space-y-2">
                   <Skeleton className="h-6 w-40" />
                   <Skeleton className="h-4 w-72 max-w-full" />
                 </div>
                 {/* Form fields */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                <div className="tf-grid-2">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="space-y-2">
                       <Skeleton className="h-3.5 w-24" />

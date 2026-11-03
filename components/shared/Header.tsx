@@ -52,7 +52,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           <input
             type="text"
             placeholder="Search candidates, jobs, assessments..."
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors"
+            className="w-full pl-10 pr-4 h-9 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent bg-gray-50 hover:bg-white transition-colors"
           />
         </div>
       </div>
@@ -118,36 +118,36 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                   <div className="grid grid-cols-2 gap-2 mb-4">
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <Book className="w-5 h-5 text-gray-700 mb-2" />
-                      <div className="text-sm text-gray-900">Knowledge Base</div>
-                      <div className="text-xs text-gray-500">Browse articles</div>
+                      <div className="tf-body">Knowledge Base</div>
+                      <div className="tf-meta">Browse articles</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <Video className="w-5 h-5 text-gray-600 mb-2" />
-                      <div className="text-sm text-gray-900">Video Tutorials</div>
-                      <div className="text-xs text-gray-500">Watch & learn</div>
+                      <div className="tf-body">Video Tutorials</div>
+                      <div className="tf-meta">Watch & learn</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <FileText className="w-5 h-5 text-gray-600 mb-2" />
-                      <div className="text-sm text-gray-900">Documentation</div>
-                      <div className="text-xs text-gray-500">Full guides</div>
+                      <div className="tf-body">Documentation</div>
+                      <div className="tf-meta">Full guides</div>
                     </button>
                     <button className="p-3 border border-gray-200 rounded-lg hover:border-gray-400 hover:bg-gray-50 transition-all group text-left">
                       <MessageCircle className="w-5 h-5 text-gray-500 mb-2" />
-                      <div className="text-sm text-gray-900">Live Chat</div>
-                      <div className="text-xs text-gray-500">Chat with us</div>
+                      <div className="tf-body">Live Chat</div>
+                      <div className="tf-meta">Chat with us</div>
                     </button>
                   </div>
 
                   {/* Popular Articles */}
                   <div className="mb-4">
-                    <h4 className="text-sm text-gray-900 mb-2">Popular Articles</h4>
+                    <h4 className="tf-body mb-2">Popular Articles</h4>
                     <div className="space-y-2">
                       <button className="w-full text-left p-2 hover:bg-gray-50 rounded-lg transition-colors group">
                         <div className="flex items-start gap-2">
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Getting Started with TalentFlow</div>
-                            <div className="text-xs text-gray-500">5 min read</div>
+                            <div className="tf-meta">5 min read</div>
                           </div>
                         </div>
                       </button>
@@ -156,7 +156,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">How to Parse Resumes with AI</div>
-                            <div className="text-xs text-gray-500">8 min read</div>
+                            <div className="tf-meta">8 min read</div>
                           </div>
                         </div>
                       </button>
@@ -165,7 +165,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
                           <div>
                             <div className="text-sm text-gray-900 group-hover:text-gray-700">Creating & Managing Assessments</div>
-                            <div className="text-xs text-gray-500">10 min read</div>
+                            <div className="tf-meta">10 min read</div>
                           </div>
                         </div>
                       </button>
@@ -174,15 +174,15 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
 
                   {/* Contact Options */}
                   <div className="border-t border-gray-200 pt-4">
-                    <h4 className="text-sm text-gray-900 mb-3">Contact Support</h4>
+                    <h4 className="tf-body mb-3">Contact Support</h4>
                     <div className="space-y-2">
                       <button className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-lg transition-colors text-left">
                         <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                           <Mail className="w-4 h-4 text-gray-600" />
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm text-gray-900">Email Support</div>
-                          <div className="text-xs text-gray-500">support@talentflow.com</div>
+                          <div className="tf-body">Email Support</div>
+                          <div className="tf-meta">support@talentflow.com</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
                       </button>
@@ -191,8 +191,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           <Phone className="w-4 h-4 text-gray-600" />
                         </div>
                         <div className="flex-1">
-                          <div className="text-sm text-gray-900">Phone Support</div>
-                          <div className="text-xs text-gray-500">+1 (800) 123-4567</div>
+                          <div className="tf-body">Phone Support</div>
+                          <div className="tf-meta">+1 (800) 123-4567</div>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-400" />
                       </button>
@@ -241,7 +241,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       <Bell className="w-5 h-5" />
                       Notifications
                     </h3>
-                    <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">5 new</span>
+                    <span className="tf-badge bg-white/20">5 new</span>
                   </div>
                   <p className="text-sm text-gray-300 mt-1">Stay updated with latest activities</p>
                 </div>
@@ -270,10 +270,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Resume parsing completed</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2m ago</span>
+                            <p className="tf-body">Resume parsing completed</p>
+                            <span className="tf-meta whitespace-nowrap">2m ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Successfully parsed 24 resumes from "Software Engineer" batch</p>
+                          <p className="tf-meta">Successfully parsed 24 resumes from "Software Engineer" batch</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-green-600 font-medium">View Results</span>
                           </div>
@@ -289,12 +289,12 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">New candidate applied</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">15m ago</span>
+                            <p className="tf-body">New candidate applied</p>
+                            <span className="tf-meta whitespace-nowrap">15m ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">John Smith applied for "Senior React Developer" position</p>
+                          <p className="tf-meta">John Smith applied for "Senior React Developer" position</p>
                           <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs text-gray-700 font-medium">Review Application</span>
+                            <span className="tf-caption">Review Application</span>
                           </div>
                         </div>
                       </div>
@@ -308,10 +308,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Assessment deadline approaching</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">1h ago</span>
+                            <p className="tf-body">Assessment deadline approaching</p>
+                            <span className="tf-meta whitespace-nowrap">1h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Python Developer assessment closes in 24 hours</p>
+                          <p className="tf-meta">Python Developer assessment closes in 24 hours</p>
                           <div className="flex items-center gap-2 mt-2">
                             <span className="text-xs text-orange-600 font-medium">Extend Deadline</span>
                           </div>
@@ -327,10 +327,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Scheduled AI Interview starting soon</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">2h ago</span>
+                            <p className="tf-body">Scheduled AI Interview starting soon</p>
+                            <span className="tf-meta whitespace-nowrap">2h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Interview with Sarah Johnson begins at 3:00 PM</p>
+                          <p className="tf-meta">Interview with Sarah Johnson begins at 3:00 PM</p>
                         </div>
                       </div>
                     </button>
@@ -343,10 +343,10 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2 mb-1">
-                            <p className="text-sm text-gray-900">Team member added</p>
-                            <span className="text-xs text-gray-500 whitespace-nowrap">3h ago</span>
+                            <p className="tf-body">Team member added</p>
+                            <span className="tf-meta whitespace-nowrap">3h ago</span>
                           </div>
-                          <p className="text-xs text-gray-600">Mike Johnson joined your recruitment team</p>
+                          <p className="tf-meta">Mike Johnson joined your recruitment team</p>
                         </div>
                       </div>
                     </button>
@@ -389,8 +389,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           >
             <NameAvatar name={user.name} fallback={user.email} size="md" />
             <div className="text-left">
-              <div className="text-sm text-gray-900">{user.name || user.email || 'User'}</div>
-              <div className="text-xs text-gray-500">{roleLabels[user.role]}</div>
+              <div className="tf-body">{user.name || user.email || 'User'}</div>
+              <div className="tf-meta">{roleLabels[user.role]}</div>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-400" />
           </button>
@@ -404,17 +404,17 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
               <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-72 sm:max-w-[calc(100vw-2rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm text-gray-900">{user.name}</p>
+                    <p className="tf-body">{user.name}</p>
                     <span className={`px-2 py-0.5 rounded text-xs border ${roleBadgeColors[user.role]}`}>
                       {roleLabels[user.role]}
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500">{user.email}</p>
+                  <p className="tf-meta">{user.email}</p>
                 </div>
 
                 {/* Permissions Summary */}
                 <div className="px-4 py-3 border-b border-gray-100">
-                  <p className="text-xs text-gray-500 mb-2 flex items-center gap-1">
+                  <p className="tf-meta mb-2 flex items-center gap-1">
                     <Shield className="w-3 h-3" />
                     Your Permissions
                   </p>

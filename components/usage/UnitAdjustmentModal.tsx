@@ -166,10 +166,10 @@ export default function UnitAdjustmentModal({
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <h2 className="tf-section-title">
               Adjust Unit Pool
             </h2>
-            <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">
+            <p className="tf-body-muted mt-0.5">
               {tenantName}
               {tenantStatus && (
                 <span className={`ml-2 px-2 py-0.5 rounded text-xs ${
@@ -238,21 +238,21 @@ export default function UnitAdjustmentModal({
                                 }`}>
                                   {isPositive ? '+' : ''}{entry.units_amount} {entry.unit_type}
                                 </span>
-                                <span className="text-xs bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded text-gray-600 dark:text-slate-400">
+                                <span className="tf-meta bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                   {entry.action_type}
                                 </span>
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+                              <p className="tf-body-secondary mt-0.5">
                                 {entry.reason}
                               </p>
                               {entry.notes && (
-                                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                                <p className="tf-hint mt-1">
                                   Note: {entry.notes}
                                 </p>
                               )}
                             </div>
                           </div>
-                          <div className="text-right text-xs text-gray-400 dark:text-slate-500">
+                          <div className="text-right tf-hint">
                             <p>{entry.actor_email || entry.actor_type}</p>
                             <p>{formatIST(entry.created_at)}</p>
                             <p className="mt-1 text-gray-500 dark:text-slate-500">
@@ -271,7 +271,7 @@ export default function UnitAdjustmentModal({
             <>
               {/* Current Balances */}
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Current Balances</h3>
+                <h3 className="tf-label mb-3">Current Balances</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
                     const pool = pools?.[type];
@@ -290,14 +290,14 @@ export default function UnitAdjustmentModal({
                       >
                         <div className="flex items-center gap-2">
                           <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`} />
-                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                          <span className="tf-label">
                             {getUnitTypeName(type)}
                           </span>
                         </div>
                         <p className="text-2xl font-bold text-gray-900 dark:text-slate-50 mt-2">
                           {pool?.available_units.toLocaleString() || 0}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500">
+                        <p className="tf-meta">
                           of {pool?.total_allocated.toLocaleString() || 0} allocated
                         </p>
                       </button>
@@ -308,7 +308,7 @@ export default function UnitAdjustmentModal({
 
               {/* Adjustment Mode */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Adjustment Type
                 </label>
                 <div className="flex gap-2">
@@ -349,7 +349,7 @@ export default function UnitAdjustmentModal({
 
               {/* Amount */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   {mode === 'set' ? 'New Balance' : 'Amount'}
                 </label>
                 <input
@@ -357,11 +357,11 @@ export default function UnitAdjustmentModal({
                   min={0}
                   value={amount}
                   onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="tf-input"
                   placeholder="Enter amount"
                 />
                 {amount > 0 && (
-                  <p className="mt-2 text-sm text-gray-500 dark:text-slate-500">
+                  <p className="mt-2 tf-body-muted">
                     New balance will be:{' '}
                     <span className={`font-medium ${
                       projectedBalance < 0 ? 'text-red-600' : 'text-gray-900 dark:text-slate-50'
@@ -379,14 +379,14 @@ export default function UnitAdjustmentModal({
 
               {/* Reason (Required) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Reason <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="tf-input"
                   placeholder="e.g., Customer request, Plan upgrade, Billing adjustment"
                   maxLength={100}
                 />
@@ -394,13 +394,13 @@ export default function UnitAdjustmentModal({
 
               {/* Notes (Optional) */}
               <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                <label className="block tf-label mb-2">
                   Additional Notes
                 </label>
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                  className="tf-textarea resize-none"
                   rows={2}
                   placeholder="Optional additional details..."
                   maxLength={500}
@@ -410,7 +410,7 @@ export default function UnitAdjustmentModal({
               {/* Reference (Optional) */}
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-label mb-2">
                     Reference Type
                   </label>
                   <FilterSelect
@@ -428,14 +428,14 @@ export default function UnitAdjustmentModal({
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
+                  <label className="block tf-label mb-2">
                     Reference ID
                   </label>
                   <input
                     type="text"
                     value={referenceId}
                     onChange={(e) => setReferenceId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="tf-input"
                     placeholder="Optional"
                   />
                 </div>

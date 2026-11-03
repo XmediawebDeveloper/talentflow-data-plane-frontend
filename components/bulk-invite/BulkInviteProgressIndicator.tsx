@@ -70,10 +70,10 @@ export default function BulkInviteProgressIndicator() {
               <span className="font-medium text-sm truncate">{title}</span>
             </div>
             <div className="flex items-center gap-1">
-              <Button tone="onColor" variant="secondary" size="sm" onClick={() => setMinimized(true)} className="px-2" aria-label="Minimize" title="Minimize">
+              <Button tone="onColor" variant="secondary" size="sm" onClick={() => setMinimized(true)} className="" aria-label="Minimize" title="Minimize">
                 <Minimize2 className="w-4 h-4" />
               </Button>
-              <Button tone="onColor" variant="secondary" size="sm" onClick={closeAll} className="px-2" aria-label="Close" title={running > 0 ? 'Close — the sends carry on in the background' : 'Close'}>
+              <Button tone="onColor" variant="secondary" size="sm" onClick={closeAll} aria-label="Close" title={running > 0 ? 'Close — the sends carry on in the background' : 'Close'}>
                 <X className="w-4 h-4" />
               </Button>
             </div>
@@ -87,11 +87,11 @@ export default function BulkInviteProgressIndicator() {
                 <li key={job.job_id} className="px-4 py-2.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">
+                      <p className="tf-caption truncate">
                         {job.kind === 'assessment' ? 'Assessment' : 'AI Interview'}{job.version_label ? ` · ${job.version_label}` : ''}
                       </p>
                       {(job.jdCode || job.jdTitle) && (
-                        <p className="text-2xs text-gray-500 dark:text-slate-400 truncate">{[job.jdCode, job.jdTitle].filter(Boolean).join(' · ')}</p>
+                        <p className="tf-micro-hint truncate">{[job.jdCode, job.jdTitle].filter(Boolean).join(' · ')}</p>
                       )}
                     </div>
                     <button type="button" onClick={() => dismiss(job.job_id)} aria-label="Dismiss this run" title={active ? 'Dismiss — it carries on in the background' : 'Dismiss'} className="shrink-0 h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800">
@@ -102,7 +102,7 @@ export default function BulkInviteProgressIndicator() {
                     <div className={`h-full rounded-full transition-[width] duration-500 ${job.status === 'failed' ? 'bg-destructive' : job.status === 'cancelled' ? 'bg-warning-strong' : 'bg-brand-blue'}`} style={{ width: `${pct}%` }} />
                   </div>
                   <div className="mt-1.5 flex items-center justify-between gap-2">
-                    <p className="inline-flex items-center gap-1.5 text-2xs text-gray-600 dark:text-slate-400 min-w-0 truncate">
+                    <p className="inline-flex items-center gap-1.5 tf-micro-hint min-w-0 truncate">
                       {active ? <Loader2 className="w-3 h-3 animate-spin text-brand-blue shrink-0" />
                         : job.status === 'done' ? <CheckCircle2 className="w-3 h-3 text-success shrink-0" />
                         : <XCircle className="w-3 h-3 text-warning-strong shrink-0" />}

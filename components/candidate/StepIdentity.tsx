@@ -78,11 +78,11 @@ function HowItWorksCard({
         {done ? <Check className="w-4 h-4 animate-in zoom-in-50 duration-300" /> : num}
       </span>
       {/* Phones (cards stacked): a small picture, not the column's full width. */}
-      <div className="relative w-full max-w-[9rem] min-[380px]:max-w-none aspect-[156/123] rounded-xl bg-gradient-to-b from-brand-blue/5 to-brand-blue/10 border border-brand-blue/10 flex items-center justify-center overflow-hidden">
+      <div className="relative w-full max-w-[9rem] xs:max-w-none aspect-[156/123] rounded-xl bg-gradient-to-b from-brand-blue/5 to-brand-blue/10 border border-brand-blue/10 flex items-center justify-center overflow-hidden">
         {children}
       </div>
-      <p className="mt-2 text-sm font-semibold text-gray-900 leading-tight">{title}</p>
-      <p className="mt-0.5 text-xs text-gray-600 leading-snug">{subtitle}</p>
+      <p className="mt-2 tf-row-title leading-tight">{title}</p>
+      <p className="mt-0.5 tf-meta leading-snug">{subtitle}</p>
     </div>
   );
 }
@@ -803,8 +803,8 @@ export default function StepIdentity({
         <Lock className="w-4 h-4" />
       </span>
       <div className="min-w-0">
-        <h4 className="text-sm font-semibold text-gray-900 mb-1">Your privacy is protected</h4>
-        <p className="text-xs text-gray-600 leading-relaxed">
+        <h4 className="tf-row-title mb-1">Your privacy is protected</h4>
+        <p className="tf-meta leading-relaxed">
           Your information is encrypted and stored securely under GDPR and DPDP regulations.
           Used only for interview verification purposes.
         </p>
@@ -825,34 +825,34 @@ export default function StepIdentity({
           </span>
           <div>
             <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Identity Verification</h1>
-            <p className="text-gray-600 mt-0.5 text-sm">
+            <p className="tf-body-secondary mt-0.5">
               Confirm your details to proceed with the interview for <strong>{position}</strong>
             </p>
           </div>
         </div>
 
-        <div ref={formCardRef} className="w-full max-w-3xl mx-auto bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm flex flex-col lg:flex-row">
+        <div ref={formCardRef} className="tf-card-soft w-full max-w-3xl mx-auto overflow-hidden flex flex-col lg:flex-row">
           <div className="p-4 sm:p-6 space-y-5 min-w-0 flex-1">
             <div>
-              <label htmlFor="identity-name" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
+              <label htmlFor="identity-name" className="flex items-center gap-1.5 tf-row-name mb-1.5">
                 <User className="w-4 h-4 text-gray-500" /> Full Name
               </label>
               <input
                 id="identity-name" type="text" value={name}
                 readOnly
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors"
+                className="w-full px-4 h-9 border border-gray-200 rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors"
               />
             </div>
 
             <div className="space-y-3">
-              <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+              <label htmlFor="identity-email" className="flex items-center gap-1.5 tf-row-name">
                 <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-destructive">*</span>
               </label>
-              <div className="flex flex-col min-[380px]:flex-row gap-2">
+              <div className="flex flex-col xs:flex-row gap-2">
                 <input
                   id="identity-email" type="email" value={email}
                   readOnly
-                  className={`flex-1 min-w-0 px-4 py-2.5 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
+                  className={`flex-1 min-w-0 px-4 h-9 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
                     otpVerified ? 'border-success-line bg-success-subtle' : 'border-gray-200'
                   }`}
                 />
@@ -862,7 +862,7 @@ export default function StepIdentity({
                     variant="primary"
                     onClick={handleSendOtp}
                     disabled={!isEmailValid || otpSending}
-                    className="flex-shrink-0 whitespace-nowrap w-full min-[380px]:w-auto"
+                    className="flex-shrink-0 whitespace-nowrap w-full xs:w-auto"
                   >
                     {otpSending
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
@@ -882,7 +882,7 @@ export default function StepIdentity({
                   success tick once the code is accepted. */}
               {otpSent && !otpVerified && (
                 <div className="space-y-3">
-                  <label ref={otpHeadingRef} className="flex items-center gap-1.5 text-sm font-medium text-gray-900 scroll-mt-2">
+                  <label ref={otpHeadingRef} className="flex items-center gap-1.5 tf-row-name scroll-mt-2">
                     <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-destructive">*</span>
                   </label>
 
@@ -986,7 +986,7 @@ export default function StepIdentity({
                     {/* Didn't receive the code — secondary hint, smaller text. */}
                     <div className="mt-3 pt-3 border-t border-brand-blue/10 flex items-start gap-2">
                       <Info className="w-3.5 h-3.5 text-brand-blue flex-shrink-0 mt-0.5" aria-hidden="true" />
-                      <p className="text-xs text-gray-600">
+                      <p className="tf-meta">
                         <span className="font-semibold text-gray-700">Didn&apos;t receive the code?</span>{' '}
                         Check your spam or junk folder. The code will expire in{' '}
                         <span className="font-semibold text-brand-blue">10 minutes</span>.
@@ -1011,7 +1011,7 @@ export default function StepIdentity({
         <div ref={continueWrapRef} className="w-full max-w-3xl mx-auto flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 sm:gap-4">
           {/* Why Continue is still disabled. */}
           {!submitting && !isFormValid && !name.trim() && (
-            <p id="identity-continue-hint" className="text-xs text-gray-500 text-center sm:text-right sm:mr-auto">
+            <p id="identity-continue-hint" className="tf-meta text-center sm:text-right sm:mr-auto">
               Enter your full name.
             </p>
           )}
@@ -1042,10 +1042,10 @@ export default function StepIdentity({
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture
         </span>
         <h1 className="text-2xl font-bold text-gray-900">Identity Validation</h1>
-        <p className="text-gray-600 mt-1 text-sm">Take a live photo to verify your identity and prevent proxy interviews.</p>
+        <p className="tf-body-secondary mt-1">Take a live photo to verify your identity and prevent proxy interviews.</p>
       </div>
 
-      <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+      <div className="tf-card-soft overflow-hidden">
 
         <div className="p-3 sm:p-4">
           <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-4 sm:gap-5">
@@ -1070,7 +1070,7 @@ export default function StepIdentity({
                 <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 text-white gap-2">
                   <Camera className="w-10 h-10 text-gray-400" />
                   <p className="text-sm text-gray-300">Camera access denied</p>
-                  <p className="text-xs text-gray-500 text-center px-4">Allow camera access in your browser&apos;s address bar, then retry.</p>
+                  <p className="tf-meta text-center px-4">Allow camera access in your browser&apos;s address bar, then retry.</p>
                   <Button type="button" variant="secondary" size="sm" onClick={() => { void startCamera(); }} className="mt-1">
                     <RefreshCw className="w-4 h-4" /> Retry camera
                   </Button>
@@ -1155,14 +1155,14 @@ export default function StepIdentity({
               <div className="bg-brand-blue/5 border border-brand-blue/15 rounded-xl px-3 py-2.5 sm:px-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Lightbulb className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <h4 className="text-sm font-semibold text-gray-900">Tips for a clear photo</h4>
+                  <h4 className="tf-row-title">Tips for a clear photo</h4>
                 </div>
                 <div className="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-brand-blue/15">
                   {[
                     { icon: Sun, text: 'Be in a well-lit place' },
                     { icon: User, text: 'Keep only yourself in the frame' },
                   ].map(({ icon: Icon, text }) => (
-                    <div key={text} className="flex items-center gap-2 text-sm text-gray-600 py-1.5 sm:py-0 sm:px-4 sm:first:pl-0">
+                    <div key={text} className="flex items-center gap-2 tf-body-secondary py-1.5 sm:py-0 sm:px-4 sm:first:pl-0">
                       <Icon className="w-4 h-4 text-brand-blue flex-shrink-0" />
                       {text}
                     </div>
@@ -1184,8 +1184,8 @@ export default function StepIdentity({
                     <Shield className="w-4 h-4" />
                   </span>
                   <div className="min-w-0">
-                    <h4 className="text-sm font-semibold text-gray-900 leading-tight">How it works</h4>
-                    <p className="text-xs text-gray-600">Follow the steps below to capture a clear photo.</p>
+                    <h4 className="tf-row-title leading-tight">How it works</h4>
+                    <p className="tf-meta">Follow the steps below to capture a clear photo.</p>
                   </div>
                 </div>
                 {(() => {
@@ -1193,7 +1193,7 @@ export default function StepIdentity({
                   const shotTaken = phase !== 'photo_ready';
                   const captured = phase === 'captured';
                   return (
-                    <div className="px-3 sm:px-4 py-4 flex-1 flex flex-col min-[480px]:flex-row items-stretch gap-4 min-[480px]:gap-2">
+                    <div className="px-3 sm:px-4 py-4 flex-1 flex flex-col sm:flex-row items-stretch gap-4 sm:gap-2">
                       <HowItWorksCard
                         num={1}
                         done={shotTaken}
@@ -1202,7 +1202,7 @@ export default function StepIdentity({
                       >
                         <Image src="/images/identity/how-it-works-1.png" alt="Candidate holding their glasses, ready to take them off" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
                       </HowItWorksCard>
-                      <div className="hidden min-[480px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                      <div className="hidden sm:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
                         <ArrowRight className="w-4 h-4 text-brand-blue" />
                       </div>
                       <HowItWorksCard
@@ -1213,7 +1213,7 @@ export default function StepIdentity({
                       >
                         <Image src="/images/identity/how-it-works-2.png" alt="Candidate without glasses, face centred in the frame" fill sizes="(min-width: 768px) 160px, 33vw" className="object-cover select-none" draggable={false} />
                       </HowItWorksCard>
-                      <div className="hidden min-[480px]:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
+                      <div className="hidden sm:flex items-center flex-shrink-0 self-start mt-[4rem]" aria-hidden="true">
                         <ArrowRight className="w-4 h-4 text-brand-blue" />
                       </div>
                       <HowItWorksCard
@@ -1269,7 +1269,7 @@ export default function StepIdentity({
                         {/* Only a blocked camera is spelled out here — the face
                             hints already show on the camera itself. */}
                         {cameraError && (
-                          <p role="status" className="text-xs text-gray-600 text-center">
+                          <p role="status" className="tf-meta text-center">
                             Camera access is blocked — allow it in the address bar, then retry.
                           </p>
                         )}

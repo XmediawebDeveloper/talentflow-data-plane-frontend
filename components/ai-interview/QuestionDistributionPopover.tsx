@@ -200,7 +200,7 @@ export function QuestionDistributionPopover({
   );
 
   const qCell = (n: number, tone: string) => (
-    <td className="align-top px-2 py-1.5 w-[32px] sm:w-[40px]">
+    <td className="tf-td align-top w-[32px] sm:w-[40px]">
       <span className={`text-2xs font-mono font-semibold ${tone}`}>Q{n}</span>
     </td>
   );
@@ -213,7 +213,7 @@ export function QuestionDistributionPopover({
         className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
       >
         {qCell(n, sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan')}
-        <td className="align-top px-2 py-1.5">
+        <td className="tf-td align-top">
           <div className="flex flex-wrap items-center gap-1.5">
             {chips.map((s, i) => (
               <span
@@ -234,7 +234,7 @@ export function QuestionDistributionPopover({
   const renderHrRow = (q: DistHRQuestion, n: number) => (
     <tr key={`hr-${q.id}`} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
       {qCell(n, 'text-brand-orange-deep')}
-      <td className="align-top px-2 py-1.5">
+      <td className="tf-td align-top">
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-2xs text-gray-800">{q.question_text}</span>
         </div>
@@ -263,8 +263,8 @@ export function QuestionDistributionPopover({
         className={`${hrQuestions.length > 0 ? POPOVER_WIDTH[2] : POPOVER_WIDTH[1]} max-h-[75dvh] overflow-y-auto p-0`}
       >
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-          <div className="text-2xs text-gray-500">
+          <div className="tf-row-title">Question Distribution</div>
+          <div className="tf-micro-hint">
             {totalQ + hrQuestions.length} questions · {totalSkillsCovered} skills covered
           </div>
           {/* Per-section question counts — only sections that have questions. */}
@@ -287,9 +287,9 @@ export function QuestionDistributionPopover({
               to the wrong box. */}
           <div className="sticky top-0 z-10 bg-white">
             <div className="grid grid-cols-[32px_1fr_96px] sm:grid-cols-[40px_1fr_150px] bg-white border border-gray-100 rounded-t-md">
-              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Q#</span>
-              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Skills/Questions</span>
-              <span className="px-2 py-1.5 text-xs font-semibold text-gray-600">Section</span>
+              <span className="px-2 py-1.5 tf-caption">Q#</span>
+              <span className="px-2 py-1.5 tf-caption">Skills/Questions</span>
+              <span className="px-2 py-1.5 tf-caption">Section</span>
             </div>
           </div>
           <div className="border border-t-0 border-gray-100 rounded-b-md">

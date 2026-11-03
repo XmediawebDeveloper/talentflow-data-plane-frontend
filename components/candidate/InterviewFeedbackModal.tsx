@@ -100,8 +100,8 @@ function StarRating({ label, hint, Icon, iconClass, value, onChange, disabled }:
     <div className="flex items-start gap-3 sm:gap-4 py-4 first:pt-0">
       <Icon className={`w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5 ${iconClass}`} aria-hidden />
       <div className="min-w-0 flex-1">
-      <p className="text-sm sm:text-base font-semibold text-gray-900">{label}</p>
-      <p className="text-sm text-gray-500 mt-0.5 mb-2.5">{hint}</p>
+      <p className="tf-row-title sm:text-base">{label}</p>
+      <p className="tf-body-muted mt-0.5 mb-2.5">{hint}</p>
       <div
         role="radiogroup"
         aria-label={label}
@@ -149,7 +149,7 @@ function StarRating({ label, hint, Icon, iconClass, value, onChange, disabled }:
           );
         })}
         {value > 0 && (
-          <span className="ml-2 sm:ml-3 text-sm font-semibold text-gray-900 tabular-nums">
+          <span className="ml-2 sm:ml-3 tf-row-title tabular-nums">
             {value.toFixed(1)} / 5
           </span>
         )}
@@ -273,8 +273,8 @@ export default function InterviewFeedbackModal({
             <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-7 h-7 text-success" />
             </div>
-            <h2 className="text-lg font-bold text-gray-900 mb-1">Thank you for your feedback!</h2>
-            <p className="text-sm text-gray-500">We appreciate you taking the time.</p>
+            <h2 className="tf-section-title mb-1">Thank you for your feedback!</h2>
+            <p className="tf-body-muted">We appreciate you taking the time.</p>
           </div>
         ) : (
           <>
@@ -282,10 +282,10 @@ export default function InterviewFeedbackModal({
             <div className="shrink-0 flex items-start gap-3 sm:gap-4 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
               <MessageCircleMore className="w-7 h-7 sm:w-8 sm:h-8 text-brand-blue shrink-0" aria-hidden />
               <div className="min-w-0 flex-1">
-                <h2 id="feedback-title" className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
+                <h2 id="feedback-title" className="tf-section-title sm:text-xl tracking-tight">
                   Quick feedback
                 </h2>
-                <p className="text-sm text-gray-500 mt-0.5">
+                <p className="tf-body-muted mt-0.5">
                   Optional, and it won&apos;t affect your result.
                 </p>
               </div>
@@ -319,7 +319,7 @@ export default function InterviewFeedbackModal({
                 <div className="flex items-start gap-3 sm:gap-4 pt-4">
                   <MessageSquareText className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5 text-brand-blue" aria-hidden />
                   <div className="min-w-0 flex-1">
-                    <label htmlFor="feedback-comment" className="block text-sm sm:text-base font-semibold text-gray-900 mb-2">
+                    <label htmlFor="feedback-comment" className="block tf-row-title sm:text-base mb-2">
                       Any quick feedback? <span className="font-normal text-sm text-gray-500">(optional)</span>
                     </label>
                     <Textarea
@@ -334,7 +334,7 @@ export default function InterviewFeedbackModal({
                       placeholder="Tell us anything that would make this better…"
                       className="min-h-[84px] max-h-40"
                     />
-                    <p className="text-xs text-gray-400 mt-1 text-right tabular-nums">
+                    <p className="tf-hint mt-1 text-right tabular-nums">
                       {comment.length}/{COMMENT_MAX}
                     </p>
                   </div>
@@ -359,7 +359,7 @@ export default function InterviewFeedbackModal({
                 variant="secondary"
                 onClick={handleClose}
                 disabled={submitting}
-                className="border-transparent bg-transparent text-gray-600 hover:text-gray-900"
+                className="border-transparent bg-transparent text-gray-600 hover:text-gray-900 hover:bg-[var(--surface-hover)]"
               >
                 Skip
               </Button>

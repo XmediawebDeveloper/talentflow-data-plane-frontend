@@ -581,7 +581,7 @@ export function InvitationActionsMenu({ actions, extraItems, className }: {
   extraItems?: React.ReactNode;
   className?: string;
 }) {
-  if (actions.length === 0 && !extraItems) return <span className="text-xs text-gray-400 dark:text-slate-500">—</span>;
+  if (actions.length === 0 && !extraItems) return <span className="tf-hint">—</span>;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -722,29 +722,29 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+          <h3 className="min-w-0 truncate tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => { if (!saving) onClose(); }}
             aria-label="Close"
-            className="px-2 shrink-0"
+            className="shrink-0"
           >
             <X className="w-5 h-5" />
           </Button>
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
-          <p className="text-sm text-gray-500 dark:text-slate-500">
+          <p className="tf-body-muted">
             Update the candidate's details below. Saving will send them a fresh invitation link automatically.
           </p>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+            <label className="block tf-caption mb-1">Candidate name</label>
             <input
               type="text"
               value={form.candidate_name}
               onChange={(e) => setForm((f) => ({ ...f, candidate_name: e.target.value }))}
               aria-invalid={nameError ? 'true' : undefined}
-              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full min-w-0 h-9 px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 nameError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -753,13 +753,13 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             {nameError && <p className="mt-1 text-xs text-destructive">{nameError}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+            <label className="block tf-caption mb-1">Candidate email</label>
             <input
               type="email"
               value={form.candidate_email}
               onChange={(e) => setForm((f) => ({ ...f, candidate_email: e.target.value }))}
               aria-invalid={emailError ? 'true' : undefined}
-              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full min-w-0 h-9 px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 emailError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -910,17 +910,17 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                       <entry.Icon className="w-3.5 h-3.5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                      <p className="tf-meta">{formatIST(entry.at)}</p>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
+                        <p className="tf-row-name">{entry.label}</p>
                         {isCurrent && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                          <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                             Current status
                           </span>
                         )}
                       </div>
                       {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
-                        <p className="text-xs text-gray-600 dark:text-slate-400 break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
+                        <p className="tf-meta break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
                       )}
                     </div>
                   </li>
@@ -928,7 +928,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
               })}
             </ol>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+            <p className="tf-body-muted py-6 text-center">No history recorded yet.</p>
           )}
         </div>
       </DialogContent>

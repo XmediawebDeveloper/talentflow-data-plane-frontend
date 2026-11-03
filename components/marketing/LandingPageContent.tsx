@@ -371,7 +371,7 @@ export function LandingPageContent() {
             {/* Steps back down at xl, where the artwork appears and the column
                 narrows — the headline has to sit beside the subject rather than
                 run under it, then opens up again at 2xl once there is room. */}
-            <h1 className="text-[1.75rem] font-extrabold leading-[1.02] tracking-[-0.045em] text-balance min-[400px]:text-[2.35rem] min-[400px]:leading-[0.98] sm:text-[3.1rem] md:text-[3.95rem] lg:text-[4.6rem] xl:text-[3rem] 2xl:text-[4.2rem]">
+            <h1 className="text-[1.75rem] font-extrabold leading-[1.02] tracking-[-0.045em] text-balance xs:text-[2.35rem] xs:leading-[0.98] sm:text-[3.1rem] md:text-[3.95rem] lg:text-[4.6rem] xl:text-[3rem] 2xl:text-[4.2rem]">
               {/* No `whitespace-nowrap`: at 3.95rem the line is ~620px, which
                   is wider than the usable width between 640 and ~700px, and the
                   section clips its overflow — so the sentence lost its tail

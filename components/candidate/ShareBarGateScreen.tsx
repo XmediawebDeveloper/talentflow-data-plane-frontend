@@ -44,7 +44,7 @@ export const ShareBarGateScreen = forwardRef<HTMLDivElement, ShareBarGateScreenP
           </p>
 
           <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 mb-6">
-            <ul className="space-y-2 text-sm text-gray-700">
+            <ul className="space-y-2 tf-body">
               <li className="flex items-start gap-2">
                 <Monitor className="w-4 h-4 text-brand-blue mt-0.5 shrink-0" />
                 <span>Keep sharing your <strong>entire screen</strong> for the whole assessment. Stopping the share is recorded and blocks the assessment until you share again.</span>
@@ -81,7 +81,7 @@ export const ShareBarGateScreen = forwardRef<HTMLDivElement, ShareBarGateScreenP
               'Continue'
             )}
           </Button>
-          <p className="text-xs text-gray-500 text-center mt-3">
+          <p className="tf-meta text-center mt-3">
             We take one picture of your screen to verify the bar is hidden. It is stored with your assessment record.
           </p>
         </div>

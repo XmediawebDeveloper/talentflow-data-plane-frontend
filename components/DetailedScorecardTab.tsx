@@ -710,13 +710,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Status summary sentence for the Overall Rating, per the client's
           10-point rating document (section 9 UI guidance). */}
       {resume.ratingSummaryText && (
-        <p className="text-xs text-gray-500 italic break-words">{resume.ratingSummaryText}</p>
+        <p className="tf-meta italic break-words">{resume.ratingSummaryText}</p>
       )}
 
       {/* AI Analysis */}
       {aiReasoning && (
-        <div className="bg-white border border-gray-200 rounded-lg p-4">
-          <h4 className="text-sm font-semibold text-gray-800 uppercase tracking-wide mb-2">AI Analysis</h4>
+        <div className="tf-panel p-4">
+          <h4 className="tf-row-title uppercase tracking-wide mb-2">AI Analysis</h4>
           {/* `aiReasoning` is LLM-generated free text — it has no guarantee of
               word-breakable spacing (a long URL, a run-on technical term). Without
               `break-words` a single such run doesn't wrap, and since this sits
@@ -724,13 +724,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               overflow-x), CSS's overflow interaction rule computes that axis to
               `auto` too — turning one long word into a sideways-scrollable modal
               with everything else left looking stranded in a narrow column. */}
-          <p className="text-gray-900 text-sm leading-relaxed break-words">{aiReasoning}</p>
+          <p className="tf-body leading-relaxed break-words">{aiReasoning}</p>
         </div>
       )}
 
       {/* Detailed Scoring Table - Only show if real API data exists */}
       {criteriaScores.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="tf-panel overflow-hidden">
           <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-6 py-3">
             <h4 className="text-gray-900 flex items-center gap-2">
               <CheckSquare className="w-5 h-5 text-gray-800" />
@@ -765,7 +765,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2 min-w-0">
                       <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                      <span className="text-sm font-semibold text-gray-900 break-words">{criteria.name}</span>
+                      <span className="tf-row-title break-words">{criteria.name}</span>
                     </div>
                     <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold border flex-shrink-0 ${getRatingBgColor(criteria.rating)}`}>
                       {criteria.rating}
@@ -809,7 +809,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
+                    <p className="tf-body leading-relaxed whitespace-pre-line break-words">
                       {criteria.aiReasoning}
                     </p>
                   </div>
@@ -821,19 +821,19 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <table className="w-full table-fixed">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="w-[20%] px-3 py-2.5 text-left text-xs font-semibold text-gray-600">
+                  <th className="tf-th-cell w-[20%] text-left tf-th">
                     Category
                   </th>
-                  <th className="w-[10%] px-3 py-2.5 text-center text-xs font-semibold text-gray-600">
+                  <th className="tf-th-cell w-[10%] text-center tf-th">
                     Rating
                   </th>
-                  <th className="w-[12%] px-3 py-2.5 text-center text-xs font-semibold text-gray-600">
+                  <th className="tf-th-cell w-[12%] text-center tf-th">
                     Range
                   </th>
-                  <th className="w-[14%] px-3 py-2.5 text-left text-xs font-semibold text-gray-600">
+                  <th className="tf-th-cell w-[14%] text-left tf-th">
                     Eligible Status
                   </th>
-                  <th className="w-[12%] px-3 py-2.5 text-left text-xs font-semibold text-gray-600">
+                  <th className="tf-th-cell w-[12%] text-left tf-th">
                     Criteria
                   </th>
                   <th className={`${rowExpand ? 'w-[27%]' : 'w-[32%]'} px-3 py-2.5 text-left text-xs font-semibold text-gray-600 `}>
@@ -848,7 +848,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           aria-pressed={allReasoningOpen}
                           aria-label={allReasoningOpen ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
                           title={allReasoningOpen ? 'Collapse all reasoning' : 'Expand all reasoning'}
-                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         >
                           {allReasoningOpen
                             ? <ChevronsDownUp className="w-3.5 h-3.5" />
@@ -859,7 +859,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                     </div>
                   </th>
                   {rowExpand && (
-                    <th className="w-[5%] px-3 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-label="Show reasoning" />
+                    <th className="tf-th-cell w-[5%] tf-th" aria-label="Show reasoning" />
                   )}
                 </tr>
               </thead>
@@ -870,23 +870,23 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   const rowOpen = isRowOpen(index);
                   return (
                     <tr key={index} className="hover:bg-gray-50">
-                      <td className="px-3 py-3">
+                      <td className="tf-td">
                         <div className="flex items-center gap-2 min-w-0">
                           <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                          <span className="text-sm font-medium text-gray-900 truncate">{criteria.name}</span>
+                          <span className="tf-row-name truncate">{criteria.name}</span>
                         </div>
                       </td>
-                      <td className="px-3 py-3 text-center">
+                      <td className="tf-td text-center">
                         <span className={`inline-flex items-center justify-center w-10 h-10 rounded-lg font-bold border ${getRatingBgColor(criteria.rating)}`}>
                           {criteria.rating}
                         </span>
                       </td>
-                      <td className="px-3 py-3 text-center">
+                      <td className="tf-td text-center">
                         <span className={`text-sm ${getRatingRangeColor(criteria.rating)}`}>
                           {getRatingRange(criteria.rating)}
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="tf-td">
                         <div className="flex items-center gap-1.5 min-w-0">
                           {eligibility.icon}
                           <span className={`text-sm font-medium truncate ${eligibility.color}`}>
@@ -894,7 +894,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           </span>
                         </div>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="tf-td">
                         <span className={`inline-block max-w-full truncate px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                           criteria.criteriaType === 'Required'
                             ? 'bg-destructive-subtle text-destructive border border-destructive-line'
@@ -903,10 +903,10 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                           {criteria.criteriaType}
                         </span>
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="tf-td">
                         <div className={`flex gap-1.5 ${rowOpen ? 'items-start' : 'items-center'}`}>
                           {rowOpen ? (
-                            <p className="flex-1 min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
+                            <p className="flex-1 min-w-0 tf-body leading-relaxed whitespace-pre-line break-words">
                               {criteria.aiReasoning}
                             </p>
                           ) : (
@@ -916,7 +916,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                               /* Fills the column (copy button after it) and cuts the
                                  full reasoning off with an ellipsis where the cell
                                  ends, instead of a fixed first-four-words stub. */
-                              className="flex-1 min-w-0 block truncate px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 cursor-default"
+                              className="flex-1 min-w-0 block truncate px-2.5 py-1 rounded-full tf-caption bg-gray-100 border border-gray-300 cursor-default"
                             >
                               {criteria.aiReasoning}
                             </span>
@@ -936,7 +936,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                       </td>
                       {/* ⌄ — this row's full reasoning, open / closed. */}
                       {rowExpand && (
-                        <td className="px-3 py-3 text-center">
+                        <td className="tf-td text-center">
                           <button
                             type="button"
                             onClick={() => toggleRowExpanded(index)}
@@ -1000,11 +1000,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           },
         ];
         return (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div className="tf-grid-stats">
             {stats.map(({ label, count, icon: Icon, tile, value, bar }) => (
               <div
                 key={label}
-                className="min-w-0 bg-white border border-gray-200 rounded-xl p-3 sm:p-4 shadow-sm shadow-brand-blue/5 flex flex-col gap-3"
+                className="tf-card-soft min-w-0 p-3 sm:p-4 flex flex-col gap-3"
               >
                 {/* Narrow cards stack the icon over the label so long labels
                     don't overflow; mt-auto below keeps every count and bar on
@@ -1013,11 +1013,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                   <span className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${tile}`}>
                     <Icon className="w-[18px] h-[18px]" />
                   </span>
-                  <span className="min-w-0 break-words text-sm font-medium text-gray-700 leading-tight">{label}</span>
+                  <span className="min-w-0 break-words tf-label leading-tight">{label}</span>
                 </div>
                 <div className="mt-auto flex items-baseline gap-1.5">
                   <span className={`text-2xl font-bold leading-none ${value}`}>{count}</span>
-                  <span className="text-xs text-gray-500">of {total}</span>
+                  <span className="tf-meta">of {total}</span>
                 </div>
                 <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
                   <div className={`h-full rounded-full ${bar}`} style={{ width: `${total ? (count / total) * 100 : 0}%` }} />

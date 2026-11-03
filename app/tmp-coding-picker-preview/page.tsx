@@ -49,7 +49,7 @@ export default function TmpCodingPickerPreview() {
   return (
     <div className="min-h-screen bg-slate-100 p-4 sm:p-6 space-y-8">
       <a className="text-sm text-brand-blue underline" href="/tmp-coding-picker-preview/loading">Open the “Preparing your assessment” loading screen</a>
-      <p className="text-sm text-gray-600">
+      <p className="tf-body-secondary">
         Temporary preview — real components, sample data. Nothing is saved or run.
       </p>
 
@@ -62,7 +62,7 @@ export default function TmpCodingPickerPreview() {
 
       <section className="space-y-3">
         <h2 className="font-semibold">Candidate — language picker popup</h2>
-        <button className="px-4 py-2 rounded-lg bg-brand-blue text-white text-sm" onClick={() => setShowPicker(true)}>
+        <button className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue text-sm whitespace-normal shadow-none gap-0 font-normal hover:bg-brand-blue" onClick={() => setShowPicker(true)}>
           Open popup
         </button>
         {showPicker && <CodingLanguagePickerStep token="preview" attemptId="preview" onPicked={() => setShowPicker(false)} />}

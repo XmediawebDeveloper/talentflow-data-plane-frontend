@@ -236,7 +236,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             {/* Unit Type Breakdown */}
             <div className="grid grid-cols-3 gap-4">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div key={i} className="tf-panel p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <Skeleton className="w-8 h-8 rounded-lg" />
                     <Skeleton className="h-4 w-24" />
@@ -255,7 +255,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           </div>
 
           {/* Filters Section */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+          <div className="tf-card-soft p-6 mb-6">
             <div className="flex items-center justify-between gap-4">
               <Skeleton className="h-10 w-64 rounded-lg" />
               <Skeleton className="h-10 w-28 rounded-lg" />
@@ -263,7 +263,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           </div>
 
           {/* Data Table */}
-          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+          <div className="tf-card-soft p-6">
             <div className="flex items-center gap-3 mb-6">
               <Skeleton className="w-5 h-5 rounded" />
               <Skeleton className="h-5 w-48" />
@@ -273,7 +273,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <thead>
                   <tr className="border-b-2 border-gray-200">
                     {Array.from({ length: 8 }).map((_, i) => (
-                      <th key={i} className="text-left py-3 px-4 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                      <th key={i} className="tf-th-cell text-left tf-th">
                         <Skeleton className="h-3 w-20" />
                       </th>
                     ))}
@@ -283,7 +283,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                   {Array.from({ length: 7 }).map((_, r) => (
                     <tr key={r} className="border-b border-gray-100">
                       {Array.from({ length: 8 }).map((_, c) => (
-                        <td key={c} className="py-4 px-4">
+                        <td key={c} className="tf-td">
                           <Skeleton className="h-4 w-16" />
                         </td>
                       ))}
@@ -309,8 +309,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <Eye className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl text-gray-900">Usage Transparency Dashboard</h1>
-                <p className="text-sm text-gray-600 mt-0.5">
+                <h1 className="tf-page-title">Usage Transparency Dashboard</h1>
+                <p className="tf-body-secondary mt-0.5">
                   Detailed visibility of unit deductions: Full, Partial, and Non-Deductions
                 </p>
               </div>
@@ -367,7 +367,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         {/* Summary Cards */}
         {summary && (
           <div className="mb-8">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+            <h2 className="tf-section-title mb-4 flex items-center gap-2">
               <Layers className="w-5 h-5" />
               Deduction Summary ({summary.period.days} Days)
             </h2>
@@ -405,7 +405,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               {/* Non-Deductions */}
               <div className="bg-white border-2 border-gray-200 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-gray-700">Non-Deductions</span>
+                  <span className="tf-label">Non-Deductions</span>
                   <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                     <XCircle className="w-4 h-4 text-gray-600" />
                   </div>
@@ -413,7 +413,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                 <div className="text-3xl font-bold text-gray-800">
                   {summary.summary.by_category?.NON_DEDUCTION || 0}
                 </div>
-                <p className="text-xs text-gray-600 mt-1">0 units (failed/abandoned)</p>
+                <p className="tf-meta mt-1">0 units (failed/abandoned)</p>
               </div>
             </div>
 
@@ -422,7 +422,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               {(['RS', 'AS', 'AIU'] as UnitType[]).map(unitType => {
                 const typeData = summary.summary.by_unit_type?.[unitType];
                 return (
-                  <div key={unitType} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div key={unitType} className="tf-panel p-4">
                     <div className="flex items-center gap-2 mb-3">
                       <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                         {getUnitTypeIcon(unitType)}
@@ -459,7 +459,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         )}
 
         {/* Filters Section */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+        <div className="tf-card-soft p-6 mb-6">
           <ListToolbar
             searchValue={search.query}
             onSearchChange={search.setQuery}
@@ -485,10 +485,10 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
           {showFilters && (
             <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
+            <div className="tf-grid-4">
               {/* Unit Type Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Unit Type</label>
+                <label className="block tf-label mb-2">Unit Type</label>
                 <FilterSelect
                   value={selectedUnitType}
                   onChange={(v) => search.setFilter('unitType', v as UnitType | '')}
@@ -505,7 +505,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
               {/* Category Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Deduction Category</label>
+                <label className="block tf-label mb-2">Deduction Category</label>
                 <FilterSelect
                   value={selectedCategory}
                   onChange={(v) => search.setFilter('category', v as DeductionCategory | '')}
@@ -522,7 +522,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
               {/* Time Period */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Time Period</label>
+                <label className="block tf-label mb-2">Time Period</label>
                 <FilterSelect
                   value={String(days)}
                   onChange={(v) => search.setFilter('days', parseInt(v))}
@@ -545,18 +545,18 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     type="checkbox"
                     checked={includePartialDeductions}
                     onChange={(e) => search.setFilter('includePartialDeductions', e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
+                    className="tf-checkbox focus:ring-gray-500"
                   />
-                  <span className="text-sm text-gray-700">Include Partial Deductions</span>
+                  <span className="tf-body">Include Partial Deductions</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={includeNonDeductions}
                     onChange={(e) => search.setFilter('includeNonDeductions', e.target.checked)}
-                    className="w-4 h-4 rounded border-gray-300 text-gray-700 focus:ring-gray-500"
+                    className="tf-checkbox focus:ring-gray-500"
                   />
-                  <span className="text-sm text-gray-700">Include Non-Deductions (Failed/Abandoned)</span>
+                  <span className="tf-body">Include Non-Deductions (Failed/Abandoned)</span>
                 </label>
               </div>
             </div>
@@ -578,7 +578,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         </div>
 
         {/* Data Table */}
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+        <div className="tf-card-soft p-6">
           <div className="flex items-center justify-between mb-6">
             <div className="flex items-center gap-3">
               <BarChart3 className="w-5 h-5 text-gray-700" />
@@ -596,14 +596,14 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             <table className="w-full">
               <thead>
                 <tr className="border-b-2 border-gray-200">
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Timestamp</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Unit Type</th>
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600">Units</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Category</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Status</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">User</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600">Entity</th>
-                  <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600">Score</th>
+                  <th className="tf-th-cell text-left tf-th">Timestamp</th>
+                  <th className="tf-th-cell text-left tf-th">Unit Type</th>
+                  <th className="tf-th-cell text-center tf-th">Units</th>
+                  <th className="tf-th-cell text-left tf-th">Category</th>
+                  <th className="tf-th-cell text-left tf-th">Status</th>
+                  <th className="tf-th-cell text-left tf-th">User</th>
+                  <th className="tf-th-cell text-left tf-th">Entity</th>
+                  <th className="tf-th-cell text-right tf-th">Score</th>
                 </tr>
               </thead>
               <tbody>
@@ -614,21 +614,21 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                       index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                     }`}
                   >
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-900">
+                    <td className="tf-td">
+                      <div className="tf-body">
                         {formatISTDate(entry.created_at)}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="tf-meta">
                         {formatISTTime(entry.created_at)}
                       </div>
                     </td>
-                    <td className="py-4 px-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-gray-100 text-gray-700 border border-gray-200">
+                    <td className="tf-td">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md tf-caption bg-gray-100 border border-gray-200">
                         {getUnitTypeIcon(entry.unit_type)}
                         {UNIT_TYPE_NAMES[entry.unit_type] || entry.unit_type}
                       </span>
                     </td>
-                    <td className="py-4 px-4 text-center">
+                    <td className="tf-td text-center">
                       <span className={`inline-flex items-center justify-center min-w-[3rem] px-2 py-1 rounded-lg text-sm font-bold ${
                         entry.units_consumed === 0
                           ? 'bg-gray-100 text-gray-500'
@@ -639,34 +639,34 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                         {formatUnitsConsumed(entry.units_consumed)}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="tf-td">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${getDeductionCategoryColor(entry.deduction_category)}`}>
                         {getDeductionIcon(entry.deduction_category)}
                         {getDeductionCategoryName(entry.deduction_category)}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
+                    <td className="tf-td">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium ${getConsumptionStatusColor(entry.status)}`}>
                         {entry.status}
                       </span>
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-900 truncate max-w-[150px]" title={entry.user_email || undefined}>
+                    <td className="tf-td">
+                      <div className="tf-body truncate max-w-[150px]" title={entry.user_email || undefined}>
                         {entry.user_name || entry.user_email || '-'}
                       </div>
                       {entry.team_name && (
-                        <div className="text-xs text-gray-500">{entry.team_name}</div>
+                        <div className="tf-meta">{entry.team_name}</div>
                       )}
                     </td>
-                    <td className="py-4 px-4">
-                      <div className="text-sm text-gray-700 truncate max-w-[200px]" title={entry.entity_name || undefined}>
+                    <td className="tf-td">
+                      <div className="tf-body truncate max-w-[200px]" title={entry.entity_name || undefined}>
                         {entry.entity_name || '-'}
                       </div>
                       {entry.entity_type && (
-                        <div className="text-xs text-gray-500">{entry.entity_type}</div>
+                        <div className="tf-meta">{entry.entity_type}</div>
                       )}
                     </td>
-                    <td className="py-4 px-4 text-right">
+                    <td className="tf-td text-right">
                       {entry.overall_score !== null ? (
                         <span className={`inline-flex items-center px-2 py-1 rounded-lg text-sm font-semibold ${
                           entry.overall_score >= 70
@@ -702,12 +702,12 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           {/* Pagination */}
           {data && data.total > limit && (
             <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-              <div className="text-sm text-gray-600">
+              <div className="tf-body-secondary">
                 Showing {page * limit + 1} - {Math.min((page + 1) * limit, data.total)} of {data.total}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -722,18 +722,18 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                    className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                   />
                 </div>
                 <button
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
                 </span>
                 <button
@@ -750,8 +750,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
         </div>
 
         {/* Legend */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h4 className="text-sm font-semibold text-gray-900 mb-4">Deduction Categories Explained</h4>
+        <div className="tf-card-soft mt-6 p-6">
+          <h4 className="tf-row-title mb-4">Deduction Categories Explained</h4>
           <div className="grid grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
               <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
@@ -759,7 +759,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Full Deduction (1.0)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   Completed action: Resume scored, Assessment sent, AI Interview conducted
                 </p>
               </div>
@@ -770,7 +770,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Partial Deduction (0.5)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   Partial completion: Session cutoff, incomplete assessment submission
                 </p>
               </div>
@@ -781,7 +781,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
               <div>
                 <p className="font-medium text-gray-900">Non-Deduction (0)</p>
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="tf-meta mt-1">
                   No units charged: Failed operation, user abandoned, insufficient units
                 </p>
               </div>

@@ -51,7 +51,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-gray-800" />
-              <h3 className="text-sm text-gray-900">Performance</h3>
+              <h3 className="tf-body">Performance</h3>
             </div>
             <button
               onClick={() => setIsExpanded(false)}
@@ -67,7 +67,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-green-600" />
-                <span className="text-xs text-gray-600">Load Time</span>
+                <span className="tf-meta">Load Time</span>
               </div>
               <span className={`text-xs ${metrics.loadTime < 200 ? 'text-green-600' : metrics.loadTime < 300 ? 'text-yellow-600' : 'text-red-600'}`}>
                 {Math.round(metrics.loadTime)}ms
@@ -78,7 +78,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Database className="w-3.5 h-3.5 text-gray-800" />
-                <span className="text-xs text-gray-600">Memory</span>
+                <span className="tf-meta">Memory</span>
               </div>
               <span className={`text-xs ${metrics.memoryUsage < 50 ? 'text-green-600' : metrics.memoryUsage < 70 ? 'text-yellow-600' : 'text-red-600'}`}>
                 {Math.round(metrics.memoryUsage)}%
@@ -89,7 +89,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <Zap className="w-3.5 h-3.5 text-yellow-600" />
-                <span className="text-xs text-gray-600">Active Requests</span>
+                <span className="tf-meta">Active Requests</span>
               </div>
               <span className="text-xs text-gray-900">{metrics.activeRequests}</span>
             </div>
@@ -97,7 +97,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
             {/* Cache Hit Rate */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-600">Cache Hit Rate</span>
+                <span className="tf-meta">Cache Hit Rate</span>
                 <span className="text-xs text-gray-900">{Math.round(metrics.cacheHitRate)}%</span>
               </div>
               <div className="w-full bg-gray-200 rounded-full h-1.5">
@@ -112,7 +112,7 @@ export default function PerformanceMetrics({ position = 'bottom-right' }: Perfor
           {/* Status */}
           <div className="mt-4 pt-3 border-t border-gray-200">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-gray-600">Status</span>
+              <span className="tf-meta">Status</span>
               <div className="flex items-center gap-1.5">
                 <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
                 <span className="text-xs text-green-600">Healthy</span>

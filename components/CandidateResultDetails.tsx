@@ -984,7 +984,7 @@ export default function CandidateResultDetails({
     // (left nav / right content) body — so the skeleton lines up with the
     // page that replaces it rather than a generic block.
     return (
-      <div className="flex-1 bg-slate-50">
+      <div className="tf-page">
         {/* Top assessment bar */}
         <div className="bg-white border-b border-gray-100 shadow-sm">
           <div className="px-3 sm:px-4 py-3 sm:py-4">
@@ -1024,8 +1024,8 @@ export default function CandidateResultDetails({
         {/* Content */}
         <div className="py-4 sm:py-6 bg-white">
           {/* Assessment Info card — grid of icon + label + value cells */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
+            <div className="tf-grid-3">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3">
                   <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0" />
@@ -1040,7 +1040,7 @@ export default function CandidateResultDetails({
 
           {/* Two-column body: left nav rail + right content card */}
           <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-            <aside className="min-w-0 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
+            <aside className="min-w-0 self-start tf-panel">
               <div className="p-2 sm:p-3">
                 <div className="flex flex-col gap-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -1050,7 +1050,7 @@ export default function CandidateResultDetails({
               </div>
             </aside>
             <div className="min-w-0">
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 space-y-3">
+              <div className="tf-panel p-4 sm:p-6 space-y-3">
                 <Skeleton className="h-5 w-40 mb-2" />
                 <Skeleton className="h-3.5 w-full" />
                 <Skeleton className="h-3.5 w-5/6" />
@@ -1066,7 +1066,7 @@ export default function CandidateResultDetails({
 
   if (detailsError) {
     return (
-      <div className="flex-1 bg-slate-50 flex items-center justify-center">
+      <div className="tf-page flex items-center justify-center">
         <div className="text-center px-4 min-w-0 [overflow-wrap:anywhere]">
           <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
           <p className="text-destructive mb-4">{detailsError}</p>
@@ -1122,7 +1122,7 @@ export default function CandidateResultDetails({
   };
 
   return (
-    <div className="flex-1 bg-slate-50">
+    <div className="tf-page">
       {breadcrumbItems && breadcrumbItems.length > 0 && (
         <div className="px-3 sm:px-4 pt-3">
           {/* Previous / Next rides inside the breadcrumb bar, as on
@@ -1166,7 +1166,7 @@ export default function CandidateResultDetails({
               <NameAvatar name={candidateData?.name} fallback={candidateData?.email} size="xl" />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap min-w-0">
-                  <h1 className="min-w-0 text-lg sm:text-xl text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                  <h1 className="tf-page-title min-w-0 truncate">{candidateData?.name || 'Unknown'}</h1>
                   {/* `shrink-0` so a long name truncates, not the badge. */}
                   {(() => {
                     const displayStatus = resultStatusOf(detailedResult)
@@ -1209,7 +1209,7 @@ export default function CandidateResultDetails({
                     </Link>
                   ) : <span key="job" className="inline-flex items-center gap-1.5 text-gray-700">{jobLabel}</span>);
                   return (
-                    <div className="flex items-center gap-2 flex-wrap mt-1 text-sm text-gray-500 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mt-1 tf-body-muted min-w-0">
                       {parts.map((part, i) => (
                         <span key={i} className="inline-flex items-center gap-2 min-w-0">
                           {i > 0 && <span className="text-gray-300" aria-hidden>|</span>}
@@ -1219,7 +1219,7 @@ export default function CandidateResultDetails({
                     </div>
                   );
                 })()}
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-muted mt-2">
                   <span className="flex items-center gap-1" title="Start time">
                     <Clock className="w-3.5 h-3.5" />
                     Started {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
@@ -1320,7 +1320,7 @@ export default function CandidateResultDetails({
                       toast.error('Failed to export result PDF. Please try again.');
                     }
                   }}
-                  className="px-3 sm:px-4 py-2 text-sm font-medium text-white bg-brand-blue border border-brand-blue rounded-lg hover:bg-brand-blue-2 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  className="tf-btn tf-btn-primary px-3 sm:px-4 py-2 text-sm bg-brand-blue border border-brand-blue hover:bg-brand-blue-2 transition-colors flex gap-1.5 shadow-none"
                 >
                   <Download className="w-4 h-4" />
                   <span>Report</span>
@@ -1373,7 +1373,7 @@ export default function CandidateResultDetails({
                     </span>
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="text-base font-bold leading-tight text-gray-900">{card.value}</span>
+                        <span className="tf-section-title leading-tight">{card.value}</span>
                         {card.passed !== undefined && (
                           <span className={`rounded px-1.5 py-0.5 text-2xs font-semibold ${
                             card.passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
@@ -1382,7 +1382,7 @@ export default function CandidateResultDetails({
                           </span>
                         )}
                       </div>
-                      <div className="text-2xs text-gray-500 truncate">
+                      <div className="tf-micro-hint truncate">
                         {card.label}{card.sub ? ` · ${card.sub}` : ''}
                       </div>
                     </div>
@@ -1450,7 +1450,7 @@ export default function CandidateResultDetails({
             horizontal pill bar above it. Shared `tabPill` chrome; danger tabs
             flip to solid red when active. top-12 clears the sticky breadcrumb. */}
         <div className="space-y-3 sm:space-y-4 lg:space-y-0 lg:grid lg:grid-cols-[210px_minmax(0,1fr)] lg:items-start lg:gap-6">
-          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
           <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map((tab, tabIndex) => {
@@ -1571,17 +1571,17 @@ export default function CandidateResultDetails({
                     off the record instead would make the gap before the fetch
                     lands announce that the job has no description at all. */}
                 {!assessmentMeta.jd_id ? (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                  <div className="tf-panel px-3 sm:px-4 lg:px-6 py-8 text-center">
                     <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-                    <p className="text-sm text-gray-500 dark:text-slate-400">No linked job description found</p>
+                    <p className="tf-body-muted">No linked job description found</p>
                   </div>
                 ) : jdError ? (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                  <div className="tf-panel px-3 sm:px-4 lg:px-6 py-8 text-center">
                     <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
                     <p className="text-sm text-red-600 dark:text-red-400">{jdError}</p>
                   </div>
                 ) : jdLoading || !jdData ? (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
+                  <div className="tf-panel px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
                     <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
                   </div>
                 ) : (
@@ -1614,17 +1614,17 @@ export default function CandidateResultDetails({
 
         {/* Candidate Insights - AI Generated Analysis */}
         {isInsightsPanel && detailedResult && detailedResult.scoring_status === 'completed' && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden mb-4 sm:mb-6">
+          <div className="tf-panel overflow-hidden mb-4 sm:mb-6">
             <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-brand-blue ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
                   <Award className="w-5 h-5 text-white" />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="text-gray-900 flex items-center gap-2 text-sm sm:text-base tracking-tight font-semibold">
+                  <h2 className="tf-row-title flex items-center gap-2 sm:text-base tracking-tight">
                     AI-Generated Candidate Insights
                   </h2>
-                  <p className="text-gray-600 text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                  <p className="tf-body-secondary mt-1">Advanced automated analysis for Technical & Coding rounds</p>
                 </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
@@ -1649,10 +1649,10 @@ export default function CandidateResultDetails({
             </div>
             <div className="p-4 sm:p-6">
               {detailedResult.candidate_insights?.interview_strength ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="tf-grid-2">
                 {/* Summary — overall performance write-up, based on the assessment score */}
                 {detailedResult.summary && (
-                  <div className="sm:col-span-2 bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                  <div className="sm:col-span-2 tf-panel p-4">
                     <h3 className="text-gray-900 dark:text-gray-100 font-medium mb-3 flex items-center gap-2">
                       <Info className="w-4 h-4" />
                       Summary
@@ -1663,7 +1663,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                  <div className="tf-panel p-4">
                     <h3 className="text-success-strong font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       Interview Strength
@@ -1674,7 +1674,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Weakness */}
                 {detailedResult.candidate_insights.interview_weakness && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                  <div className="tf-panel p-4">
                     <h3 className="text-brand-orange-deep font-medium mb-3 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
                       Interview Weakness
@@ -1685,7 +1685,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Modules */}
                 {detailedResult.candidate_insights.interview_training_modules && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                  <div className="tf-panel p-4">
                     <h3 className="text-brand-blue font-medium mb-3 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Interview Training Modules
@@ -1696,7 +1696,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Suggestion */}
                 {detailedResult.candidate_insights.interview_training_suggestion && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                  <div className="tf-panel p-4">
                     <h3 className="text-brand-cyan font-medium mb-3 flex items-center gap-2">
                       <Briefcase className="w-4 h-4" />
                       Interview Training Suggestion
@@ -1708,8 +1708,8 @@ export default function CandidateResultDetails({
               ) : (
                 <div className="text-center py-8 sm:py-12">
                   <Award className="w-12 h-12 sm:w-16 sm:h-16 text-brand-blue/30 mx-auto mb-4" />
-                  <h3 className="text-base sm:text-lg text-gray-700 mb-2 tracking-tight font-semibold">No AI Insights Generated Yet</h3>
-                  <p className="text-sm sm:text-base text-gray-600 mb-4">
+                  <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">No AI Insights Generated Yet</h3>
+                  <p className="tf-body-secondary sm:text-base mb-4">
                     Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
                   </p>
                   <Button
@@ -1751,11 +1751,11 @@ export default function CandidateResultDetails({
                   <Info className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
                   <div className="flex-1 min-w-0 [overflow-wrap:anywhere]">
                     <h3 className="text-sm font-medium text-brand-orange-deep mb-2">Score Calculation Note</h3>
-                    <p className="text-sm text-gray-700 mb-3">
+                    <p className="tf-body mb-3">
                       The assessment score is calculated using weighted section scores.
                       Individual section scores may show 0% if questions are not yet scored or if there's a scoring status mismatch.
                     </p>
-                    <div className="text-xs text-gray-600 space-y-1">
+                    <div className="tf-meta space-y-1">
                       <div><strong>Scoring Status:</strong> {detailedResult.scoring_status}</div>
                       <div className="mt-2 mb-1"><strong>Score Breakdown:</strong></div>
                       {detailedResult.round_scores.map((round, idx) => (
@@ -1778,8 +1778,8 @@ export default function CandidateResultDetails({
 
         {/* Section Scores — shown inside the AI-Generated Candidate Insights panel. */}
         {isInsightsPanel && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
-          <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
+        <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="tf-row-title sm:text-base mb-3 sm:mb-4 tracking-tight">Section-wise Performance</h2>
           <div className="space-y-4">
             {candidateData?.sections.map((section, idx) => {
               const isHR = section.name.toLowerCase().includes('hr');
@@ -1827,7 +1827,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center justify-between gap-3 mb-3">
                           <div className="min-w-0">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="min-w-0 text-sm sm:text-base text-gray-900 [overflow-wrap:anywhere]">{section.name}</span>
+                              <span className="min-w-0 tf-body sm:text-base [overflow-wrap:anywhere]">{section.name}</span>
                               {isHR ? (
                                 <span className="shrink-0 whitespace-nowrap px-2 py-0.5 bg-slate-100 text-slate-700 ring-1 ring-slate-200 rounded text-xs font-medium">
                                   Not Scored
@@ -1842,7 +1842,7 @@ export default function CandidateResultDetails({
                                 </span>
                               )}
                             </div>
-                            <div className="text-sm text-gray-500">
+                            <div className="tf-body-muted">
                               {scoringDone || isHR ? (
                                 <>
                                   {section.score}/{section.totalScore} correct
@@ -1877,8 +1877,8 @@ export default function CandidateResultDetails({
                   {totalQ > 0 && (
                     <div className={isHR ? '' : 'mt-1 pt-3 border-t border-brand-blue/10'}>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-medium text-gray-600">Question Attendance</span>
-                        <span className="text-xs text-gray-400">{totalQ} Total</span>
+                        <span className="tf-caption">Question Attendance</span>
+                        <span className="tf-hint">{totalQ} Total</span>
                       </div>
                       {/* Stacked bar — Submitted vs Unanswered only.
                           Skipped was a synthetic third bucket that confused
@@ -1927,13 +1927,13 @@ export default function CandidateResultDetails({
             </div>
             <div className="flex-1">
               <h2 className="text-gray-900 mb-1">Assessment Scoring Rules</h2>
-              <p className="text-sm text-gray-600">Critical Evaluation Logic for PASS/FAIL determination</p>
+              <p className="tf-body-secondary">Critical Evaluation Logic for PASS/FAIL determination</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+          <div className="tf-grid-2">
             {/* HR Section Rules */}
-            <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+            <div className="tf-panel p-3 sm:p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                   <FileText className="w-4 h-4 text-gray-600" />
@@ -1988,26 +1988,26 @@ export default function CandidateResultDetails({
               <h3 className="text-gray-900">Pass Logic (Per Section)</h3>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 mb-3">
-              <div className="text-sm text-gray-900 mb-2">A section PASSES if either condition is met:</div>
+              <div className="tf-body mb-2">A section PASSES if either condition is met:</div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-gray-800 font-bold flex-shrink-0">1.</span>
                   <span className="text-gray-700">At least <strong>70% of questions</strong> score ≥7</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <div className="flex items-center gap-2 tf-meta">
                   <span className="px-2 py-0.5 bg-gray-200 rounded">Example:</span>
                   <span>10 questions → 7+ questions must score ≥7</span>
                 </div>
               </div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3">
-              <div className="text-sm text-gray-900 mb-2">OR:</div>
+              <div className="tf-body mb-2">OR:</div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
                   <span className="text-gray-800 font-bold flex-shrink-0">2.</span>
                   <span className="text-gray-700">Overall average score ≥7</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-500 text-xs">
+                <div className="flex items-center gap-2 tf-meta">
                   <span className="px-2 py-0.5 bg-gray-200 rounded">Example:</span>
                   <span>Total score: 75/100 → Average: 7.5 ≥ 7 → PASS</span>
                 </div>
@@ -2021,7 +2021,7 @@ export default function CandidateResultDetails({
               <Award className="w-5 h-5 text-success" />
               <h3 className="text-gray-900">Final Assessment Result</h3>
             </div>
-            <div className="text-sm text-gray-700">
+            <div className="tf-body">
               <strong>PASS</strong> if <strong>ALL</strong> evaluated sections (Technical + Coding) pass
             </div>
             <div className="mt-2 flex items-center gap-2 text-xs text-warning bg-warning-subtle border border-warning-line rounded px-3 py-2">
@@ -2032,17 +2032,17 @@ export default function CandidateResultDetails({
         </div>}
 
         {isQuestionAnalysisTab && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+        <div className="tf-panel overflow-hidden">
 
           {/* Agent Processing State */}
           {detailedResult && detailedResult.scoring_status === 'processing' && (
             <div className="p-3 sm:p-6 md:p-8">
-              <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-5 sm:p-8 text-center">
+              <div className="tf-panel p-5 sm:p-8 text-center">
                 <div className="w-16 h-16 sm:w-20 sm:h-20 bg-brand-blue rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-brand-blue/25 ring-1 ring-white/20">
                   <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-white animate-spin" />
                 </div>
-                <h3 className="text-lg sm:text-xl font-semibold text-gray-900 mb-2 tracking-tight">Processing Results</h3>
-                <p className="text-sm sm:text-base text-gray-600 mb-4">
+                <h3 className="tf-section-title sm:text-xl mb-2 tracking-tight">Processing Results</h3>
+                <p className="tf-body-secondary sm:text-base mb-4">
                   We're analyzing the candidate's responses. This usually takes 1–2 minutes.
                 </p>
                 <div className="flex items-center justify-center gap-2 text-sm text-brand-blue">
@@ -2083,7 +2083,7 @@ export default function CandidateResultDetails({
                       {/* Section Header */}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
                         <div className="min-w-0">
-                          <h3 className="text-base sm:text-xl text-gray-900 capitalize tracking-tight font-semibold">{round.round_type} Round</h3>
+                          <h3 className="tf-section-title sm:text-xl capitalize tracking-tight">{round.round_type} Round</h3>
                           {(() => {
                             // Per-type question count for this round so the
                             // header shows e.g. "13 questions (MCQ - 11, Text
@@ -2116,7 +2116,7 @@ export default function CandidateResultDetails({
                             })() : null;
                             const codingLanguageLabel = codingLanguage ? logoLabelForId(codingLanguage) : null;
                             return (
-                              <p className="text-sm text-gray-600 mt-1">
+                              <p className="tf-body-secondary mt-1">
                                 {questionsForRound.length} question{questionsForRound.length !== 1 ? 's' : ''}
                                 {showBreakdown && (
                                   <span className="text-gray-500"> (MCQ - {mcqCount}, Text Input - {textCount})</span>
@@ -2131,7 +2131,7 @@ export default function CandidateResultDetails({
                                 </span>
                                 {codingLanguageLabel && (
                                   <span
-                                    className="inline-flex items-center gap-1.5 ml-2 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-gray-700 ring-1 ring-slate-200 align-middle"
+                                    className="tf-badge gap-1.5 ml-2 bg-slate-100 text-gray-700 ring-1 ring-slate-200 align-middle"
                                     title="Language the candidate coded in"
                                   >
                                     <LanguageLogo language={codingLanguageLabel} size="sm" />
@@ -2143,7 +2143,7 @@ export default function CandidateResultDetails({
                           })()}
                         </div>
                         <div className="shrink-0 text-left sm:text-right">
-                          <div className="text-sm text-gray-600 mb-0.5 sm:mb-1">
+                          <div className="tf-body-secondary mb-0.5 sm:mb-1">
                             {isHRRound ? 'Section Type' : 'Section Score'}
                           </div>
                           <div className={`text-xl sm:text-3xl font-bold tracking-tight ${isHRRound ? 'text-gray-400' : getScoreColor(displayedSectionPercentage)}`}>
@@ -2204,7 +2204,7 @@ export default function CandidateResultDetails({
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
                                     <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-                                      <span className="shrink-0 whitespace-nowrap px-3 py-1 bg-brand-blue text-white rounded-full text-xs font-medium shadow-sm shadow-brand-blue/20">
+                                      <span className="tf-badge shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/20">
                                         Q{qIdx + 1}
                                       </span>
                                       {/* Question-type badge removed —
@@ -2216,7 +2216,7 @@ export default function CandidateResultDetails({
                                           for coding, free text otherwise). */}
                                       {!isTextQuestion && (
                                         isNotAnswered ? (
-                                          <span className="px-2 py-0.5 bg-gray-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs font-medium">Not Answered</span>
+                                          <span className="px-2 py-0.5 bg-gray-100 tf-caption ring-1 ring-gray-200 rounded">Not Answered</span>
                                         ) : q.is_correct ? (
                                           <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">Correct</span>
                                         ) : isPartiallyCorrect ? (
@@ -2243,7 +2243,7 @@ export default function CandidateResultDetails({
                                       // Example Input / Expected Output blocks.
                                       <div className="space-y-4">
                                         <div>
-                                          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 tracking-tight">
+                                          <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">
                                             {q.problem_title || 'Coding Problem'}
                                           </h3>
                                           <div className="prose prose-sm max-w-none text-gray-700">
@@ -2255,8 +2255,8 @@ export default function CandidateResultDetails({
 
                                         {q.input_format && (
                                           <div>
-                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Input Format</h4>
-                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
+                                            <h4 className="tf-label mb-1.5">Input Format</h4>
+                                            <div className="tf-body bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.input_format}
                                             </div>
                                           </div>
@@ -2264,8 +2264,8 @@ export default function CandidateResultDetails({
 
                                         {q.output_format && (
                                           <div>
-                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Output Format</h4>
-                                            <div className="text-sm text-gray-700 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
+                                            <h4 className="tf-label mb-1.5">Output Format</h4>
+                                            <div className="tf-body bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg whitespace-pre-wrap">
                                               {q.output_format}
                                             </div>
                                           </div>
@@ -2273,8 +2273,8 @@ export default function CandidateResultDetails({
 
                                         {Array.isArray(q.constraints) && q.constraints.length > 0 && (
                                           <div>
-                                            <h4 className="font-medium text-gray-800 mb-1.5 text-sm">Constraints</h4>
-                                            <ul className="text-sm text-gray-700 space-y-1 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg">
+                                            <h4 className="tf-label mb-1.5">Constraints</h4>
+                                            <ul className="tf-body space-y-1 bg-slate-50 ring-1 ring-black/[0.03] p-3 rounded-lg">
                                               {q.constraints.map((constraint: string, idx: number) => (
                                                 <li key={idx} className="flex items-start gap-2">
                                                   <span className="shrink-0 text-gray-400">-</span>
@@ -2287,10 +2287,10 @@ export default function CandidateResultDetails({
 
                                         {(q.sample_input || q.sample_output) && (
                                           <div className="space-y-3">
-                                            <h4 className="font-medium text-gray-800 text-sm">Example</h4>
+                                            <h4 className="tf-label">Example</h4>
                                             {q.sample_input && (
                                               <div>
-                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Input</div>
+                                                <div className="tf-eyebrow tracking-wide mb-1">Input</div>
                                                 <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_input}
                                                 </pre>
@@ -2298,7 +2298,7 @@ export default function CandidateResultDetails({
                                             )}
                                             {q.sample_output && (
                                               <div>
-                                                <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expected Output</div>
+                                                <div className="tf-eyebrow tracking-wide mb-1">Expected Output</div>
                                                 <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_output}
                                                 </pre>
@@ -2320,7 +2320,7 @@ export default function CandidateResultDetails({
                                   </div>
                                   {!isHRRound && (
                                     <div className="sm:ml-6 text-left sm:text-right flex-shrink-0">
-                                      <div className="text-xs text-gray-600 mb-0.5 sm:mb-1">Score</div>
+                                      <div className="tf-meta mb-0.5 sm:mb-1">Score</div>
                                       <div className="flex items-center gap-2">
                                         {(() => {
                                           const normalizedEarned = getDisplayedQuestionEarnedPoints(q);
@@ -2464,7 +2464,7 @@ export default function CandidateResultDetails({
                                           <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                             <Menu className="w-4 h-4 text-brand-blue" />
                                           </div>
-                                          <div className="text-sm font-medium text-gray-800">OPTIONS</div>
+                                          <div className="tf-label">OPTIONS</div>
                                         </div>
                                         <div className="space-y-2">
                                           {q.options.map((opt: any) => {
@@ -2507,7 +2507,7 @@ export default function CandidateResultDetails({
                                             );
                                           })}
                                           {selectedSet.size === 0 && (
-                                            <p className="text-xs text-gray-500 italic mt-1">No answer provided</p>
+                                            <p className="tf-meta italic mt-1">No answer provided</p>
                                           )}
                                         </div>
                                       </div>
@@ -2522,7 +2522,7 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                           <User className="w-4 h-4 text-brand-blue" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">CANDIDATE'S ANSWER</div>
+                                        <div className="tf-label">CANDIDATE'S ANSWER</div>
                                       </div>
                                       <div className={`rounded-lg p-3 sm:p-4 ${
                                         q.question_type === 'coding'
@@ -2555,7 +2555,7 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-orange-deep" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">INPUT</div>
+                                        <div className="tf-label">INPUT</div>
                                       </div>
                                       <div className="bg-slate-900 rounded-lg p-4 text-brand-orange font-mono text-sm overflow-x-auto ring-1 ring-black/20">
                                         <pre className="whitespace-pre-wrap">{getCandidateCodingInput(q)}</pre>
@@ -2567,7 +2567,7 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
                                           <FileText className="w-4 h-4 text-brand-cyan" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">OUTPUT</div>
+                                        <div className="tf-label">OUTPUT</div>
                                       </div>
                                     <div className="rounded-lg p-4 font-mono text-sm overflow-x-auto bg-slate-900 text-brand-cyan ring-1 ring-black/20">
                                       <pre className="whitespace-pre-wrap">
@@ -2582,9 +2582,9 @@ export default function CandidateResultDetails({
                                         <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                           <Award className="w-4 h-4 text-brand-blue" />
                                         </div>
-                                        <div className="text-sm font-medium text-gray-800">MARKS BREAKDOWN</div>
+                                        <div className="tf-label">MARKS BREAKDOWN</div>
                                       </div>
-                                      <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-4 space-y-2 text-sm text-gray-800">
+                                      <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-4 space-y-2 tf-body">
                                         <div>
                                           Syntax: {formatMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{formatMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
                                           {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
@@ -2601,7 +2601,7 @@ export default function CandidateResultDetails({
                                           Final: {formatMark(q.points_earned)}/{formatMark(q.points_possible)} ({formatMark(q.score)}%)
                                         </div>
                                         {q.candidate_test_results.marks_breakdown.pass_requirement && (
-                                          <div className="text-xs text-gray-600">
+                                          <div className="tf-meta">
                                             {q.candidate_test_results.marks_breakdown.pass_requirement}
                                           </div>
                                         )}
@@ -2615,13 +2615,13 @@ export default function CandidateResultDetails({
                                           <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                             <FileText className="w-4 h-4 text-brand-blue" />
                                           </div>
-                                          <div className="text-sm font-medium text-gray-800">TEST CASES</div>
+                                          <div className="tf-label">TEST CASES</div>
                                         </div>
                                         <div className="space-y-3">
                                           {q.candidate_test_results.details.map((testCase, testCaseIdx) => (
                                             <div key={testCaseIdx} className="rounded-xl border border-gray-100 bg-slate-50 ring-1 ring-black/[0.02] p-3 sm:p-4">
                                               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                <div className="text-sm font-medium text-gray-900">
+                                                <div className="tf-row-name">
                                                   Test Case {testCase.test_number}
                                                   {testCase.is_hidden ? ' (Hidden from candidate)' : ''}
                                                 </div>
@@ -2636,18 +2636,18 @@ export default function CandidateResultDetails({
 
                                               <div className="grid gap-3 md:grid-cols-2">
                                                 <div>
-                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                  <div className="mb-1 tf-eyebrow tracking-wide">
                                                     Test Case Input
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
+                                                  <div className="rounded bg-white p-3 font-mono tf-body border border-gray-200 dark:border-slate-700">
                                                     <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
                                                   </div>
                                                 </div>
                                                 <div>
-                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                  <div className="mb-1 tf-eyebrow tracking-wide">
                                                     Expected Output
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
+                                                  <div className="rounded bg-white p-3 font-mono tf-body border border-gray-200 dark:border-slate-700">
                                                     <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.expected_output
                                                       // '' is a real answer (the correct program prints nothing),
                                                       // not a missing value - say so rather than "Hidden expected output".
@@ -2664,7 +2664,7 @@ export default function CandidateResultDetails({
                                                   an answer or printed a fixed one. */}
                                               <div className="mt-3 grid gap-3 md:grid-cols-2">
                                                 <div>
-                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                  <div className="mb-1 tf-eyebrow tracking-wide">
                                                     Candidate Output
                                                   </div>
                                                   <div className={`rounded p-3 font-mono text-sm border ${
@@ -2686,7 +2686,7 @@ export default function CandidateResultDetails({
                                                 </div>
                                                 {testCase.error && (
                                                   <div>
-                                                    <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                    <div className="mb-1 tf-eyebrow tracking-wide">
                                                       Why It Failed
                                                     </div>
                                                     <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
@@ -2698,7 +2698,7 @@ export default function CandidateResultDetails({
 
                                               {testCase.improvement_hint && (
                                                 <div className="mt-3">
-                                                  <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
+                                                  <div className="mb-1 tf-eyebrow tracking-wide">
                                                     What To Improve
                                                   </div>
                                                   <div className="rounded border border-brand-orange/30 ring-1 ring-brand-orange/15 bg-brand-orange/5 p-3 text-sm text-brand-orange-deep">
@@ -2732,7 +2732,7 @@ export default function CandidateResultDetails({
                                       <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
                                         <CheckCircle className="w-4 h-4 text-success" />
                                       </div>
-                                      <div className="text-sm font-medium text-gray-800">CORRECT ANSWER</div>
+                                      <div className="tf-label">CORRECT ANSWER</div>
                                     </div>
                                     <div className="bg-success-subtle ring-1 ring-success-line rounded-lg p-4">
                                       {q.correct_answer.map((opt, i) => {
@@ -2756,12 +2756,12 @@ export default function CandidateResultDetails({
                                       <div className="w-8 h-8 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                                         <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
-                                      <div className="text-sm font-medium text-gray-800">
+                                      <div className="tf-label">
                                         {isTextQuestion ? 'WHY THIS SCORE WAS GIVEN' : 'AI FEEDBACK & EVALUATION'}
                                       </div>
                                     </div>
-                                    <div className="bg-slate-50 rounded-lg p-3 sm:p-4 border border-gray-200 dark:border-slate-700">
-                                      <div className="text-sm sm:text-base text-gray-800 leading-relaxed [overflow-wrap:anywhere]">
+                                    <div className="tf-card-muted p-3 sm:p-4">
+                                      <div className="tf-body sm:text-base leading-relaxed [overflow-wrap:anywhere]">
                                         {q.question_type === 'coding' ? getCodingEvaluationState(q).summary : q.feedback}
                                       </div>
                                     </div>
@@ -2790,7 +2790,7 @@ export default function CandidateResultDetails({
                                   <div className="pt-4 border-t border-gray-100">
                                     <div className="bg-brand-orange/5 ring-1 ring-brand-orange/15 border border-brand-orange/20 rounded-lg p-4">
                                       <div className="text-sm font-medium text-brand-orange-deep mb-2">What to Improve</div>
-                                      <ul className="text-sm text-gray-700 space-y-1">
+                                      <ul className="tf-body space-y-1">
                                         {(q.areas_for_improvement && q.areas_for_improvement.length > 0 ? q.areas_for_improvement : (q.candidate_test_results?.improvements || [])).map((item, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <AlertCircle className="w-3 h-3 mt-1 flex-shrink-0 text-brand-orange-deep" />
@@ -2811,7 +2811,7 @@ export default function CandidateResultDetails({
                       ) : (
                         <div className="text-center px-4 py-8 sm:py-12 bg-slate-50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
                           <FileText className="w-10 h-10 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-3" />
-                          <p className="text-sm sm:text-base text-gray-600">No questions available for this section</p>
+                          <p className="tf-body-secondary sm:text-base">No questions available for this section</p>
                         </div>
                       )}
                     </div>
@@ -2843,13 +2843,13 @@ export default function CandidateResultDetails({
                     {/* Violations Header */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 pb-3 sm:pb-4 border-b border-gray-100">
                       <div className="min-w-0">
-                        <h3 className="text-base sm:text-xl text-gray-900 tracking-tight font-semibold">Proctoring Violations</h3>
-                        <p className="text-sm text-gray-600 mt-1">
+                        <h3 className="tf-section-title sm:text-xl tracking-tight">Proctoring Violations</h3>
+                        <p className="tf-body-secondary mt-1">
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
                       </div>
                       <div className="shrink-0 text-left sm:text-right">
-                        <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
+                        <div className="tf-body-secondary mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center whitespace-nowrap px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
                             ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -2888,7 +2888,7 @@ export default function CandidateResultDetails({
                               <ShieldAlert className={`w-5 h-5 ${hasViolations ? 'text-destructive' : 'text-success'}`} />
                             </div>
                             <div>
-                              <div className="text-xs text-gray-600">Total Violations</div>
+                              <div className="tf-meta">Total Violations</div>
                               <div className={`text-3xl font-bold tracking-tight ${hasViolations ? 'text-destructive' : 'text-success'}`}>
                                 {ps.total_violations}
                               </div>
@@ -2897,15 +2897,15 @@ export default function CandidateResultDetails({
                           <div className="flex items-center gap-5 sm:gap-7 pl-1 sm:pl-0">
                             <div className="text-center">
                               <div className="text-xl font-semibold text-destructive">{high}</div>
-                              <div className="text-[11px] text-gray-500">Serious</div>
+                              <div className="tf-meta">Serious</div>
                             </div>
                             <div className="text-center">
                               <div className="text-xl font-semibold text-brand-orange-deep">{medium}</div>
-                              <div className="text-[11px] text-gray-500">Moderate</div>
+                              <div className="tf-meta">Moderate</div>
                             </div>
                             <div className="text-center">
                               <div className="text-xl font-semibold text-brand-blue">{low}</div>
-                              <div className="text-[11px] text-gray-500">Minor</div>
+                              <div className="tf-meta">Minor</div>
                             </div>
                           </div>
                         </div>
@@ -2913,7 +2913,7 @@ export default function CandidateResultDetails({
                     })()}
 
                     {/* Violations Grid — ordered High → Medium → Low via order-1/2/3 on each card */}
-                    <div className="grid grid-cols-1 min-[360px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+                    <div className="tf-grid-4">
                       {/* Window Focus Lost — High-severity group (order-1) */}
                       <div className={`order-1 rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
@@ -2932,7 +2932,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Window Focus Lost</div>
+                          <div className="min-w-0 tf-label leading-snug">Window Focus Lost</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -2942,7 +2942,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.window_blur_count}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -2964,7 +2964,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Mouse Movement</div>
+                          <div className="min-w-0 tf-label leading-snug">Mouse Movement</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -2974,7 +2974,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.mouse_movement_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -2996,7 +2996,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Tab Switch</div>
+                          <div className="min-w-0 tf-label leading-snug">Tab Switch</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3006,7 +3006,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.tab_switch_count}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -3028,7 +3028,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Copy Attempts</div>
+                          <div className="min-w-0 tf-label leading-snug">Copy Attempts</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3038,7 +3038,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.copy_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3060,7 +3060,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Paste Attempts</div>
+                          <div className="min-w-0 tf-label leading-snug">Paste Attempts</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3070,7 +3070,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.paste_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3092,7 +3092,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Camera Obstructed / Off</div>
+                          <div className="min-w-0 tf-label leading-snug">Camera Obstructed / Off</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3102,7 +3102,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.camera_obstructed_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3124,7 +3124,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Face Not Detected</div>
+                          <div className="min-w-0 tf-label leading-snug">Face Not Detected</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3134,7 +3134,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.face_not_visible_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3156,7 +3156,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Voice Violations</div>
+                          <div className="min-w-0 tf-label leading-snug">Voice Violations</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3166,7 +3166,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.voice_violation_count}
                           </div>
-                          <div className="text-xs text-gray-500">Occurrences</div>
+                          <div className="tf-meta">Occurrences</div>
                         </div>
                       </div>
 
@@ -3188,7 +3188,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Multiple Faces</div>
+                          <div className="min-w-0 tf-label leading-snug">Multiple Faces</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3198,7 +3198,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.multiple_faces_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Detections</div>
+                          <div className="tf-meta">Detections</div>
                         </div>
                       </div>
 
@@ -3220,7 +3220,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Fullscreen Exit</div>
+                          <div className="min-w-0 tf-label leading-snug">Fullscreen Exit</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3230,7 +3230,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Count</div>
+                          <div className="tf-meta">Count</div>
                         </div>
                       </div>
 
@@ -3252,7 +3252,7 @@ export default function CandidateResultDetails({
                                 : 'text-gray-400'
                             }`} />
                           </div>
-                          <div className="min-w-0 text-sm font-medium text-gray-700 leading-snug">Screen Capture Attempt</div>
+                          <div className="min-w-0 tf-label leading-snug">Screen Capture Attempt</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <div className={`text-2xl font-bold tracking-tight ${
@@ -3262,7 +3262,7 @@ export default function CandidateResultDetails({
                           }`}>
                             {detailedResult.proctoring_stats.screen_capture_count || 0}
                           </div>
-                          <div className="text-xs text-gray-500">Attempts</div>
+                          <div className="tf-meta">Attempts</div>
                         </div>
                       </div>
 
@@ -3272,11 +3272,11 @@ export default function CandidateResultDetails({
                           <div className="w-12 h-12 rounded-lg flex items-center justify-center mb-3 bg-gray-200">
                             <AlertCircle className="w-6 h-6 text-gray-600" />
                           </div>
-                          <div className="text-sm text-gray-600 mb-1">Other</div>
+                          <div className="tf-body-secondary mb-1">Other</div>
                           <div className="text-3xl font-bold text-gray-600">
                             {detailedResult.proctoring_stats.other_violation_count}
                           </div>
-                          <div className="text-xs text-gray-500 mt-1">events</div>
+                          <div className="tf-meta mt-1">events</div>
                         </div>
                       )} */}
 
@@ -3286,9 +3286,9 @@ export default function CandidateResultDetails({
                     <div className="mt-2">
                       <div className="flex flex-wrap items-center gap-2 mb-4">
                         <Activity className="w-5 h-5 text-brand-blue shrink-0" />
-                        <h4 className="text-base font-semibold text-gray-900 tracking-tight">Event Log</h4>
+                        <h4 className="tf-section-title tracking-tight">Event Log</h4>
                         {!isLoadingEvents && proctoringEvents.length > 0 && (
-                          <span className="ml-auto whitespace-nowrap text-xs text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full font-medium">
+                          <span className="tf-badge ml-auto text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20">
                             {proctoringEvents.length} event{proctoringEvents.length !== 1 ? 's' : ''} · {groupedEvents.length} row{groupedEvents.length !== 1 ? 's' : ''}
                           </span>
                         )}
@@ -3340,7 +3340,7 @@ export default function CandidateResultDetails({
                         <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
                           <div className="overflow-x-auto">
                           {/* Table header */}
-                          <div className="grid min-w-[660px] grid-cols-[40px_2fr_1fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <div className="grid min-w-[660px] grid-cols-[40px_2fr_1fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 tf-eyebrow tracking-wide">
                             <span>S.No</span>
                             <span>Event</span>
                             <span>Timestamp</span>
@@ -3403,7 +3403,7 @@ export default function CandidateResultDetails({
                                   className="grid grid-cols-[40px_2fr_1fr_1fr_1fr_80px] items-center px-4 py-3 text-sm"
                                 >
                                   {/* S.No */}
-                                  <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
+                                  <span className="tf-caption">{globalIdx}</span>
 
                                   {/* Event — icon/label stay neutral; the Severity badge alone
                                       carries the color signal now, instead of 3 overlapping cues. */}
@@ -3413,7 +3413,7 @@ export default function CandidateResultDetails({
                                   </div>
 
                                   {/* Timestamp — minute only */}
-                                  <span className="text-gray-600 text-xs font-mono">{timeStr}</span>
+                                  <span className="tf-meta font-mono">{timeStr}</span>
 
                                   {/* Video Time — where this sits in the
                                       recording. Clickable only when we can
@@ -3433,7 +3433,7 @@ export default function CandidateResultDetails({
                                         <Play className="w-3 h-3" />{formatVideoOffset(off)}
                                       </button>
                                     ) : (
-                                      <span className="text-gray-400 text-xs font-mono">{formatVideoOffset(off)}</span>
+                                      <span className="tf-hint font-mono">{formatVideoOffset(off)}</span>
                                     );
                                   })()}
 
@@ -3461,12 +3461,12 @@ export default function CandidateResultDetails({
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-gray-100">
-                              <span className="text-xs text-gray-500">
+                              <span className="tf-meta">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
                               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                                 <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-gray-600 whitespace-nowrap">Go to</span>
+                                  <span className="tf-meta whitespace-nowrap">Go to</span>
                                   <input
                                     type="number"
                                     min={1}
@@ -3481,7 +3481,7 @@ export default function CandidateResultDetails({
                                     }}
                                     onBlur={commitEventsGoToPage}
                                     aria-label="Go to page"
-                                    className="w-12 h-8 px-1.5 text-xs text-center border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                                    className="tf-input tf-input-sm w-12 px-1.5 text-center rounded-md"
                                   />
                                 </div>
                                 <button
@@ -3492,7 +3492,7 @@ export default function CandidateResultDetails({
                                 >
                                   <ChevronLeft className="w-3.5 h-3.5" />
                                 </button>
-                                <span className="text-xs font-medium text-gray-700 px-1 whitespace-nowrap">
+                                <span className="tf-caption px-1 whitespace-nowrap">
                                   <span className="text-brand-blue font-semibold">{eventsPage}</span> / {eventsTotalPages}
                                 </span>
                                 <button
@@ -3525,7 +3525,7 @@ export default function CandidateResultDetails({
                           <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-brand-orange-deep flex-shrink-0" />
                           <div className="min-w-0">
                             <h4 className="text-base sm:text-lg font-medium text-brand-orange-deep mb-1 tracking-tight">Violations Summary</h4>
-                            <p className="text-sm text-gray-700">
+                            <p className="tf-body">
                               {detailedResult.proctoring_stats.total_violations} violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's were' : ' was'} detected during this assessment.
                               Please review the candidate's responses and consider these violations when making your hiring decision.
                             </p>

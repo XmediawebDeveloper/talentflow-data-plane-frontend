@@ -29,9 +29,9 @@ export default function AllAssessmentsPage() {
           with the sibling assessment routes and safe if a param is added. */}
       <Suspense
         fallback={
-          <main className="flex-1 overflow-x-clip bg-slate-50">
+          <main className="tf-page">
             <div className="mx-auto w-full max-w-[1400px]">
-              <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+              <div className="tf-page-sheet">
                 {/* Breadcrumb: Dashboard › Assessments › All Assessments */}
                 <div className="mb-4 md:mb-6 flex items-center gap-2">
                   <Skeleton className="h-3 w-16" />

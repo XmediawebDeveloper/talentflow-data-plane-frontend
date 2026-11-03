@@ -95,7 +95,7 @@ export default function SkillsList({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold text-gray-900">All skills ({list.length})</p>
+              <p className="tf-caption">All skills ({list.length})</p>
               <button
                 type="button"
                 onClick={(e) => {

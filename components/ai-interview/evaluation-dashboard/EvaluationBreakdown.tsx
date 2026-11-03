@@ -52,14 +52,14 @@ export function EvaluationBreakdown({
   const nthSum = nthItems.reduce((a, x) => a + x.contribution, 0);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+    <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
           <Calculator size={20} className="text-blue-600" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">Evaluation Breakdown</h2>
-          <p className="text-sm text-gray-500">Detailed scoring methodology and calculations</p>
+          <h2 className="text-lg sm:text-2xl font-bold">Evaluation Breakdown</h2>
+          <p className="tf-body-muted">Detailed scoring methodology and calculations</p>
         </div>
       </div>
 
@@ -70,7 +70,7 @@ export function EvaluationBreakdown({
             <span className="w-6 h-6 rounded bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center text-xs">1</span>
             Skill Scoring (0–10 Scale)
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 pl-8">
+          <p className="tf-body-secondary pl-8">
             Each skill is evaluated on a 0–10 scale based on candidate responses, with AI-driven feedback providing context for the assessment.
           </p>
         </div>
@@ -81,7 +81,7 @@ export function EvaluationBreakdown({
             <span className="w-6 h-6 rounded bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center text-xs">2</span>
             Cluster Score Calculation
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 pl-8 mb-3">
+          <p className="tf-body-secondary pl-8 mb-3">
             Skills within each cluster are averaged to produce a cluster score.
           </p>
           <div className="pl-8 p-4 rounded-lg bg-gray-50 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700">
@@ -97,7 +97,7 @@ export function EvaluationBreakdown({
             <span className="w-6 h-6 rounded bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center text-xs">3</span>
             Category Score Calculation
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 pl-8 mb-3">
+          <p className="tf-body-secondary pl-8 mb-3">
             Clusters within each category (Must-Have, Nice-to-Have) are weighted and combined to produce category scores.
           </p>
 
@@ -154,7 +154,7 @@ export function EvaluationBreakdown({
             <span className="w-6 h-6 rounded bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 flex items-center justify-center text-xs">4</span>
             Final Score Weight Distribution
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 pl-8 mb-2">
+          <p className="tf-body-secondary pl-8 mb-2">
             Canonical weights: <strong>MHS 70%, NHS 30%</strong> (HR is review-only, excluded from scoring). When a section is absent, its share is
             redistributed proportionally so the present sections sum to 100%.
           </p>
@@ -163,7 +163,7 @@ export function EvaluationBreakdown({
               This interview has <strong>{presentCount}</strong> of 3 sections — weights renormalized below.
             </p>
           )}
-          <div className={`pl-8 grid gap-3 ${presentCount === 3 ? 'grid-cols-3' : presentCount === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`pl-0 sm:pl-8 grid gap-3 ${presentCount === 3 ? 'grid-cols-1 sm:grid-cols-3' : presentCount === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
             {sectionsPresent.mustHave && (
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                 <div className="text-xs text-emerald-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>MUST-HAVE</div>
@@ -179,15 +179,15 @@ export function EvaluationBreakdown({
               </div>
             )}
           </div>
-          <details className="ml-8 mt-3 text-xs text-gray-500">
+          <details className="ml-8 mt-3 tf-meta">
             <summary className="cursor-pointer hover:text-gray-700">How is this calculated?</summary>
             <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/30 rounded border border-gray-200 dark:border-gray-700" style={{ fontFamily: 'var(--font-mono)' }}>
               <div className="mb-1">w_section = (base_section / Σ base_of_present_sections) × 100</div>
-              <div className="text-2xs text-gray-400 mt-2">Examples:</div>
+              <div className="tf-micro-hint mt-2">Examples:</div>
               <div className="text-2xs">• Both: MHS = 70%, NHS = 30%</div>
               <div className="text-2xs">• MHS only: 100%</div>
               <div className="text-2xs">• NHS only: 100%</div>
-              <div className="text-2xs text-gray-400 mt-1">HR section is review-only and excluded from scoring.</div>
+              <div className="tf-micro-hint mt-1">HR section is review-only and excluded from scoring.</div>
             </div>
           </details>
         </div>

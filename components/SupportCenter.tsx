@@ -32,6 +32,7 @@ import api, { ApiError, handleApiError, getTokens } from '@/lib/services/api';
 import { PageHeader } from '@/components/ui/page-header';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
 
@@ -275,7 +276,7 @@ const EMOJI_FONT_STACK = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emo
 
 function AwaitingTeamTag() {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-orange/10 px-2 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+    <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep">
       <MessageSquare className="h-3 w-3" />
       Awaiting response
     </span>
@@ -284,7 +285,7 @@ function AwaitingTeamTag() {
 
 function AwaitingReplyTag() {
   return (
-    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-brand-orange/10 px-2 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+    <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep">
       <MessageSquare className="h-3 w-3" />
       Awaiting your reply
     </span>
@@ -297,8 +298,8 @@ function ListLoadError({ message, onRetry }: { message: string; onRetry: () => v
     <div className="flex flex-col items-center gap-3 px-4 py-10 text-center sm:py-12">
       <AlertCircle className="h-10 w-10 text-destructive" />
       <div>
-        <p className="text-sm font-medium text-gray-900 dark:text-slate-50">Couldn&apos;t load tickets</p>
-        <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{message}</p>
+        <p className="tf-row-name">Couldn&apos;t load tickets</p>
+        <p className="mt-1 tf-meta">{message}</p>
       </div>
       <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
         <RefreshCw className="h-4 w-4" />
@@ -1203,9 +1204,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = statCount(internalStats?.total_tickets, internalStatsFailed);
 
   return (
-    <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">
+    <div ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       <PageBreadcrumb
         className="mb-4 md:mb-6"
         items={
@@ -1218,14 +1219,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]
         }
       />
-      <div className="mb-4 flex flex-col gap-4 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className="tf-card-soft mb-4 flex flex-col gap-4 p-4 sm:p-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3 sm:gap-4">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue sm:h-12 sm:w-12">
             <Headphones className="h-5 w-5 sm:h-6 sm:w-6" />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-gray-900 dark:text-slate-50 sm:text-xl">Support Center</h1>
-            <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
+            <h1 className="tf-page-title">Support Center</h1>
+            <p className="mt-0.5 tf-body-secondary">{activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -1237,7 +1238,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <span
                 aria-disabled="true"
                 title={PLAN_LOCKED_MESSAGE}
-                className="inline-flex cursor-not-allowed max-w-full items-start justify-start whitespace-normal text-left leading-snug items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400"
+                className="inline-flex cursor-not-allowed max-w-full items-start justify-start whitespace-normal text-left leading-snug items-center gap-2 rounded-lg bg-gray-100 px-3 py-2 tf-caption dark:bg-slate-800"
               >
                 <Lock className="h-3.5 w-3.5 shrink-0 shrink-0 mt-0.5" />
                 <span className="sm:hidden">Priority Support not in plan</span>
@@ -1280,10 +1281,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         <div className="mb-4 flex gap-1 border-b border-gray-200 dark:border-slate-700">
           <button
             onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors sm:px-5 sm:text-sm ${
+            className={`tf-tab-line -mb-px ${
               activeTab === 'external'
-                ? 'border-brand-blue text-brand-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'tf-tab-line-active'
+                : ''
             }`}
           >
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1294,10 +1295,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
           </button>
           <button
             onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
-            className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-semibold transition-colors sm:px-5 sm:text-sm ${
+            className={`tf-tab-line -mb-px ${
               activeTab === 'team'
-                ? 'border-brand-blue text-brand-blue'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                ? 'tf-tab-line-active'
+                : ''
             }`}
           >
             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1305,7 +1306,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <span className="hidden sm:inline">Team Support Tickets</span>
               <span className="sm:hidden">Team</span>
               {internalUnassignedTickets > 0 && (
-                <span className="px-1.5 sm:px-2 py-0.5 text-xs bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20 rounded-full font-semibold">
+                <span className="tf-badge sm:px-2 bg-brand-orange/15 text-brand-orange ring-1 ring-brand-orange/20">
                   {internalUnassignedTickets}
                 </span>
               )}
@@ -1322,7 +1323,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {activeTab === 'external' && view === 'overview' && (
           <div className="space-y-4">
             {/* Stats Cards — clicking a card drills into the tickets list pre-filtered by that status */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
+            <div className="tf-grid-4">
               {[
                 { label: 'Open Tickets', value: openTickets, sub: 'Awaiting response', icon: FileText, tile: 'bg-brand-blue/10 text-brand-blue', badge: <Clock className="h-4 w-4 text-brand-orange" />, filter: 'open' },
                 { label: 'In Progress', value: inProgressTickets, sub: 'Being worked on', icon: CircleDashed, tile: 'bg-brand-blue/10 text-brand-blue', badge: <Clock className="h-4 w-4 text-brand-orange" />, filter: 'in-progress' },
@@ -1335,16 +1336,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     key={card.label}
                     type="button"
                     onClick={() => { setFilterStatus(card.filter as typeof filterStatus); setView('tickets'); }}
-                    className="group relative flex w-full items-start gap-3 overflow-hidden rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900"
+                    className="group relative flex w-full items-start gap-3 overflow-hidden tf-panel p-4 text-left transition-all hover:-translate-y-0.5 hover:border-brand-blue/30 hover:shadow-md"
                   >
                     <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${card.tile}`}>
                       <CardIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                      <p className="tf-body-secondary">{card.label}</p>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
-                      <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
-                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
+                      <p className="mt-0.5 tf-meta">{card.sub}</p>
+                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
                         View tickets
                         <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                       </p>
@@ -1356,17 +1357,17 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2 sm:gap-4">
+            <div className="tf-grid-2">
               <button
                 onClick={openSubmitView}
-                className="group flex w-full flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
+                className="group flex w-full flex-col gap-3 tf-panel p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md sm:flex-row sm:items-center"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
                   <Send className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Submit New Ticket</h3>
-                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Report an issue or request help from our support team</p>
+                  <h3 className="tf-section-title">Submit New Ticket</h3>
+                  <p className="mt-0.5 tf-body-secondary">Report an issue or request help from our support team</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-brand-blue px-4 py-2 text-sm font-semibold text-white shadow-sm shadow-brand-blue/25 transition-colors group-hover:bg-brand-blue-2">
                   Submit New Ticket
@@ -1376,14 +1377,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
               <button
                 onClick={() => setView('tickets')}
-                className="group flex w-full flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 sm:flex-row sm:items-center"
+                className="group flex w-full flex-col gap-3 tf-panel p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md sm:flex-row sm:items-center"
               >
                 <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue">
                   <Ticket className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">View My Tickets</h3>
-                  <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Track and manage all your support requests</p>
+                  <h3 className="tf-section-title">View My Tickets</h3>
+                  <p className="mt-0.5 tf-body-secondary">Track and manage all your support requests</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-brand-blue px-4 py-2 text-sm font-semibold text-brand-blue transition-colors group-hover:bg-brand-blue/5">
                   View My Tickets
@@ -1393,9 +1394,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Tickets */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div className="tf-panel p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Tickets</h3>
+                <h3 className="tf-section-title">Recent Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
                   className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
@@ -1426,65 +1427,69 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : (
                 <>
                   {/* Mobile: compact cards */}
-                  <div className="space-y-2 md:hidden">
-                    {tickets.slice(0, 5).map(ticket => (
-                      <button
-                        key={ticket.id}
-                        onClick={() => {
-                          setSelectedTicket(ticket);
-                          fetchTicketDetail(ticket.id);
-                          setView('detail');
-                        }}
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 dark:border-slate-700/60 dark:bg-slate-800/50 dark:hover:bg-slate-800"
-                      >
-                        <div className="mb-1.5 flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <span className="mb-0.5 block text-2xs text-gray-600 dark:text-slate-400">{ticket.ticketNumber}</span>
-                            <h4 className="truncate text-sm text-gray-900 dark:text-slate-50">{ticket.title}</h4>
-                          </div>
-                          <div className="flex shrink-0 flex-col items-end gap-1">
-                            {getStatusBadge(ticket.status)}
-                            {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
-                          </div>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
-                          <span className="truncate">{getCategoryLabel(ticket.category)}</span>
-                          {getPriorityBadge(ticket.priority)}
-                          <span>{formatISTDate(ticket.createdAt)}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
+                  <MobileRecordList>
+                    {tickets.slice(0, 5).map(ticket => {
+                      const openTicket = () => {
+                        setSelectedTicket(ticket);
+                        fetchTicketDetail(ticket.id);
+                        setView('detail');
+                      };
+                      return (
+                        <MobileRecordCard
+                          key={ticket.id}
+                          onClick={openTicket}
+                          idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticketNumber}</span>}
+                          title={ticket.title}
+                          badges={
+                            <>
+                              {getPriorityBadge(ticket.priority)}
+                              {getStatusBadge(ticket.status)}
+                              {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
+                            </>
+                          }
+                          meta={[
+                            { icon: <Tag />, label: getCategoryLabel(ticket.category) },
+                            { icon: <Calendar />, label: formatISTDate(ticket.createdAt) },
+                          ]}
+                          actions={
+                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticketNumber}`} title="View" className="tf-icon-btn-outline">
+                              <Eye />
+                            </button>
+                          }
+                        />
+                      );
+                    })}
+                  </MobileRecordList>
 
                   {/* Desktop: table */}
-                  <div className="hidden overflow-x-auto md:block">
+                  <div className="hidden overflow-x-auto lg:block">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created On</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                        <tr className="bg-white text-left tf-caption dark:bg-slate-900">
+                          <th className="tf-th-cell rounded-l-lg tf-th">Ticket ID</th>
+                          <th className="tf-th-cell tf-th">Subject</th>
+                          <th className="tf-th-cell tf-th">Category</th>
+                          <th className="tf-th-cell tf-th">Priority</th>
+                          <th className="tf-th-cell tf-th">Created On</th>
+                          <th className="tf-th-cell tf-th">Status</th>
+                          <th className="tf-th-cell rounded-r-lg text-right tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {tickets.slice(0, 5).map(ticket => (
                           <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
-                            <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticketNumber}</td>
-                            <td className="max-w-[240px] truncate px-4 py-3 text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{getCategoryLabel(ticket.category)}</td>
-                            <td className="px-4 py-3">{getPriorityBadge(ticket.priority)}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{formatISTDate(ticket.createdAt)}</td>
-                            <td className="px-4 py-3">
+                            <td className="tf-td whitespace-nowrap font-medium text-gray-900 dark:text-slate-100">{ticket.ticketNumber}</td>
+                            <td className="tf-td max-w-[240px] truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</td>
+                            <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">{getCategoryLabel(ticket.category)}</td>
+                            <td className="tf-td">{getPriorityBadge(ticket.priority)}</td>
+                            <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">{formatISTDate(ticket.createdAt)}</td>
+                            <td className="tf-td">
                               <div className="flex flex-col items-start gap-1">
                                 {getStatusBadge(ticket.status)}
                                 {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="tf-td text-right">
                               <button
                                 onClick={() => {
                                   setSelectedTicket(ticket);
@@ -1507,7 +1512,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Help Resources */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+            <div className="tf-grid-3">
               {[
                 { key: 'kb', title: 'Knowledge Base', desc: 'Browse articles and guides', icon: Book },
                 { key: 'video', title: 'Video Tutorials', desc: 'Watch step-by-step guides', icon: Video },
@@ -1520,13 +1525,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <ItemIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-base">{item.title}</h4>
-                      <p className="text-xs text-gray-600 dark:text-slate-400 sm:text-sm">{item.desc}</p>
+                      <h4 className="tf-row-title sm:text-base">{item.title}</h4>
+                      <p className="tf-meta sm:text-sm">{item.desc}</p>
                     </div>
                     <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </>
                 );
-                const cls = 'group flex w-full items-center gap-3 rounded-xl border border-gray-200 bg-white p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900';
+                const cls = 'group flex w-full items-center gap-3 tf-panel p-4 text-left transition-all hover:border-brand-blue/30 hover:shadow-md';
                 // Video tutorials and FAQs have no content yet — shown as "Coming soon" instead of a dead link.
                 return item.key === 'kb' ? (
                   <button key={item.key} onClick={() => setView('knowledge-base')} className={cls}>{inner}</button>
@@ -1536,19 +1541,19 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <item.icon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-sm font-semibold text-gray-700 dark:text-slate-300 sm:text-base">{item.title}</h4>
-                      <p className="text-xs text-gray-500 dark:text-slate-400 sm:text-sm">{item.desc}</p>
+                      <h4 className="tf-row-title sm:text-base">{item.title}</h4>
+                      <p className="tf-meta sm:text-sm">{item.desc}</p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-gray-200 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600 dark:bg-slate-700 dark:text-slate-300">Coming soon</span>
+                    <span className="tf-badge shrink-0 bg-gray-200 tf-micro-hint uppercase tracking-wide dark:bg-slate-700">Coming soon</span>
                   </div>
                 );
               })}
             </div>
 
             {/* Contact Information */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5">
-              <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Need Immediate Help?</h3>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-0 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
+            <div className="tf-panel p-4 sm:p-5">
+              <h3 className="mb-3 tf-section-title">Need Immediate Help?</h3>
+              <div className="tf-grid-3 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
                 {[
                   { label: 'Email', value: 'support@talentflow.com', icon: Mail, href: 'mailto:support@talentflow.com' },
                   { label: 'Phone', value: '1-800-TALENT-1', icon: Phone, href: undefined },
@@ -1561,11 +1566,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <ContactIcon className="h-[18px] w-[18px]" />
                       </span>
                       <div className="min-w-0">
-                        <div className="text-xs text-gray-500 dark:text-slate-400">{c.label}</div>
+                        <div className="tf-meta">{c.label}</div>
                         {c.href ? (
                           <a href={c.href} className="block truncate text-sm font-medium text-brand-blue hover:underline">{c.value}</a>
                         ) : (
-                          <div className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{c.value}</div>
+                          <div className="truncate tf-row-name">{c.value}</div>
                         )}
                       </div>
                     </div>
@@ -1607,10 +1612,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="tf-grid-3">
               {/* Form — Ctrl/⌘ + Enter submits (same Submit as the button) */}
               <div
-                className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-6 lg:col-span-2"
+                className="tf-panel p-4 sm:p-6 lg:col-span-2"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
@@ -1620,12 +1625,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               >
                 <div className="border-b border-gray-100 pb-4 dark:border-slate-700/60">
                   <h2 className="text-xl font-bold tracking-tight text-gray-900 dark:text-slate-50 sm:text-2xl">Create Support Ticket</h2>
-                  <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">Tell us about your issue or request. Our support team will get back to you as soon as possible.</p>
+                  <p className="mt-1 tf-body-secondary">Tell us about your issue or request. Our support team will get back to you as soon as possible.</p>
                 </div>
 
                 {/* Draft status */}
                 {draftRestored ? (
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 text-xs text-gray-700 ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:text-slate-300 dark:ring-slate-700 sm:text-sm">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 tf-meta ring-1 ring-brand-blue/10 dark:bg-slate-800/60 dark:ring-slate-700 sm:text-sm">
                     <span className="inline-flex items-center gap-2">
                       <RefreshCw className="h-4 w-4 shrink-0 text-brand-blue" />
                       We restored your unsent draft.
@@ -1635,7 +1640,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </button>
                   </div>
                 ) : (title.trim() || description.trim()) && authUser?.id ? (
-                  <p className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 dark:text-slate-500">
+                  <p className="mt-3 flex items-center gap-1.5 tf-hint">
                     <CheckCircle2 className="h-3.5 w-3.5" />
                     Draft saved automatically on this device
                   </p>
@@ -1690,13 +1695,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             </li>
                           ))}
                         </ul>
-                        <p className="mt-2 text-[11px] text-gray-600 dark:text-slate-400">Adding to an existing ticket gets you a faster answer. Your draft is kept if you go and check.</p>
+                        <p className="mt-2 tf-meta">Adding to an existing ticket gets you a faster answer. Your draft is kept if you go and check.</p>
                       </div>
                     )}
                   </div>
 
                   {/* Category + Priority */}
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+                  <div className="tf-grid-2">
                     <div>
                       <Label className="mb-1.5 font-semibold">
                         Category <span className="text-destructive">*</span>
@@ -1734,7 +1739,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         options={priorities.map(p => ({ value: p.value, label: p.label }))}
                         className="w-full sm:w-full px-3 sm:px-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
                       />
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      <p className="mt-1 tf-meta">
                         {PRIORITY_GUIDANCE.find(g => g.label.toLowerCase() === priority)?.text}
                       </p>
                     </div>
@@ -1789,7 +1794,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
 
                     {showDescriptionPreview ? (
-                      <div className="min-h-[132px] rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm leading-relaxed text-gray-800 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-200">
+                      <div className="min-h-[132px] rounded-md border border-gray-200 bg-gray-50 px-3 py-2 tf-body leading-relaxed dark:border-slate-700 dark:bg-slate-800/50">
                         {description.trim()
                           ? <div className="space-y-1">{renderFormattedMessage(description)}</div>
                           : <p className="text-gray-400 dark:text-slate-500">Nothing to preview yet.</p>}
@@ -1824,7 +1829,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <div className="absolute left-0 top-full z-20 mt-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                 {EMOJI_GROUPS.map(group => (
                                   <div key={group.group} className="mb-1.5 last:mb-0">
-                                    <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                    <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
                                     <div className="grid grid-cols-8 gap-0.5">
                                       {group.items.map(em => (
                                         <button
@@ -1858,16 +1863,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
 
                     {/* Optional browser details — inserted visibly into the description */}
-                    <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                    <label className="mt-3 flex cursor-pointer items-start gap-2.5 tf-body">
                       <input
                         type="checkbox"
                         checked={envIncluded}
                         onChange={(e) => toggleEnvironmentDetails(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/30"
+                        className="tf-checkbox mt-0.5 focus:ring-brand-blue/30"
                       />
                       <span>
                         Include my browser details
-                        <span className="block text-xs text-gray-500 dark:text-slate-400">Adds your browser, operating system and screen size to the description so support can reproduce the issue. You can edit it before sending.</span>
+                        <span className="block tf-meta">Adds your browser, operating system and screen size to the description so support can reproduce the issue. You can edit it before sending.</span>
                       </span>
                     </label>
                   </div>
@@ -1892,12 +1897,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       />
                       <div className="flex flex-col items-center">
                         <UploadCloud className="mb-2 h-9 w-9 text-brand-blue/60" />
-                        <span className="text-sm font-medium text-gray-700 dark:text-slate-200">Click to attach files</span>
-                        <span className="mt-2 text-xs text-gray-600 dark:text-slate-300">
+                        <span className="tf-label">Click to attach files</span>
+                        <span className="mt-2 tf-meta">
                           <span className="font-medium text-gray-700 dark:text-slate-200">Supported formats:</span>{' '}
                           {ATTACHMENT_SHOWN_EXTS.join(', ')}
                         </span>
-                        <span className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                        <span className="mt-1 tf-meta">
                           Up to {ATTACHMENT_MAX_FILES} files per upload (10 MB in total) · {ATTACHMENT_MAX_PER_TICKET} files per ticket · no videos
                         </span>
                       </div>
@@ -1910,8 +1915,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <div className="flex min-w-0 items-center gap-2.5">
                               <FileText className="h-4 w-4 flex-shrink-0 text-brand-blue" />
                               <div className="min-w-0">
-                                <div className="truncate text-sm text-gray-900 dark:text-slate-50">{file.name}</div>
-                                <div className="text-xs text-gray-500 dark:text-slate-400">
+                                <div className="truncate tf-body">{file.name}</div>
+                                <div className="tf-meta">
                                   {(file.size / 1024).toFixed(1)} KB
                                 </div>
                               </div>
@@ -1933,8 +1938,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   {/* Actions */}
                   <div className="flex flex-col gap-3 border-t border-gray-100 pt-4 dark:border-slate-700/60 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="hidden text-xs text-gray-400 dark:text-slate-500 sm:block">
-                      Tip: press <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] dark:border-slate-700 dark:bg-slate-800">Ctrl</kbd> + <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-[10px] dark:border-slate-700 dark:bg-slate-800">Enter</kbd> to submit
+                    <p className="hidden tf-hint sm:block">
+                      Tip: press <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-2xs dark:border-slate-700 dark:bg-slate-800">Ctrl</kbd> + <kbd className="rounded border border-gray-200 bg-gray-50 px-1 py-0.5 font-sans text-2xs dark:border-slate-700 dark:bg-slate-800">Enter</kbd> to submit
                     </p>
                     <div className="flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                       <Button
@@ -1964,14 +1969,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               </div>
 
               {/* Tips */}
-              <aside className="h-fit rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900 sm:p-5 lg:sticky lg:top-4">
+              <aside className="h-fit tf-panel p-4 sm:p-5 lg:sticky lg:top-4">
                 <div className="flex items-start gap-3 border-b border-gray-100 pb-4 dark:border-slate-700/60">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue">
                     <Lightbulb className="h-5 w-5" />
                   </span>
                   <div>
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Tips for a better response</h3>
-                    <p className="mt-0.5 text-sm text-gray-500 dark:text-slate-400">Follow these guidelines to help us resolve your issue faster.</p>
+                    <h3 className="tf-section-title">Tips for a better response</h3>
+                    <p className="mt-0.5 tf-body-muted">Follow these guidelines to help us resolve your issue faster.</p>
                   </div>
                 </div>
                 <ul className="mt-4 space-y-4">
@@ -1987,8 +1992,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <Check className="h-3.5 w-3.5" strokeWidth={3} />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{tip.title}</p>
-                        <p className="mt-0.5 text-xs text-gray-500 dark:text-slate-400 sm:text-sm">{tip.desc}</p>
+                        <p className="tf-row-title">{tip.title}</p>
+                        <p className="mt-0.5 tf-meta sm:text-sm">{tip.desc}</p>
                       </div>
                     </li>
                   ))}
@@ -2010,7 +2015,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="tf-card-soft">
               {/* Filters */}
               <div className="p-3 sm:p-4 md:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col gap-2 sm:gap-3 md:gap-4">
@@ -2077,7 +2082,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Active filters — each removable, plus clear all */}
                   {(filterStatus !== 'all' || filterPriority !== 'all' || myCategoryFilter !== 'all' || searchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      <span className="tf-meta">Filters:</span>
                       {searchQuery && (
                         <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
                           &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
@@ -2117,7 +2122,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 dark:border-slate-700/60">
                       <Skeleton className="h-4 w-28" />
                       <Skeleton className="h-4 flex-1" />
-                      <Skeleton className="hidden h-5 w-16 rounded-md md:block" />
+                      <Skeleton className="hidden h-5 w-16 rounded-md lg:block" />
                       <Skeleton className="h-5 w-20 rounded-full" />
                     </div>
                   ))}
@@ -2125,54 +2130,53 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
+                  <MobileRecordList className="p-3">
                     {paginatedTickets.map(ticket => {
                       const CategoryIcon = getCategoryIcon(ticket.category);
+                      const openTicket = () => {
+                        setSelectedTicket(ticket);
+                        fetchTicketDetail(ticket.id);
+                        setView('detail');
+                      };
                       return (
-                        <button
+                        <MobileRecordCard
                           key={ticket.id}
-                          onClick={() => {
-                            setSelectedTicket(ticket);
-                            fetchTicketDetail(ticket.id);
-                            setView('detail');
-                          }}
-                          className="w-full text-left p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition-colors"
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1.5">
-                            <div className="min-w-0 flex-1">
-                              <span className="text-xs text-gray-600 dark:text-slate-400 block mb-0.5">{ticket.ticketNumber}</span>
-                              <h4 className="text-sm text-gray-900 dark:text-slate-50 font-medium truncate">{ticket.title}</h4>
-                            </div>
-                            <div className="flex shrink-0 flex-col items-end gap-1">
+                          onClick={openTicket}
+                          idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticketNumber}</span>}
+                          title={ticket.title}
+                          badges={
+                            <>
+                              {getPriorityBadge(ticket.priority)}
                               {getStatusBadge(ticket.status)}
                               {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 flex-wrap mt-1.5">
-                            <div className="flex items-center gap-1 min-w-0">
-                              <CategoryIcon className="w-3 h-3 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                              <span className="text-xs text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
-                            </div>
-                            {getPriorityBadge(ticket.priority)}
-                            <span className="text-xs text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
-                          </div>
-                        </button>
+                            </>
+                          }
+                          meta={[
+                            { icon: <CategoryIcon />, label: getCategoryLabel(ticket.category) },
+                            { icon: <Clock />, label: formatISTDate(ticket.updatedAt) },
+                          ]}
+                          actions={
+                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticketNumber}`} title="View" className="tf-icon-btn-outline">
+                              <Eye />
+                            </button>
+                          }
+                        />
                       );
                     })}
-                  </div>
+                  </MobileRecordList>
 
                   {/* Desktop Table */}
-                  <div className="hidden md:block overflow-x-auto tf-table-shell">
+                  <div className="hidden lg:block overflow-x-auto tf-table-shell">
                     <table className="w-full">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Title</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
-                          <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col">Actions</th>
+                          <th className="tf-th-cell text-left tf-th">Ticket #</th>
+                          <th className="tf-th-cell text-left tf-th">Title</th>
+                          <th className="tf-th-cell text-left tf-th">Category</th>
+                          <th className="tf-th-cell text-left tf-th">Priority</th>
+                          <th className="tf-th-cell text-left tf-th">Status</th>
+                          <th className="tf-th-cell text-left tf-th">Updated</th>
+                          <th className="tf-th-cell text-left tf-th tf-sticky-col">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -2180,31 +2184,31 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           const CategoryIcon = getCategoryIcon(ticket.category);
                           return (
                             <tr key={ticket.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/50">
-                              <td className="px-6 py-4">
-                                <span className="text-sm text-gray-900 dark:text-slate-50">{ticket.ticketNumber}</span>
+                              <td className="tf-td">
+                                <span className="tf-body">{ticket.ticketNumber}</span>
                               </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 dark:text-slate-50 max-w-md truncate">{ticket.title}</div>
+                              <td className="tf-td">
+                                <div className="tf-body max-w-md truncate">{ticket.title}</div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="tf-td">
                                 <div className="flex items-center gap-2 min-w-0">
                                   <CategoryIcon className="w-4 h-4 text-gray-600 dark:text-slate-400 flex-shrink-0" />
-                                  <span className="text-sm text-gray-600 dark:text-slate-400 truncate">{getCategoryLabel(ticket.category)}</span>
+                                  <span className="tf-body-secondary truncate">{getCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="tf-td">
                                 {getPriorityBadge(ticket.priority)}
                               </td>
-                              <td className="px-6 py-4">
+                              <td className="tf-td">
                                 <div className="flex flex-col items-start gap-1">
                                   {getStatusBadge(ticket.status)}
                                   {isAwaitingUserReply(ticket) && <AwaitingReplyTag />}
                                 </div>
                               </td>
-                              <td className="px-6 py-4">
-                                <span className="text-sm text-gray-600 dark:text-slate-400">{formatISTDate(ticket.updatedAt)}</span>
+                              <td className="tf-td">
+                                <span className="tf-body-secondary">{formatISTDate(ticket.updatedAt)}</span>
                               </td>
-                              <td className="px-6 py-4 tf-sticky-col">
+                              <td className="tf-td tf-sticky-col">
                                 <button
                                   onClick={() => {
                                     setSelectedTicket(ticket);
@@ -2357,13 +2361,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             },
           ];
 
-          const cardCls = 'rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900';
+          const cardCls = 'tf-panel';
           const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-40 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
               <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
-              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
-              <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
+              <span className="w-24 shrink-0 tf-body-muted">{label}</span>
+              <div className="min-w-0 flex-1 tf-row-name">{value}</div>
             </div>
           );
 
@@ -2424,13 +2428,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="tf-grid-3">
               {/* Main Content */}
               <div className={`${cardCls} p-4 sm:p-5 lg:col-span-2`}>
                 {/* Ticket Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5 tf-meta">
                       <span>{selectedTicket.ticketNumber}</span>
                       <button type="button" onClick={copyTicketId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
@@ -2440,7 +2444,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
                       {getStatusBadge(selectedTicket.status)}
                       {getPriorityBadge(selectedTicket.priority)}
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 tf-caption dark:bg-slate-800">
                         {getCategoryLabel(selectedTicket.category)}
                       </span>
                       {isAwaitingUserReply(selectedTicket) && <AwaitingReplyTag />}
@@ -2451,15 +2455,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <div className="flex items-start gap-2">
                         <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
                         <div>
-                          <div className="text-[11px] text-gray-500 dark:text-slate-400">Created</div>
-                          <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(selectedTicket.createdAt)}</div>
+                          <div className="tf-meta">Created</div>
+                          <div className="tf-caption">{formatIST(selectedTicket.createdAt)}</div>
                         </div>
                       </div>
                       <div className="flex items-start gap-2">
                         <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
                         <div>
-                          <div className="text-[11px] text-gray-500 dark:text-slate-400">Last Updated</div>
-                          <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(selectedTicket.updatedAt)}</div>
+                          <div className="tf-meta">Last Updated</div>
+                          <div className="tf-caption">{formatIST(selectedTicket.updatedAt)}</div>
                         </div>
                       </div>
                     </div>
@@ -2514,10 +2518,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         key={tab.id}
                         type="button"
                         onClick={() => setDetailTabState({ id: selectedTicket.id, tab: tab.id })}
-                        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-2.5 py-2 text-xs font-semibold transition-colors sm:px-3 sm:text-sm ${
+                        className={`tf-tab-line -mb-px ${
                           detailTab === tab.id
-                            ? 'border-brand-blue text-brand-blue'
-                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                            ? 'tf-tab-line-active'
+                            : ''
                         }`}
                       >
                         <TabIcon className="h-4 w-4" />
@@ -2531,7 +2535,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <>
                     <div className="mt-4 space-y-3">
                       {thread.length === 0 && (
-                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                        <p className="py-6 text-center tf-body-muted">No messages yet.</p>
                       )}
                       {thread.map((response) => (
                         <div
@@ -2547,16 +2551,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <div className="min-w-0 flex-1">
                               <div className="mb-1 flex items-center justify-between gap-2">
                                 <div className="flex min-w-0 items-center gap-2">
-                                  <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{authorName(response)}</span>
+                                  <span className="truncate tf-row-title">{authorName(response)}</span>
                                   {response.from === 'user' ? (
-                                    <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue">You</span>
+                                    <span className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue">You</span>
                                   ) : (
-                                    <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">Support</span>
+                                    <span className="tf-badge bg-gray-200 tf-micro-hint dark:bg-slate-700">Support</span>
                                   )}
                                 </div>
-                                <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.timestamp)}</span>
+                                <span className="shrink-0 whitespace-nowrap tf-meta">{formatIST(response.timestamp)}</span>
                               </div>
-                              <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                              <div className="space-y-1 tf-body leading-relaxed">{renderFormattedMessage(response.message)}</div>
                             </div>
                           </div>
                         </div>
@@ -2594,7 +2598,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {replyTemplates.map(group => (
                                       <div key={group.group} className="py-1">
-                                        <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
                                         {group.items.map(tpl => (
                                           <button
                                             key={tpl.label}
@@ -2629,7 +2633,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           {replyFiles.length > 0 && (
                             <ul className="mt-2 flex flex-wrap gap-1.5">
                               {replyFiles.map((file, index) => (
-                                <li key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+                                <li key={`${file.name}-${index}`} className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 py-1 pl-2.5 pr-1 tf-meta dark:border-slate-700 dark:bg-slate-800/60">
                                   <Paperclip className="h-3 w-3 shrink-0 text-brand-blue" />
                                   <span className="truncate" title={file.name}>{file.name}</span>
                                   <span className="shrink-0 text-gray-400">{(file.size / 1024).toFixed(0)} KB</span>
@@ -2682,7 +2686,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                     <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                       {EMOJI_GROUPS.map(group => (
                                         <div key={group.group} className="mb-1.5 last:mb-0">
-                                          <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                          <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
                                           <div className="grid grid-cols-8 gap-0.5">
                                             {group.items.map(em => (
                                               <button
@@ -2731,10 +2735,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <ItemIcon className="h-3.5 w-3.5" />
                           </span>
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
-                            {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
+                            <p className="tf-row-title">{item.title}</p>
+                            {item.time && <span className="tf-meta">{formatIST(item.time)}</span>}
                           </div>
-                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                          {item.detail && <p className="mt-0.5 break-words tf-meta">{item.detail}</p>}
                         </li>
                       );
                     })}
@@ -2744,14 +2748,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {detailTab === 'attachments' && (
                   <div className="mt-4">
                     {attachments.length === 0 ? (
-                      <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No attachments on this ticket.</p>
+                      <p className="py-6 text-center tf-body-muted">No attachments on this ticket.</p>
                     ) : (
                       <ul className="space-y-2">
                         {attachments.map(file => (
                           <li key={file.id} className="flex items-center gap-3 rounded-lg border border-gray-200 px-3 py-2.5 dark:border-slate-700">
                             <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
-                            <span className="min-w-0 flex-1 truncate text-sm text-gray-900 dark:text-slate-100" title={file.name}>{file.name}</span>
-                            <span className="shrink-0 text-xs text-gray-500 dark:text-slate-400">{file.size}</span>
+                            <span className="min-w-0 flex-1 truncate tf-body" title={file.name}>{file.name}</span>
+                            <span className="shrink-0 tf-meta">{file.size}</span>
                             <button
                               type="button"
                               onClick={() => downloadAttachment(selectedTicket.id, file)}
@@ -2772,7 +2776,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4">
                 {/* Ticket Info */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-1 flex items-center gap-2 tf-row-title">
                     <Ticket className="h-4 w-4 text-brand-blue" />
                     Ticket Information
                   </h4>
@@ -2799,7 +2803,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {infoRow(MessageSquare, 'Responses', `${responseCount} message${responseCount === 1 ? '' : 's'}`)}
                   </div>
                   {selectedTicket.status !== 'closed' && selectedTicket.status !== 'resolved' && (
-                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 text-xs text-gray-600 dark:bg-slate-800/60 dark:text-slate-400">
+                    <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.05] px-3 py-2 tf-meta dark:bg-slate-800/60">
                       <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
                       <span>
                         Typical first response within <strong className="font-semibold text-gray-900 dark:text-slate-100">24 hours</strong>.
@@ -2814,7 +2818,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority */}
                 {selectedTicket.status !== 'closed' && (
                   <div className={`${cardCls} p-4`}>
-                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="mb-3 flex items-center gap-2 tf-row-title">
                       <Flag className="h-4 w-4 text-brand-blue" />
                       Update Priority
                     </h4>
@@ -2838,11 +2842,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-3 flex items-center gap-2 tf-row-title">
                     <Settings2 className="h-4 w-4 text-brand-blue" />
                     Actions
                   </h4>
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                  <div className="tf-grid-2">
                     <button
                       onClick={downloadTranscript}
                       className="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
@@ -2876,7 +2880,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Related Articles */}
                 <div className={`${cardCls} p-4`}>
                   <div className="mb-3 flex items-center justify-between">
-                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="flex items-center gap-2 tf-row-title">
                       <Book className="h-4 w-4 text-brand-blue" />
                       Related Help Articles
                     </h4>
@@ -2885,7 +2889,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="flex items-start gap-2 text-sm text-gray-500 dark:text-slate-400">
+                  <p className="flex items-start gap-2 tf-body-muted">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0" />
                     Articles for this topic are coming soon.
                   </p>
@@ -2907,10 +2911,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 md:p-8">
-              <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">Knowledge Base</h2>
+            <div className="tf-card-soft p-4 sm:p-6 md:p-8">
+              <h2 className="tf-row-title sm:text-base md:text-lg mb-4 sm:mb-6">Knowledge Base</h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 md:gap-6">
+              <div className="tf-grid-3">
                 {categories.slice(0, 6).map(cat => {
                   const Icon = cat.icon;
                   return (
@@ -2920,8 +2924,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       className="p-3 sm:p-4 md:p-6 border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 rounded-lg hover:border-brand-blue/30 hover:shadow-md transition-all"
                     >
                       <Icon className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue mb-2 sm:mb-3" />
-                      <h4 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-1 sm:mb-2">{cat.label}</h4>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Articles coming soon</p>
+                      <h4 className="tf-body sm:text-base mb-1 sm:mb-2">{cat.label}</h4>
+                      <p className="tf-body-secondary">Articles coming soon</p>
                     </div>
                   );
                 })}
@@ -2936,7 +2940,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
         {activeTab === 'team' && isAdmin && view === 'overview' && (
           <div className="space-y-4">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 sm:gap-4">
+            <div className="tf-grid-stats-5">
               {[
                 { label: 'Open', value: internalOpenTickets, sub: 'Awaiting action', icon: FileText, tile: 'bg-brand-blue/10 text-brand-blue', status: 'open', assignment: 'all', attention: false },
                 { label: 'In Progress', value: internalInProgressTickets, sub: 'Being handled', icon: Clock, tile: 'bg-brand-orange/10 text-brand-orange-deep', status: 'in-progress', assignment: 'all', attention: false },
@@ -2961,14 +2965,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <p className="text-sm text-gray-600 dark:text-slate-400">{card.label}</p>
+                        <p className="tf-body-secondary">{card.label}</p>
                         {card.attention && (
-                          <span className="rounded-full bg-brand-orange/15 px-1.5 py-px text-[10px] font-semibold text-brand-orange-deep">Needs attention</span>
+                          <span className="rounded-full bg-brand-orange/15 px-1.5 py-px text-2xs font-semibold text-brand-orange-deep">Needs attention</span>
                         )}
                       </div>
                       <p className="mt-0.5 text-2xl font-bold tracking-tight tabular-nums text-gray-900 dark:text-slate-50">{card.value}</p>
-                      <p className="mt-0.5 truncate text-xs text-gray-500 dark:text-slate-400">{card.sub}</p>
-                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-[11px] font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
+                      <p className="mt-0.5 truncate tf-meta">{card.sub}</p>
+                      <p className="mt-1.5 inline-flex items-center gap-0.5 text-xs font-semibold text-brand-blue opacity-70 transition-opacity group-hover:opacity-100">
                         View tickets
                         <ChevronRight className="h-3 w-3 transition-transform group-hover:translate-x-0.5" />
                       </p>
@@ -2980,8 +2984,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
             {/* Category Breakdown */}
             {internalStats?.tickets_by_category && Object.keys(internalStats.tickets_by_category).length > 0 && (
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
-                <h3 className="mb-3 text-base font-semibold text-gray-900 dark:text-slate-50">Tickets by Category</h3>
+              <div className="tf-panel p-4">
+                <h3 className="mb-3 tf-section-title">Tickets by Category</h3>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(internalStats.tickets_by_category).map(([cat, count]) => {
                     const CategoryIcon = getInternalCategoryIcon(cat);
@@ -2995,8 +2999,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white text-brand-blue ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">
                           <CategoryIcon className="h-4 w-4" />
                         </span>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-gray-800 dark:text-slate-200">{getInternalCategoryLabel(cat)}</span>
-                        <span className="shrink-0 rounded-md bg-white px-2 py-0.5 text-xs font-semibold tabular-nums text-gray-700 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700">{count}</span>
+                        <span className="min-w-0 flex-1 truncate tf-label">{getInternalCategoryLabel(cat)}</span>
+                        <span className="shrink-0 rounded-md bg-white px-2 py-0.5 tf-caption tabular-nums ring-1 ring-gray-200 dark:bg-slate-900 dark:ring-slate-700">{count}</span>
                         <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" />
                       </button>
                     );
@@ -3006,7 +3010,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             )}
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3 sm:gap-4">
+            <div className="tf-grid-3">
               {[
                 { key: 'unassigned', title: 'Unassigned Tickets', desc: `${internalUnassignedTickets} tickets need attention`, icon: Users, accent: true, onClick: () => { setInternalFilterAssignment('unassigned'); setTeamCategoryFilter('all'); setView('tickets'); } },
                 { key: 'mine', title: 'My Assigned Tickets', desc: 'View tickets assigned to you', icon: UserCheck, accent: false, onClick: () => { setInternalFilterAssignment('mine'); setTeamCategoryFilter('all'); setView('tickets'); } },
@@ -3027,8 +3031,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <ActionIcon className="h-5 w-5" />
                     </span>
                     <div className="min-w-0 flex-1">
-                      <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">{action.title}</h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400">{action.desc}</p>
+                      <h3 className="tf-section-title">{action.title}</h3>
+                      <p className="tf-body-secondary">{action.desc}</p>
                     </div>
                     <ChevronRight className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-brand-blue" />
                   </button>
@@ -3037,9 +3041,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Recent Team Tickets */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+            <div className="tf-panel p-4">
               <div className="mb-3 flex items-center justify-between">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Team Tickets</h3>
+                <h3 className="tf-section-title">Recent Team Tickets</h3>
                 <button
                   onClick={() => setView('tickets')}
                   className="inline-flex items-center gap-1 text-sm font-medium text-brand-blue hover:text-brand-blue/80"
@@ -3056,7 +3060,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : internalTickets.length === 0 ? (
                 <div className="text-center py-8 sm:py-12">
                   <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="text-sm text-gray-600 dark:text-slate-400">No team tickets yet</p>
+                  <p className="tf-body-secondary">No team tickets yet</p>
                 </div>
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {
@@ -3067,72 +3071,74 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 return (
                 <>
                   {/* Mobile: compact cards */}
-                  <div className="space-y-2 md:hidden">
+                  <MobileRecordList>
                     {internalTickets.slice(0, 5).map(ticket => (
-                      <button
+                      <MobileRecordCard
                         key={ticket.id}
                         onClick={() => openInternal(ticket)}
-                        className="w-full rounded-lg border border-gray-200 bg-gray-50 p-3 text-left transition-colors hover:bg-gray-100 dark:border-slate-700/60 dark:bg-slate-800/50 dark:hover:bg-slate-800"
-                      >
-                        <div className="mb-1.5 flex items-start justify-between gap-2">
-                          <div className="min-w-0 flex-1">
-                            <span className="mb-0.5 block truncate text-2xs text-gray-600 dark:text-slate-400">{ticket.ticket_number} · from {ticket.created_by?.name}</span>
-                            <h4 className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{ticket.title}</h4>
-                          </div>
-                          <div className="flex shrink-0 items-center gap-1.5">
+                        idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticket_number}</span>}
+                        title={ticket.title}
+                        badges={
+                          <>
+                            {getInternalPriorityBadge(ticket.priority)}
+                            {getInternalStatusBadge(ticket.status)}
                             {!ticket.assigned_to && (
                               <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
                             )}
-                            {getInternalStatusBadge(ticket.status)}
-                          </div>
-                        </div>
-                        {isAwaitingTeamResponse(ticket) && <div className="mb-1.5"><AwaitingTeamTag /></div>}
-                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
-                          <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
-                          {getInternalPriorityBadge(ticket.priority)}
-                          <span>{formatISTDate(ticket.created_at)}</span>
-                        </div>
-                      </button>
+                            {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                          </>
+                        }
+                        meta={[
+                          { icon: <User />, label: ticket.created_by?.name ? `from ${ticket.created_by.name}` : null },
+                          { icon: <Tag />, label: getInternalCategoryLabel(ticket.category) },
+                          { icon: <Calendar />, label: formatISTDate(ticket.created_at) },
+                        ]}
+                        actions={
+                          <button type="button" onClick={() => openInternal(ticket)} aria-label={`View ticket ${ticket.ticket_number}`} title="View" className="tf-icon-btn-outline">
+                            <Eye />
+                          </button>
+                        }
+                      />
                     ))}
-                  </div>
+                  </MobileRecordList>
 
                   {/* Desktop: table */}
-                  <div className="hidden overflow-x-auto md:block">
+                  <div className="hidden overflow-x-auto lg:block">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="rounded-l-lg px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket ID</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Created</th>
-                          <th className="px-4 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="rounded-r-lg px-4 py-2.5 text-right text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                        <tr className="bg-white text-left tf-caption dark:bg-slate-900">
+                          <th className="tf-th-cell rounded-l-lg tf-th">Ticket ID</th>
+                          <th className="tf-th-cell tf-th">Subject</th>
+                          <th className="tf-th-cell tf-th">Category</th>
+                          <th className="tf-th-cell tf-th">Priority</th>
+                          <th className="tf-th-cell tf-th">Created</th>
+                          <th className="tf-th-cell tf-th">Status</th>
+                          <th className="tf-th-cell rounded-r-lg text-right tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                         {internalTickets.slice(0, 5).map(ticket => (
                           <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
-                            <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
-                            <td className="max-w-[240px] px-4 py-3">
+                            <td className="tf-td whitespace-nowrap font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
+                            <td className="tf-td max-w-[240px]">
                               <div className="truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</div>
-                              <div className="flex items-center gap-1.5 truncate text-[11px] text-gray-500 dark:text-slate-400">
+                              <div className="flex items-center gap-1.5 truncate tf-meta">
                                 <span className="truncate">from {ticket.created_by?.name}</span>
                                 {!ticket.assigned_to && (
-                                  <span className="shrink-0 rounded border border-warning-line bg-warning-subtle px-1 py-px text-[10px] font-medium text-warning-strong">Unassigned</span>
+                                  <span className="shrink-0 rounded border border-warning-line bg-warning-subtle px-1 py-px text-2xs font-medium text-warning-strong">Unassigned</span>
                                 )}
                               </div>
                             </td>
-                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{getInternalCategoryLabel(ticket.category)}</td>
-                            <td className="px-4 py-3">{getInternalPriorityBadge(ticket.priority)}</td>
-                            <td className="whitespace-nowrap px-4 py-3 text-gray-600 dark:text-slate-400">{formatISTDate(ticket.created_at)}</td>
-                            <td className="px-4 py-3">
+                            <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">{getInternalCategoryLabel(ticket.category)}</td>
+                            <td className="tf-td">{getInternalPriorityBadge(ticket.priority)}</td>
+                            <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">{formatISTDate(ticket.created_at)}</td>
+                            <td className="tf-td">
                               <div className="flex flex-col items-start gap-1">
                                 {getInternalStatusBadge(ticket.status)}
                                 {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
                               </div>
                             </td>
-                            <td className="px-4 py-3 text-right">
+                            <td className="tf-td text-right">
                               <button
                                 onClick={() => openInternal(ticket)}
                                 className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 px-3 py-1.5 text-xs font-semibold text-brand-blue transition-colors hover:bg-brand-blue/5"
@@ -3164,7 +3170,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               Back to Overview
             </button>
 
-            <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            <div className="tf-panel">
               {/* Filters */}
               <div className="border-b border-gray-100 p-3 dark:border-slate-700/60 sm:p-4">
                 <div className="flex flex-col gap-3">
@@ -3179,7 +3185,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 sm:gap-3">
+                  <div className="tf-grid-stats-5">
                     <FilterSelect
                       value={teamFilterStatus}
                       onChange={(v) => setTeamFilterStatus(v)}
@@ -3244,7 +3250,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {/* Active filters — each removable, plus clear all */}
                   {(teamFilterStatus !== 'all' || teamFilterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || teamSearchQuery) && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs text-gray-500 dark:text-slate-400">Filters:</span>
+                      <span className="tf-meta">Filters:</span>
                       {teamSearchQuery && (
                         <button type="button" onClick={() => setTeamSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
                           &ldquo;{teamSearchQuery}&rdquo; <X className="h-3 w-3" />
@@ -3289,8 +3295,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <div key={i} className="flex items-center gap-4 rounded-lg border border-gray-100 px-4 py-3 dark:border-slate-700/60">
                       <Skeleton className="h-4 w-28" />
                       <Skeleton className="h-4 flex-1" />
-                      <Skeleton className="hidden h-6 w-6 rounded-full md:block" />
-                      <Skeleton className="hidden h-5 w-16 rounded-md md:block" />
+                      <Skeleton className="hidden h-6 w-6 rounded-full lg:block" />
+                      <Skeleton className="hidden h-5 w-16 rounded-md lg:block" />
                       <Skeleton className="h-5 w-20 rounded-full" />
                     </div>
                   ))}
@@ -3298,69 +3304,60 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               ) : (
                 <>
                   {/* Mobile Card Layout */}
-                  <div className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+                  <MobileRecordList className="p-3">
                     {paginatedInternalTickets.map(ticket => {
                       const CategoryIcon = getInternalCategoryIcon(ticket.category);
+                      const openTicket = () => {
+                        setSelectedInternalTicket(ticket);
+                        fetchInternalTicketDetail(ticket.id);
+                        setView('detail');
+                      };
                       return (
-                        <button
+                        <MobileRecordCard
                           key={ticket.id}
-                          onClick={() => {
-                            setSelectedInternalTicket(ticket);
-                            fetchInternalTicketDetail(ticket.id);
-                            setView('detail');
-                          }}
-                          className="w-full p-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-slate-800/50 sm:p-4"
-                        >
-                          <div className="mb-1.5 flex items-start justify-between gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-2xs text-gray-600 dark:text-slate-400">
-                                <span>{ticket.ticket_number}</span>
-                                <span aria-hidden="true">·</span>
-                                <span className="truncate">from {ticket.created_by?.name}</span>
-                              </div>
-                              <h4 className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{ticket.title}</h4>
-                            </div>
-                            <div className="flex flex-shrink-0 flex-col items-end gap-1">
+                          onClick={openTicket}
+                          idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticket_number}</span>}
+                          title={ticket.title}
+                          badges={
+                            <>
+                              {getInternalPriorityBadge(ticket.priority)}
                               {getInternalStatusBadge(ticket.status)}
                               {!ticket.assigned_to && (
                                 <span className="rounded border border-warning-line bg-warning-subtle px-1.5 py-0.5 text-2xs text-warning-strong">Unassigned</span>
                               )}
-                            </div>
-                          </div>
-                          {isAwaitingTeamResponse(ticket) && <div className="mb-1.5"><AwaitingTeamTag /></div>}
-                          <div className="mt-1.5 flex flex-wrap items-center gap-2 text-2xs text-gray-600 dark:text-slate-400">
-                            <span className="inline-flex min-w-0 items-center gap-1">
-                              <CategoryIcon className="h-3 w-3 flex-shrink-0" />
-                              <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
-                            </span>
-                            {getInternalPriorityBadge(ticket.priority)}
-                            <span title={formatIST(ticket.updated_at)}>{timeAgo(ticket.updated_at)}</span>
-                            {ticket.assigned_to && (
-                              <span className="inline-flex max-w-[120px] items-center gap-1 truncate">
-                                <UserCheck className="h-3 w-3 shrink-0" />
-                                <span className="truncate">{ticket.assigned_to.name}</span>
-                              </span>
-                            )}
-                          </div>
-                        </button>
+                              {isAwaitingTeamResponse(ticket) && <AwaitingTeamTag />}
+                            </>
+                          }
+                          meta={[
+                            { icon: <User />, label: ticket.created_by?.name ? `from ${ticket.created_by.name}` : null },
+                            { icon: <CategoryIcon />, label: getInternalCategoryLabel(ticket.category) },
+                            { icon: <Clock />, label: <span title={formatIST(ticket.updated_at)}>{timeAgo(ticket.updated_at)}</span> },
+                            { icon: <UserCheck />, label: ticket.assigned_to ? ticket.assigned_to.name : null },
+                          ]}
+                          actions={
+                            <button type="button" onClick={openTicket} aria-label={`View ticket ${ticket.ticket_number}`} title="View" className="tf-icon-btn-outline">
+                              <Eye />
+                            </button>
+                          }
+                        />
                       );
                     })}
-                  </div>
+                  </MobileRecordList>
 
                   {/* Desktop Table */}
-                  <div className="hidden overflow-x-auto md:block tf-table-shell">
+                  <div className="hidden overflow-x-auto lg:block tf-table-shell">
                     <table className="w-full text-sm">
                       <thead>
-                        <tr className="bg-white text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300">
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Ticket #</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Subject</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">From</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Category</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Priority</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Status</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Assigned</th>
-                          <th className="px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Updated</th>
-                          <th className="px-4 py-3 text-right tf-sticky-col text-xs font-semibold text-gray-600 dark:text-slate-300">Actions</th>
+                        <tr className="bg-white text-left tf-caption dark:bg-slate-900">
+                          <th className="tf-th-cell tf-th">Ticket #</th>
+                          <th className="tf-th-cell tf-th">Subject</th>
+                          <th className="tf-th-cell tf-th">From</th>
+                          <th className="tf-th-cell tf-th">Category</th>
+                          <th className="tf-th-cell tf-th">Priority</th>
+                          <th className="tf-th-cell tf-th">Status</th>
+                          <th className="tf-th-cell tf-th">Assigned</th>
+                          <th className="tf-th-cell tf-th">Updated</th>
+                          <th className="tf-th-cell text-right tf-sticky-col tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -3369,26 +3366,26 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           const canAssign = !ticket.assigned_to && ticket.status !== 'closed';
                           return (
                             <tr key={ticket.id} className="transition-colors hover:bg-gray-50/70 dark:hover:bg-slate-800/40">
-                              <td className="whitespace-nowrap px-4 py-3 font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
-                              <td className="max-w-[260px] px-4 py-3">
+                              <td className="tf-td whitespace-nowrap font-medium text-gray-900 dark:text-slate-100">{ticket.ticket_number}</td>
+                              <td className="tf-td max-w-[260px]">
                                 <div className="truncate text-gray-900 dark:text-slate-100" title={ticket.title}>{ticket.title}</div>
                                 {isAwaitingTeamResponse(ticket) && <div className="mt-1"><AwaitingTeamTag /></div>}
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="tf-td">
                                 <div className="flex min-w-0 items-center gap-2">
                                   <NameAvatar name={ticket.created_by?.name} fallback={ticket.created_by?.email} size="xs" />
                                   <span className="truncate text-gray-700 dark:text-slate-300">{ticket.created_by?.name}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
+                              <td className="tf-td">
                                 <div className="flex min-w-0 items-center gap-2 text-gray-600 dark:text-slate-400">
                                   <CategoryIcon className="h-4 w-4 flex-shrink-0" />
                                   <span className="truncate">{getInternalCategoryLabel(ticket.category)}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">{getInternalPriorityBadge(ticket.priority)}</td>
-                              <td className="px-4 py-3">{getInternalStatusBadge(ticket.status)}</td>
-                              <td className="px-4 py-3">
+                              <td className="tf-td">{getInternalPriorityBadge(ticket.priority)}</td>
+                              <td className="tf-td">{getInternalStatusBadge(ticket.status)}</td>
+                              <td className="tf-td">
                                 {ticket.assigned_to ? (
                                   <div className="flex min-w-0 items-center gap-2">
                                     <NameAvatar name={ticket.assigned_to.name} size="xs" />
@@ -3398,11 +3395,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   <span className="rounded border border-warning-line bg-warning-subtle px-2 py-0.5 text-xs text-warning-strong">Unassigned</span>
                                 )}
                               </td>
-                              <td className="whitespace-nowrap px-4 py-3">
+                              <td className="tf-td whitespace-nowrap">
                                 <div className="text-gray-700 dark:text-slate-300">{formatISTDate(ticket.updated_at)}</div>
-                                <div className="text-[11px] text-gray-400 dark:text-slate-500">{timeAgo(ticket.updated_at)}</div>
+                                <div className="tf-hint">{timeAgo(ticket.updated_at)}</div>
                               </td>
-                              <td className="px-4 py-3 tf-sticky-col">
+                              <td className="tf-td tf-sticky-col">
                                 <div className="flex items-center justify-end gap-1.5">
                                   {canAssign && (
                                     <button
@@ -3440,14 +3437,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   ) : filteredInternalTickets.length === 0 && (
                     <div className="py-10 text-center sm:py-12">
                       <Inbox className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-600 sm:h-12 sm:w-12" />
-                      <p className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                      <p className="tf-label">
                         {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
                           ? 'No unassigned tickets 🎉'
                           : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
                             ? 'Nothing is assigned to you right now'
                             : 'No tickets match these filters'}
                       </p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+                      <p className="mt-1 tf-meta">
                         {internalFilterAssignment === 'unassigned' || internalFilterAssignment === 'mine'
                           ? 'New requests from your team will show up here.'
                           : 'Try changing or clearing the filters above.'}
@@ -3569,14 +3566,14 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             },
           ];
 
-          const cardCls = 'rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900';
+          const cardCls = 'tf-panel';
           const toolBtn = 'flex h-8 w-8 items-center justify-center rounded-md text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100';
           const actionBtn = 'flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60';
           const infoRow = (Icon: typeof Ticket, label: string, value: React.ReactNode) => (
             <div className="flex items-center gap-3 py-2">
               <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
-              <span className="w-24 shrink-0 text-sm text-gray-500 dark:text-slate-400">{label}</span>
-              <div className="min-w-0 flex-1 text-sm font-medium text-gray-900 dark:text-slate-100">{value}</div>
+              <span className="w-24 shrink-0 tf-body-muted">{label}</span>
+              <div className="min-w-0 flex-1 tf-row-name">{value}</div>
             </div>
           );
 
@@ -3615,13 +3612,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+            <div className="tf-grid-3">
               {/* Main Content */}
               <div className={`${cardCls} p-4 sm:p-5 lg:col-span-2`}>
                 {/* Ticket Header */}
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400">
+                    <div className="flex items-center gap-1.5 tf-meta">
                       <span>{t.ticket_number}</span>
                       <button type="button" onClick={copyId} aria-label="Copy ticket ID" className="rounded p-0.5 hover:bg-gray-100 hover:text-brand-blue dark:hover:bg-slate-800">
                         <Copy className="h-3.5 w-3.5" />
@@ -3631,7 +3628,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <div className="mt-2.5 flex flex-wrap items-center gap-2">
                       {getInternalStatusBadge(t.status)}
                       {getInternalPriorityBadge(t.priority)}
-                      <span className="rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-slate-800 dark:text-slate-300">
+                      <span className="rounded-md bg-gray-100 px-2 py-0.5 tf-caption dark:bg-slate-800">
                         {getInternalCategoryLabel(t.category)}
                       </span>
                       {!t.assigned_to && t.status !== 'closed' && (
@@ -3639,11 +3636,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       )}
                       {isAwaitingTeamResponse(t) && <AwaitingTeamTag />}
                     </div>
-                    <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400 sm:text-sm">
+                    <div className="mt-3 flex flex-wrap items-center gap-1.5 tf-meta sm:text-sm">
                       <User className="h-4 w-4 shrink-0 text-brand-blue" />
                       <span>Submitted by <strong className="text-gray-900 dark:text-slate-100">{t.created_by?.name}</strong></span>
                       {t.created_by?.email && (
-                        <span className="truncate text-xs text-gray-500 dark:text-slate-500">({t.created_by.email})</span>
+                        <span className="truncate tf-meta">({t.created_by.email})</span>
                       )}
                     </div>
                   </div>
@@ -3651,15 +3648,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <div className="flex items-start gap-2">
                       <Calendar className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
                       <div>
-                        <div className="text-[11px] text-gray-500 dark:text-slate-400">Created</div>
-                        <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(t.created_at)}</div>
+                        <div className="tf-meta">Created</div>
+                        <div className="tf-caption">{formatIST(t.created_at)}</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-2">
                       <Clock className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
                       <div>
-                        <div className="text-[11px] text-gray-500 dark:text-slate-400">Last Updated</div>
-                        <div className="text-xs font-medium text-gray-900 dark:text-slate-100">{formatIST(t.updated_at)}</div>
+                        <div className="tf-meta">Last Updated</div>
+                        <div className="tf-caption">{formatIST(t.updated_at)}</div>
                       </div>
                     </div>
                   </div>
@@ -3677,10 +3674,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         key={tab.id}
                         type="button"
                         onClick={() => setDetailTabState({ id: t.id, tab: tab.id })}
-                        className={`-mb-px inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+                        className={`tf-tab-line -mb-px ${
                           detailTab === tab.id
-                            ? 'border-brand-blue text-brand-blue'
-                            : 'border-transparent text-gray-500 hover:text-gray-800 dark:text-slate-400 dark:hover:text-slate-200'
+                            ? 'tf-tab-line-active'
+                            : ''
                         }`}
                       >
                         <TabIcon className="h-4 w-4" />
@@ -3694,7 +3691,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <>
                     <div className="mt-4 space-y-3">
                       {thread.length === 0 && (
-                        <p className="py-6 text-center text-sm text-gray-500 dark:text-slate-400">No messages yet.</p>
+                        <p className="py-6 text-center tf-body-muted">No messages yet.</p>
                       )}
                       {thread.map((response) => {
                         const fromAdmin = response.user_role === 'admin';
@@ -3716,16 +3713,16 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <div className="min-w-0 flex-1">
                                 <div className="mb-1 flex items-center justify-between gap-2">
                                   <div className="flex min-w-0 items-center gap-2">
-                                    <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{nameOf(response)}</span>
+                                    <span className="truncate tf-row-title">{nameOf(response)}</span>
                                     {fromAdmin ? (
-                                      <span className="rounded-full bg-gray-200 px-1.5 py-0.5 text-[10px] font-semibold text-gray-600 dark:bg-slate-700 dark:text-slate-300">Admin</span>
+                                      <span className="tf-badge bg-gray-200 tf-micro-hint dark:bg-slate-700">Admin</span>
                                     ) : (
-                                      <span className="rounded-full bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue">Requester</span>
+                                      <span className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue">Requester</span>
                                     )}
                                   </div>
-                                  <span className="shrink-0 whitespace-nowrap text-[11px] text-gray-500 dark:text-slate-400">{formatIST(response.created_at)}</span>
+                                  <span className="shrink-0 whitespace-nowrap tf-meta">{formatIST(response.created_at)}</span>
                                 </div>
-                                <div className="space-y-1 text-sm leading-relaxed text-gray-700 dark:text-slate-300">{renderFormattedMessage(response.message)}</div>
+                                <div className="space-y-1 tf-body leading-relaxed">{renderFormattedMessage(response.message)}</div>
                               </div>
                             </div>
                           </div>
@@ -3754,7 +3751,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                 <div className="absolute right-0 z-20 mt-1 max-h-80 w-64 overflow-y-auto rounded-lg border border-gray-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                   {adminTemplates.map(group => (
                                     <div key={group.group} className="py-1">
-                                      <p className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                      <p className="px-3 pb-1 pt-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
                                       {group.items.map(tpl => (
                                         <button
                                           key={tpl.label}
@@ -3802,7 +3799,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                                   <div className="absolute bottom-full left-0 z-20 mb-1 max-h-64 w-[17.5rem] overflow-y-auto rounded-lg border border-gray-200 bg-white p-2 shadow-lg dark:border-slate-700 dark:bg-slate-900">
                                     {EMOJI_GROUPS.map(group => (
                                       <div key={group.group} className="mb-1.5 last:mb-0">
-                                        <p className="px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
+                                        <p className="px-1 pb-1 text-2xs font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group.group}</p>
                                         <div className="grid grid-cols-8 gap-0.5">
                                           {group.items.map(em => (
                                             <button
@@ -3848,10 +3845,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <ItemIcon className="h-3.5 w-3.5" />
                           </span>
                           <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{item.title}</p>
-                            {item.time && <span className="text-[11px] text-gray-500 dark:text-slate-400">{formatIST(item.time)}</span>}
+                            <p className="tf-row-title">{item.title}</p>
+                            {item.time && <span className="tf-meta">{formatIST(item.time)}</span>}
                           </div>
-                          {item.detail && <p className="mt-0.5 break-words text-xs text-gray-600 dark:text-slate-400">{item.detail}</p>}
+                          {item.detail && <p className="mt-0.5 break-words tf-meta">{item.detail}</p>}
                         </li>
                       );
                     })}
@@ -3863,7 +3860,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4">
                 {/* Ticket Info */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-1 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-1 flex items-center gap-2 tf-row-title">
                     <Ticket className="h-4 w-4 text-brand-blue" />
                     Ticket Information
                   </h4>
@@ -3896,7 +3893,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 {/* Update Priority — saves on change, as before */}
                 {t.status !== 'closed' && (
                   <div className={`${cardCls} p-4`}>
-                    <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                    <h4 className="mb-3 flex items-center gap-2 tf-row-title">
                       <Flag className="h-4 w-4 text-brand-blue" />
                       Update Priority
                     </h4>
@@ -3911,7 +3908,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 {/* Actions — same actions and conditions as before */}
                 <div className={`${cardCls} p-4`}>
-                  <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-slate-50">
+                  <h4 className="mb-3 flex items-center gap-2 tf-row-title">
                     <Settings2 className="h-4 w-4 text-brand-blue" />
                     Actions
                   </h4>
@@ -3949,7 +3946,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       </button>
                     )}
 
-                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+                    <div className="tf-grid-2">
                       <button
                         onClick={downloadInternalTranscript}
                         className={`${actionBtn} border border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700`}

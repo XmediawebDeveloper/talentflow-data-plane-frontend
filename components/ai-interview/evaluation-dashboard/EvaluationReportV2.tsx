@@ -71,36 +71,36 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             </div>
             <div>
               <div className="text-2xl font-bold text-gray-900 leading-tight">AI Interview Evaluation Report</div>
-              <div className="text-sm text-gray-500">Automated Technical Assessment & Skills Evaluation</div>
+              <div className="tf-body-muted">Automated Technical Assessment & Skills Evaluation</div>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-400 mb-1">Report Generated</div>
-            <div className="text-sm font-semibold text-gray-900 mb-2">{reportGenerated}</div>
-            <div className="text-xs text-gray-400">Evaluation ID: #{evalId}</div>
+            <div className="tf-hint mb-1">Report Generated</div>
+            <div className="tf-row-title mb-2">{reportGenerated}</div>
+            <div className="tf-hint">Evaluation ID: #{evalId}</div>
           </div>
         </div>
 
         <hr className="border-gray-200 mb-6" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="tf-grid-2 mb-6">
           <div>
-            <div className="text-xs text-gray-500 mb-1">Candidate Name</div>
+            <div className="tf-meta mb-1">Candidate Name</div>
             <div className="text-xl font-bold text-gray-900">{candidate.name}</div>
           </div>
           <div>
-            <div className="text-xs text-gray-500 mb-1">Position Applied</div>
+            <div className="tf-meta mb-1">Position Applied</div>
             <div className="text-xl font-bold text-gray-900">{candidate.role}</div>
           </div>
           {candidate.email && (
             <div>
-              <div className="text-xs text-gray-500 mb-1">Email Address</div>
-              <div className="text-sm font-semibold text-gray-900">{candidate.email}</div>
+              <div className="tf-meta mb-1">Email Address</div>
+              <div className="tf-row-title">{candidate.email}</div>
             </div>
           )}
           <div>
-            <div className="text-xs text-gray-500 mb-1">Interview Date</div>
-            <div className="text-sm font-semibold text-gray-900">{interview.date || '—'}</div>
+            <div className="tf-meta mb-1">Interview Date</div>
+            <div className="tf-row-title">{interview.date || '—'}</div>
           </div>
         </div>
 
@@ -154,9 +154,9 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
       {/* ── Executive Summary ───────────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
-          <div className="text-base font-bold text-gray-900">Executive Summary</div>
+          <div className="tf-section-title">Executive Summary</div>
         </div>
-        <div className="p-6 space-y-4 text-sm leading-relaxed text-gray-900">
+        <div className="p-6 space-y-4 tf-body leading-relaxed">
           <p>
             {candidate.name} {isPartialEvaluation ? 'attended' : 'completed'} an AI-powered technical interview for the{' '}
             {candidate.role} position on {interview.date || 'the scheduled date'}.{' '}
@@ -199,7 +199,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
       {/* ── Detailed Score Breakdown ────────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
-          <div className="text-base font-bold text-gray-900">Detailed Score Breakdown</div>
+          <div className="tf-section-title">Detailed Score Breakdown</div>
         </div>
         <div className="divide-y divide-gray-100">
           {sectionsPresent.mustHave && (
@@ -213,7 +213,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
               </div>
               <div>
                 {isPartialEvaluation ? (
-                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                  <span className="tf-badge bg-amber-100 text-amber-700">
                     Partial
                   </span>
                 ) : (
@@ -231,7 +231,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           )}
           {sectionsPresent.niceToHave && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center px-5 py-4 gap-2">
-              <div className="text-sm font-semibold text-gray-900">Nice-to-Have Section Score</div>
+              <div className="tf-row-title">Nice-to-Have Section Score</div>
               <div className="text-2xl font-bold text-indigo-500">{formatScore1(scores.niceToHave)}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-indigo-100 rounded-full overflow-hidden">
@@ -239,7 +239,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 </div>
               </div>
               <div>
-                <span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700">
+                <span className="tf-badge bg-amber-100 text-amber-700">
                   Info Only
                 </span>
               </div>
@@ -247,14 +247,14 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           )}
           {!isPartialEvaluation && (
             <div className="grid grid-cols-[35%_15%_minmax(0,1fr)_20%] items-center bg-gray-50 px-5 py-4 gap-2">
-              <div className="text-sm font-semibold text-gray-900">Overall Average Score</div>
+              <div className="tf-row-title">Overall Average Score</div>
               <div className="text-2xl font-bold text-indigo-700">{formatScore1((scores.final / 10))}</div>
               <div className="pr-3">
                 <div className="h-3.5 bg-gray-200 rounded-full overflow-hidden">
                   <div className="h-full bg-indigo-700 rounded-full" style={{ width: `${scores.final}%` }} />
                 </div>
               </div>
-              <div className="text-xs italic text-gray-500">Reference only</div>
+              <div className="tf-meta italic">Reference only</div>
             </div>
           )}
         </div>
@@ -263,7 +263,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
       {/* ── Skills Assessment Summary ───────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
-          <div className="text-base font-bold text-gray-900">Skills Assessment Summary</div>
+          <div className="tf-section-title">Skills Assessment Summary</div>
         </div>
 
         {sectionsPresent.mustHave && flatMustHave.length > 0 && (
@@ -277,13 +277,13 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const tagBg = s.tag === 'P1' ? 'bg-indigo-600' : s.tag === 'P2' ? 'bg-indigo-500' : 'bg-indigo-400';
                 return (
                   <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
+                    <div className="tf-row-title truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">Weight: {s.weight}</div>
+                    <div className="tf-meta">Weight: {s.weight}</div>
                     <div className="pr-2">
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
@@ -308,13 +308,13 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                 const tagBg = s.tag === 'P1' ? 'bg-amber-500' : 'bg-amber-400';
                 return (
                   <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
-                    <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
+                    <div className="tf-row-title truncate">{s.name}</div>
                     <div>
                       <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-500">Weight: {s.weight}</div>
+                    <div className="tf-meta">Weight: {s.weight}</div>
                     <div className="pr-2">
                       <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full ${sc.bar}`} style={{ width: `${(s.score / 10) * 100}%` }} />
@@ -329,14 +329,14 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
         )}
 
         {flatMustHave.length === 0 && flatNiceToHave.length === 0 && (
-          <div className="p-6 text-sm text-gray-400 italic text-center">No skills evaluated yet.</div>
+          <div className="p-6 tf-body-muted italic text-center">No skills evaluated yet.</div>
         )}
       </div>
 
       {/* ── Question-by-Question Performance ────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
-          <div className="text-base font-bold text-gray-900">Question-by-Question Performance</div>
+          <div className="tf-section-title">Question-by-Question Performance</div>
         </div>
         {perQuestionDetails.length > 0 ? (
           <div className="divide-y divide-gray-100">
@@ -372,11 +372,11 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                       {sectionLabel} · Q{q.qNum}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 truncate">
+                  <div className="tf-meta truncate">
                     {middleText}
                   </div>
                   {isHR ? (
-                    <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
+                    <div className="tf-caption text-right italic">Review only</div>
                   ) : q.notDelivered ? (
                     <div className={`text-xs font-semibold ${sc.text} text-right`}>Not Delivered · 0.0/10</div>
                   ) : (
@@ -387,20 +387,20 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
             })}
           </div>
         ) : (
-          <div className="p-6 text-sm text-gray-400 italic text-center">The candidate exited the interview without answering any questions, so question-level details are not shown here.</div>
+          <div className="p-6 tf-body-muted italic text-center">The candidate exited the interview without answering any questions, so question-level details are not shown here.</div>
         )}
       </div>
 
       {/* ── Recommendations & Next Steps ────────────────────────────── */}
       <div className="rounded-2xl border border-gray-200 overflow-hidden">
         <div className="bg-gray-50 border-b border-gray-200 px-5 py-3">
-          <div className="text-base font-bold text-gray-900">Recommendations & Next Steps</div>
+          <div className="tf-section-title">Recommendations & Next Steps</div>
         </div>
         <div className="p-6">
           {isPartialEvaluation ? (
             <>
               <div className="text-sm font-bold text-amber-800 mb-3">Partial Interview Guidance:</div>
-              <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
+              <ul className="space-y-2 tf-body leading-relaxed">
                 <li><strong>Review attended answers only:</strong> These scores reflect only the questions the candidate reached before termination</li>
                 <li><strong>Avoid final hiring decisions from this report:</strong> There is no complete must-have coverage or valid overall match score</li>
                 <li><strong>Re-run the interview if needed:</strong> Schedule a fresh interview when a full hiring signal is required</li>
@@ -409,7 +409,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           ) : isPassed ? (
             <>
               <div className="text-sm font-bold text-emerald-800 mb-3">✓ Recommended Actions:</div>
-              <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
+              <ul className="space-y-2 tf-body leading-relaxed">
                 <li><strong>Proceed to next round:</strong> Candidate demonstrates strong technical competency across must-have skills</li>
                 <li><strong>Technical interview:</strong> Consider a deeper assessment in core architecture and design topics</li>
                 <li><strong>Cultural fit:</strong> Schedule a behavioral interview to assess team alignment</li>
@@ -419,7 +419,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
           ) : (
             <>
               <div className="text-sm font-bold text-red-800 mb-3">⚠ Recommended Actions:</div>
-              <ul className="space-y-2 text-sm leading-relaxed text-gray-900">
+              <ul className="space-y-2 tf-body leading-relaxed">
                 <li><strong>Do not proceed:</strong> Candidate did not meet the minimum requirements for must-have skills</li>
                 <li><strong>Skills gap identified:</strong> Significant development needed in core technical areas</li>
                 <li><strong>Re-assess later:</strong> Consider a fresh interview only once the candidate has gained hands-on experience in the must-have skills</li>

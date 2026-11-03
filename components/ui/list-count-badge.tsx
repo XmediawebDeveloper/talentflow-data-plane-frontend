@@ -43,7 +43,7 @@ export default function ListCountBadge({
   return (
     <div
       className={cn(
-        'text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap font-medium',
+        'tf-label bg-brand-blue/5 ring-1 ring-brand-blue/10 px-3 py-2 rounded-lg whitespace-nowrap',
         className,
       )}
     >

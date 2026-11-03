@@ -19,10 +19,10 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
   const priorityStyle = getLevelStyle(cluster.priority);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden shadow-sm hover:shadow-md transition-all">
+    <div className="tf-card-soft overflow-hidden hover:shadow-md transition-all">
       <button
         onClick={onToggle}
-        className="w-full p-6 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
+        className="w-full p-4 sm:p-6 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
       >
         <div className="flex items-center gap-6">
           <div className="flex flex-col items-center">
@@ -52,7 +52,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
                 {cluster.priority} Priority
               </span>
             </div>
-            <p className="text-sm text-gray-500">
+            <p className="tf-body-muted">
               Weight: <span style={{ fontFamily: 'var(--font-mono)' }}>{cluster.weight}%</span> • {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
             </p>
           </div>
@@ -65,11 +65,11 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
           return (
             <div className="flex items-center gap-6">
               <div className="text-right">
-                <div className="text-sm text-gray-500 mb-1">Coverage</div>
+                <div className="tf-body-muted mb-1">Coverage</div>
                 <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: priorityStyle.border }}>
                   {coveragePct}%
                 </div>
-                <div className="text-2xs text-gray-500 mt-0.5">{coveredCount}/{totalSkills} skills</div>
+                <div className="tf-micro-hint mt-0.5">{coveredCount}/{totalSkills} skills</div>
               </div>
               <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div
@@ -86,7 +86,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
       </button>
 
       {expanded && (
-        <div className="px-6 pb-6 space-y-3">
+        <div className="px-4 sm:px-6 pb-4 sm:pb-6 space-y-3">
           {cluster.skills.map((skill, idx) => {
             const levelStyle = getLevelStyle(skill.level);
             return (
@@ -124,7 +124,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
                     />
                   </div>
                 </div>
-                <div className="flex items-start gap-2 mt-3 text-sm text-gray-600 dark:text-gray-400">
+                <div className="flex items-start gap-2 mt-3 tf-body-secondary">
                   <AlertCircle size={14} className="mt-0.5 flex-shrink-0" style={{ color: levelStyle.text }} />
                   <p>{skill.feedback}</p>
                 </div>

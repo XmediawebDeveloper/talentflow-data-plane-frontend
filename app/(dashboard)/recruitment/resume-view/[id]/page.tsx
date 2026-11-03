@@ -98,8 +98,8 @@ function FullResumeContent({ text }: { text: string }) {
       <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-100">
         <div className="flex items-center gap-3">
           <FileText className="w-5 h-5 text-gray-500" />
-          <h3 className="text-lg font-semibold text-gray-800">Full Resume Content</h3>
-          <div className="flex items-center gap-3 text-xs text-gray-500 ml-2">
+          <h3 className="tf-section-title">Full Resume Content</h3>
+          <div className="flex items-center gap-3 tf-meta ml-2">
             <span className="flex items-center gap-1">
               <Hash className="w-3 h-3" />
               {wordCount.toLocaleString()} words
@@ -152,14 +152,14 @@ function FullResumeContent({ text }: { text: string }) {
         {activeTab === 'formatted' ? (
           <div className="p-4 space-y-4">
             {sections.map((section, idx) => (
-              <div key={idx} className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+              <div key={idx} className="tf-panel overflow-hidden">
                 <div className="px-4 py-2 bg-gray-50 border-b border-gray-200">
-                  <h4 className="font-medium text-gray-800 text-sm">{section.title}</h4>
+                  <h4 className="tf-label">{section.title}</h4>
                 </div>
                 <div className="p-4">
                   {section.content.map((line, lineIdx) => (
                     line ? (
-                      <p key={lineIdx} className="text-sm text-gray-700 mb-2 last:mb-0 leading-relaxed">
+                      <p key={lineIdx} className="tf-body mb-2 last:mb-0 leading-relaxed">
                         {line}
                       </p>
                     ) : (
@@ -172,7 +172,7 @@ function FullResumeContent({ text }: { text: string }) {
           </div>
         ) : (
           <div className="p-4">
-            <pre className="text-sm text-gray-700 whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded-lg p-4">
+            <pre className="tf-body whitespace-pre-wrap font-mono leading-relaxed bg-white border border-gray-200 rounded-lg p-4">
               {text}
             </pre>
           </div>
@@ -1236,9 +1236,9 @@ Best regards`);
     // stacked section cards (Summary, Work Experience, Education, Skills…),
     // each a titled card with an icon tile, heading and a few skeleton lines.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
@@ -1253,7 +1253,7 @@ Best regards`);
             {/* Body — candidate hero card + section cards */}
             <div className="space-y-6">
               {/* Candidate hero card */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-start gap-4">
                   <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
                   <div className="flex-1 space-y-2">
@@ -1279,7 +1279,7 @@ Best regards`);
 
               {/* Section cards */}
               {Array.from({ length: 3 }).map((_, card) => (
-                <div key={card} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-4 sm:p-6">
+                <div key={card} className="tf-card-soft p-4 sm:p-6">
                   <div className="flex items-center gap-2 mb-4">
                     <Skeleton className="w-9 h-9 rounded-lg" />
                     <Skeleton className="h-6 w-48" />
@@ -1342,9 +1342,9 @@ Best regards`);
      (share, delete, score, assessment) keep their own permission and plan
      checks below. */
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           {/* Previous / Next rides inside the breadcrumb bar, as on
               job-details, and uses the shared RecordPager instead of the grey
               hand-rolled buttons that used to sit in the header row. */}
@@ -1432,14 +1432,14 @@ Best regards`);
                           )}
                         </div>
                         {title && (
-                          <p className="text-sm sm:text-base text-gray-600 break-words sm:truncate">{title}</p>
+                          <p className="tf-body-secondary sm:text-base break-words sm:truncate">{title}</p>
                         )}
                       </div>
 
                       {/* Source, as a chip rather than a floating stat — it's a
                           label for the record, not a headline number. */}
                       <div className="flex-shrink-0 flex items-center gap-2">
-                        <span className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/20">
+                        <span className="tf-badge flex-shrink-0 gap-1.5 bg-white/70 text-brand-blue ring-1 ring-brand-blue/20">
                           <Database className="w-3.5 h-3.5" />
                           {resume.source}
                         </span>
@@ -1461,7 +1461,7 @@ Best regards`);
                         {facts.map(({ icon: Icon, text }, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-full bg-white/70 tf-meta ring-1 ring-brand-blue/10"
                           >
                             <Icon className="w-3.5 h-3.5 text-brand-blue" />
                             {text}
@@ -1575,7 +1575,7 @@ Best regards`);
                               <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                                 <ClipboardList className="w-4 h-4 text-brand-blue" />
                               </span>
-                              <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
+                              <span className="min-w-0 tf-row-name">Assessment</span>
                             </button>
                             <button
                               role="menuitem"
@@ -1590,7 +1590,7 @@ Best regards`);
                               <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
                                 <Video className="w-4 h-4 text-brand-cyan" />
                               </span>
-                              <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
+                              <span className="min-w-0 tf-row-name">AI Interview</span>
                             </button>
                           </div>
                         )}
@@ -1641,7 +1641,7 @@ Best regards`);
                       <button
                         onClick={() => void openScoreTable()}
                         disabled={loadingScoreTable}
-                        className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-60 disabled:cursor-wait"
+                        className="tf-btn tf-btn-primary flex px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-60 disabled:cursor-wait whitespace-normal justify-start font-normal"
                       >
                         {loadingScoreTable ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
                         View Score Table
@@ -1665,7 +1665,7 @@ Best regards`);
                   ) : viewSource === 'job-details' ? (
                     <button
                       onClick={handleOpenScoredResumes}
-                      className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      className="tf-btn tf-btn-primary flex px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start font-normal"
                     >
                       <FileText className="w-4 h-4" />
                       Scored Resumes
@@ -1694,25 +1694,25 @@ Best regards`);
 
           {/* Professional Summary */}
           {detailedResume.summary && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Professional Summary</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Professional Summary</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
+              <p className="tf-body leading-relaxed whitespace-pre-wrap">{detailedResume.summary}</p>
             </div>
           )}
 
           {/* Work Experience */}
           {detailedResume.experience.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Briefcase className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Work Experience</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Work Experience</h3>
               </div>
               <div className="space-y-6">
                 {detailedResume.experience.map((exp, index) => (
@@ -1721,12 +1721,12 @@ Best regards`);
                     <div className="mb-3">
                       <div className="flex items-start justify-between mb-2">
                         <div>
-                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{exp.title}</h4>
-                          <div className="flex items-center gap-2 text-sm text-gray-700 mb-1">
+                          <h4 className="tf-row-title sm:text-base mb-1">{exp.title}</h4>
+                          <div className="flex items-center gap-2 tf-body mb-1">
                             <Building2 className="w-4 h-4" />
                             <span>{exp.company}</span>
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-gray-600">
+                          <div className="flex items-center gap-4 tf-meta">
                             {exp.location && (
                               <span className="flex items-center gap-1">
                                 <MapPin className="w-3 h-3" />
@@ -1752,7 +1752,7 @@ Best regards`);
                             .map((point: string) => point.trim())
                             .filter((point: string) => point.length > 0)
                             .map((point: string, pointIndex: number) => (
-                              <div key={pointIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                              <div key={pointIndex} className="flex items-start gap-2 tf-body">
                                 <ChevronRight className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                                 <span>{point}</span>
                               </div>
@@ -1762,7 +1762,7 @@ Best regards`);
                       {exp.achievements && exp.achievements.length > 0 && (
                         <div className="space-y-1.5">
                           {exp.achievements.map((achievement, achIndex) => (
-                            <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
+                            <div key={achIndex} className="flex items-start gap-2 tf-body">
                               <ChevronRight className="w-4 h-4 text-brand-cyan flex-shrink-0 mt-0.5" />
                               <span>{achievement}</span>
                             </div>
@@ -1780,26 +1780,26 @@ Best regards`);
               whichever is present alone takes the whole row. Stacked on
               smaller screens. */}
           {(detailedResume.education.length > 0 || detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:[&>*:only-child]:col-span-2">
+            <div className="tf-grid-split lg:[&>*:only-child]:col-span-2">
             {/* Education */}
             {detailedResume.education.length > 0 && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Education</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">Education</h3>
                 </div>
                 <div className="space-y-4">
                   {detailedResume.education.map((edu, index) => (
                     <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-800 mb-1">
+                      <h4 className="tf-row-title sm:text-base mb-1">
                         {edu.degree}
                         {edu.field && ` in ${edu.field}`}
                       </h4>
-                      {edu.school && <div className="text-sm text-gray-700 mb-1">{edu.school}</div>}
-                      {edu.institution && !edu.school && <div className="text-sm text-gray-700 mb-1">{edu.institution}</div>}
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                      {edu.school && <div className="tf-body mb-1">{edu.school}</div>}
+                      {edu.institution && !edu.school && <div className="tf-body mb-1">{edu.institution}</div>}
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta">
                         {edu.location && (
                           <span className="flex items-center gap-1">
                             <MapPin className="w-3 h-3" />
@@ -1829,18 +1829,18 @@ Best regards`);
 
             {/* Skills */}
             {(detailedResume.skills.technical.length > 0 || detailedResume.skills.soft.length > 0) && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Code className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Skills</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">Skills</h3>
                 </div>
 
                 {/* Technical Skills */}
                 {detailedResume.skills.technical.length > 0 && (
                   <div className="mb-6">
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Technical Skills</h4>
+                    <h4 className="tf-row-name mb-3">Technical Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.technical.map((skill, index) => (
                         <span key={index} className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1855,7 +1855,7 @@ Best regards`);
                 {/* Soft Skills */}
                 {detailedResume.skills.soft.length > 0 && (
                   <div>
-                    <h4 className="text-sm font-medium text-gray-900 mb-3">Soft Skills</h4>
+                    <h4 className="tf-row-name mb-3">Soft Skills</h4>
                     <div className="flex flex-wrap gap-1.5">
                       {detailedResume.skills.soft.map((skill, index) => (
                         <span key={index} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded-md text-xs ring-1 ring-brand-blue/20">
@@ -1875,24 +1875,24 @@ Best regards`);
               is room; whichever is present alone takes the whole row.
               Stacked on smaller screens. */}
           {(detailedResume.certifications.length > 0 || detailedResume.languages.length > 0 || (resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl)) && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:[&>*:only-child]:col-span-2">
+            <div className="tf-grid-split lg:[&>*:only-child]:col-span-2">
             {/* Certifications */}
             {detailedResume.certifications.length > 0 && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+              <div className="tf-card-soft p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                     <Award className="w-4 h-4 text-brand-orange" />
                   </div>
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Certifications</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">Certifications</h3>
                 </div>
                 <div className={`space-y-2.5 ${detailedResume.certifications.length > 3 ? 'max-h-[15rem] overflow-y-auto pr-1' : ''}`}>
                   {detailedResume.certifications.map((cert, index) => (
                     <div key={index} className="px-3 py-2.5 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0 [overflow-wrap:anywhere]">
-                          <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-0.5">{cert.name}</h4>
-                          {cert.issuer && <div className="text-sm text-gray-700 mb-0.5">{cert.issuer}</div>}
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gray-600">
+                          <h4 className="tf-row-title sm:text-base mb-0.5">{cert.name}</h4>
+                          {cert.issuer && <div className="tf-body mb-0.5">{cert.issuer}</div>}
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta">
                             {cert.date && (
                               <span className="flex items-center gap-1">
                                 <Calendar className="w-3 h-3" />
@@ -1913,20 +1913,20 @@ Best regards`);
             {/* Languages — with the Social & Portfolio Links under them; a
                 resume with links but no languages shows the links alone. */}
             {(detailedResume.languages.length > 0 || (resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl)) && (
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+              <div className="tf-card-soft p-4 sm:p-5">
                 {detailedResume.languages.length > 0 ? (
                   <>
                     <div className="flex items-center gap-2 mb-4">
                       <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                         <Languages className="w-4 h-4 text-brand-cyan" />
                       </div>
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Languages</h3>
+                      <h3 className="tf-section-title sm:text-lg tracking-tight">Languages</h3>
                     </div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                   {detailedResume.languages.map((lang, index) => (
                     <div key={index} className="px-3 py-2 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate" title={lang.name}>{lang.name}</div>
-                      <div className="text-xs text-gray-600 truncate">{lang.proficiency}</div>
+                      <div className="tf-row-name truncate" title={lang.name}>{lang.name}</div>
+                      <div className="tf-meta truncate">{lang.proficiency}</div>
                     </div>
                   ))}
                     </div>
@@ -1936,14 +1936,14 @@ Best regards`);
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Globe className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Social &amp; Portfolio Links</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Social &amp; Portfolio Links</h3>
                   </div>
                 )}
 
                 {(resume.linkedinUrl || resume.githubUrl || resume.portfolioUrl) && (
                   <div className={detailedResume.languages.length > 0 ? 'mt-4 pt-4 border-t border-gray-100' : ''}>
                     {detailedResume.languages.length > 0 && (
-                      <h4 className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-2.5">
+                      <h4 className="flex items-center gap-1.5 tf-row-name mb-2.5">
                         <Globe className="w-3.5 h-3.5 text-brand-blue" />
                         Social &amp; Portfolio Links
                       </h4>
@@ -1959,9 +1959,9 @@ Best regards`);
                       )}
                       {resume.githubUrl && (
                         <a href={resume.githubUrl} target="_blank" rel="noopener noreferrer"
-                           className="flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors min-w-0 bg-slate-50 border border-gray-200 hover:bg-slate-100">
+                           className="flex items-center gap-1.5 px-3 py-2 tf-card-muted transition-colors min-w-0 hover:bg-slate-100">
                           <SkillLogo name="GitHub" className="w-4 h-4" />
-                          <span className="text-gray-700 text-xs font-medium truncate">GitHub</span>
+                          <span className="tf-caption truncate">GitHub</span>
                           <ExternalLink className="w-3 h-3 text-gray-500 ml-auto flex-shrink-0" />
                         </a>
                       )}
@@ -1983,18 +1983,18 @@ Best regards`);
 
           {/* Projects */}
           {resume.projects && resume.projects.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Code className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Projects</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Projects</h3>
               </div>
               <div className="space-y-4">
                 {resume.projects.map((project: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between mb-2">
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-900">{project.name}</h4>
+                      <h4 className="tf-row-title sm:text-base">{project.name}</h4>
                       {project.url && (
                         <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                           <ExternalLink className="w-4 h-4" />
@@ -2002,9 +2002,9 @@ Best regards`);
                       )}
                     </div>
                     {project.description && (
-                      <p className="text-gray-700 text-sm mb-2">{project.description}</p>
+                      <p className="tf-body mb-2">{project.description}</p>
                     )}
-                    <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                    <div className="flex flex-wrap gap-2 tf-meta">
                       {project.duration && (
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
@@ -2023,28 +2023,28 @@ Best regards`);
 
           {/* Awards */}
           {resume.awards && resume.awards.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Award className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Awards & Honors</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Awards & Honors</h3>
               </div>
               <div className="space-y-4">
                 {resume.awards.map((award: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
                     <div className="flex items-start justify-between">
                       <div>
-                        <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{award.name}</h4>
-                        {award.issuer && <div className="text-sm text-gray-700">{award.issuer}</div>}
+                        <h4 className="tf-row-title sm:text-base mb-1">{award.name}</h4>
+                        {award.issuer && <div className="tf-body">{award.issuer}</div>}
                         {award.date && (
-                          <div className="text-xs text-gray-600 flex items-center gap-1 mt-1">
+                          <div className="tf-meta flex items-center gap-1 mt-1">
                             <Calendar className="w-3 h-3" />
                             {award.date}
                           </div>
                         )}
                         {award.description && (
-                          <p className="text-sm text-gray-600 mt-2">{award.description}</p>
+                          <p className="tf-body-secondary mt-2">{award.description}</p>
                         )}
                       </div>
                       <Award className="w-6 h-6 text-brand-orange" />
@@ -2057,12 +2057,12 @@ Best regards`);
 
           {/* Achievements */}
           {resume.achievements && resume.achievements.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Achievements</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Achievements</h3>
               </div>
               <div className="space-y-2">
                 {/* param is not just `string`: the render below branches on the object form
@@ -2080,25 +2080,25 @@ Best regards`);
 
           {/* Volunteer Experience */}
           {resume.volunteerExperience && resume.volunteerExperience.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <User className="w-4 h-4 text-brand-cyan" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Volunteer Experience</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Volunteer Experience</h3>
               </div>
               <div className="space-y-4">
                 {resume.volunteerExperience.map((vol: any, index: number) => (
                   <div key={index} className="p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
-                    <h4 className="text-sm sm:text-base font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
-                    {vol.organization && <div className="text-sm text-gray-700 mb-1">{vol.organization}</div>}
+                    <h4 className="tf-row-title sm:text-base mb-1">{vol.role || vol.title}</h4>
+                    {vol.organization && <div className="tf-body mb-1">{vol.organization}</div>}
                     {vol.duration && (
-                      <div className="text-xs text-gray-600 flex items-center gap-1 mb-2">
+                      <div className="tf-meta flex items-center gap-1 mb-2">
                         <Calendar className="w-3 h-3" />
                         {vol.duration}
                       </div>
                     )}
-                    {vol.description && <p className="text-sm text-gray-600">{vol.description}</p>}
+                    {vol.description && <p className="tf-body-secondary">{vol.description}</p>}
                   </div>
                 ))}
               </div>
@@ -2107,12 +2107,12 @@ Best regards`);
 
           {/* Hobbies & Interests */}
           {resume.hobbies && resume.hobbies.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4 sm:mb-6">
                 <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                   <Star className="w-4 h-4 text-brand-orange" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Hobbies & Interests</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Hobbies & Interests</h3>
               </div>
               <div className="flex flex-wrap gap-2">
                 {resume.hobbies.map((hobby: string | { name?: string }, index: number) => (
@@ -2126,27 +2126,27 @@ Best regards`);
 
           {/* Objective (if different from summary) */}
           {resume.objective && resume.objective !== resume.professionalSummary && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Career Objective</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Career Objective</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed">{resume.objective}</p>
+              <p className="tf-body leading-relaxed">{resume.objective}</p>
             </div>
           )}
 
           {/* Additional Information */}
           {resume.additionalInfo && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                   <FileText className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Additional Information</h3>
+                <h3 className="tf-section-title sm:text-lg tracking-tight">Additional Information</h3>
               </div>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
+              <p className="tf-body leading-relaxed whitespace-pre-wrap">{resume.additionalInfo}</p>
             </div>
           )}
 
@@ -2157,13 +2157,13 @@ Best regards`);
 
           {/* Version History */}
           {resume.versions && resume.versions.length > 0 && (
-            <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+            <div className="tf-card-soft p-4 sm:p-6">
               <div className="flex items-center gap-2 gap-y-2 mb-6 flex-wrap">
                 <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
                   <History className="w-4 h-4 text-brand-blue" />
                 </div>
-                <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Version History</h3>
-                <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
+                <h3 className="tf-section-title sm:text-lg tracking-tight whitespace-nowrap">Version History</h3>
+                <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 shrink-0">
                   {resume.versions.length} version{resume.versions.length !== 1 ? 's' : ''}
                 </span>
                 {resume.versions.length > 1 && (
@@ -2212,7 +2212,7 @@ Best regards`);
                                     type="checkbox"
                                     checked={compareChecked.includes(version.id)}
                                     onChange={() => handleCompareCheck(version.id)}
-                                    className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 cursor-pointer"
+                                    className="tf-checkbox focus:ring-brand-blue/40"
                                   />
                                 </label>
                               )}
@@ -2234,8 +2234,8 @@ Best regards`);
                                     </span>
                                   )}
                                 </div>
-                                <div className="text-xs text-gray-500 mb-1 truncate">{version.name}</div>
-                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-600">
+                                <div className="tf-meta mb-1 truncate">{version.name}</div>
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 tf-meta">
                                   <span className="flex items-center gap-1 whitespace-nowrap">
                                     <Clock className="w-3 h-3 shrink-0" />
                                     {formatIST(version.uploadDate)}
@@ -2262,7 +2262,7 @@ Best regards`);
                                 </button>
                               )}
                               {!previousVersion && (
-                                <span className="px-3 py-1.5 text-xs text-gray-400 italic">First version</span>
+                                <span className="px-3 py-1.5 tf-hint italic">First version</span>
                               )}
                               {/* View (preview) button */}
                               <button
@@ -2366,7 +2366,7 @@ Best regards`);
             <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
               <File className="w-4 h-4 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 tracking-tight">File Properties</h3>
+            <h3 className="tf-section-title tracking-tight">File Properties</h3>
           </div>
           <div className="flex-1 min-h-0 overflow-y-auto p-5">
             <div className="grid grid-cols-1 gap-6">
@@ -2378,8 +2378,8 @@ Best regards`);
                   {/* min-w-0 + anywhere-wrap: a long underscore-joined file
                       name has no break points and ran out of the drawer. */}
                   <div className="min-w-0">
-                    <div className="text-xs text-gray-500 mb-1">File Name</div>
-                    <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}</div>
+                    <div className="tf-meta mb-1">File Name</div>
+                    <div className="tf-body [overflow-wrap:anywhere]">{resume.fileName || `${resume.name.replace(' ', '_')}_Resume.pdf`}</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -2387,8 +2387,8 @@ Best regards`);
                     <HardDrive className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">File Size</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">File Size</div>
+                    <div className="tf-body">
                       {resume.fileSizeKb ? `${resume.fileSizeKb} KB` :
                         (resume.versions && resume.versions.length > 0
                           ? resume.versions[0].size
@@ -2401,8 +2401,8 @@ Best regards`);
                     <File className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">File Type</div>
-                    <div className="text-sm text-gray-900">{resume.fileType?.toUpperCase() || 'PDF'} Document</div>
+                    <div className="tf-meta mb-1">File Type</div>
+                    <div className="tf-body">{resume.fileType?.toUpperCase() || 'PDF'} Document</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
@@ -2410,8 +2410,8 @@ Best regards`);
                     <Calendar className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Upload Date</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">Upload Date</div>
+                    <div className="tf-body">
                       {formatIST(resume.uploadDate)}
                     </div>
                   </div>
@@ -2423,8 +2423,8 @@ Best regards`);
                     <Clock className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Last Modified</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">Last Modified</div>
+                    <div className="tf-body">
                       {resume.lastUpdated
                         ? formatIST(resume.lastUpdated)
                         : 'Never'}
@@ -2436,8 +2436,8 @@ Best regards`);
                     <User className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Uploaded By</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">Uploaded By</div>
+                    <div className="tf-body">
                       {resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}
                     </div>
                   </div>
@@ -2447,8 +2447,8 @@ Best regards`);
                     <FileText className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Total Attachments</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">Total Attachments</div>
+                    <div className="tf-body">
                       {resume.attachments} file{resume.attachments !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -2458,8 +2458,8 @@ Best regards`);
                     <History className="w-4 h-4 text-brand-blue" />
                   </div>
                   <div>
-                    <div className="text-xs text-gray-500 mb-1">Version Count</div>
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-meta mb-1">Version Count</div>
+                    <div className="tf-body">
                       {resume.versionCount || (resume.versions ? resume.versions.length : 1)} version{(resume.versionCount || (resume.versions ? resume.versions.length : 1)) !== 1 ? 's' : ''}
                     </div>
                   </div>
@@ -2522,8 +2522,8 @@ Best regards`);
                   <History className="w-5 h-5 text-white" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Select Resume Version</h2>
-                  <p className="text-sm text-gray-600">Choose which version to apply for the job</p>
+                  <h2 className="tf-section-title tracking-tight">Select Resume Version</h2>
+                  <p className="tf-body-secondary">Choose which version to apply for the job</p>
                 </div>
               </div>
               <button
@@ -2553,15 +2553,15 @@ Best regards`);
                       name="version"
                       checked={selectedVersionForApply === resumeId}
                       onChange={() => setSelectedVersionForApply(resumeId)}
-                      className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                      className="tf-radio focus:ring-brand-blue/40"
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                         <File className="w-4 h-4 text-gray-500" />
                         <span className="min-w-0 font-medium text-gray-900 [overflow-wrap:anywhere]">{resume.fileName || 'Current Version'}</span>
-                        <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Current</span>
+                        <span className="tf-badge bg-green-100 text-green-700">Current</span>
                       </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta mt-1">
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3 h-3" />
                           {resume.uploadDate ? formatISTDate(resume.uploadDate) : 'N/A'}
@@ -2597,15 +2597,15 @@ Best regards`);
                         name="version"
                         checked={selectedVersionForApply === version.id}
                         onChange={() => setSelectedVersionForApply(version.id)}
-                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                        className="tf-radio focus:ring-brand-blue/40"
                       />
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                           <File className="w-4 h-4 text-gray-400" />
                           <span className="whitespace-nowrap font-medium text-gray-700">Version {version.version || (resume.versions.length - index)}</span>
-                          <span className="min-w-0 text-xs text-gray-500 [overflow-wrap:anywhere]">({version.name})</span>
+                          <span className="min-w-0 tf-meta [overflow-wrap:anywhere]">({version.name})</span>
                         </div>
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 mt-1">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta mt-1">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-3 h-3" />
                             {version.uploadDate ? formatISTDate(version.uploadDate) : 'N/A'}
@@ -2633,7 +2633,7 @@ Best regards`);
               <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}
-                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="tf-btn tf-btn-primary px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 flex shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start font-normal"
               >
                 <Send className="w-4 h-4" />
                 Continue to Score Resume
@@ -2754,8 +2754,8 @@ Best regards`);
                     <Mail className="w-5 h-5 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
-                    <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
+                    <h2 className="tf-section-title tracking-tight">Share Resume</h2>
+                    <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
                 <button
@@ -2773,7 +2773,7 @@ Best regards`);
                 {/* What actually goes out with the email — the candidate's
                     resume file, with the eye to read it before sending. */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Attachment</label>
+                  <label className="block tf-label mb-1">Attachment</label>
                   {(() => {
                     const row = resume as any;
                     const fileName = row?.fileName || `${resume?.name || 'resume'}.${row?.fileType || 'pdf'}`;
@@ -2785,10 +2785,10 @@ Best regards`);
                           <FileText className="w-4 h-4 text-brand-blue" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-gray-900 truncate" title={fileName}>
+                          <div className="tf-row-name truncate" title={fileName}>
                             {fileName}
                           </div>
-                          <div className="text-xs text-gray-500">
+                          <div className="tf-meta">
                             {resume?.name}
                             {fileType && <> &middot; {fileType}</>}
                             {sizeKb ? <> &middot; {Math.round(sizeKb)} KB</> : null}
@@ -2811,7 +2811,7 @@ Best regards`);
 
                 {/* Email Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Recipient Email <span className="text-red-500">*</span>
                   </label>
                   <input
@@ -2819,13 +2819,13 @@ Best regards`);
                     value={shareEmail}
                     onChange={(e) => setShareEmail(e.target.value)}
                     placeholder="Enter email address"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                    className="tf-input px-4"
                   />
                 </div>
 
                 {/* Subject Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Subject
                   </label>
                   <input
@@ -2833,13 +2833,13 @@ Best regards`);
                     value={shareSubject}
                     onChange={(e) => setShareSubject(e.target.value)}
                     placeholder="Email subject"
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                    className="tf-input px-4"
                   />
                 </div>
 
                 {/* Message Input */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block tf-label mb-1">
                     Message
                   </label>
                   <textarea
@@ -2847,7 +2847,7 @@ Best regards`);
                     onChange={(e) => setShareMessage(e.target.value)}
                     placeholder="Enter your message"
                     rows={8}
-                    className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
+                    className="tf-textarea px-4 py-2.5 resize-none"
                   />
                 </div>
               </div>
@@ -2857,7 +2857,7 @@ Best regards`);
                 <button
                   onClick={handleSendEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="tf-btn tf-btn-primary flex px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start font-normal"
                 >
                   {isSendingEmail ? (
                     <>

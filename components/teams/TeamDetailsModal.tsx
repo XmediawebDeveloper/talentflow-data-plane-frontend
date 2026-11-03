@@ -91,9 +91,9 @@ export default function TeamDetailsModal({
         {/* Name + lead on one line, stats beside them on wide screens. */}
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0">
-            <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">{team.name}</h3>
-            {team.description && <p className="mt-1 whitespace-pre-line break-words text-sm max-sm:text-[13px] text-gray-600 dark:text-slate-400">{team.description}</p>}
-            <p className="mt-2 flex items-center gap-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
+            <h3 className="truncate tf-section-title max-sm:text-sm tracking-tight">{team.name}</h3>
+            {team.description && <p className="mt-1 whitespace-pre-line break-words tf-body-secondary">{team.description}</p>}
+            <p className="mt-2 flex items-center gap-1.5 tf-body-muted">
               <Crown className="h-3.5 w-3.5 text-brand-blue/60 dark:text-blue-300/70" />
               {team.team_lead ? (
                 <>
@@ -108,8 +108,8 @@ export default function TeamDetailsModal({
 
           {/* Members + units (last 30 days) — the Teams module is about people and units. */}
           <dl className={`grid shrink-0 gap-2 sm:gap-3 ${showUnits ? 'grid-cols-2' : 'grid-cols-1'}`}>
-            <div className="min-w-[7rem] rounded-xl border border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700/60 dark:bg-slate-900">
-              <dt className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+            <div className="tf-panel min-w-[7rem] px-3 py-2.5">
+              <dt className="flex items-center gap-1.5 tf-meta">
                 <Users className="h-3.5 w-3.5 text-brand-blue" />
                 Members
               </dt>
@@ -118,8 +118,8 @@ export default function TeamDetailsModal({
               </dd>
             </div>
             {showUnits && (
-              <div className="min-w-[9rem] rounded-xl border border-gray-100 bg-white px-3 py-2.5 dark:border-slate-700/60 dark:bg-slate-900">
-                <dt className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-500">
+              <div className="tf-panel min-w-[9rem] px-3 py-2.5">
+                <dt className="flex items-center gap-1.5 tf-meta">
                   <BarChart3 className="h-3.5 w-3.5 text-brand-blue" />
                   Units · 30 days
                 </dt>
@@ -132,23 +132,23 @@ export default function TeamDetailsModal({
         </div>
 
         <div>
-          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">
+          <h4 className="mb-2 tf-eyebrow">
             Team Members ({team.members?.length || 0})
           </h4>
           {team.members && team.members.length > 0 ? (
             // Two columns on the wider popup — roughly halves the list's height.
-            <div className="grid max-h-56 grid-cols-1 gap-2 overflow-y-auto sm:grid-cols-2">
+            <div className="tf-grid-2 max-h-56 overflow-y-auto">
               {team.members.map((member) => (
                 <div key={member.id} className="flex items-center gap-2.5 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-slate-700/60 dark:bg-slate-800/50">
                   <NameAvatar name={member.name} fallback={member.email} src={member.avatar_url} userId={member.id} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{member.name}</p>
-                    <p className="truncate text-xs text-gray-500 dark:text-slate-500">{member.email}</p>
+                    <p className="truncate tf-row-name">{member.name}</p>
+                    <p className="truncate tf-meta">{member.email}</p>
                   </div>
                   {team.team_lead?.id === member.id ? (
-                    <span className="shrink-0 rounded-full bg-brand-blue px-2 py-0.5 text-xs font-medium text-white">Lead</span>
+                    <span className="tf-badge shrink-0 bg-brand-blue text-white">Lead</span>
                   ) : member.role ? (
-                    <span className="shrink-0 rounded-full bg-white px-2 py-0.5 text-xs font-medium text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
+                    <span className="tf-badge shrink-0 bg-white text-gray-600 ring-1 ring-gray-200 dark:bg-slate-900 dark:text-slate-400 dark:ring-slate-700">
                       {member.role}
                     </span>
                   ) : null}
@@ -158,7 +158,7 @@ export default function TeamDetailsModal({
           ) : (
             <div className="flex items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 py-6 text-gray-500 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500">
               <Users className="mr-2 h-4 w-4" />
-              <p className="text-sm max-sm:text-[13px]">No members</p>
+              <p className="text-sm">No members</p>
             </div>
           )}
         </div>

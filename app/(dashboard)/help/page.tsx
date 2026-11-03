@@ -26,6 +26,7 @@ import {
   LifeBuoy,
 } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 // Step component for instructions
 const Step = ({ number, title, children }: { number: number; title: string; children: React.ReactNode }) => (
@@ -74,12 +75,22 @@ const FeatureItem = ({ children }: { children: React.ReactNode }) => (
 // Navigation path item
 const NavPath = ({ children, isLast = false }: { children: React.ReactNode; isLast?: boolean }) => (
   <span className="inline-flex items-center">
-    <span className="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded text-sm font-medium text-gray-700 dark:text-slate-300">{children}</span>
+    <span className="bg-gray-100 dark:bg-slate-800 px-2 py-1 rounded tf-label">{children}</span>
     {!isLast && <ArrowRight className="w-4 h-4 mx-2 text-gray-400 dark:text-slate-500" />}
   </span>
 );
 
 // Help articles content
+// Plans Overview — one list feeding both the desktop table and the phone cards. Declared before
+// helpArticles, whose JSX is built when the module loads.
+const PLAN_OVERVIEW_ROWS: [feature: string, starter: string, professional: string, enterprise: string][] = [
+  ['Users', '3', '10', 'Unlimited'],
+  ['Resume Storage', '100/mo', '500/mo', 'Unlimited'],
+  ['Assessments', '10/mo', '50/mo', 'Unlimited'],
+  ['AI Features', 'Basic', 'Advanced', 'Premium'],
+  ['Support', 'Email', 'Priority', 'Dedicated'],
+];
+
 const helpArticles: Record<string, {
   id: string;
   title: string;
@@ -186,22 +197,22 @@ const helpArticles: Record<string, {
           <p className="text-gray-600 dark:text-slate-400 leading-relaxed mb-4">
             Your dashboard provides a quick snapshot of your recruitment activity:
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="tf-grid-2">
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Active Job Openings</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Track open positions and their status</div>
+              <div className="tf-body-secondary">Track open positions and their status</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Recent Candidates</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Latest applications and uploads</div>
+              <div className="tf-body-secondary">Latest applications and uploads</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Pending Assessments</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Assessments awaiting completion</div>
+              <div className="tf-body-secondary">Assessments awaiting completion</div>
             </div>
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Team Activity</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Recent actions by team members</div>
+              <div className="tf-body-secondary">Recent actions by team members</div>
             </div>
           </div>
         </section>
@@ -255,23 +266,23 @@ const helpArticles: Record<string, {
             <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg p-4 space-y-3">
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Job Title</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">e.g., "Senior React Developer"</span>
+                <span className="tf-body-muted">e.g., "Senior React Developer"</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Department</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Select or create new</span>
+                <span className="tf-body-muted">Select or create new</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Employment Type</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Full-time, Part-time, Contract</span>
+                <span className="tf-body-muted">Full-time, Part-time, Contract</span>
               </div>
               <div className="flex justify-between border-b border-gray-200 dark:border-slate-700 pb-2">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Location</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Office location or "Remote"</span>
+                <span className="tf-body-muted">Office location or "Remote"</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-medium text-gray-700 dark:text-slate-300">Salary Range</span>
-                <span className="text-gray-500 dark:text-slate-500 text-sm">Optional but recommended</span>
+                <span className="tf-body-muted">Optional but recommended</span>
               </div>
             </div>
           </Step>
@@ -282,10 +293,10 @@ const helpArticles: Record<string, {
             <div className="mb-4">
               <h5 className="font-medium text-gray-800 dark:text-slate-200 mb-2">Experience Level</h5>
               <div className="flex flex-wrap gap-2">
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Entry (0-2 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Mid (2-5 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Senior (5-8 yrs)</span>
-                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full text-sm text-gray-700 dark:text-slate-300">Lead (8+ yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Entry (0-2 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Mid (2-5 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Senior (5-8 yrs)</span>
+                <span className="px-3 py-1 bg-gray-100 dark:bg-slate-800 rounded-full tf-body">Lead (8+ yrs)</span>
               </div>
             </div>
 
@@ -330,28 +341,28 @@ const helpArticles: Record<string, {
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Use clear, inclusive language</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Avoid jargon and gendered terms</div>
+                <div className="tf-body-secondary">Avoid jargon and gendered terms</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Include salary range</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Increases application quality by 30%</div>
+                <div className="tf-body-secondary">Increases application quality by 30%</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Highlight growth opportunities</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Mention career paths and learning</div>
+                <div className="tf-body-secondary">Mention career paths and learning</div>
               </div>
             </div>
             <div className="flex items-start gap-3 p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
               <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Describe your team</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Team size, reporting structure, collaboration style</div>
+                <div className="tf-body-secondary">Team size, reporting structure, collaboration style</div>
               </div>
             </div>
           </div>
@@ -363,26 +374,26 @@ const helpArticles: Record<string, {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Action</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                  <th className="tf-th-cell text-left tf-th">Action</th>
+                  <th className="tf-th-cell text-left tf-th">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Edit JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Click on any JD to modify details</td>
+                  <td className="tf-td tf-row-name">Edit JD</td>
+                  <td className="tf-td tf-body-secondary">Click on any JD to modify details</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Clone JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Duplicate an existing JD as a template</td>
+                  <td className="tf-td tf-row-name">Clone JD</td>
+                  <td className="tf-td tf-body-secondary">Duplicate an existing JD as a template</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Archive JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Close positions no longer hiring</td>
+                  <td className="tf-td tf-row-name">Archive JD</td>
+                  <td className="tf-td tf-body-secondary">Close positions no longer hiring</td>
                 </tr>
                 <tr>
-                  <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Delete JD</td>
-                  <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Permanently remove (requires confirmation)</td>
+                  <td className="tf-td tf-row-name">Delete JD</td>
+                  <td className="tf-td tf-body-secondary">Permanently remove (requires confirmation)</td>
                 </tr>
               </tbody>
             </table>
@@ -417,7 +428,7 @@ const helpArticles: Record<string, {
                 <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                 Single Resume Upload
               </h3>
-              <ol className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+              <ol className="space-y-2 tf-body-secondary">
                 <li className="flex gap-2"><span className="font-medium">1.</span> Go to Resume Database</li>
                 <li className="flex gap-2"><span className="font-medium">2.</span> Click "Upload Resume"</li>
                 <li className="flex gap-2"><span className="font-medium">3.</span> Select your file</li>
@@ -429,7 +440,7 @@ const helpArticles: Record<string, {
                 <Upload className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                 Bulk Upload
               </h3>
-              <ol className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+              <ol className="space-y-2 tf-body-secondary">
                 <li className="flex gap-2"><span className="font-medium">1.</span> Click "Bulk Upload" button</li>
                 <li className="flex gap-2"><span className="font-medium">2.</span> Select multiple files (up to 50)</li>
                 <li className="flex gap-2"><span className="font-medium">3.</span> Or drag & drop files</li>
@@ -441,10 +452,10 @@ const helpArticles: Record<string, {
           <div className="bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg p-4">
             <h4 className="font-semibold text-brand-blue mb-2">Supported File Formats</h4>
             <div className="flex gap-3">
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 text-sm font-medium text-gray-900 dark:text-slate-50">PDF</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 text-sm font-medium text-gray-900 dark:text-slate-50">.DOC</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 text-sm font-medium text-gray-900 dark:text-slate-50">.DOCX</span>
-              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 text-sm font-medium text-gray-900 dark:text-slate-50">.TXT</span>
+              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">PDF</span>
+              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.DOC</span>
+              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.DOCX</span>
+              <span className="px-3 py-1 bg-white dark:bg-slate-900 rounded ring-1 ring-brand-blue/15 tf-row-name">.TXT</span>
             </div>
           </div>
         </section>
@@ -457,19 +468,19 @@ const helpArticles: Record<string, {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Field</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">Description</th>
+                  <th className="tf-th-cell text-left tf-th">Field</th>
+                  <th className="tf-th-cell text-left tf-th">Description</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Name</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Candidate's full name</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Email</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Contact email address</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Phone</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Phone number(s)</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Location</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">City, State, Country</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Experience</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Total years of experience</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Skills</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Technical and soft skills</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Education</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Degrees, institutions, years</td></tr>
-                <tr><td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-slate-50">Work History</td><td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400">Companies, roles, durations</td></tr>
+                <tr><td className="tf-td tf-row-name">Name</td><td className="tf-td tf-body-secondary">Candidate's full name</td></tr>
+                <tr><td className="tf-td tf-row-name">Email</td><td className="tf-td tf-body-secondary">Contact email address</td></tr>
+                <tr><td className="tf-td tf-row-name">Phone</td><td className="tf-td tf-body-secondary">Phone number(s)</td></tr>
+                <tr><td className="tf-td tf-row-name">Location</td><td className="tf-td tf-body-secondary">City, State, Country</td></tr>
+                <tr><td className="tf-td tf-row-name">Experience</td><td className="tf-td tf-body-secondary">Total years of experience</td></tr>
+                <tr><td className="tf-td tf-row-name">Skills</td><td className="tf-td tf-body-secondary">Technical and soft skills</td></tr>
+                <tr><td className="tf-td tf-row-name">Education</td><td className="tf-td tf-body-secondary">Degrees, institutions, years</td></tr>
+                <tr><td className="tf-td tf-row-name">Work History</td><td className="tf-td tf-body-secondary">Companies, roles, durations</td></tr>
               </tbody>
             </table>
           </div>
@@ -498,22 +509,22 @@ const helpArticles: Record<string, {
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <Search className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Search</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Find by name, skills, or experience</div>
+              <div className="tf-body-secondary">Find by name, skills, or experience</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <BarChart3 className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Filter</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Filter by location, experience, skills</div>
+              <div className="tf-body-secondary">Filter by location, experience, skills</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <FileText className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Folders</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Organize by position or stage</div>
+              <div className="tf-body-secondary">Organize by position or stage</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <Upload className="w-5 h-5 text-gray-600 dark:text-slate-400 mb-2" />
               <div className="font-medium text-gray-900 dark:text-slate-50">Export</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Download candidate data</div>
+              <div className="tf-body-secondary">Download candidate data</div>
             </div>
           </div>
         </section>
@@ -544,7 +555,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">1</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Select JD</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Choose the position</div>
+              <div className="tf-body-secondary mt-1">Choose the position</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -552,7 +563,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">2</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Select Resumes</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">Pick candidates to evaluate</div>
+              <div className="tf-body-secondary mt-1">Pick candidates to evaluate</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -560,7 +571,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-gray-50 dark:bg-slate-800/50 rounded-xl">
               <div className="w-12 h-12 bg-brand-blue text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">3</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">AI Analysis</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">AI compares against requirements</div>
+              <div className="tf-body-secondary mt-1">AI compares against requirements</div>
             </div>
             <div className="flex items-center justify-center">
               <ArrowRight className="w-6 h-6 text-gray-400 dark:text-slate-500 rotate-90 md:rotate-0" />
@@ -568,7 +579,7 @@ const helpArticles: Record<string, {
             <div className="flex-1 text-center p-6 bg-success-subtle rounded-xl ring-1 ring-success-line">
               <div className="w-12 h-12 bg-success-strong text-white rounded-full flex items-center justify-center mx-auto mb-3 text-lg font-bold">4</div>
               <div className="font-medium text-gray-900 dark:text-slate-50">Get Scores</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">View ranked results</div>
+              <div className="tf-body-secondary mt-1">View ranked results</div>
             </div>
           </div>
         </section>
@@ -603,7 +614,7 @@ const helpArticles: Record<string, {
               <div className="text-2xl font-bold text-gray-500 dark:text-slate-400">Below 60</div>
               <div>
                 <div className="font-medium text-gray-700 dark:text-slate-300">Low Match</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">May not meet key requirements</div>
+                <div className="tf-body-secondary">May not meet key requirements</div>
               </div>
             </div>
           </div>
@@ -640,19 +651,19 @@ const helpArticles: Record<string, {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Skills Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">How well technical skills align</div>
+              <div className="tf-body-secondary">How well technical skills align</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Experience Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Years and relevance of experience</div>
+              <div className="tf-body-secondary">Years and relevance of experience</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Education Match</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Qualifications alignment</div>
+              <div className="tf-body-secondary">Qualifications alignment</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Overall Fit</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Combined assessment score</div>
+              <div className="tf-body-secondary">Combined assessment score</div>
             </div>
           </div>
         </section>
@@ -679,33 +690,33 @@ const helpArticles: Record<string, {
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Types of Assessments</h2>
           <div className="grid md:grid-cols-2 gap-4">
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <ClipboardCheck className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Technical Quiz</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Multiple choice, coding questions, and problem-solving tests</p>
+              <p className="tf-body-secondary">Multiple choice, coding questions, and problem-solving tests</p>
             </div>
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <BarChart3 className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Skill Assessment</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Practical tasks and hands-on exercises</p>
+              <p className="tf-body-secondary">Practical tasks and hands-on exercises</p>
             </div>
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <MessageCircle className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">AI Interview</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Automated video interviews with AI analysis</p>
+              <p className="tf-body-secondary">Automated video interviews with AI analysis</p>
             </div>
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center mb-3">
                 <Settings className="w-4 h-4 text-brand-blue" />
               </div>
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-2">Custom Assessment</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">Your own evaluation criteria and scoring</p>
+              <p className="tf-body-secondary">Your own evaluation criteria and scoring</p>
             </div>
           </div>
         </section>
@@ -745,7 +756,7 @@ const helpArticles: Record<string, {
           </Step>
 
           <Step number={3} title="Configure Settings">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="tf-grid-2 text-sm">
               <div className="p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                 <div className="font-medium text-gray-900 dark:text-slate-50">Time Limit</div>
                 <div className="text-gray-600 dark:text-slate-400">Total duration allowed</div>
@@ -814,13 +825,13 @@ const helpArticles: Record<string, {
               </div>
               <p className="text-gray-700 dark:text-slate-300">Full access to all features including user management, billing, and settings. Can invite and manage other users.</p>
             </div>
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="px-3 py-1 bg-brand-blue text-white rounded-full text-sm font-medium shadow-md ring-1 ring-white/10">Recruiter</div>
               </div>
               <p className="text-gray-600 dark:text-slate-400">Can create JDs, manage candidates, upload resumes, run assessments, and use AI features. Cannot manage users or billing.</p>
             </div>
-            <div className="p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] bg-white dark:bg-slate-900 rounded-xl">
+            <div className="tf-panel p-5">
               <div className="flex items-center gap-3 mb-2">
                 <div className="px-3 py-1 bg-gray-400 text-white rounded-full text-sm font-medium">Viewer</div>
               </div>
@@ -875,19 +886,19 @@ const helpArticles: Record<string, {
           <div className="grid md:grid-cols-2 gap-4">
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Channels</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Create topic-based discussions</div>
+              <div className="tf-body-secondary">Create topic-based discussions</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Direct Messages</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Private 1-on-1 conversations</div>
+              <div className="tf-body-secondary">Private 1-on-1 conversations</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Share Candidates</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Discuss profiles with team</div>
+              <div className="tf-body-secondary">Discuss profiles with team</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-1">Notifications</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Stay updated on mentions</div>
+              <div className="tf-body-secondary">Stay updated on mentions</div>
             </div>
           </div>
         </section>
@@ -906,50 +917,41 @@ const helpArticles: Record<string, {
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Plans Overview</h2>
 
-          <div className="overflow-x-auto tf-table-shell">
+          <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
             <table className="w-full border-collapse">
               <thead>
                 <tr className="bg-white dark:bg-slate-900">
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Feature</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Starter</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Enterprise</th>
+                  <th className="tf-th-cell text-left tf-th border border-gray-200 dark:border-slate-700">Feature</th>
+                  <th className="tf-th-cell text-center tf-th border border-gray-200 dark:border-slate-700">Starter</th>
+                  <th className="tf-th-cell text-center text-xs font-semibold border border-gray-200 dark:border-slate-700 bg-brand-blue/5 text-brand-blue">Professional</th>
+                  <th className="tf-th-cell text-center tf-th border border-gray-200 dark:border-slate-700">Enterprise</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Users</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">3</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">10</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Resume Storage</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">100/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">500/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Assessments</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">10/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">50/mo</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Unlimited</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">AI Features</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Basic</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Advanced</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Premium</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700">Support</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Email</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">Priority</td>
-                  <td className="px-4 py-3 text-sm text-center text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">Dedicated</td>
-                </tr>
+                {PLAN_OVERVIEW_ROWS.map(([feature, starter, professional, enterprise]) => (
+                  <tr key={feature}>
+                    <td className="tf-td tf-body border border-gray-200 dark:border-slate-700">{feature}</td>
+                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700">{starter}</td>
+                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">{professional}</td>
+                    <td className="tf-td tf-body-secondary text-center border border-gray-200 dark:border-slate-700">{enterprise}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
+          <MobileRecordList>
+            {PLAN_OVERVIEW_ROWS.map(([feature, starter, professional, enterprise]) => (
+              <MobileRecordCard
+                key={feature}
+                title={feature}
+                fields={[
+                  { label: 'Starter', value: starter },
+                  { label: <span className="text-brand-blue">Professional</span>, value: professional },
+                  { label: 'Enterprise', value: enterprise },
+                ]}
+              />
+            ))}
+          </MobileRecordList>
         </section>
 
         <section className="mb-10">
@@ -972,7 +974,7 @@ const helpArticles: Record<string, {
           <div className="grid md:grid-cols-2 gap-6">
             <div className="p-5 border border-gray-200 dark:border-slate-700 rounded-xl">
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3">Upgrade Plan</h3>
-              <ol className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+              <ol className="space-y-2 tf-body-secondary">
                 <li>1. Go to Subscription → Current Plan</li>
                 <li>2. Click "Upgrade"</li>
                 <li>3. Select new plan</li>
@@ -982,7 +984,7 @@ const helpArticles: Record<string, {
             </div>
             <div className="p-5 border border-gray-200 dark:border-slate-700 rounded-xl">
               <h3 className="font-semibold text-gray-900 dark:text-slate-50 mb-3">Billing History</h3>
-              <ol className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+              <ol className="space-y-2 tf-body-secondary">
                 <li>1. Go to Subscription → Billing History</li>
                 <li>2. View all invoices</li>
                 <li>3. Download receipts</li>
@@ -999,9 +1001,9 @@ const helpArticles: Record<string, {
 
         <section>
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Need Billing Help?</h2>
-          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-6">
+          <div className="tf-card-soft p-6">
             <p className="mb-3 text-gray-900 dark:text-slate-50">Contact our billing support team:</p>
-            <div className="space-y-2 text-sm text-gray-600 dark:text-slate-400">
+            <div className="space-y-2 tf-body-secondary">
               <div>Email: <span className="text-brand-blue">billing@talentflow.com</span></div>
               <div>Include your account ID for faster support</div>
             </div>
@@ -1068,20 +1070,20 @@ const helpArticles: Record<string, {
               </div>
               <div>
                 <div className="font-medium text-gray-900 dark:text-slate-50">Match Score</div>
-                <div className="text-sm text-gray-600 dark:text-slate-400">Overall compatibility rating (0-100)</div>
+                <div className="tf-body-secondary">Overall compatibility rating (0-100)</div>
               </div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Key Strengths</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Why this candidate is a good fit for the role</div>
+              <div className="tf-body-secondary">Why this candidate is a good fit for the role</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Potential Gaps</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Areas that may need attention or training</div>
+              <div className="tf-body-secondary">Areas that may need attention or training</div>
             </div>
             <div className="p-4 border border-gray-200 dark:border-slate-700 rounded-lg">
               <div className="font-medium text-gray-900 dark:text-slate-50 mb-2">Recommended Actions</div>
-              <div className="text-sm text-gray-600 dark:text-slate-400">Suggested next steps for this candidate</div>
+              <div className="tf-body-secondary">Suggested next steps for this candidate</div>
             </div>
           </div>
         </section>
@@ -1095,16 +1097,16 @@ const helpArticles: Record<string, {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4">Taking Action on Matches</h2>
           <p className="text-gray-600 dark:text-slate-400 mb-4">For each matched candidate, you can:</p>
           <div className="grid md:grid-cols-2 gap-3">
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">View Profile</span> - See full resume details
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Score Resume</span> - Get detailed scoring
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Invite to Assessment</span> - Send test invitation
             </div>
-            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-700 dark:text-slate-300">
+            <div className="p-3 border border-gray-200 dark:border-slate-700 rounded-lg tf-body">
               <span className="font-medium text-gray-900 dark:text-slate-50">Add to Shortlist</span> - Save for later
             </div>
           </div>
@@ -1142,9 +1144,9 @@ export default function HelpCenterPage() {
   // Article view
   if (selectedArticle) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center', href: '/help' }, { label: selectedArticle.title }]} />
           {/* Back button */}
           <button
@@ -1162,11 +1164,11 @@ export default function HelpCenterPage() {
                 <selectedArticle.icon className="h-5 w-5 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">{selectedArticle.title}</h1>
-                <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{selectedArticle.subtitle}</p>
+                <h1 className="tf-page-title">{selectedArticle.title}</h1>
+                <p className="mt-0.5 tf-body-secondary">{selectedArticle.subtitle}</p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-500">
+            <div className="flex flex-wrap items-center gap-3 tf-body-muted">
               <span className="flex items-center gap-1.5">
                 <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 {selectedArticle.readTime} read
@@ -1176,14 +1178,14 @@ export default function HelpCenterPage() {
           </div>
 
           {/* Article content */}
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-5 sm:p-8 md:p-10">
+          <div className="tf-card-soft p-5 sm:p-8 md:p-10">
             {selectedArticle.content}
           </div>
 
           {/* Related articles */}
           <div className="mt-10">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-4">Related Articles</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <h3 className="tf-section-title mb-4">Related Articles</h3>
+            <div className="tf-grid-2">
               {Object.values(helpArticles)
                 .filter(a => a.id !== selectedArticle.id && a.category === selectedArticle.category)
                 .slice(0, 2)
@@ -1191,7 +1193,7 @@ export default function HelpCenterPage() {
                   <button
                     key={article.id}
                     onClick={() => router.push(`/help?article=${article.id}`)}
-                    className="p-4 sm:p-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30 hover:shadow-md transition-all text-left group"
+                    className="p-4 sm:p-5 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left group"
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 transition-colors">
@@ -1199,7 +1201,7 @@ export default function HelpCenterPage() {
                       </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-gray-900 dark:text-slate-50 group-hover:text-brand-blue">{article.title}</h4>
-                        <p className="text-sm text-gray-500 dark:text-slate-500 mt-0.5">{article.readTime} read</p>
+                        <p className="tf-body-muted mt-0.5">{article.readTime} read</p>
                       </div>
                     </div>
                   </button>
@@ -1214,9 +1216,9 @@ export default function HelpCenterPage() {
 
   // Help center home
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Center' }]} />
         {/* Header */}
         <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
@@ -1225,8 +1227,8 @@ export default function HelpCenterPage() {
               <LifeBuoy className="h-5 w-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Help Center</h1>
-              <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">Find answers, guides, and tutorials to help you succeed</p>
+              <h1 className="tf-page-title">Help Center</h1>
+              <p className="mt-0.5 tf-body-secondary">Find answers, guides, and tutorials to help you succeed</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1237,7 +1239,7 @@ export default function HelpCenterPage() {
                 placeholder="Search for help articles..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 py-2.5 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="tf-input pl-9 pr-3"
               />
             </div>
           </div>
@@ -1262,36 +1264,36 @@ export default function HelpCenterPage() {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-5">
+        <div className="tf-grid-3 mb-5">
           <button
             onClick={() => router.push('/help?article=getting-started')}
-            className="p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
+            className="p-4 sm:p-6 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
           >
             <Lightbulb className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
-            <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Quick Start Guide</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
+            <div className="tf-section-title sm:text-lg">Quick Start Guide</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">New to TalentFlow? Start here</div>
           </button>
           <button
             onClick={() => router.push('/support-tickets')}
-            className="p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
+            className="p-4 sm:p-6 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
           >
             <MessageCircle className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
-            <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Contact Support</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Get personalized help</div>
+            <div className="tf-section-title sm:text-lg">Contact Support</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Get personalized help</div>
           </button>
           <button
             onClick={() => router.push('/settings/general-settings')}
-            className="p-4 sm:p-6 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
+            className="p-4 sm:p-6 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left"
           >
             <Settings className="w-6 h-6 sm:w-8 sm:h-8 mb-2 sm:mb-3 text-brand-blue" />
-            <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">Settings</div>
-            <div className="text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1">Configure your account</div>
+            <div className="tf-section-title sm:text-lg">Settings</div>
+            <div className="tf-body-muted mt-0.5 sm:mt-1">Configure your account</div>
           </button>
         </div>
 
         {/* Articles Grid */}
         <div className="mb-5">
-          <h2 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-4 sm:mb-6">
+          <h2 className="tf-section-title sm:text-lg lg:text-xl mb-4 sm:mb-6">
             {selectedCategory === 'all' ? 'All Articles' : categories.find(c => c.id === selectedCategory)?.name}
             <span className="text-gray-400 dark:text-slate-500 font-normal ml-2">({filteredArticles.length})</span>
           </h2>
@@ -1302,12 +1304,12 @@ export default function HelpCenterPage() {
               <p className="text-lg">No articles found matching your search</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+            <div className="tf-grid-3">
               {filteredArticles.map(article => (
                 <button
                   key={article.id}
                   onClick={() => router.push(`/help?article=${article.id}`)}
-                  className="p-4 sm:p-5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] hover:border-brand-blue/30 hover:shadow-md transition-all text-left group"
+                  className="p-4 sm:p-5 tf-card-soft hover:border-brand-blue/30 hover:shadow-md transition-all text-left group"
                 >
                   <div className="flex items-start gap-3 sm:gap-4">
                     <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
@@ -1317,7 +1319,7 @@ export default function HelpCenterPage() {
                       <h3 className="font-semibold text-gray-900 dark:text-slate-50 group-hover:text-brand-blue mb-1 line-clamp-2">
                         {article.title}
                       </h3>
-                      <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                      <div className="flex items-center gap-2 tf-body-muted">
                         <Clock className="w-3.5 h-3.5" />
                         {article.readTime}
                       </div>
@@ -1331,9 +1333,9 @@ export default function HelpCenterPage() {
         </div>
 
         {/* Contact Section */}
-        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-5">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-6">Still need help?</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="tf-card-soft p-4 sm:p-5">
+          <h2 className="tf-section-title mb-6">Still need help?</h2>
+          <div className="tf-grid-2">
             <a
               href="mailto:support@talentflow.com"
               className="flex items-center gap-4 p-5 bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 rounded-xl hover:bg-brand-blue/[0.08] dark:hover:bg-brand-blue/15 transition-colors"

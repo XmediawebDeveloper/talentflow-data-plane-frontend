@@ -86,7 +86,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="tf-card-soft">
         <div className="px-6 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -94,8 +94,8 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <Shield className="w-5 h-5 text-indigo-600" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Compliance Dashboard</h2>
-                <p className="text-sm text-gray-500">
+                <h2 className="tf-section-title">Compliance Dashboard</h2>
+                <p className="tf-body-muted">
                   Immutable Audit Record Enforcement & Regulatory Compliance
                 </p>
               </div>
@@ -126,12 +126,12 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
 
         {/* Compliance Status Cards */}
         <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="tf-grid-4">
             {/* Immutability Status */}
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Lock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Immutability</span>
+                <span className="tf-label">Immutability</span>
               </div>
               <div className={`flex items-center gap-2 ${report?.immutability_status.all_records_immutable ? 'text-success' : 'text-destructive'}`}>
                 {report?.immutability_status.all_records_immutable ? (
@@ -143,7 +143,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   {report?.immutability_status.all_records_immutable ? 'Enforced' : 'Check Required'}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 DB Triggers: {report?.immutability_status.database_triggers_active ? 'Active' : 'Inactive'}
               </p>
             </div>
@@ -152,12 +152,12 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <AlertTriangle className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Blocked Attempts</span>
+                <span className="tf-label">Blocked Attempts</span>
               </div>
               <div className={`font-semibold text-2xl ${(modSummary?.total_attempts || 0) > 0 ? 'text-warning' : 'text-success'}`}>
                 {modSummary?.total_attempts || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Last 30 days
               </p>
             </div>
@@ -166,12 +166,12 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <FileText className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Corrections</span>
+                <span className="tf-label">Corrections</span>
               </div>
               <div className="font-semibold text-2xl text-gray-900">
                 {report?.summary.total_corrections || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Via new records (immutable)
               </p>
             </div>
@@ -180,12 +180,12 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="p-4 bg-gray-50 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <Lock className="w-4 h-4 text-gray-500" />
-                <span className="text-sm font-medium text-gray-700">Legal Holds</span>
+                <span className="tf-label">Legal Holds</span>
               </div>
               <div className="font-semibold text-2xl text-gray-900">
                 {report?.summary.records_under_legal_hold || 0}
               </div>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="tf-meta mt-1">
                 Records under retention hold
               </p>
             </div>
@@ -194,7 +194,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
       </div>
 
       {/* Compliance Flags */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="tf-card-soft">
         <button
           onClick={() => toggleSection('compliance')}
           className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-200"
@@ -211,7 +211,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
         </button>
         {expandedSection === 'compliance' && (
           <div className="p-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="tf-grid-3">
               <div className={`p-4 rounded-lg ${getComplianceStatusColor(report?.compliance_flags.gdpr_compliant || false)}`}>
                 <div className="flex items-center gap-2 mb-2">
                   {report?.compliance_flags.gdpr_compliant ? (
@@ -276,7 +276,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
 
       {/* Modification Attempts by Table */}
       {modSummary && Object.keys(modSummary.by_table).length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="tf-card-soft">
           <button
             onClick={() => toggleSection('attempts')}
             className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-200"
@@ -284,7 +284,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="flex items-center gap-2">
               <AlertTriangle className="w-5 h-5 text-warning" />
               <h3 className="font-semibold text-gray-900">Blocked Modification Attempts</h3>
-              <span className="text-sm text-gray-500">({modSummary.total_attempts} total)</span>
+              <span className="tf-body-muted">({modSummary.total_attempts} total)</span>
             </div>
             {expandedSection === 'attempts' ? (
               <ChevronDown className="w-5 h-5 text-gray-400" />
@@ -298,13 +298,13 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <table className="w-full">
                   <thead className="bg-white">
                     <tr>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="tf-th-cell text-left tf-th">
                         Table
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="tf-th-cell text-left tf-th">
                         Attempts
                       </th>
-                      <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600">
+                      <th className="tf-th-cell text-left tf-th">
                         Status
                       </th>
                     </tr>
@@ -312,16 +312,16 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   <tbody className="divide-y divide-gray-200">
                     {Object.entries(modSummary.by_table).map(([table, count]) => (
                       <tr key={table} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <span className="text-sm font-medium text-gray-900">
+                        <td className="tf-td">
+                          <span className="tf-row-name">
                             {getTableDisplayName(table)}
                           </span>
-                          <p className="text-xs text-gray-500">{table}</p>
+                          <p className="tf-meta">{table}</p>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="tf-td">
                           <span className="text-sm text-warning font-semibold">{count}</span>
                         </td>
-                        <td className="px-4 py-3">
+                        <td className="tf-td">
                           <span className="px-2 py-1 text-xs font-medium bg-success-subtle text-success rounded">
                             All Blocked
                           </span>
@@ -331,7 +331,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                   </tbody>
                 </table>
               </div>
-              <p className="text-xs text-gray-500 mt-4">
+              <p className="tf-meta mt-4">
                 All modification attempts were blocked by database triggers. Audit records remain immutable.
               </p>
             </div>
@@ -340,7 +340,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
       )}
 
       {/* Recent Corrections */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="tf-card-soft">
         <button
           onClick={() => toggleSection('corrections')}
           className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-200"
@@ -361,7 +361,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <div className="text-center py-8">
                 <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                 <p className="text-gray-500">No corrections recorded</p>
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="tf-hint mt-1">
                   Corrections are created when audit data needs annotation or clarification
                 </p>
               </div>
@@ -374,16 +374,16 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                         <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">
                           {getCorrectionTypeName(correction.correction_type)}
                         </span>
-                        <span className="text-sm text-gray-500">
+                        <span className="tf-body-muted">
                           {getTableDisplayName(correction.original_table)}
                         </span>
                       </div>
-                      <span className="text-xs text-gray-400">
+                      <span className="tf-hint">
                         {formatIST(correction.created_at)}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700">{correction.correction_reason}</p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="tf-body">{correction.correction_reason}</p>
+                    <p className="tf-meta mt-1">
                       By {correction.corrected_by_email}
                       {correction.requires_approval && !correction.approved_at && (
                         <span className="ml-2 text-warning">(Pending Approval)</span>
@@ -399,7 +399,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
 
       {/* Audit Summary */}
       {showFullReport && report && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="tf-card-soft">
           <button
             onClick={() => toggleSection('summary')}
             className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-200"
@@ -407,7 +407,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-gray-500" />
               <h3 className="font-semibold text-gray-900">Audit Action Summary</h3>
-              <span className="text-sm text-gray-500">
+              <span className="tf-body-muted">
                 ({report.summary.total_audit_actions} actions)
               </span>
             </div>
@@ -419,18 +419,18 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
           </button>
           {expandedSection === 'summary' && (
             <div className="p-6">
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="tf-grid-stats">
                 {Object.entries(report.summary.audit_action_breakdown)
                   .sort(([, a], [, b]) => b - a)
                   .slice(0, 8)
                   .map(([action, count]) => (
                     <div key={action} className="p-3 bg-gray-50 rounded-lg">
-                      <p className="text-xs text-gray-500 truncate">{action}</p>
-                      <p className="text-lg font-semibold text-gray-900">{count}</p>
+                      <p className="tf-meta truncate">{action}</p>
+                      <p className="tf-section-title">{count}</p>
                     </div>
                   ))}
               </div>
-              <div className="mt-4 text-xs text-gray-500">
+              <div className="mt-4 tf-meta">
                 <p>Report Period: {formatISTDate(report.period.start_date)} - {formatISTDate(report.period.end_date)}</p>
                 <p>Generated: {formatIST(report.generated_at)}</p>
               </div>

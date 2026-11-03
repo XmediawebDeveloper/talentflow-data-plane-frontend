@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface ResumeScoringProps {
   resumes: Resume[] | any[];
@@ -217,8 +218,8 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
           </button>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
             <div>
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 mb-1 tracking-tight">Resume Scoring Analysis</h1>
-              <p className="text-sm text-gray-600">
+              <h1 className="tf-page-title mb-1">Resume Scoring Analysis</h1>
+              <p className="tf-body-secondary">
                 AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
             </div>
@@ -241,11 +242,11 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
       {/* Stats Cards */}
       <div className="px-4 md:px-8 py-5">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-5">
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="tf-grid-stats mb-5">
+          <div className="tf-panel p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Total Matches</div>
+                <div className="tf-body-secondary mb-1">Total Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">{scoringResults.length}</div>
               </div>
               <div className="h-9 w-9 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -254,10 +255,10 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="tf-panel p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Excellent Matches</div>
+                <div className="tf-body-secondary mb-1">Excellent Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'excellent').length}
                 </div>
@@ -268,10 +269,10 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="tf-panel p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Good Matches</div>
+                <div className="tf-body-secondary mb-1">Good Matches</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {scoringResults.filter(r => r.matchType === 'good').length}
                 </div>
@@ -282,10 +283,10 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 p-4">
+          <div className="tf-panel p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-sm mb-1">Avg. Score</div>
+                <div className="tf-body-secondary mb-1">Avg. Score</div>
                 <div className="text-2xl sm:text-3xl lg:text-4xl font-semibold text-gray-900 tracking-tight">
                   {Math.round(scoringResults.reduce((acc, r) => acc + r.score, 0) / scoringResults.length)}%
                 </div>
@@ -298,18 +299,18 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
         </div>
 
         {/* Scoring Results Table */}
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden mb-5">
+        <div className={`tf-panel overflow-hidden mb-5 ${DESKTOP_TABLE_ONLY}`}>
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full">
               <thead className="bg-white border-b border-gray-200">
                 <tr>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Candidate</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Job Position</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Match Score</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Key Matches</th>
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600">Missing Skills</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Status</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600">Action</th>
+                  <th className="tf-th-cell text-left tf-th">Candidate</th>
+                  <th className="tf-th-cell text-left tf-th">Job Position</th>
+                  <th className="tf-th-cell text-center tf-th">Match Score</th>
+                  <th className="tf-th-cell text-left tf-th">Key Matches</th>
+                  <th className="tf-th-cell text-left tf-th">Missing Skills</th>
+                  <th className="tf-th-cell text-center tf-th">Status</th>
+                  <th className="tf-th-cell text-center tf-th">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -322,26 +323,26 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
                   return (
                     <tr key={resultKey} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3">
+                      <td className="tf-td">
                         <div className="flex items-center gap-3">
                           <NameAvatar name={resume.name || resume.candidateName} fallback={resume.email} size="md" />
                           <div>
-                            <div className="text-sm font-medium text-gray-900">{resume.name || resume.candidateName || 'Unknown'}</div>
-                            <div className="text-xs text-gray-500">{resume.title || resume.experience || ''}</div>
+                            <div className="tf-row-name">{resume.name || resume.candidateName || 'Unknown'}</div>
+                            <div className="tf-meta">{resume.title || resume.experience || ''}</div>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
-                        <div className="text-sm text-gray-900">{job.title}</div>
-                        <div className="text-xs text-gray-500">{job.location}</div>
+                      <td className="tf-td">
+                        <div className="tf-body">{job.title}</div>
+                        <div className="tf-meta">{job.location}</div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="tf-td">
                         <div className="flex items-center justify-center gap-2">
                           {getScoreIcon(result.matchType)}
                           <span className={`${SCORE_CELL_TEXT} text-gray-900`}>{result.score}%</span>
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="tf-td">
                         <div className="flex flex-wrap gap-1">
                           {result.keyMatches.map((skill, i) => (
                             <span
@@ -353,28 +354,28 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                           ))}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="tf-td">
                         <div className="flex flex-wrap gap-1">
                           {result.missingSkills.length > 0 ? (
                             result.missingSkills.map((skill, i) => (
                               <span
                                 key={i}
-                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 text-xs border border-gray-200"
+                                className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 tf-meta border border-gray-200"
                               >
                                 {skill}
                               </span>
                             ))
                           ) : (
-                            <span className="text-xs text-gray-400">None</span>
+                            <span className="tf-hint">None</span>
                           )}
                         </div>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="tf-td">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
                           {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-center">
+                      <td className="tf-td text-center">
                         <Button
                           variant="secondary"
                           size="sm"
@@ -391,6 +392,87 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
             </table>
           </div>
         </div>
+        <MobileRecordList className="mb-5">
+          {paginatedScoringResults.map((result) => {
+            const resume = resumes?.find(r => r.id === result.resumeId);
+            const job = effectiveJobs.find(j => j.id === result.jobId);
+            const resultKey = `${result.resumeId}-${result.jobId}`;
+
+            if (!resume || !job) return null;
+
+            return (
+              <MobileRecordCard
+                key={resultKey}
+                badges={
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
+                    {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)}
+                  </span>
+                }
+                title={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <NameAvatar name={resume.name || resume.candidateName} fallback={resume.email} size="md" />
+                    <span className="min-w-0 truncate">{resume.name || resume.candidateName || 'Unknown'}</span>
+                  </span>
+                }
+                footer={
+                  <span className="inline-flex items-center gap-1">
+                    {getScoreIcon(result.matchType)}
+                    <span className={`${SCORE_CELL_TEXT} text-gray-900`}>{result.score}%</span>
+                  </span>
+                }
+                meta={[
+                  { icon: <Briefcase className="w-3.5 h-3.5" />, label: job.title },
+                  { label: job.location },
+                  { label: resume.title || resume.experience || '' },
+                ]}
+                fields={[
+                  {
+                    label: 'Key Matches',
+                    value: result.keyMatches.length > 0 ? (
+                      <span className="inline-flex flex-wrap gap-1">
+                        {result.keyMatches.map((skill, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md bg-success-subtle text-success text-xs border border-success-line"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </span>
+                    ) : null,
+                  },
+                  {
+                    label: 'Missing Skills',
+                    value: result.missingSkills.length > 0 ? (
+                      <span className="inline-flex flex-wrap gap-1">
+                        {result.missingSkills.map((skill, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center px-2 py-0.5 rounded-md bg-gray-100 tf-meta border border-gray-200"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="tf-hint">None</span>
+                    ),
+                  },
+                ]}
+                actions={
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setSelectedResultForDetail(resultKey)}
+                    icon={<Eye className="w-3 h-3" />}
+                  >
+                    View Details
+                  </Button>
+                }
+              />
+            );
+          })}
+        </MobileRecordList>
 
         <ListPagination
           currentPage={currentPage}
@@ -419,12 +501,12 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
               <div className="bg-gray-50 px-4 py-3 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3 flex-wrap">
-                    <div className="text-sm text-gray-600">
+                    <div className="tf-body-secondary">
                       Overall Match Score:
                     </div>
-                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-lg border border-gray-300">
+                    <div className="tf-panel flex items-center gap-3 px-3 py-1.5">
                       {getScoreIcon(result.matchType)}
-                      <span className="text-base font-bold text-gray-900">{result.score}%</span>
+                      <span className="tf-section-title">{result.score}%</span>
                       <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border ${getMatchColor(result.matchType)}`}>
                         {result.matchType.charAt(0).toUpperCase() + result.matchType.slice(1)} Match
                       </span>
@@ -446,8 +528,8 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
         <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Ready to Proceed?</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className="tf-row-name mb-1">Ready to Proceed?</h3>
+              <p className="tf-body-secondary">
                 Review the scoring analysis above and click "Complete & Apply" to finalize the applications.
               </p>
             </div>

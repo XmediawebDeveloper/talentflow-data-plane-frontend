@@ -172,10 +172,10 @@ export function usePermissionChangeDialog() {
       actions={actions}
     >
       {opts && (
-        <div className="space-y-3 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300">
+        <div className="space-y-3 tf-body">
           <div>{opts.summary}</div>
           {detailCount > 0 && (
-            <p className="text-xs text-gray-500 dark:text-slate-400">
+            <p className="tf-meta">
               All {detailCount} are listed below{detailCount > 6 ? ' — scroll to see every one' : ''}.
             </p>
           )}
@@ -191,16 +191,16 @@ export function usePermissionChangeDialog() {
                 });
                 return (
                   <div key={g.heading} className="space-y-2.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">
+                    <p className="tf-eyebrow tracking-wide">
                       {g.heading} <span className="text-gray-400 dark:text-slate-600">· {g.codes.length}</span>
                     </p>
                     {Array.from(bySection.entries()).map(([section, codes]) => (
                       <div key={section}>
-                        <p className="mb-1.5 text-xs font-semibold text-gray-800 dark:text-slate-200">
+                        <p className="mb-1.5 tf-caption">
                           {section} <span className="font-normal text-gray-500 dark:text-slate-500">({codes.length})</span>
                         </p>
                         {/* Same tile look as the Edit User permission grid. */}
-                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <div className="tf-grid-2">
                           {codes.map((code) => {
                             const { label } = getPermissionParts(code);
                             return (
@@ -211,7 +211,7 @@ export function usePermissionChangeDialog() {
                                 <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${permissionBadgeClass(permissionActionOf(code))}`}>
                                   <span className="text-xs font-semibold uppercase">{label[0] || 'P'}</span>
                                 </span>
-                                <p className="min-w-0 break-words text-sm max-sm:text-[13px] font-semibold leading-snug text-gray-900 dark:text-slate-50">{label}</p>
+                                <p className="min-w-0 break-words tf-row-title leading-snug">{label}</p>
                               </div>
                             );
                           })}

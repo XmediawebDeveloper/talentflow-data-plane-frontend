@@ -330,14 +330,14 @@ ${job.certifications?.join(', ') || 'N/A'}
             {/* Main column — Job Description, Requirements, Job Details cards */}
             <div className="col-span-9 space-y-6">
               {/* Job Description */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+              <div className="tf-panel p-6 space-y-3">
                 <Skeleton className="h-6 w-40 mb-2" />
                 <Skeleton className="h-4 w-full" />
                 <Skeleton className="h-4 w-5/6" />
                 <Skeleton className="h-4 w-4/6" />
               </div>
               {/* Requirements */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+              <div className="tf-panel p-6 space-y-4">
                 <Skeleton className="h-6 w-36 mb-2" />
                 <Skeleton className="h-4 w-24" />
                 <div className="flex flex-wrap gap-2">
@@ -353,7 +353,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 </div>
               </div>
               {/* Job Details grid */}
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="tf-panel p-6">
                 <Skeleton className="h-6 w-32 mb-4" />
                 <div className="grid grid-cols-2 gap-4">
                   {Array.from({ length: 4 }).map((_, i) => (
@@ -371,13 +371,13 @@ ${job.certifications?.join(', ') || 'N/A'}
 
             {/* Sidebar — Quick Actions, Applicant Statistics, Recent Activity */}
             <div className="col-span-3 space-y-6">
-              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <div className="tf-panel p-5 space-y-3">
                 <Skeleton className="h-4 w-28 mb-2" />
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Skeleton key={i} className="h-10 w-full rounded-lg" />
                 ))}
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+              <div className="tf-panel p-5 space-y-4">
                 <Skeleton className="h-4 w-36 mb-2" />
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="flex items-center justify-between">
@@ -389,7 +389,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   </div>
                 ))}
               </div>
-              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+              <div className="tf-panel p-5 space-y-3">
                 <Skeleton className="h-4 w-28 mb-2" />
                 {Array.from({ length: 4 }).map((_, i) => (
                   <div key={i} className="flex items-start gap-3">
@@ -448,10 +448,10 @@ ${job.certifications?.join(', ') || 'N/A'}
           <div className="flex items-start justify-between">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <h1 className="text-2xl font-semibold text-gray-900">{job.title}</h1>
+                <h1 className="tf-page-title">{job.title}</h1>
                 {getStatusBadge(job.status)}
               </div>
-              <div className="flex items-center gap-4 text-sm text-gray-500">
+              <div className="flex items-center gap-4 tf-body-muted">
                 {job.department && (
                   <span className="flex items-center gap-1">
                     <Building2 className="w-4 h-4" />
@@ -475,7 +475,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 variant="secondary"
                 size="sm"
                 onClick={handleCopy}
-                className="px-2"
+               
                 aria-label="Copy" title="Copy"
               >
                 <Copy className="w-5 h-5" />
@@ -484,7 +484,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 variant="secondary"
                 size="sm"
                 onClick={handleDownload}
-                className="px-2"
+               
                 aria-label="Download" title="Download"
               >
                 <Download className="w-5 h-5" />
@@ -531,20 +531,20 @@ ${job.certifications?.join(', ') || 'N/A'}
             {activeTab === 'overview' && (
               <>
                 {/* Job Description */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Description</h2>
+                <div className="tf-panel p-6">
+                  <h2 className="tf-section-title mb-4">Job Description</h2>
                   <div className="markdown-content text-gray-700 leading-relaxed">
                     <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{job.description || ''}</ReactMarkdown>
                   </div>
                 </div>
 
                 {/* Requirements */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Requirements</h2>
+                <div className="tf-panel p-6">
+                  <h2 className="tf-section-title mb-4">Requirements</h2>
 
                   {/* Experience */}
                   <div className="mb-6">
-                    <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                    <h3 className="tf-label mb-2 flex items-center gap-2">
                       <Clock className="w-4 h-4 text-gray-400" />
                       Experience
                     </h3>
@@ -560,7 +560,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {/* Must Have Skills */}
                   {job.must_have_skills && job.must_have_skills.length > 0 && (
                     <div className="mb-6">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="tf-label mb-2 flex items-center gap-2">
                         <CheckCircle className="w-4 h-4 text-success" />
                         Must Have Skills
                       </h3>
@@ -577,13 +577,13 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {/* Nice to Have Skills */}
                   {job.nice_to_have_skills && job.nice_to_have_skills.length > 0 && (
                     <div className="mb-6">
-                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="tf-label mb-2 flex items-center gap-2">
                         <Target className="w-4 h-4 text-gray-700" />
                         Nice to Have Skills
                       </h3>
                       <div className="flex flex-wrap gap-2">
                         {job.nice_to_have_skills.map((skill, index) => (
-                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
+                          <span key={index} className="px-3 py-1 bg-gray-50 tf-body rounded-full">
                             {skill}
                           </span>
                         ))}
@@ -594,13 +594,13 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {/* Certifications */}
                   {job.certifications && job.certifications.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
+                      <h3 className="tf-label mb-2 flex items-center gap-2">
                         <Award className="w-4 h-4 text-gray-700" />
                         Certifications
                       </h3>
                       <div className="flex flex-wrap gap-2">
                         {job.certifications.map((cert, index) => (
-                          <span key={index} className="px-3 py-1 bg-gray-50 text-gray-900 rounded-full text-sm">
+                          <span key={index} className="px-3 py-1 bg-gray-50 tf-body rounded-full">
                             {cert}
                           </span>
                         ))}
@@ -610,43 +610,43 @@ ${job.certifications?.join(', ') || 'N/A'}
                 </div>
 
                 {/* Job Details Grid */}
-                <div className="bg-white rounded-xl border border-gray-200 p-6">
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">Job Details</h2>
+                <div className="tf-panel p-6">
+                  <h2 className="tf-section-title mb-4">Job Details</h2>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <Briefcase className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Employment Type</p>
-                        <p className="text-sm font-medium text-gray-900">{job.employment_type || 'Not specified'}</p>
+                        <p className="tf-meta">Employment Type</p>
+                        <p className="tf-row-name">{job.employment_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <MapPin className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Remote Type</p>
-                        <p className="text-sm font-medium text-gray-900">{job.remote_type || 'Not specified'}</p>
+                        <p className="tf-meta">Remote Type</p>
+                        <p className="tf-row-name">{job.remote_type || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <TrendingUp className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Job Level</p>
-                        <p className="text-sm font-medium text-gray-900">{job.job_level || 'Not specified'}</p>
+                        <p className="tf-meta">Job Level</p>
+                        <p className="tf-row-name">{job.job_level || 'Not specified'}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
                       <Building2 className="w-5 h-5 text-gray-400" />
                       <div>
-                        <p className="text-xs text-gray-500">Industry</p>
-                        <p className="text-sm font-medium text-gray-900">{job.industry_type || 'Not specified'}</p>
+                        <p className="tf-meta">Industry</p>
+                        <p className="tf-row-name">{job.industry_type || 'Not specified'}</p>
                       </div>
                     </div>
                     {(job.salary_min || job.salary_max) && (
                       <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg col-span-2">
                         <DollarSign className="w-5 h-5 text-gray-400" />
                         <div>
-                          <p className="text-xs text-gray-500">Salary Range</p>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="tf-meta">Salary Range</p>
+                          <p className="tf-row-name">
                             {formatSalaryRange({
                               min: job.salary_min,
                               max: job.salary_max,
@@ -663,9 +663,9 @@ ${job.certifications?.join(', ') || 'N/A'}
             )}
 
             {activeTab === 'scored-resumes' && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="tf-panel p-6">
                 <div className="flex items-center justify-between mb-6">
-                  <h2 className="text-lg font-semibold text-gray-900">Scored Resumes</h2>
+                  <h2 className="tf-section-title">Scored Resumes</h2>
                   <Button
                     variant="primary"
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
@@ -703,8 +703,8 @@ ${job.certifications?.join(', ') || 'N/A'}
           {/* Sidebar */}
           <div className="col-span-3 space-y-6">
             {/* Quick Actions */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Quick Actions</h3>
+            <div className="tf-panel p-5">
+              <h3 className="tf-row-title mb-4">Quick Actions</h3>
               <div className="space-y-2">
                 {/* Status Change Actions */}
                 {job.status === 'draft' && (
@@ -796,51 +796,51 @@ ${job.certifications?.join(', ') || 'N/A'}
             </div>
 
             {/* Applicant Statistics */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Applicant Statistics</h3>
+            <div className="tf-panel p-5">
+              <h3 className="tf-row-title mb-4">Applicant Statistics</h3>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
                       <Users className="w-4 h-4 text-gray-800" />
                     </div>
-                    <span className="text-sm text-gray-600">Total Applicants</span>
+                    <span className="tf-body-secondary">Total Applicants</span>
                   </div>
-                  <span className="text-lg font-semibold text-gray-900">{job.applicants_count || 0}</span>
+                  <span className="tf-section-title">{job.applicants_count || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
                       <UserCheck className="w-4 h-4 text-success" />
                     </div>
-                    <span className="text-sm text-gray-600">Shortlisted</span>
+                    <span className="tf-body-secondary">Shortlisted</span>
                   </div>
-                  <span className="text-lg font-semibold text-gray-900">0</span>
+                  <span className="tf-section-title">0</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
                       <ClipboardList className="w-4 h-4 text-gray-800" />
                     </div>
-                    <span className="text-sm text-gray-600">Scored</span>
+                    <span className="tf-body-secondary">Scored</span>
                   </div>
-                  <span className="text-lg font-semibold text-gray-900">{job.scored_resumes_count || 0}</span>
+                  <span className="tf-section-title">{job.scored_resumes_count || 0}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-warning-subtle rounded-lg flex items-center justify-center">
                       <BarChart3 className="w-4 h-4 text-warning" />
                     </div>
-                    <span className="text-sm text-gray-600">Assessments</span>
+                    <span className="tf-body-secondary">Assessments</span>
                   </div>
-                  <span className="text-lg font-semibold text-gray-900">{job.assessments_count || 0}</span>
+                  <span className="tf-section-title">{job.assessments_count || 0}</span>
                 </div>
               </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="bg-white rounded-xl border border-gray-200 p-5">
-              <h3 className="text-sm font-semibold text-gray-900 mb-4">Recent Activity</h3>
+            <div className="tf-panel p-5">
+              <h3 className="tf-row-title mb-4">Recent Activity</h3>
               <div className="space-y-3">
                 {recentActivity.map((activity) => (
                   <div key={activity.id} className="flex items-start gap-3">
@@ -853,8 +853,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                       {activity.type === 'assessment' && <BarChart3 className="w-4 h-4 text-gray-800" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.action}</p>
-                      <p className="text-xs text-gray-500">{activity.user} • {activity.time}</p>
+                      <p className="tf-body">{activity.action}</p>
+                      <p className="tf-meta">{activity.user} • {activity.time}</p>
                     </div>
                   </div>
                 ))}

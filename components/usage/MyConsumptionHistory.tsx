@@ -34,6 +34,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import type { ExportFileFormat } from '@/lib/utils/exportUtils';
 
@@ -187,7 +188,7 @@ export default function MyConsumptionHistory() {
     return (
       <div className="space-y-6">
         {/* Header + summary stat cards */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="tf-card-soft p-6">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Skeleton className="w-10 h-10 rounded-lg" />
@@ -199,7 +200,7 @@ export default function MyConsumptionHistory() {
             <Skeleton className="h-9 w-24 rounded-lg" />
           </div>
 
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="tf-grid-4 mt-6">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="p-4 bg-gray-50 rounded-lg">
                 <Skeleton className="h-4 w-24" />
@@ -216,20 +217,20 @@ export default function MyConsumptionHistory() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="tf-card-soft p-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-50 rounded-lg">
               <User className="w-6 h-6 text-blue-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">My Consumption History</h2>
-              <p className="text-sm text-gray-500">View your personal unit usage across all features</p>
+              <h2 className="tf-section-title">My Consumption History</h2>
+              <p className="tf-body-muted">View your personal unit usage across all features</p>
             </div>
           </div>
           <button
             onClick={() => setShowExportModal(true)}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+            className="flex items-center gap-2 px-4 py-2 tf-label bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
           >
             <Download className="w-4 h-4" />
             Export
@@ -243,15 +244,15 @@ export default function MyConsumptionHistory() {
         </div>
 
         {/* Summary Stats — clicking a card drills into the consumption table filtered by that type */}
-        <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="tf-grid-4 mt-6">
           <button
             type="button"
             onClick={() => openListView('all')}
             className={`text-left w-full p-4 bg-gray-50 rounded-lg hover:shadow-md transition-all ${pageView === 'list' && selectedType === 'all' ? 'ring-2 ring-brand-blue' : ''}`}
           >
-            <p className="text-sm text-gray-600">Total Consumed</p>
+            <p className="tf-body-secondary">Total Consumed</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{summary.total.toFixed(1)}</p>
-            <p className="text-xs text-gray-500 mt-1">Last {dateRange} days</p>
+            <p className="tf-meta mt-1">Last {dateRange} days</p>
           </button>
           {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
             const Icon = UNIT_TYPE_ICONS[type];
@@ -268,7 +269,7 @@ export default function MyConsumptionHistory() {
                   <p className={`text-sm font-medium ${colors.text}`}>{getUnitTypeName(type)}</p>
                 </div>
                 <p className={`text-2xl font-bold ${colors.text} mt-1`}>{summary.byType[type].toFixed(1)}</p>
-                <p className="text-xs text-gray-600 mt-1">{type} units</p>
+                <p className="tf-meta mt-1">{type} units</p>
               </button>
             );
           })}
@@ -281,17 +282,17 @@ export default function MyConsumptionHistory() {
           used to hold the left slot is gone, and the tally belongs on the
           right. */}
       <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-gray-500">
+        <span className="tf-meta">
           {filteredHistory.length} {filteredHistory.length === 1 ? 'entry' : 'entries'}
         </span>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="tf-card-soft p-6">
         <div className="flex items-center gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-gray-500" />
-            <span className="text-sm font-medium text-gray-700">Filters:</span>
+            <span className="tf-label">Filters:</span>
           </div>
 
           <FilterSelect
@@ -332,23 +333,23 @@ export default function MyConsumptionHistory() {
             className="px-3 sm:px-3 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg border-gray-300"
           />
 
-          <div className="ml-auto text-sm text-gray-600">
+          <div className="ml-auto tf-body-secondary">
             {filteredHistory.length} records
           </div>
         </div>
       </div>
 
       {/* Consumption History Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+      <div className={`tf-card-soft overflow-hidden ${DESKTOP_TABLE_ONLY}`}>
         <div className="overflow-x-auto tf-table-shell">
           <table className="w-full">
             <thead className="bg-white border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Date & Time</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Type</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Units</th>
-                <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
+                <th className="tf-th-cell text-left tf-th">Date & Time</th>
+                <th className="tf-th-cell text-left tf-th">Type</th>
+                <th className="tf-th-cell text-left tf-th">Action</th>
+                <th className="tf-th-cell text-left tf-th">Units</th>
+                <th className="tf-th-cell text-left tf-th">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -368,13 +369,13 @@ export default function MyConsumptionHistory() {
 
                   return (
                     <tr key={item.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-900">
+                      <td className="tf-td tf-body">
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-gray-400" />
                           {formatIST(item.created_at)}
                         </div>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="tf-td">
                         <div className={`inline-flex items-center gap-1.5 px-2 py-1 ${colors.bg} rounded-md`}>
                           <Icon className={`w-3.5 h-3.5 ${colors.text}`} />
                           <span className={`text-xs font-medium ${colors.text}`}>
@@ -382,15 +383,15 @@ export default function MyConsumptionHistory() {
                           </span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
+                      <td className="tf-td tf-body-secondary">
                         {item.entity_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm font-medium text-gray-900">
+                      <td className="tf-td">
+                        <span className="tf-row-name">
                           {item.units_consumed?.toFixed(1) || '0.0'}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="tf-td">
                         {item.status === 'SUCCESS' ? (
                           <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 rounded-md">
                             <CheckCircle className="w-3.5 h-3.5 text-green-600" />
@@ -411,6 +412,47 @@ export default function MyConsumptionHistory() {
           </table>
         </div>
       </div>
+      <MobileRecordList
+        empty={
+          <div className={`${TABLE_EMPTY_PANEL_CLASS} text-gray-500`}>
+            No consumption history found for the selected filters.
+          </div>
+        }
+      >
+        {filteredHistory.map((item) => {
+          const Icon = UNIT_TYPE_ICONS[item.unit_type];
+          const colors = UNIT_TYPE_COLORS[item.unit_type];
+          return (
+            <MobileRecordCard
+              key={item.id}
+              badges={
+                <>
+                  <div className={`inline-flex items-center gap-1.5 px-2 py-1 ${colors.bg} rounded-md`}>
+                    <Icon className={`w-3.5 h-3.5 ${colors.text}`} />
+                    <span className={`text-xs font-medium ${colors.text}`}>
+                      {getUnitTypeName(item.unit_type)}
+                    </span>
+                  </div>
+                  {item.status === 'SUCCESS' ? (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-green-50 rounded-md">
+                      <CheckCircle className="w-3.5 h-3.5 text-green-600" />
+                      <span className="text-xs font-medium text-green-700">Success</span>
+                    </div>
+                  ) : (
+                    <div className="inline-flex items-center gap-1.5 px-2 py-1 bg-red-50 rounded-md">
+                      <XCircle className="w-3.5 h-3.5 text-red-600" />
+                      <span className="text-xs font-medium text-red-700">Failed</span>
+                    </div>
+                  )}
+                </>
+              }
+              title={item.entity_type?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              meta={[{ icon: <Clock className="w-3.5 h-3.5" />, label: formatIST(item.created_at) }]}
+              footer={<MobileStatChip tone="info">{item.units_consumed?.toFixed(1) || '0.0'} units</MobileStatChip>}
+            />
+          );
+        })}
+      </MobileRecordList>
       </>
       )}
 

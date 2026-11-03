@@ -108,13 +108,13 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
           <div className="space-y-3">
             <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-3 sm:p-4">
               <div className="text-sm font-semibold tracking-wide text-blue-700 mb-1">Scenario</div>
-              <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-6 text-gray-800 m-0">
+              <div className="whitespace-pre-wrap break-words font-sans tf-body sm:text-base leading-6 m-0">
                 {scenarioBody}
               </div>
             </div>
             <div>
-              <div className="text-sm font-semibold tracking-wide text-gray-600 mb-1">Question</div>
-              <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-relaxed italic text-gray-900 m-0">
+              <div className="tf-row-title tracking-wide mb-1">Question</div>
+              <div className="whitespace-pre-wrap break-words font-sans tf-body sm:text-base leading-relaxed italic m-0">
                 {questionBody}
               </div>
             </div>
@@ -123,7 +123,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
       }
     }
     return (
-      <div className="whitespace-pre-wrap break-words font-sans text-sm sm:text-base leading-relaxed italic text-gray-900 m-0">
+      <div className="whitespace-pre-wrap break-words font-sans tf-body sm:text-base leading-relaxed italic m-0">
         {text}
       </div>
     );
@@ -167,7 +167,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
                 : 'border-gray-200 focus:!outline-none focus-visible:!outline-none focus:border-brand-blue/50 focus:ring-2 focus:ring-brand-blue/15'
             }`}
           />
-          <div className="flex justify-between items-center text-sm text-gray-500">
+          <div className="flex justify-between items-center tf-body-muted">
             <span>
               {isLocked ? (
                 <span className="text-green-600">✓ Answer submitted</span>
@@ -203,7 +203,7 @@ export function TechnicalQuestionView({ question, answer, onAnswerChange, isLock
       {/* Answer-mode hint: the checkbox shape alone was the only cue that a
           multi-select question can have several correct answers. */}
       {!isLocked && (
-        <p className="text-sm font-medium text-gray-600">
+        <p className="tf-label">
           {isMultipleChoice ? 'Select all that apply.' : 'Select one answer.'}
         </p>
       )}

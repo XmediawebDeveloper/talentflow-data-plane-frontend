@@ -38,7 +38,7 @@ export default function LoadingOverlay({ message = 'Loading...', progress, subMe
 
           {/* Sub message */}
           {subMessage && (
-            <p className="mt-3 text-sm text-gray-600 text-center">{subMessage}</p>
+            <p className="mt-3 tf-body-secondary text-center">{subMessage}</p>
           )}
 
           {/* Animated dots */}

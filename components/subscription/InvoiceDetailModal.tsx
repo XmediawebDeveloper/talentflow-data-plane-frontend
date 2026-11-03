@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { X, Calendar, CalendarCheck, CalendarClock, RefreshCw, CreditCard, Package, FileText, Receipt, FileSignature, Download, Loader2 } from 'lucide-react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 type StatusVariant = 'success' | 'warning' | 'destructive' | 'info' | 'muted';
 
@@ -57,8 +58,8 @@ function InfoTile({ icon, label, children }: { icon: ReactNode; label: string; c
     <div className="flex items-start gap-3 rounded-xl bg-slate-50 px-3.5 py-3 ring-1 ring-gray-100 dark:bg-slate-800/50 dark:ring-slate-700/60">
       <span className="mt-0.5 shrink-0">{icon}</span>
       <div className="min-w-0">
-        <p className="text-xs text-gray-500 dark:text-slate-400">{label}</p>
-        <div className="mt-0.5 truncate text-sm font-semibold text-gray-900 dark:text-slate-50">{children}</div>
+        <p className="tf-meta">{label}</p>
+        <div className="mt-0.5 truncate tf-row-title">{children}</div>
       </div>
     </div>
   );
@@ -67,7 +68,7 @@ function InfoTile({ icon, label, children }: { icon: ReactNode; label: string; c
 function Section({ icon, title, children, className = '' }: { icon: ReactNode; title: string; children: ReactNode; className?: string }) {
   return (
     <section className={`overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ${className}`}>
-      <h3 className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5 text-sm font-semibold text-gray-900 dark:border-slate-700/60 dark:bg-slate-800/50 dark:text-slate-50">
+      <h3 className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-2.5 tf-row-title dark:border-slate-700/60 dark:bg-slate-800/50">
         <span className="text-gray-500 dark:text-slate-400">{icon}</span>
         {title}
       </h3>
@@ -126,7 +127,7 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
 
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5 sm:p-6">
           {/* Key info */}
-          <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3">
+          <div className="tf-grid-3">
             <InfoTile icon={<Calendar className={tileIcon} />} label="Issue Date">{formatISTDate(invoice.issue_date)}</InfoTile>
             <InfoTile icon={<CalendarClock className={tileIcon} />} label="Due Date">{formatISTDate(invoice.due_date)}</InfoTile>
             <InfoTile
@@ -160,12 +161,12 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
               <div className="flex min-w-0 items-center gap-3">
                 <Package className="h-6 w-6 shrink-0 text-brand-blue" />
                 <div className="min-w-0">
-                  <p className="text-xs text-gray-500 dark:text-slate-400">Plan</p>
+                  <p className="tf-meta">Plan</p>
                   <p className="truncate text-sm font-semibold text-brand-blue">{invoice.plan_name?.trim()}</p>
                 </div>
               </div>
               {invoice.plan_type && (
-                <span className="shrink-0 rounded-full bg-brand-blue/10 px-3 py-1 text-2xs font-semibold uppercase tracking-wide text-brand-blue">
+                <span className="tf-badge shrink-0 bg-brand-blue/10 text-2xs uppercase tracking-wide text-brand-blue">
                   {invoice.plan_type}
                 </span>
               )}
@@ -175,15 +176,15 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
           {/* Subscription period */}
           {invoice.subscription_start_date && (
             <Section icon={<Calendar className="h-4 w-4" />} title="Subscription Period">
-              <div className="grid grid-cols-1 divide-y divide-gray-100 px-4 py-3 dark:divide-slate-700/60 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div className="tf-grid-3 divide-y divide-gray-100 px-4 py-3 dark:divide-slate-700/60 sm:divide-x sm:divide-y-0">
                 {[
                   { label: 'Start', value: invoice.subscription_start_date },
                   { label: 'End', value: invoice.subscription_end_date },
                   ...(invoice.next_billing_date ? [{ label: 'Next Billing', value: invoice.next_billing_date }] : []),
                 ].map((p, i) => (
                   <div key={p.label} className={`py-2 sm:py-0 ${i > 0 ? 'sm:pl-5' : ''}`}>
-                    <p className="text-xs text-gray-500 dark:text-slate-400">{p.label}</p>
-                    <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(p.value)}</p>
+                    <p className="tf-meta">{p.label}</p>
+                    <p className="mt-0.5 tf-row-title">{formatISTDate(p.value)}</p>
                   </div>
                 ))}
               </div>
@@ -193,25 +194,25 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
           {/* Invoice items */}
           {invoice.line_items?.length > 0 && (
             <Section icon={<FileText className="h-4 w-4" />} title="Invoice Items">
-              <div className="overflow-x-auto">
+              <div className={`overflow-x-auto ${DESKTOP_TABLE_ONLY}`}>
                 <table className="w-full min-w-[480px] text-sm">
-                  <thead className="bg-white text-xs text-gray-600 dark:bg-slate-900 dark:text-slate-300">
+                  <thead className="bg-white tf-meta dark:bg-slate-900">
                     <tr>
-                      <th className="w-10 px-4 py-2 text-left font-semibold">#</th>
-                      <th className="px-4 py-2 text-left font-semibold">Description</th>
-                      <th className="px-4 py-2 text-right font-semibold">Quantity</th>
-                      <th className="px-4 py-2 text-right font-semibold">Unit Price</th>
-                      <th className="px-4 py-2 text-right font-semibold">Amount</th>
+                      <th className="tf-th-cell w-10 text-left font-semibold">#</th>
+                      <th className="tf-th-cell text-left font-semibold">Description</th>
+                      <th className="tf-th-cell text-right font-semibold">Quantity</th>
+                      <th className="tf-th-cell text-right font-semibold">Unit Price</th>
+                      <th className="tf-th-cell text-right font-semibold">Amount</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {invoice.line_items.map((item, idx) => (
                       <tr key={idx}>
-                        <td className="px-4 py-2.5 text-gray-500 dark:text-slate-400">{idx + 1}</td>
-                        <td className="px-4 py-2.5 text-gray-800 dark:text-slate-100">{item.description}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700 dark:text-slate-300">{item.quantity}</td>
-                        <td className="px-4 py-2.5 text-right tabular-nums text-gray-700 dark:text-slate-300">{formatAmount(item.unit_price)}</td>
-                        <td className="px-4 py-2.5 text-right font-medium tabular-nums text-gray-900 dark:text-slate-50">
+                        <td className="tf-td text-gray-500 dark:text-slate-400">{idx + 1}</td>
+                        <td className="tf-td text-gray-800 dark:text-slate-100">{item.description}</td>
+                        <td className="tf-td text-right tabular-nums text-gray-700 dark:text-slate-300">{item.quantity}</td>
+                        <td className="tf-td text-right tabular-nums text-gray-700 dark:text-slate-300">{formatAmount(item.unit_price)}</td>
+                        <td className="tf-td text-right font-medium tabular-nums text-gray-900 dark:text-slate-50">
                           {formatAmount(Math.abs(item.amount ?? item.total ?? 0))}
                         </td>
                       </tr>
@@ -219,6 +220,20 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
                   </tbody>
                 </table>
               </div>
+              <MobileRecordList className="p-3">
+                {invoice.line_items.map((item, idx) => (
+                  <MobileRecordCard
+                    key={idx}
+                    idBadge={<span className="tf-meta">#{idx + 1}</span>}
+                    title={item.description}
+                    fields={[
+                      { label: 'Quantity', value: item.quantity },
+                      { label: 'Unit Price', value: formatAmount(item.unit_price) },
+                      { label: 'Amount', value: formatAmount(Math.abs(item.amount ?? item.total ?? 0)) },
+                    ]}
+                  />
+                ))}
+              </MobileRecordList>
             </Section>
           )}
 
@@ -230,14 +245,14 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
                   <dl className="space-y-2 px-4 py-3">
                     {invoice.razorpay_payment_id && (
                       <div>
-                        <dt className="text-xs text-gray-500 dark:text-slate-400">Payment ID</dt>
-                        <dd className="break-all text-sm text-gray-900 dark:text-slate-50">{invoice.razorpay_payment_id}</dd>
+                        <dt className="tf-meta">Payment ID</dt>
+                        <dd className="break-all tf-body">{invoice.razorpay_payment_id}</dd>
                       </div>
                     )}
                     {invoice.razorpay_order_id && (
                       <div>
-                        <dt className="text-xs text-gray-500 dark:text-slate-400">Order ID</dt>
-                        <dd className="break-all text-sm text-gray-900 dark:text-slate-50">{invoice.razorpay_order_id}</dd>
+                        <dt className="tf-meta">Order ID</dt>
+                        <dd className="break-all tf-body">{invoice.razorpay_order_id}</dd>
                       </div>
                     )}
                   </dl>
@@ -245,7 +260,7 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
               )}
               {reason && (
                 <Section icon={<FileSignature className="h-4 w-4" />} title="Reason">
-                  <p className="px-4 py-3 text-sm text-gray-800 dark:text-slate-100">{reason}</p>
+                  <p className="px-4 py-3 tf-body">{reason}</p>
                 </Section>
               )}
             </div>
@@ -280,7 +295,7 @@ export default function InvoiceDetailModal<T extends InvoiceDetail>({
                 type="button"
                 onClick={() => onDownload(invoice)}
                 disabled={downloading}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-3 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                className="tf-btn tf-btn-primary flex w-full rounded-xl bg-brand-blue px-4 py-3 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70 whitespace-normal hover:bg-brand-blue"
               >
                 {downloading
                   ? <><Loader2 className="h-4 w-4 animate-spin" /> Generating PDF...</>

@@ -161,8 +161,8 @@ function Demo({ name, path, children }: { name: string; path: string; children: 
   return (
     <div className="min-w-0">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{name}</h3>
-        <code className="min-w-0 text-xs text-gray-500 dark:text-slate-400 [overflow-wrap:anywhere]">{path}</code>
+        <h3 className="tf-row-title">{name}</h3>
+        <code className="min-w-0 tf-meta [overflow-wrap:anywhere]">{path}</code>
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -374,11 +374,11 @@ export default function UiReferencePage() {
               </Demo>
               <Demo name="Checkbox · Switch · GroupCheckbox" path="components/ui/checkbox.tsx · switch.tsx · group-checkbox.tsx">
                 <div className="flex flex-col gap-3">
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 tf-body">
                     <Checkbox checked={checked} onCheckedChange={(v) => setChecked(!!v)} />
                     Show unused components
                   </label>
-                  <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
+                  <label className="flex items-center gap-2 tf-body">
                     <Switch checked={switched} onCheckedChange={setSwitched} />
                     Compact rows
                   </label>
@@ -588,7 +588,7 @@ export default function UiReferencePage() {
                 <Tooltip content="Tooltips explain an icon or a truncated label.">
                   <Button variant="secondary">Hover for tooltip</Button>
                 </Tooltip>
-                <span className="inline-flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+                <span className="inline-flex items-center gap-1.5 tf-body">
                   Info tooltip <InfoTooltip content="Inline help beside a label." />
                 </span>
               </Row>
@@ -691,30 +691,30 @@ export default function UiReferencePage() {
                   <div className="tf-table-shell">
                     <table className="w-full min-w-[640px] text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-600 dark:border-slate-700 dark:text-slate-300">
-                          <th className="w-10 px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">
+                        <tr className="border-b border-gray-200 text-left tf-caption dark:border-slate-700">
+                          <th className="w-10 px-3 py-3 tf-th">
                             <Checkbox
                               aria-label="Select this page"
                               checked={pageSelected}
                               onCheckedChange={() => (pageSelected ? deselectPage() : selectPage())}
                             />
                           </th>
-                          <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'name')}>
+                          <th className="px-3 py-3 tf-th" aria-sort={ariaSort(sort, 'name')}>
                             <SortableHeader label="Component" column="name" sort={sort} />
                           </th>
-                          {columns.path && <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300">Path</th>}
+                          {columns.path && <th className="px-3 py-3 tf-th">Path</th>}
                           {columns.category && (
-                            <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'category')}>
+                            <th className="px-3 py-3 tf-th" aria-sort={ariaSort(sort, 'category')}>
                               <SortableHeader label="Category" column="category" sort={sort} />
                             </th>
                           )}
                           {columns.files && (
-                            <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'files')}>
+                            <th className="px-3 py-3 text-right tf-th" aria-sort={ariaSort(sort, 'files')}>
                               <SortableHeader label="Files" column="files" sort={sort} align="right" />
                             </th>
                           )}
                           {columns.status && (
-                            <th className="px-3 py-3 text-xs font-semibold text-gray-600 dark:text-slate-300" aria-sort={ariaSort(sort, 'status')}>
+                            <th className="px-3 py-3 tf-th" aria-sort={ariaSort(sort, 'status')}>
                               <SortableHeader label="Status" column="status" sort={sort} />
                             </th>
                           )}
@@ -727,7 +727,7 @@ export default function UiReferencePage() {
                               <Checkbox aria-label={`Select ${r.name}`} checked={selected.has(r.id)} onCheckedChange={() => toggleRow(r.id)} />
                             </td>
                             <td className="px-3 py-2.5 font-medium text-gray-900 dark:text-slate-100">{r.name}</td>
-                            {columns.path && <td className="px-3 py-2.5 font-mono text-xs text-gray-500 dark:text-slate-400">{r.path}</td>}
+                            {columns.path && <td className="px-3 py-2.5 font-mono tf-meta">{r.path}</td>}
                             {columns.category && <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300">{r.category}</td>}
                             {columns.files && <td className="px-3 py-2.5 text-right tabular-nums text-gray-700 dark:text-slate-300">{r.files}</td>}
                             {columns.status && (
@@ -765,10 +765,10 @@ export default function UiReferencePage() {
                       >
                         <GridCardSelect selected={selected.has(r.id)} onToggle={() => toggleRow(r.id)} label={`Select ${r.name}`} selectionActive={selected.size > 0} />
                         <div className="truncate pr-8 font-medium text-gray-900 dark:text-slate-100">{r.name}</div>
-                        <div className="mt-1 truncate font-mono text-xs text-gray-500 dark:text-slate-400" title={r.path}>{r.path}</div>
+                        <div className="mt-1 truncate font-mono tf-meta" title={r.path}>{r.path}</div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge variant={STATUS_BADGE[r.status]}>{r.status}</Badge>
-                          <span className="text-xs text-gray-500 dark:text-slate-400">{r.files} files</span>
+                          <span className="tf-meta">{r.files} files</span>
                         </div>
                       </div>
                     ))}
@@ -808,12 +808,12 @@ export default function UiReferencePage() {
               <Row>
                 <MiniPagination page={miniPage} totalPages={INVENTORY_CATEGORIES.length} onPageChange={setMiniPage} />
                 <MiniPagination page={miniPage} totalPages={INVENTORY_CATEGORIES.length} onPageChange={setMiniPage} showEnds />
-                <span className="text-sm text-gray-600 dark:text-slate-400">{INVENTORY_CATEGORIES[miniPage - 1]}</span>
+                <span className="tf-body-secondary">{INVENTORY_CATEGORIES[miniPage - 1]}</span>
               </Row>
             </Demo>
             <Demo name="RecordPager (Previous / Next record)" path="components/RecordPager.tsx">
               <Row className="justify-between">
-                <span className="min-w-0 text-sm text-gray-700 dark:text-slate-300 [overflow-wrap:anywhere]">
+                <span className="min-w-0 tf-body [overflow-wrap:anywhere]">
                   <span className="font-medium">{record.name}</span> — {record.path}
                 </span>
                 <RecordPager
@@ -864,7 +864,7 @@ export default function UiReferencePage() {
                   ))}
                 </TabsList>
                 {(['Shared', 'Duplicated', 'Barely used'] as const).map((s) => (
-                  <TabsContent key={s} value={s} className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere]">
+                  <TabsContent key={s} value={s} className="tf-body-secondary [overflow-wrap:anywhere]">
                     {INVENTORY.filter((r) => r.status === s).map((r) => r.name).join(' · ')}
                   </TabsContent>
                 ))}
@@ -946,7 +946,7 @@ export default function UiReferencePage() {
                       <Badge variant="success">Shared</Badge>
                     </CardAction>
                   </CardHeader>
-                  <CardContent className="text-sm text-gray-600 dark:text-slate-400">Card header, action, content and footer slots.</CardContent>
+                  <CardContent className="tf-body-secondary">Card header, action, content and footer slots.</CardContent>
                   <CardFooter>
                     <Button size="sm" variant="secondary">Open</Button>
                   </CardFooter>
@@ -954,7 +954,7 @@ export default function UiReferencePage() {
               </Demo>
               <Demo name="SurfaceCard" path="components/ui/section-container.tsx">
                 <SurfaceCard>
-                  <div className="text-sm text-gray-600 dark:text-slate-400">The plain panel every section on this page sits on.</div>
+                  <div className="tf-body-secondary">The plain panel every section on this page sits on.</div>
                 </SurfaceCard>
               </Demo>
             </div>
@@ -1064,13 +1064,13 @@ export default function UiReferencePage() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-3">
             {categoryGroups.map(({ c, rows }) => (
               <div key={c} className="min-w-0 rounded-lg border border-gray-200 p-3 dark:border-slate-700">
-                <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{c}</div>
-                <div className="mt-1 text-xs text-gray-500 dark:text-slate-400">{componentCount(rows.length)}</div>
+                <div className="tf-row-name">{c}</div>
+                <div className="mt-1 tf-meta">{componentCount(rows.length)}</div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-gray-600 dark:text-slate-400">
+          <p className="tf-body-secondary">
             {modal === 'warning' ? 'Your changes will be lost.' : 'Confirm, delete and other short prompts use the small size.'}
           </p>
         )}

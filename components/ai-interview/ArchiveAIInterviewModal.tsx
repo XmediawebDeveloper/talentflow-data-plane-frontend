@@ -67,7 +67,7 @@ export default function ArchiveAIInterviewModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 Archive AI Interview?
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Move this AI interview to the Archived tab.
               </p>
             </div>
@@ -81,7 +81,7 @@ export default function ArchiveAIInterviewModal({
             </div>
             <ul className="mt-2.5 space-y-2">
               {ARCHIVE_EFFECTS.map((effect) => (
-                <li key={effect} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                <li key={effect} className="flex items-start gap-2.5 tf-body">
                   <CheckCircle2 className="w-4 h-4 shrink-0 text-brand-orange-deep dark:text-orange-300 mt-0.5" />
                   <span>{effect}</span>
                 </li>
@@ -102,7 +102,7 @@ export default function ArchiveAIInterviewModal({
         </div>
 
         <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 shrink-0">
-          <p className="text-sm text-gray-700 dark:text-slate-300">
+          <p className="tf-body">
             Are you sure you want to archive this AI interview?
           </p>
           <div className="flex gap-3 justify-end">

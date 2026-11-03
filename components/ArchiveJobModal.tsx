@@ -83,14 +83,14 @@ export default function ArchiveJobModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 {many ? `Archive ${count} Job Descriptions?` : 'Archive Job Description?'}
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Are you sure you want to archive the following job description{many ? 's' : ''}?
               </p>
               {/* The house grey pill, so the JD reads as a chip and not as body copy. */}
               <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
                 {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
-                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-row-title">
                   {jobLabel}
                 </span>
               </span>
@@ -100,7 +100,7 @@ export default function ArchiveJobModal({
           {/* Where it goes */}
           <div className="mt-5 flex items-start gap-3 rounded-xl border border-brand-orange/20 dark:border-orange-500/25 bg-brand-orange/[0.06] dark:bg-orange-500/10 px-4 py-3">
             <Info className="w-5 h-5 shrink-0 text-brand-orange-deep dark:text-orange-300 mt-0.5" />
-            <div className="min-w-0 text-sm text-gray-700 dark:text-slate-300">
+            <div className="min-w-0 tf-body">
               <p>
                 Archiving {subject} will move {many ? 'them' : 'it'} to the{' '}
                 <span className="font-semibold text-brand-orange-deep dark:text-orange-300">Archived</span> section.
@@ -113,12 +113,12 @@ export default function ArchiveJobModal({
 
           {/* What stops, and what does not */}
           <div className="mt-4">
-            <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+            <p className="tf-row-title">
               While archived, {subject} will:
             </p>
             <ul className="mt-3 space-y-2.5">
               {ARCHIVE_EFFECTS.map(effect => (
-                <li key={effect} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
+                <li key={effect} className="flex items-start gap-2.5 tf-body">
                   <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-brand-orange shrink-0" aria-hidden="true" />
                   <span>{effect}</span>
                 </li>

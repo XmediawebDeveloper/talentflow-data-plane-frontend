@@ -29,7 +29,7 @@ export default function DemoPage() {
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
           {/* Left Side */}
           <div>
-            <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 text-gray-900 dark:text-gray-300 border-0 text-sm">
+            <Badge className="mb-3 sm:mb-4 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full bg-gray-100 dark:bg-purple-900/30 tf-body border-0">
               <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 mr-1.5 sm:mr-2" />
               Request Demo
             </Badge>
@@ -49,7 +49,7 @@ export default function DemoPage() {
               ].map((item, index) => (
                 <div key={index} className="flex items-start gap-2.5 sm:gap-3">
                   <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-green-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-sm sm:text-base text-gray-700 dark:text-gray-300">{item}</span>
+                  <span className="tf-body sm:text-base">{item}</span>
                 </div>
               ))}
             </div>
@@ -111,7 +111,7 @@ export default function DemoPage() {
                 Request Demo
               </Button>
 
-              <p className="text-sm text-gray-500 text-center">
+              <p className="tf-body-muted text-center">
                 Or start your{" "}
                 <a href="/signup" className="text-gray-800 hover:underline">
                   14-day free trial

@@ -6,9 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // real gradient hero doesn't reshuffle on hand-off.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <Skeleton className="h-3 w-48 mb-4 md:mb-6" />
 
@@ -41,7 +41,7 @@ export default function Loading() {
           </section>
 
           {/* Timeline body skeleton */}
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 overflow-hidden">
+          <div className="tf-panel overflow-hidden">
             {/* Date header */}
             <div className="bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-6 py-2.5 sm:py-3 border-b border-gray-100 dark:border-slate-700/60">
               <Skeleton className="h-4 w-32" />

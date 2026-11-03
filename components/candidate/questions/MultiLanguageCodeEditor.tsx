@@ -769,7 +769,7 @@ export function MultiLanguageCodeEditor({
         {/* Header */}
         <div className="flex items-center gap-2 p-3 border-b border-gray-200 bg-gray-50">
           <Code className="w-4 h-4 text-gray-600" />
-          <span className="text-sm font-medium text-gray-800">Problem</span>
+          <span className="tf-label">Problem</span>
         </div>
 
         {/* Content - the problem details scroll on their own; Output stays
@@ -779,7 +779,7 @@ export function MultiLanguageCodeEditor({
           <div className="flex-1 min-h-0 max-h-[60vh] md:max-h-none overflow-y-auto p-5 space-y-5 border-b border-gray-200">
             {/* Problem Title & Description */}
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-2">
+              <h3 className="tf-section-title mb-2">
                 {question.problem_title || question.question_text}
               </h3>
               {problemText.intro && (
@@ -796,7 +796,7 @@ export function MultiLanguageCodeEditor({
               <div key={`${section.label}-${idx}`}>
                 <h4 className={PROBLEM_HEADING_CLASS}>{section.label}</h4>
                 {section.body && (
-                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                  <p className="tf-body-secondary bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
                     {section.body}
                   </p>
                 )}
@@ -807,7 +807,7 @@ export function MultiLanguageCodeEditor({
             {question.input_format && (
               <div>
                 <h4 className={PROBLEM_HEADING_CLASS}>Input Format</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <p className="tf-body-secondary bg-gray-50 p-3 rounded-lg">
                   {question.input_format}
                 </p>
               </div>
@@ -816,7 +816,7 @@ export function MultiLanguageCodeEditor({
             {question.output_format && (
               <div>
                 <h4 className={PROBLEM_HEADING_CLASS}>Output Format</h4>
-                <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
+                <p className="tf-body-secondary bg-gray-50 p-3 rounded-lg">
                   {question.output_format}
                 </p>
               </div>
@@ -826,7 +826,7 @@ export function MultiLanguageCodeEditor({
             {question.constraints && question.constraints.length > 0 && (
               <div>
                 <h4 className={PROBLEM_HEADING_CLASS}>Constraints</h4>
-                <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
+                <ul className="tf-body-secondary space-y-1 bg-gray-50 p-3 rounded-lg">
                   {question.constraints.map((constraint, idx) => (
                     <li key={idx} className="flex items-start gap-2">
                       <span className="text-gray-400">-</span>
@@ -839,12 +839,12 @@ export function MultiLanguageCodeEditor({
 
             {/* Sample Input/Output */}
             <div className="space-y-3">
-              <h4 className="text-sm font-semibold text-gray-900">Example</h4>
+              <h4 className="tf-row-title">Example</h4>
 
               {question.sample_input && (
                 <div className="relative">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    <span className="tf-eyebrow tracking-wide">
                       Input
                     </span>
                     <button
@@ -865,7 +865,7 @@ export function MultiLanguageCodeEditor({
 
               {question.sample_output && (
                 <div>
-                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                  <span className="tf-eyebrow tracking-wide">
                     Expected Output
                   </span>
                   <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto mt-1">
@@ -881,14 +881,14 @@ export function MultiLanguageCodeEditor({
           <div className="shrink-0 max-h-[45%] overflow-y-auto p-4 bg-gray-50">
             <div className="flex items-center gap-2 mb-3">
               <Terminal className="w-4 h-4 text-gray-600" />
-              <span className="text-sm font-medium text-gray-800">Output</span>
+              <span className="tf-label">Output</span>
             </div>
 
             {isRunning ? (
               <div className="flex items-center justify-center py-8">
                 <div className="text-center">
                   <Loader2 className="w-8 h-8 text-blue-500 animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-gray-600">Compiling and running...</p>
+                  <p className="tf-body-secondary">Compiling and running...</p>
                 </div>
               </div>
             ) : executionOutput ? (
@@ -921,7 +921,7 @@ export function MultiLanguageCodeEditor({
 
                 {/* Success Output */}
                 {executionOutput.success && executionOutput.output && (
-                  <div className="p-3 rounded-lg bg-white border border-gray-200">
+                  <div className="tf-panel p-3">
                     <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                       {executionOutput.output}
                     </pre>
@@ -957,7 +957,7 @@ export function MultiLanguageCodeEditor({
                         }`}>
                           {submissionResult.message}
                         </p>
-                        <p className="text-xs text-gray-600 mt-0.5">
+                        <p className="tf-meta mt-0.5">
                           Score: {submissionResult.score_percentage.toFixed(0)}%
                         </p>
                       </div>
@@ -1016,7 +1016,7 @@ export function MultiLanguageCodeEditor({
                 )}
               </div>
             ) : (
-              <div className="flex items-center justify-center py-6 text-gray-400 bg-white rounded-lg border border-dashed border-gray-300">
+              <div className="tf-panel flex items-center justify-center py-6 text-gray-400 border-dashed">
                 <div className="text-center">
                   <Play className="w-8 h-8 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">Click "Run" to see output</p>
@@ -1061,7 +1061,7 @@ export function MultiLanguageCodeEditor({
               <div className="absolute top-full left-0 mt-1 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 max-h-80 overflow-y-auto">
                 {/* Loading state */}
                 {isLoadingLanguages && (
-                  <div className="px-4 py-3 text-center text-gray-400 text-sm">
+                  <div className="px-4 py-3 text-center tf-body-muted">
                     <Loader2 className="w-4 h-4 mx-auto mb-1 animate-spin" />
                     Loading languages...
                   </div>
@@ -1093,7 +1093,7 @@ export function MultiLanguageCodeEditor({
 
                 {/* No languages available */}
                 {!isLoadingLanguages && availableLanguages.length === 0 && (
-                  <div className="px-4 py-3 text-center text-gray-400 text-sm">
+                  <div className="px-4 py-3 text-center tf-body-muted">
                     No languages available
                   </div>
                 )}
@@ -1139,7 +1139,7 @@ export function MultiLanguageCodeEditor({
             <Button
               onClick={handleRunCode}
               disabled={isRunning || isSubmitting || hasSubmitted || isLocked}
-              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isRunning ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -1200,7 +1200,7 @@ export function MultiLanguageCodeEditor({
         {showInputPanel && (
           <div className="border-t border-gray-700 bg-gray-800 p-3">
             <div className="flex items-center justify-between mb-2">
-              <label className="text-xs text-gray-400 uppercase tracking-wide">
+              <label className="tf-hint uppercase tracking-wide">
                 Program Input (stdin)
               </label>
               {!isLocked && question.sample_input && customInput !== question.sample_input && (
@@ -1249,7 +1249,7 @@ export function MultiLanguageCodeEditor({
                 {programInputError}
               </p>
             ) : (
-              <p className="text-xs text-gray-400 mt-1">
+              <p className="tf-hint mt-1">
                 Provide the input your program should read, then run it to check the output.
               </p>
             )}

@@ -150,7 +150,7 @@ export default function SelectedCandidatesPanel({
   return (
     <div className="mb-4 sm:mb-6 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-slate-100">
+        <h3 className="flex items-center gap-2 tf-row-title">
           <Users className="w-4 h-4 text-brand-blue" />
           {/* Counts the ticked ones, so it tracks unticking. */}
           {includedCount} Candidate{includedCount === 1 ? '' : 's'} Selected
@@ -162,7 +162,7 @@ export default function SelectedCandidatesPanel({
         {/* Ticks or unticks the whole list in one click — half-ticked while
             only some are in, so the box reads the list's state at a glance. */}
         {resumes.length > 1 && (
-          <label className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400 cursor-pointer select-none flex-shrink-0">
+          <label className="flex items-center gap-1.5 tf-caption cursor-pointer select-none flex-shrink-0">
             <input
               type="checkbox"
               checked={allIncluded}
@@ -232,7 +232,7 @@ export default function SelectedCandidatesPanel({
                         ? `Version ${chosen.number} of ${chosen.total} — chosen from the version list`
                         : hasMultiple ? `Latest of ${count} versions` : 'Only version'
                     }
-                    className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/15 tabular-nums"
+                    className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15 tabular-nums"
                   >
                     {shownTotal > 1 && <Layers className="w-3 h-3" />}
                     v{shownVersion}
@@ -243,7 +243,7 @@ export default function SelectedCandidatesPanel({
                   )}
                 </div>
                 {/* Role first, then how to reach them. */}
-                <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-slate-400 mt-0.5 min-w-0">
+                <div className="flex items-center gap-2 tf-meta mt-0.5 min-w-0">
                   {role && (
                     <span className="flex items-center gap-1 min-w-0">
                       <Briefcase className="w-3 h-3 flex-shrink-0" />
@@ -285,7 +285,7 @@ export default function SelectedCandidatesPanel({
       {tipText && (
         <div className="mt-3 flex items-start gap-2 rounded-lg bg-brand-orange/[0.08] border border-brand-orange/20 px-3 py-2">
           <Lightbulb className="w-3.5 h-3.5 text-brand-orange flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-700 dark:text-slate-300">
+          <p className="tf-meta">
             <span className="font-semibold">Tip:</span> {tipText}
           </p>
         </div>

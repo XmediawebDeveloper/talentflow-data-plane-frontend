@@ -56,7 +56,7 @@ export function DuplicateResumeDetectedModal({
         </DialogHeader>
 
         <div className="py-3 sm:py-4 overflow-y-auto flex-1">
-          <p className="text-sm text-gray-600 dark:text-slate-400 mb-3 sm:mb-4">
+          <p className="tf-body-secondary mb-3 sm:mb-4">
             This resume already exists in your Shared Resume Database.
             {jobTitle && (
               <> Do you still want to submit for scoring against <span className="font-medium text-gray-900 dark:text-slate-50">{jobTitle}</span>?</>
@@ -65,7 +65,7 @@ export function DuplicateResumeDetectedModal({
 
           {/* Uploaded File Info */}
           <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
-            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+            <div className="flex items-center gap-2 tf-body-secondary">
               <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
               <span className="font-medium">Uploaded File:</span>
               <span className="truncate">{fileName}</span>
@@ -80,37 +80,37 @@ export function DuplicateResumeDetectedModal({
             <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2">
                 <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                <span className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{existingResume.candidate_name || 'Unknown Candidate'}</span>
+                <span className="tf-row-name sm:text-base truncate">{existingResume.candidate_name || 'Unknown Candidate'}</span>
                 {existingResume.version && existingResume.version > 1 && (
-                  <span className="px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full">
+                  <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                     v{existingResume.version}
                   </span>
                 )}
               </div>
 
               {existingResume.email && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                <div className="flex items-center gap-2 tf-body-secondary">
                   <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                   <span className="truncate">{existingResume.email}</span>
                 </div>
               )}
 
               {existingResume.current_title && (
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+                <div className="flex items-center gap-2 tf-body-secondary">
                   <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                   <span className="truncate">{existingResume.current_title}</span>
                 </div>
               )}
 
               {existingResume.folder_name && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                <div className="flex items-center gap-2 tf-body-muted">
                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                   <span className="truncate">Folder: {existingResume.folder_name}</span>
                 </div>
               )}
 
               {existingResume.uploaded_at && (
-                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                <div className="flex items-center gap-2 tf-body-muted">
                   <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                   <span>Uploaded: {format(new Date(existingResume.uploaded_at), 'MMM d, yyyy')}</span>
                 </div>
@@ -131,7 +131,7 @@ export function DuplicateResumeDetectedModal({
               onClose();
             }}
             size="sm"
-            className="flex items-center justify-center gap-1.5 order-2"
+            className="items-center justify-center order-2"
           >
             <Eye className="w-3.5 h-3.5" />
             View Existing Record
@@ -144,7 +144,7 @@ export function DuplicateResumeDetectedModal({
               onClose();
             }}
             size="sm"
-            className="flex items-center justify-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3"
+            className="items-center justify-center bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3 focus-visible:ring-2 hover:shadow-md active:shadow-sm"
           >
             <ClipboardList className="w-3.5 h-3.5" />
             Proceed with Scoring

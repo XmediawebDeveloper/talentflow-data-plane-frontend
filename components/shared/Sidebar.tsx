@@ -237,7 +237,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                     <div
                       key={item.id}
                       aria-disabled="true"
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg tf-body-muted cursor-not-allowed opacity-50"
                       title={DISABLED_REASON_MESSAGE.plan}
                     >
                       <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />
@@ -254,7 +254,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
                   return (
                     <div
                       key={item.id}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm text-gray-400 cursor-not-allowed opacity-50"
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-lg tf-body-muted cursor-not-allowed opacity-50"
                       title="Renew your subscription to access this feature"
                     >
                       <item.icon className="w-4 h-4 flex-shrink-0 text-gray-300" />

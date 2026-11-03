@@ -60,9 +60,9 @@ function JobOpeningsConfigContent() {
   }, [activeTab, searchParams, pathname, router]);
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -81,10 +81,10 @@ function JobOpeningsConfigContent() {
               <Settings className="h-4 w-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+              <h1 className="tf-page-title">
                 Job Description Configuration
               </h1>
-              <p className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+              <p className="tf-body-secondary mt-0.5">
                 The lists every job description is built from. Pick a section to add, edit or
                 reorder its options.
               </p>
@@ -99,7 +99,7 @@ function JobOpeningsConfigContent() {
             <nav
               role="tablist"
               aria-label="Configuration sections"
-              className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
+              className="tf-card-soft flex flex-wrap items-center gap-2 p-1.5"
             >
               {TABS.map(({ id, label, icon: TabIcon }) => {
                 const active = activeTab === id;

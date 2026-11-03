@@ -193,7 +193,7 @@ function DroppableFolderItem({
           60-character folder would otherwise push the row wider than the
           column and run out over the table beside it. */}
       <span className={`flex-1 min-w-0 text-left truncate ${MENU_ITEM_SCALE_CLASS}`} title={folder.name}>{folder.name}</span>
-      <span className="flex-shrink-0 text-xs text-gray-500">({count})</span>
+      <span className="flex-shrink-0 tf-meta">({count})</span>
       {/* No actions on the fixtures: All Resumes is a view, and root and
           Archived Resumes can't be renamed or deleted, which is most of what
           the menu is for. Uploading into root happens through the page's
@@ -782,7 +782,7 @@ export default function FolderTree({
               <Plus className={`w-4 h-4 ${canCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
               {!canCreateSubfolder && (
-                <span className="text-xs text-gray-400 dark:text-slate-600 ml-auto">
+                <span className="tf-hint ml-auto">
                   {!canCreateFolder ? '(no permission)' : '(max depth)'}
                 </span>
               )}
@@ -1050,7 +1050,7 @@ export default function FolderTree({
         {regularFolders.length > 0 ? (
           regularFolders.map(folder => renderFolder(folder))
         ) : (
-          <p className="px-3 py-2 text-xs text-gray-500">No folders yet.</p>
+          <p className="px-3 py-2 tf-meta">No folders yet.</p>
         )}
       </div>
       </div>

@@ -99,9 +99,9 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
 
       {expanded && (
         <div className="mt-2">
-          <p className="text-xs font-medium text-gray-500 mb-1">Version history</p>
+          <p className="tf-caption mb-1">Version history</p>
           {loading && !lineage ? (
-            <div className="flex items-center gap-2 py-2 text-xs text-gray-500">
+            <div className="flex items-center gap-2 py-2 tf-meta">
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
               Loading versions...
             </div>
@@ -114,7 +114,7 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
               Couldn&apos;t load versions — retry
             </button>
           ) : !lineage || lineage.length === 0 ? (
-            <p className="py-2 text-xs text-gray-500">No other versions of this job.</p>
+            <p className="py-2 tf-meta">No other versions of this job.</p>
           ) : (
             <ul>
               {lineage.map((entry, index) => {
@@ -135,12 +135,12 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
                     <span aria-hidden="true" className="absolute left-2 top-1/2 w-4 h-px bg-gray-200" />
 
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 ring-1 ring-gray-200 flex items-center gap-1">
+                      <span className="tf-badge bg-gray-50 text-gray-700 ring-1 ring-gray-200 flex">
                         <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
                         v{entry.version_number ?? 1}
                       </span>
                       {entry.is_latest_version && (
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                        <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                           Latest
                         </span>
                       )}
@@ -148,7 +148,7 @@ export default function JDVersionHistory({ jdId, version, className = '' }: JDVe
                         {label}
                       </span>
                       {(entry.published_at || entry.created_at) && (
-                        <span className="text-xs text-gray-500">
+                        <span className="tf-meta">
                           {formatISTDate(entry.published_at || entry.created_at)}
                         </span>
                       )}

@@ -75,7 +75,7 @@ export default function ResumeHoverPreview({ resumeId, children }: ResumeHoverPr
         className="w-[360px] max-w-[calc(100vw-32px)] p-0 overflow-hidden bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-xl shadow-xl"
       >
         {current?.failed ? (
-          <p className="p-4 text-sm text-gray-500 dark:text-slate-400">Couldn&apos;t load the resume preview. Click View Resume to open it.</p>
+          <p className="p-4 tf-body-muted">Couldn&apos;t load the resume preview. Click View Resume to open it.</p>
         ) : !resume ? (
           <div className="p-4 space-y-3" aria-busy="true">
             <div className="flex items-center gap-3">
@@ -100,11 +100,11 @@ export default function ResumeHoverPreview({ resumeId, children }: ResumeHoverPr
                 {(resume.name || 'U').split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()}
               </div>
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{resume.name}</p>
-                {subtitle && <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{subtitle}</p>}
+                <p className="tf-row-title truncate">{resume.name}</p>
+                {subtitle && <p className="tf-meta truncate">{subtitle}</p>}
               </div>
             </div>
-            <div className="p-4 space-y-3 text-xs text-gray-600 dark:text-slate-400">
+            <div className="p-4 space-y-3 tf-meta">
               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
                 {present(resume.email) && (
                   <span className="flex items-center gap-1.5 min-w-0 col-span-2"><Mail className="w-3.5 h-3.5 flex-shrink-0 text-brand-blue" /><span className="truncate">{resume.email}</span></span>
@@ -142,7 +142,7 @@ export default function ResumeHoverPreview({ resumeId, children }: ResumeHoverPr
                 </div>
               )}
             </div>
-            <p className="px-4 py-2 text-2xs text-gray-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-800/60 border-t border-gray-100 dark:border-slate-800">
+            <p className="px-4 py-2 tf-micro-hint bg-slate-50 dark:bg-slate-800/60 border-t border-gray-100 dark:border-slate-800">
               Click View Resume to open the full resume
             </p>
           </>

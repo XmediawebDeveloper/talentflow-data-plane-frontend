@@ -40,12 +40,12 @@ export default function PublishedSummaryCard({
       <div className="min-w-0 flex-1 flex flex-wrap sm:flex-nowrap items-center justify-center sm:justify-start gap-x-1.5 gap-y-1 sm:gap-2 sm:whitespace-nowrap">
         {jobId && <JobIdBadge className="flex-shrink-0">{jobId}</JobIdBadge>}
         {jobName && (
-          <span className="min-w-0 break-words sm:truncate text-sm sm:text-base font-semibold text-gray-900" title={jobName}>
+          <span className="min-w-0 break-words sm:truncate tf-row-title sm:text-base" title={jobName}>
             {jobName}
           </span>
         )}
         {jobVersion != null && (
-          <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-gray-700 ring-1 ring-gray-200">
+          <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded tf-caption bg-slate-100 ring-1 ring-gray-200">
             V{jobVersion}
           </span>
         )}

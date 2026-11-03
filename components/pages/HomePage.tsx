@@ -534,7 +534,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             </div>
 
             {/* Main Headline */}
-            <h1 style={h1Style}>
+            <h1 className="tf-page-title" style={h1Style}>
               <span style={{ color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)' }}>Hire Smarter with</span>
               <br />
               <span style={gradientTextStyle}>AI-Powered Recruiting</span>

@@ -116,7 +116,7 @@ export default function SubscriptionInactiveModal() {
           </h2>
 
           {/* Subtitle */}
-          <p className="text-gray-600 dark:text-slate-400 text-sm">
+          <p className="tf-body-secondary">
             {isSuspended
               ? 'Your account access has been temporarily restricted.'
               : isExpired
@@ -152,7 +152,7 @@ export default function SubscriptionInactiveModal() {
 
           {/* Suspended Date */}
           {isSuspended && errorDetails?.suspended_at && (
-            <div className="flex items-center justify-center gap-2 text-sm text-gray-500 dark:text-slate-500 mb-4">
+            <div className="flex items-center justify-center gap-2 tf-body-muted mb-4">
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
@@ -164,7 +164,7 @@ export default function SubscriptionInactiveModal() {
 
           {/* Help Text */}
           <div className="bg-slate-50 dark:bg-slate-950 rounded-lg p-3 sm:p-4 mb-5 border border-gray-100 dark:border-slate-700/60">
-            <p className="text-sm text-gray-600 dark:text-slate-400 text-center">
+            <p className="tf-body-secondary text-center">
               {isSuspended
                 ? 'If you believe this is an error or need assistance, please contact our support team.'
                 : 'Renew your subscription to restore full access to your account.'
@@ -177,7 +177,7 @@ export default function SubscriptionInactiveModal() {
             {isExpired ? (
               <button
                 onClick={handleRenewSubscription}
-                className="w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                className="tf-btn tf-btn-primary w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex whitespace-normal font-normal"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -187,7 +187,7 @@ export default function SubscriptionInactiveModal() {
             ) : (
               <button
                 onClick={handleContactSupport}
-                className="w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                className="tf-btn tf-btn-primary w-full px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex whitespace-normal font-normal"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -198,7 +198,7 @@ export default function SubscriptionInactiveModal() {
 
             <button
               onClick={handleLogout}
-              className="w-full px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="tf-btn tf-btn-secondary w-full px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex whitespace-normal font-normal"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />

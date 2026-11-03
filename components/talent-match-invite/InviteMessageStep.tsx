@@ -53,7 +53,7 @@ export default function InviteMessageStep({
             The message can’t be empty. Write one or reset to the template.
           </p>
         ) : (
-          <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">
+          <p className="mt-1 tf-meta">
             <code className="px-1 rounded bg-gray-100 dark:bg-slate-800">{CANDIDATE_NAME_PLACEHOLDER}</code> becomes each candidate’s name. Their personal link is added below the message.
           </p>
         )}
@@ -65,9 +65,9 @@ export default function InviteMessageStep({
           value={String(expiryDays)}
           onChange={(v) => onExpiry(Number(v))}
           options={EXPIRY_OPTIONS.map((o) => ({ value: String(o.value), label: o.label }))}
-          className="w-full sm:w-full text-sm px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300"
+          className="w-full sm:w-full tf-body px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg"
         />
-        <span className="text-xs text-gray-500 dark:text-slate-400">Candidates can open the link until it expires.</span>
+        <span className="tf-meta">Candidates can open the link until it expires.</span>
       </div>
     </div>
   );

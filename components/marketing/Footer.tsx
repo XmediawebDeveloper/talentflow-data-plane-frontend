@@ -17,7 +17,7 @@ export function Footer() {
               className="h-10 w-auto"
             />
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed">
+            <p className="tf-body-muted leading-relaxed">
               AI-powered recruitment solutions for agencies, companies, and
               freelance recruiters.
             </p>
@@ -131,7 +131,7 @@ export function Footer() {
         </div>
 
         <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-400 text-sm">
+          <p className="tf-body-muted">
             &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
           <div className="flex items-center gap-6">

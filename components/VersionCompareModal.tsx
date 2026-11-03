@@ -304,8 +304,8 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               <History className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">{title || 'Version Comparison'}</h2>
-              <p className="text-xs sm:text-sm text-gray-500">
+              <h2 className="tf-section-title sm:text-lg tracking-tight">{title || 'Version Comparison'}</h2>
+              <p className="tf-meta sm:text-sm">
                 {subtitle || `${olderLabel} vs ${newerLabel}`}
               </p>
             </div>
@@ -380,7 +380,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
               host shows when a single version is opened on its own. Older left,
               newer right, matching the diff panes below. */}
           {(older.card || newer.card) && (
-            <div className="flex-shrink-0 grid grid-cols-1 lg:grid-cols-2 gap-2 p-3 max-sm:p-2 border-b border-gray-200 bg-gray-50 dark:bg-slate-950 dark:border-slate-700 max-h-[35%] max-sm:max-h-none overflow-y-auto max-sm:overflow-visible">
+            <div className="tf-grid-split flex-shrink-0 p-3 max-sm:p-2 border-b border-gray-200 bg-gray-50 dark:bg-slate-950 dark:border-slate-700 max-h-[35%] max-sm:max-h-none overflow-y-auto max-sm:overflow-visible">
               {older.card}
               {newer.card}
             </div>
@@ -415,7 +415,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                   <p className="text-xs text-red-600 mt-0.5 truncate">{older.name}</p>
                 </div>
                 <div ref={leftPaneRef} onScroll={handlePaneScroll('left')} className="flex-1 overflow-y-auto max-sm:overflow-visible p-4 max-sm:p-2">
-                  <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
+                  <div className="tf-panel p-5 max-sm:p-3">
                     {isMatchesMode
                       ? olderMatchLines.map((line, idx) => renderDiffLine(line, idx, 'left'))
                       : sidePairs.map((pair, idx) => renderDiffLine(pair.left, idx, 'left'))}
@@ -433,7 +433,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
                   <p className="text-xs text-green-600 mt-0.5 truncate">{newer.name}</p>
                 </div>
                 <div ref={rightPaneRef} onScroll={handlePaneScroll('right')} className="flex-1 overflow-y-auto max-sm:overflow-visible p-4 max-sm:p-2">
-                  <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
+                  <div className="tf-panel p-5 max-sm:p-3">
                     {isMatchesMode
                       ? newerMatchLines.map((line, idx) => renderDiffLine(line, idx, 'right'))
                       : sidePairs.map((pair, idx) => renderDiffLine(pair.right, idx, 'right'))}
@@ -444,7 +444,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
           ) : (
             /* Unified */
             <div className="h-full max-sm:h-auto overflow-y-auto max-sm:overflow-visible p-6 max-sm:p-2">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-sm:p-3 max-w-3xl mx-auto">
+              <div className="tf-card-soft p-8 max-sm:p-3 max-w-3xl mx-auto">
                 {shouldRenderMarkdown ? diff.lines.map((line, idx) => (
                   renderMarkdownDiffLine(line, idx, 'unified')
                 )) : diff.lines.map((line, idx) => {
@@ -453,7 +453,7 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
 
                   if (isSectionHeader(trimmed)) {
                     return (
-                      <h3 key={idx} className="text-base font-bold mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide text-gray-900">
+                      <h3 key={idx} className="tf-section-title mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide">
                         {trimmed}
                       </h3>
                     );

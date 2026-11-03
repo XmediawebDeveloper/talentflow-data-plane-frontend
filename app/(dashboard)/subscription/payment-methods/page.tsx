@@ -314,9 +314,9 @@ export default function PaymentMethodsPage() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Payment Methods' }]} />
 
         {/* Header — title + add button */}
@@ -343,7 +343,7 @@ export default function PaymentMethodsPage() {
         {loading && (
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6">
+              <div key={i} className="tf-panel p-5 sm:p-6">
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 items-center gap-4">
                     <Skeleton className="h-12 w-16 shrink-0 rounded-xl" />
@@ -367,12 +367,12 @@ export default function PaymentMethodsPage() {
 
         {/* Empty State */}
         {!loading && paymentMethods.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="tf-card-soft p-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <CreditCard className="h-7 w-7 text-brand-blue" />
             </div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No payment methods</h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add a payment method to manage your subscription</p>
+            <h3 className="tf-section-title">No payment methods</h3>
+            <p className="mt-1 tf-body-muted">Add a payment method to manage your subscription</p>
             <button
               onClick={() => {
                 if (!canAdd) return;
@@ -415,13 +415,13 @@ export default function PaymentMethodsPage() {
                           {method.card_type} •••• {method.card_last_four}
                         </p>
                         {method.is_default && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                          <span className="tf-badge bg-brand-teal/10 text-2xs text-brand-teal ring-1 ring-brand-teal/15">
                             <ShieldCheck className="h-3 w-3" />
                             Default
                           </span>
                         )}
                       </div>
-                      <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">
+                      <p className="mt-1 tf-body-muted">
                         {method.cardholder_name} · Expires {String(method.expiry_month).padStart(2, '0')}/{method.expiry_year}
                       </p>
                     </div>
@@ -471,14 +471,14 @@ export default function PaymentMethodsPage() {
         )}
 
         {/* Secure Payments Info */}
-        <div className="mt-8 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-6">
+        <div className="tf-card-soft mt-8 p-5 sm:p-6">
           <div className="flex items-start gap-4">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-teal/10 ring-1 ring-brand-teal/15 shadow-sm shadow-brand-teal/10">
               <ShieldCheck className="h-5 w-5 text-brand-teal" />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Secure Payments</h3>
-              <p className="mt-1 text-sm text-gray-600 dark:text-slate-400">
+              <h3 className="tf-row-title">Secure Payments</h3>
+              <p className="mt-1 tf-body-secondary">
                 All payment information is securely processed and stored. We use industry-standard encryption to protect your data.
               </p>
             </div>
@@ -518,11 +518,11 @@ export default function PaymentMethodsPage() {
             <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
               {/* Card Information */}
               <div className="space-y-4">
-                <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Card Information</h3>
+                <h3 className="tf-eyebrow tracking-[0.16em]">Card Information</h3>
 
                 {/* Cardholder Name */}
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  <span className="mb-2 block tf-label">
                     Cardholder Name <span className="text-brand-orange">*</span>
                   </span>
                   <input
@@ -530,7 +530,7 @@ export default function PaymentMethodsPage() {
                     value={formData.cardholderName}
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
                     placeholder="Name as it appears on the card"
-                    className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                    className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
                       formErrors.cardholderName ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                     }`}
                   />
@@ -541,7 +541,7 @@ export default function PaymentMethodsPage() {
 
                 {/* Card Number */}
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                  <span className="mb-2 block tf-label">
                     Card Number <span className="text-brand-orange">*</span>
                   </span>
                   <div className={`flex items-center gap-2 rounded-xl border bg-white dark:bg-slate-900 px-3 py-2.5 transition-all focus-within:ring-4 ${
@@ -563,9 +563,9 @@ export default function PaymentMethodsPage() {
                 </label>
 
                 {/* Expiry and CVV */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+                <div className="tf-grid-3">
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                    <span className="mb-2 block tf-label">
                       Month <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -574,7 +574,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })}
                       placeholder="MM"
                       maxLength={2}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
                         formErrors.expiryMonth ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -583,7 +583,7 @@ export default function PaymentMethodsPage() {
                     )}
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                    <span className="mb-2 block tf-label">
                       Year <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -592,7 +592,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, expiryYear: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="YYYY"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
                         formErrors.expiryYear ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -601,7 +601,7 @@ export default function PaymentMethodsPage() {
                     )}
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">
+                    <span className="mb-2 block tf-label">
                       CVV <span className="text-brand-orange">*</span>
                     </span>
                     <input
@@ -610,7 +610,7 @@ export default function PaymentMethodsPage() {
                       onChange={(e) => setFormData({ ...formData, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })}
                       placeholder="•••"
                       maxLength={4}
-                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
+                      className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 h-9 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
                         formErrors.cvv ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
@@ -625,45 +625,45 @@ export default function PaymentMethodsPage() {
               <div className="space-y-4 border-t border-gray-100 dark:border-slate-700/60 pt-5">
                 <div className="flex items-center gap-2">
                   <Building2 className="h-4 w-4 text-brand-blue" />
-                  <h3 className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Billing Address (Optional)</h3>
+                  <h3 className="tf-eyebrow tracking-[0.16em]">Billing Address (Optional)</h3>
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Street Address</span>
+                  <span className="mb-2 block tf-label">Street Address</span>
                   <input
                     type="text"
                     value={formData.billingAddress}
                     onChange={(e) => setFormData({ ...formData, billingAddress: e.target.value })}
                     placeholder="Street and number"
-                    className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                    className="tf-input rounded-xl px-4"
                   />
                 </label>
 
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="tf-grid-2">
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">City</span>
+                    <span className="mb-2 block tf-label">City</span>
                     <input
                       type="text"
                       value={formData.billingCity}
                       onChange={(e) => setFormData({ ...formData, billingCity: e.target.value })}
                       placeholder="City"
-                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="tf-input rounded-xl px-4"
                     />
                   </label>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">ZIP Code</span>
+                    <span className="mb-2 block tf-label">ZIP Code</span>
                     <input
                       type="text"
                       value={formData.billingZip}
                       onChange={(e) => setFormData({ ...formData, billingZip: e.target.value })}
                       placeholder="Postal code"
-                      className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                      className="tf-input rounded-xl px-4"
                     />
                   </label>
                 </div>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Country</span>
+                  <span className="mb-2 block tf-label">Country</span>
                   <FilterSelect
                     value={formData.billingCountry}
                     onChange={(v) => setFormData({ ...formData, billingCountry: v })}
@@ -699,9 +699,9 @@ export default function PaymentMethodsPage() {
                   id="setAsDefault"
                   checked={formData.setAsDefault}
                   onChange={(e) => setFormData({ ...formData, setAsDefault: e.target.checked })}
-                  className="h-4 w-4 rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/30"
+                  className="tf-checkbox focus:ring-brand-blue/30"
                 />
-                <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Set as default payment method</span>
+                <span className="tf-label">Set as default payment method</span>
               </label>
             </div>
 
@@ -710,7 +710,7 @@ export default function PaymentMethodsPage() {
               <button
                 onClick={handleSubmit}
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                className="tf-btn tf-btn-primary rounded-xl bg-brand-blue px-5 py-2.5 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70 whitespace-normal hover:bg-brand-blue"
               >
                 {submitting ? (
                   <>

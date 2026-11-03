@@ -112,11 +112,11 @@ export default function JobInterviewVersionPicker({
   return (
     <div>
       <div className="flex items-center gap-2 flex-wrap mb-3">
-        <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+        <span className="tf-row-title">
           {multiple ? 'Select Interview Versions' : 'Select Interview Version'}
         </span>
         {job?.jd_short_id && <JobIdBadge>{job.jd_short_id}</JobIdBadge>}
-        {job && (job.jd_title || job.position) && <span className="min-w-0 text-sm text-gray-600 dark:text-slate-400 truncate">{job.jd_title || job.position}</span>}
+        {job && (job.jd_title || job.position) && <span className="min-w-0 tf-body-secondary truncate">{job.jd_title || job.position}</span>}
         {job && !spansJobVersions && (
           <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">
             V{jobVersionNumber ?? job.jd_version ?? 1}
@@ -127,10 +127,10 @@ export default function JobInterviewVersionPicker({
       {versions.length === 0 ? (
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 flex flex-col items-center gap-2 text-center px-4">
           <Video className="w-8 h-8 text-gray-300" />
-          <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
+          <div className="tf-label">
             {allVersions.length === 0 ? 'No AI interview for this job yet' : 'No active interview version for this job'}
           </div>
-          <div className="text-xs text-gray-500 dark:text-slate-400">
+          <div className="tf-meta">
             {allVersions.length === 0
               ? 'Create an interview for this job from AI Interviews, then invite candidates here.'
               : 'Publish an interview version for this job from AI Interviews, then invite candidates here.'}
@@ -202,7 +202,7 @@ export default function JobInterviewVersionPicker({
                         of its own) — as the assessment cards lead with the
                         assessment's name; the pills carry the versions. */}
                     <span
-                      className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]"
+                      className="min-w-0 tf-row-title sm:text-base [overflow-wrap:anywhere]"
                       title={c.display_id ? `${c.position || c.jd_title || 'AI Interview'} (${c.display_id})` : undefined}
                     >
                       {c.position || c.jd_title || 'AI Interview'}
@@ -218,7 +218,7 @@ export default function JobInterviewVersionPicker({
                       </span>
                     )}
                   </div>
-                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap text-xs text-gray-500 dark:text-slate-400">
+                  <div className="mt-1.5 flex items-center gap-x-4 gap-y-1 flex-wrap tf-meta">
                     {/* Created date with its time. */}
                     {c.created_at && (
                       <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{formatIST(c.created_at)}</span>
@@ -233,7 +233,7 @@ export default function JobInterviewVersionPicker({
                           <span
                             key={`${round.type}-${index}`}
                             title={ROUND_LABELS[round.type] || round.type}
-                            className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
+                            className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
                           >
                             {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
                           </span>
@@ -276,7 +276,7 @@ export default function JobInterviewVersionPicker({
                 ? 'You’re about to use the selected interview versions to invite candidates.'
                 : 'You’re about to use this interview version to invite candidates.'}
             </div>
-            <div className="text-xs text-gray-600 dark:text-slate-400 mt-0.5">
+            <div className="tf-meta mt-0.5">
               {multiple
                 ? 'Each candidate you invite receives every interview version you select.'
                 : 'Once selected, this version will be used for the candidate invitation.'}

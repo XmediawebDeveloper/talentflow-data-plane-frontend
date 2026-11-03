@@ -1,6 +1,7 @@
 'use client';
 
-import { Eye, Loader2, MoreVertical, Sparkles } from 'lucide-react';
+import { Briefcase, Eye, Loader2, MapPin, MoreVertical, Sparkles, TrendingUp, Users } from 'lucide-react';
+import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 /* The app's shared status vocabulary. `getDisplayStatus` is what turns a
@@ -154,12 +155,12 @@ export default function AIMatchVersionHistoryTable({
   if (loading && !versions) {
     // Skeleton mirroring this table's own 10 columns instead of a text spinner.
     return (
-      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
+      <div className="hidden lg:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
         <table className="w-full text-xs">
           <thead>
             <tr className="text-left">
               {['Version', 'Status', 'Experience / Industry', 'Location', 'Work Mode / Type', 'Posted On / By', 'Last Match Date', 'Number of Runs', 'Total Matches', 'Actions'].map((h) => (
-                <th key={h} className="py-2.5 px-3 bg-white dark:bg-slate-900 text-xs font-semibold text-gray-600 dark:text-slate-300"><Skeleton className="h-3 w-16" /></th>
+                <th key={h} className="tf-th-cell bg-white dark:bg-slate-900 tf-th"><Skeleton className="h-3 w-16" /></th>
               ))}
             </tr>
           </thead>
@@ -167,7 +168,7 @@ export default function AIMatchVersionHistoryTable({
             {Array.from({ length: 3 }).map((_, r) => (
               <tr key={r}>
                 {Array.from({ length: 10 }).map((__, c) => (
-                  <td key={c} className="py-2.5 px-3"><Skeleton className={`h-3.5 ${c === 9 ? 'w-7' : 'w-16'}`} /></td>
+                  <td key={c} className="tf-td"><Skeleton className={`h-3.5 ${c === 9 ? 'w-7' : 'w-16'}`} /></td>
                 ))}
               </tr>
             ))}
@@ -191,7 +192,7 @@ export default function AIMatchVersionHistoryTable({
 
   if (!versions || versions.length === 0) {
     return (
-      <p className="py-3 px-1 text-xs text-gray-500 dark:text-slate-500">
+      <p className="py-3 px-1 tf-meta">
         No other match runs for this job.
       </p>
     );
@@ -207,20 +208,20 @@ export default function AIMatchVersionHistoryTable({
         applied here since this table renders its own rows instead of
         sharing that component (match sessions have no version field to hang
         off its Job-shaped row model). */}
-    <div className="hidden md:block overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20">
+    <div className="hidden lg:block overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20">
       <table className="w-full text-xs">
         <thead>
           <tr className="text-left">
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Version</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Status</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Experience / Industry</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Location</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Work Mode / Type</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Posted On / By</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Last Match Date / By</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Number of Runs</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-xs">Total Matches</th>
-            <th className="py-2.5 px-3 font-semibold text-gray-600 bg-white dark:bg-slate-900 dark:text-slate-300 text-right text-xs">Actions</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Version</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Status</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Experience / Industry</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Location</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Work Mode / Type</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Posted On / By</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Last Match Date / By</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Number of Runs</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900">Total Matches</th>
+            <th className="tf-th-cell tf-th bg-white dark:bg-slate-900 text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -393,7 +394,7 @@ export default function AIMatchVersionHistoryTable({
     </div>
 
     {/* Mobile cards — the table is too wide below md */}
-    <div className="md:hidden space-y-2">
+    <MobileRecordList>
       {versions.map(({ session, versionNumber, lastMatchedAt, runCount }) => {
         const isLatest = versionNumber === latestVersionNumber;
         const job = resolveJob?.(session);
@@ -401,76 +402,77 @@ export default function AIMatchVersionHistoryTable({
         const cfg = label ? getStatusConfig(label) : undefined;
         const methodCfg = job?.status ? getCreationMethodConfig(job.creationMethod) : undefined;
         return (
-          <div
+          <MobileRecordCard
             key={session.id}
-            className={`rounded-lg border p-3 text-xs ${
-              isLatest
-                ? 'border-brand-blue/30 bg-brand-blue/[0.025] dark:border-brand-blue/40 dark:bg-brand-blue/[0.06]'
-                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-            }`}
-          >
-            <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                  v{versionNumber}
-                </span>
+            className={isLatest ? 'border-brand-blue/30 bg-brand-blue/[0.025] dark:border-brand-blue/40 dark:bg-brand-blue/[0.06]' : undefined}
+            idBadge={
+              <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                v{versionNumber}
+              </span>
+            }
+            badges={
+              <>
                 {isLatest && (
                   <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-2xs font-semibold tracking-wide">
                     LATEST
                   </span>
                 )}
-              </span>
-              {cfg && label ? (
-                <div className="flex flex-col items-end gap-1">
-                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                    {label}
-                  </span>
-                  {methodCfg && (
-                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${methodCfg.bg} ${methodCfg.text} ${methodCfg.border}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${methodCfg.dot}`} />
-                      {methodCfg.label}
+                {cfg && label ? (
+                  <>
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                      {label}
                     </span>
-                  )}
-                </div>
-              ) : (
-                <span className="text-gray-400 dark:text-slate-600">—</span>
-              )}
-            </div>
-            <div className="flex flex-col gap-1 text-gray-600 dark:text-slate-400 mb-2">
-              {(job?.experience || job?.industryType) && (
-                <span>
-                  {job.experience || '—'}
-                  {job.industryType && ` · ${formatIndustryType(job.industryType)}`}
-                </span>
-              )}
-              {job?.location && <span>{job.location}</span>}
-              {(job?.employmentType || job?.remoteType) && (
-                <span>
-                  {job.employmentType ? formatEmploymentType(job.employmentType) : '—'}
-                  {job.remoteType && ` · ${formatEmploymentType(job.remoteType)}`}
-                </span>
-              )}
-              {(job?.postedDate || job?.postedBy) && (
-                <span>
-                  Posted {job.postedDate ? formatISTDate(job.postedDate) : '—'}
-                  {job.postedBy && ` by ${job.postedBy}`}
-                </span>
-              )}
-              <span>Last Match Date: {formatIST(lastMatchedAt)} by {session.run_by_name || 'System'}</span>
-              <span>Number of Runs: {runCount}</span>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-gray-900 dark:text-slate-100 font-medium">{session.total_matches} total matches</span>
+                    {methodCfg && (
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border whitespace-nowrap ${methodCfg.bg} ${methodCfg.text} ${methodCfg.border}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${methodCfg.dot}`} />
+                        {methodCfg.label}
+                      </span>
+                    )}
+                  </>
+                ) : (
+                  <span className="text-xs text-gray-400 dark:text-slate-600">—</span>
+                )}
+              </>
+            }
+            meta={[
+              {
+                icon: <TrendingUp />,
+                label: (job?.experience || job?.industryType)
+                  ? <>{job.experience || '—'}{job.industryType && ` · ${formatIndustryType(job.industryType)}`}</>
+                  : null,
+              },
+              { icon: <MapPin />, label: job?.location || null },
+              {
+                icon: <Briefcase />,
+                label: (job?.employmentType || job?.remoteType)
+                  ? <>{job.employmentType ? formatEmploymentType(job.employmentType) : '—'}{job.remoteType && ` · ${formatEmploymentType(job.remoteType)}`}</>
+                  : null,
+              },
+            ]}
+            fields={[
+              {
+                label: 'Posted',
+                value: (job?.postedDate || job?.postedBy)
+                  ? <>{job.postedDate ? formatISTDate(job.postedDate) : '—'}{job.postedBy && ` by ${job.postedBy}`}</>
+                  : null,
+              },
+              { label: 'Last Match Date', value: `${formatIST(lastMatchedAt)} by ${session.run_by_name || 'System'}` },
+              { label: 'Number of Runs', value: runCount },
+            ]}
+            footer={
+              <MobileStatChip tone="info" icon={<Users />}>{session.total_matches} total matches</MobileStatChip>
+            }
+            actions={
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
                     aria-label="Actions"
                     title="Actions"
-                    className="p-2 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                    className="tf-icon-btn-outline"
                   >
-                    <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+                    <MoreVertical />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
@@ -495,11 +497,11 @@ export default function AIMatchVersionHistoryTable({
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
-            </div>
-          </div>
+            }
+          />
         );
       })}
-    </div>
+    </MobileRecordList>
     </>
   );
 }

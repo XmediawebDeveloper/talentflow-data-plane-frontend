@@ -11,6 +11,7 @@ import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay
 import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import { ASSESSMENT_JOB_LOCK_MESSAGE } from '@/lib/utils/assessmentJobLock';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 /**
  * Job Versions for an assessment row, expanded in place beneath it.
@@ -501,7 +502,7 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
   const label = jobVersionDisplayStatus(status, currentVersion);
   /* No status known yet (the JD lineage request is still in flight) - a dash,
      rather than asserting a state the table has not been told. */
-  if (!label) return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+  if (!label) return <span className="tf-body-muted">&mdash;</span>;
 
   const tone = getStatusConfig(label);
   return (
@@ -681,7 +682,7 @@ export function LatestBadge() {
 const sumKnown = (values: (number | undefined)[]): number | null =>
   values.some((v) => typeof v !== 'number') ? null : values.reduce<number>((sum, v) => sum + (v as number), 0);
 
-const UnknownMetric = () => <span className="text-sm text-gray-400">—</span>;
+const UnknownMetric = () => <span className="tf-body-muted">—</span>;
 
 function MetricCell({ value, label }: { value: number; label: string }) {
   // The number alone: the column header already names the metric, so repeating
@@ -689,7 +690,7 @@ function MetricCell({ value, label }: { value: number; label: string }) {
   // The word stays as the hover title and the accessible name.
   return (
     <span
-      className="text-sm font-semibold text-gray-900 dark:text-slate-100 whitespace-nowrap"
+      className="tf-row-title whitespace-nowrap"
       title={`${value} ${label}`}
       aria-label={`${value} ${label}`}
     >
@@ -743,7 +744,7 @@ function RoundWeightageCell({ assessment }: { assessment: AssessmentVersionRow }
     });
 
   if (rounds.length === 0) {
-    return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+    return <span className="tf-body-muted">&mdash;</span>;
   }
 
   return (
@@ -801,11 +802,11 @@ function CreatedCell({ createdOn, createdBy }: { createdOn?: string; createdBy?:
 
 /** A date over its time, both in IST. A missing date is a dash, never today. */
 function DateCell({ value }: { value?: string }) {
-  if (!value) return <span className="text-sm text-gray-500 dark:text-slate-400">—</span>;
+  if (!value) return <span className="tf-body-muted">—</span>;
   return (
     <>
-      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{formatISTDate(value)}</div>
-      <div className="text-xs text-gray-500 dark:text-slate-400 uppercase">{formatISTTime(value)}</div>
+      <div className="tf-row-title">{formatISTDate(value)}</div>
+      <div className="tf-meta uppercase">{formatISTTime(value)}</div>
     </>
   );
 }
@@ -1111,7 +1112,7 @@ export default function AssessmentVersionHistoryPanel({
                     onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
                     aria-label={`View job V${group.jobVersion} details`}
                     title={`View job V${group.jobVersion} details`}
-                    className="h-8 w-8 px-0 flex-shrink-0"
+                    className="h-8 w-8 flex-shrink-0"
                   >
                     <Eye className="w-4 h-4" />
                   </Button>
@@ -1202,7 +1203,7 @@ export default function AssessmentVersionHistoryPanel({
             );
           })()
         ) : (
-          <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
+          <span className="tf-meta">{vocabulary.childNone}</span>
         )}
         {/* …or last, beside the View Assessment button it
             belongs with. Same button either way. */}
@@ -1219,9 +1220,9 @@ export default function AssessmentVersionHistoryPanel({
         {/* Indented and tinted so the nesting is
             readable without a connector glyph per row. */}
         <div className="px-3 sm:px-4 py-3 bg-slate-100/70 dark:bg-slate-800/60 border-t border-gray-200 dark:border-slate-700">
-          <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
+          <div className="tf-panel overflow-hidden">
             <div className="px-3 pt-2.5 pb-1.5">
-              <h5 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
+              <h5 className="min-w-0 tf-row-title">
                 {vocabulary.childVersionsHeading}{' '}
                 <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
               </h5>
@@ -1276,7 +1277,7 @@ export default function AssessmentVersionHistoryPanel({
                           (showsAssessmentSelect ? 1 : 0) +
                           (showsAssessmentActions ? 1 : 0)
                         }
-                        className="px-3 sm:px-4 py-4 text-xs text-gray-500 dark:text-slate-400"
+                        className="tf-td tf-meta"
                       >
                         This job version has an assessment, but its details could not be
                         loaded. Reopen this panel to try again.
@@ -1348,7 +1349,7 @@ export default function AssessmentVersionHistoryPanel({
                             the choice was made in. */}
                         {showsAssessmentSelect && (
                           <td
-                            className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle"
+                            className="tf-td whitespace-nowrap"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <input
@@ -1370,42 +1371,42 @@ export default function AssessmentVersionHistoryPanel({
                             />
                           </td>
                         )}
-                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                        <td className="tf-td whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5">
                             <VersionChip kind="assessment" version={assessment.version} />
                             {(assessment.version ?? 1) === newestAssessmentVersion && <LatestBadge />}
                           </span>
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                        <td className="tf-td whitespace-nowrap">
                           <StatusChip label={statusLabel} />
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                        <td className="tf-td whitespace-nowrap">
                           <DateCell value={assessment.created_at} />
                         </td>
                         <td
-                          className="px-3 sm:px-4 py-2.5 text-sm font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap max-w-[160px] truncate align-middle"
+                          className="tf-td tf-row-name whitespace-nowrap max-w-[160px] truncate"
                           title={assessment.created_by_name || ''}
                         >
                           {assessment.created_by_name || '—'}
                         </td>
-                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                        <td className="tf-td whitespace-nowrap">
                           {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
                         </td>
                         {vocabulary.extraDetailColumn && (
-                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          <td className="tf-td whitespace-nowrap">
                             {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
                           </td>
                         )}
-                        <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
+                        <td className="tf-td whitespace-nowrap text-center">
                           {typeof invitations === 'number'
                             ? <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                             : <UnknownMetric />}
                         </td>
                         {vocabulary.childCompletedColumn && (
-                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle text-center">
+                          <td className="tf-td whitespace-nowrap text-center">
                             {typeof assessment.completed_count === 'number'
                               ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
-                              : <span className="text-sm text-gray-400">—</span>}
+                              : <span className="tf-body-muted">—</span>}
                           </td>
                         )}
                         {/* Cell and header are gated
@@ -1416,7 +1417,7 @@ export default function AssessmentVersionHistoryPanel({
                             shifts every column right
                             of it out of alignment. */}
                         {showsAssessmentActions && (
-                          <td className="px-3 sm:px-4 py-2.5 whitespace-nowrap align-middle">
+                          <td className="tf-td whitespace-nowrap">
                             {/* gap-1.5 matches the spacing
                                 inside the quick-action
                                 group, so all four
@@ -1441,7 +1442,7 @@ export default function AssessmentVersionHistoryPanel({
                                   onClick={() => onViewAssessment(assessment)}
                                   aria-label={`View assessment V${assessment.version ?? 1} details`}
                                   title={`View assessment V${assessment.version ?? 1} details`}
-                                  className="h-8 w-8 px-0 flex-shrink-0"
+                                  className="h-8 w-8 flex-shrink-0"
                                 >
                                   <Eye className="w-4 h-4" />
                                 </Button>
@@ -1492,12 +1493,12 @@ export default function AssessmentVersionHistoryPanel({
           array, empty at worst), so the spinner never showed and the panel
           printed "No version history" until the lineage request landed. */}
       {loading && groups.length === 0 ? (
-        <div className="flex items-center gap-2 py-2 text-xs text-gray-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 py-2 tf-meta">
           <RefreshCw className="w-3.5 h-3.5 animate-spin" />
           Loading versions...
         </div>
       ) : groups.length === 0 ? (
-        <p className="py-2 text-xs text-gray-500 dark:text-slate-400">
+        <p className="py-2 tf-meta">
           No version history for this assessment.
         </p>
       ) : (
@@ -1508,7 +1509,7 @@ export default function AssessmentVersionHistoryPanel({
           <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
             <div className="flex items-center gap-2 min-w-0">
               <FileText className="w-4 h-4 text-brand-blue flex-shrink-0" />
-              <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">
+              <p className="tf-row-title">
                 Job Versions{' '}
                 <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
               </p>
@@ -1520,45 +1521,47 @@ export default function AssessmentVersionHistoryPanel({
             wide table, as the JD list does — values under their names, the
             actions below, and the version's interviews opening inside it. */}
         {jdStyle && (
-          <div className="sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 divide-y divide-gray-200 overflow-hidden bg-white dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:divide-slate-700">
+          <MobileRecordList>
             {(paginated ? pageSlice(groups, jobVersionsPage, jobVersionsPageSize) : groups).map((group) => {
               const isOpen = expandedJobVersions.has(group.jobVersion);
               const count = group.assessments.length;
-              const details: [string, ReactNode][] = [
-                ['Experience', group.experience || '—'],
-                ['Created', <CreatedCell key="c" createdOn={group.createdOn} createdBy={group.createdBy} />],
-                [vocabulary.childPlural, count],
-                ['Invitations Sent', group.totalInvitations ?? '—'],
-                ['Completed', group.totalCompleted ?? '—'],
-              ];
               return (
-                <div
+                <MobileRecordCard
                   key={`job-card-${group.jobVersion}`}
-                  className={`p-3 text-xs text-gray-600 dark:text-slate-400 ${
-                    group.isLatestJobVersion ? 'bg-brand-blue/[0.025] dark:bg-brand-blue/[0.06]' : ''
-                  }`}
+                  className={group.isLatestJobVersion ? 'bg-brand-blue/[0.025] dark:bg-brand-blue/[0.06]' : undefined}
+                  idBadge={<VersionChip kind="job" version={group.jobVersion} />}
+                  badges={
+                    <>
+                      {group.isLatestJobVersion && <LatestBadge />}
+                      <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
+                    </>
+                  }
+                  fields={[
+                    { label: 'Experience', value: group.experience || '—' },
+                    { label: 'Created', value: <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} /> },
+                  ]}
+                  footer={
+                    <>
+                      <MobileStatChip tone="info">
+                        {count} {vocabulary.childPlural}
+                      </MobileStatChip>
+                      <MobileStatChip tone="neutral">
+                        {group.totalInvitations ?? '—'} Invitations Sent
+                      </MobileStatChip>
+                      <MobileStatChip tone="success">
+                        {group.totalCompleted ?? '—'} Completed
+                      </MobileStatChip>
+                    </>
+                  }
+                  actions={renderJobVersionActions(group)}
                 >
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <VersionChip kind="job" version={group.jobVersion} />
-                    {group.isLatestJobVersion && <LatestBadge />}
-                    <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
-                  </div>
-                  <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-[7rem_1fr] gap-x-2 gap-y-1">
-                    {details.map(([label, value]) => (
-                      <div key={label} className="contents">
-                        <dt className="text-gray-500 dark:text-slate-400">{label}</dt>
-                        <dd className="text-gray-800 dark:text-slate-200 font-medium min-w-0 [overflow-wrap:anywhere]">{value}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                  <div className="mt-2.5">{renderJobVersionActions(group)}</div>
                   {group.hasAssessment && isOpen && (
-                    <div className="mt-2.5 -mx-3 -mb-3">{renderJobVersionChildren(group)}</div>
+                    <div className="mt-3 -mx-4">{renderJobVersionChildren(group)}</div>
                   )}
-                </div>
+                </MobileRecordCard>
               );
             })}
-          </div>
+          </MobileRecordList>
         )}
         {/* One shell owns BOTH scroll axes (x on narrow screens, y past 4 job
             versions), so header and body live in one <table> and their columns
@@ -1566,13 +1569,13 @@ export default function AssessmentVersionHistoryPanel({
             inner table is open — an expanded list has to be readable without
             fighting a fixed window. */}
         <div className={jdStyle
-          ? 'max-sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 bg-white dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 overflow-hidden'
+          ? 'max-lg:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 bg-white dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 overflow-hidden'
           : 'rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden'}>
           {/* Heading left, the host's control right - the table's own top
               corner, above the rows it acts on. */}
           {!jdStyle && (
           <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
-            <h4 className="min-w-0 text-sm font-semibold text-gray-900 dark:text-slate-100">
+            <h4 className="min-w-0 tf-row-title">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
             </h4>
@@ -1581,7 +1584,9 @@ export default function AssessmentVersionHistoryPanel({
           )}
 
           <div
-            className={`overflow-x-auto ${
+            /* Without `jdStyle` there is no phone card list above, so the
+               table is desktop-only here and the cards below stand in for it. */
+            className={`${jdStyle ? '' : DESKTOP_TABLE_ONLY} overflow-x-auto ${
               groups.length > 4 && expandedJobVersions.size === 0
                 ? 'overflow-y-auto max-h-[320px] overscroll-contain'
                 : ''
@@ -1776,6 +1781,65 @@ export default function AssessmentVersionHistoryPanel({
               </tbody>
             </table>
           </div>
+          {!jdStyle && (
+            <MobileRecordList className="px-3 pb-3">
+              {(paginated ? pageSlice(groups, jobVersionsPage, jobVersionsPageSize) : groups).map((group) => {
+                const count = group.assessments.length;
+                const hasAssessments = group.hasAssessment;
+                const jobVersionDimmed =
+                  !!activeSelection && activeSelection.jobVersion !== group.jobVersion;
+                const isOpen = expandedJobVersions.has(group.jobVersion);
+                const holdsSelection =
+                  (multiSelect ? selectedAssessmentIds!.length > 0 : !!selectedAssessmentId)
+                  && group.assessments.some((child) => isAssessmentPicked(child.id));
+                return (
+                  <MobileRecordCard
+                    key={`job-card-${group.jobVersion}`}
+                    data-tf-job-version-open={isOpen ? 'true' : undefined}
+                    selected={holdsSelection}
+                    className={jobVersionDimmed ? 'opacity-60 hover:opacity-100' : undefined}
+                    onClick={hasAssessments ? () => toggleJobVersion(group.jobVersion) : undefined}
+                    idBadge={<VersionChip kind="job" version={group.jobVersion} />}
+                    badges={
+                      <>
+                        {group.isLatestJobVersion && <LatestBadge />}
+                        <JobStatusChip status={group.jobStatus} currentVersion={group.jobCurrentVersion} />
+                      </>
+                    }
+                    fields={[
+                      {
+                        label: 'Experience',
+                        value: group.experience || (group.experiencePending
+                          ? <span aria-label="Loading experience" className="inline-block h-4 w-16 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+                          : '—'),
+                      },
+                      { label: 'Created', value: <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} /> },
+                    ]}
+                    footer={
+                      <>
+                        <MobileStatChip tone="info">
+                          {count} {count === 1 ? vocabulary.childSingular : vocabulary.childPlural}
+                        </MobileStatChip>
+                        <MobileStatChip tone="neutral">
+                          {group.totalInvitations === null ? '—' : group.totalInvitations} {group.totalInvitations === 1 ? 'Invitation' : 'Invitations'}
+                        </MobileStatChip>
+                        <MobileStatChip tone="success">
+                          {group.totalCompleted === null ? '—' : group.totalCompleted} Completed
+                        </MobileStatChip>
+                        <div className="w-full">{renderJobVersionActions(group)}</div>
+                      </>
+                    }
+                  >
+                    {hasAssessments && isOpen && (
+                      <div className="mt-3 -mx-4" onClick={(e) => e.stopPropagation()}>
+                        {renderJobVersionChildren(group)}
+                      </div>
+                    )}
+                  </MobileRecordCard>
+                );
+              })}
+            </MobileRecordList>
+          )}
           {paginated && groups.length > 0 && (
             <div>
               <Pagination

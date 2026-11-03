@@ -28,6 +28,7 @@ import {
   describeViolation, summarizeViolations,
 } from './violationTaxonomy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface IntegrityCheckTabProps {
   violations: ViolationRecord[];
@@ -154,7 +155,7 @@ function ConfidenceTag({ record }: { record: ViolationRecord }) {
   const c = confidenceOfViolation(record);
   if (!c) return null;
   return c === 'high' ? (
-    <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
+    <span className="tf-badge text-2xs tracking-wide bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
   ) : (
     <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
   );
@@ -395,7 +396,7 @@ export default function IntegrityCheckTab({
           </div>
           <div className="min-w-0">
             <h2 className={`text-base font-semibold tracking-tight ${verdict.title}`}>{verdict.headline}</h2>
-            <p className="text-sm text-gray-600 mt-1 max-w-3xl">{verdict.body}</p>
+            <p className="tf-body-secondary mt-1 max-w-3xl">{verdict.body}</p>
             {verdict.recommendation && (
               <span className={`inline-flex items-center gap-1.5 mt-3 text-xs font-semibold px-2.5 py-1 rounded-lg ${SEV_PILL[verdict.tone === 'clean' ? 'clean' : verdict.tone]}`}>
                 <ShieldAlert className="w-3.5 h-3.5" />
@@ -408,8 +409,8 @@ export default function IntegrityCheckTab({
 
       {/* ── AT A GLANCE ─────────────────────────────────────────────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">At a glance</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <h3 className="tf-row-title mb-3 tracking-tight">At a glance</h3>
+        <div className="tf-grid-stats">
           <GlanceTile
             label="Flags that count" value={summary.counted} tone="neutral"
             sub={summary.advisory > 0
@@ -424,7 +425,7 @@ export default function IntegrityCheckTab({
 
       {/* ── WHAT WE FOUND ───────────────────────────────────────────────── */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">What we found</h3>
+        <h3 className="tf-row-title mb-3 tracking-tight">What we found</h3>
         <div className="space-y-3">
           {categoryBlocks.map(({ key, groups: cg }) => {
             const def = CATEGORIES[key];
@@ -437,12 +438,12 @@ export default function IntegrityCheckTab({
                     {CATEGORY_ICON[key]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-gray-900 tracking-tight">{def.title}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{def.description}</p>
+                    <p className="tf-row-title tracking-tight">{def.title}</p>
+                    <p className="tf-meta mt-0.5">{def.description}</p>
                   </div>
                   <div className="text-right flex-none">
                     <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-400'}`}>{count}</div>
-                    <div className="text-2xs uppercase tracking-wide text-gray-400 mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
+                    <div className="tf-micro-hint uppercase tracking-wide mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
                   </div>
                 </div>
                 {key === 'advisory' && (
@@ -463,7 +464,7 @@ export default function IntegrityCheckTab({
                 <div className="flex flex-wrap gap-2 px-4 pb-3.5 pl-16">
                   {cg.map(g => key === 'advisory' ? (
                     // No Advisory filter in the Event log, so nothing to jump to.
-                    <span key={g.key} className="inline-flex items-center gap-2 text-xs px-2.5 py-1.5 rounded-lg bg-slate-50 text-gray-600 ring-1 ring-gray-100">
+                    <span key={g.key} className="inline-flex items-center gap-2 tf-meta px-2.5 py-1.5 rounded-lg bg-slate-50 ring-1 ring-gray-100">
                       <span className="font-semibold text-gray-800">{g.label}</span>
                       <span className="tabular-nums text-gray-500">{g.count}×</span>
                       <ConfidenceTag record={g.records[0]} />
@@ -484,7 +485,7 @@ export default function IntegrityCheckTab({
                 </div>
                 )}
                 {key === 'advisory' && showAdvisory && (
-                  <p className="px-4 pb-3.5 pl-16 text-2xs text-gray-400 italic">
+                  <p className="px-4 pb-3.5 pl-16 tf-micro-hint italic">
                     Kept separate from the violation count so the number reflects real integrity flags.
                   </p>
                 )}
@@ -497,8 +498,8 @@ export default function IntegrityCheckTab({
       {/* ── TIMELINE ────────────────────────────────────────────────────── */}
       {timelineMarks.length > 0 && durationSec > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">When it happened</h3>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm px-5 pt-5 pb-4">
+          <h3 className="tf-row-title mb-3 tracking-tight">When it happened</h3>
+          <div className="tf-card-soft px-5 pt-5 pb-4">
             <div className="relative h-14 mx-1.5">
               <div className="absolute left-0 right-0 top-9 h-0.5 bg-gray-200 rounded" />
               {firstSeriousMark && (
@@ -525,11 +526,11 @@ export default function IntegrityCheckTab({
                 );
               })}
             </div>
-            <div className="flex justify-between text-2xs text-gray-400 tabular-nums mx-1.5">
+            <div className="flex justify-between tf-micro-hint tabular-nums mx-1.5">
               <span>0:00</span>
               <span>{formatOffset(durationSec)} · end</span>
             </div>
-            <div className="flex flex-wrap gap-5 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-100">
+            <div className="flex flex-wrap gap-5 tf-meta mt-3 pt-3 border-t border-gray-100">
               <LegendDot tone="critical" label="Serious" />
               <LegendDot tone="warning" label="Moderate" />
               <LegendDot tone="info" label="Minor" />
@@ -540,7 +541,7 @@ export default function IntegrityCheckTab({
 
       {/* ── EVENT LOG ───────────────────────────────────────────────────── */}
       <div ref={eventLogRef} className="scroll-mt-24">
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Event log</h3>
+        <h3 className="tf-row-title mb-3 tracking-tight">Event log</h3>
         <div className="flex flex-wrap items-center gap-2 mb-3">
           {filterChips.map(c => (
             <button key={c.key} onClick={() => setFilter(c.key)}
@@ -575,7 +576,7 @@ export default function IntegrityCheckTab({
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell">
+        <div className={`bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
           {/* No rows, no width floor and no header — see `TABLE_EMPTY_PANEL_CLASS`.
               720px is above a phone's viewport, so the one empty cell centred
               across it put the message off-screen behind a scrollbar. */}
@@ -583,12 +584,12 @@ export default function IntegrityCheckTab({
             {(logView === 'type' ? shownGroups.length > 0 : chronoRows.length > 0) && (
             <thead className="bg-white border-b border-gray-100">
               <tr>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600 w-8"></th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What happened</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">What we saw</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">When</th>
-                <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-600">Severity</th>
-                <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-600">{logView === 'type' ? 'Times' : ''}</th>
+                <th className="tf-th-cell text-left tf-th w-8"></th>
+                <th className="tf-th-cell text-left tf-th">What happened</th>
+                <th className="tf-th-cell text-left tf-th">What we saw</th>
+                <th className="tf-th-cell text-left tf-th">When</th>
+                <th className="tf-th-cell text-left tf-th">Severity</th>
+                <th className="tf-th-cell text-right tf-th">{logView === 'type' ? 'Times' : ''}</th>
               </tr>
             </thead>
             )}
@@ -600,8 +601,8 @@ export default function IntegrityCheckTab({
                 const seek = off != null && hasRecording;
                 return (
                   <tr key={`t-${g.key}-${i}`} className="hover:bg-brand-blue/[0.02] transition-colors">
-                    <td className="px-4 py-3 align-top text-2xs text-gray-400 tabular-nums">{i + 1}</td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="tf-td align-top tf-micro-hint tabular-nums">{i + 1}</td>
+                    <td className="tf-td align-top">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${SEV_PILL[tone]}`}>
                           {CATEGORY_ICON[g.category]}
@@ -610,11 +611,11 @@ export default function IntegrityCheckTab({
                         <ConfidenceTag record={r} />
                       </div>
                     </td>
-                    <td className="tf-wrap px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch] whitespace-normal break-words">
+                    <td className="tf-td tf-wrap align-top tf-meta max-w-[34ch] whitespace-normal break-words">
                       {describeViolation(r) || <span className="text-gray-300">—</span>}
                       <EnvironmentVerificationDetail record={r} />
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="tf-td align-top">
                       {seek ? (
                         <button onClick={() => onJumpToRecording(off)}
                           title="Jump to this moment in the recording"
@@ -622,14 +623,14 @@ export default function IntegrityCheckTab({
                           <Play className="w-3 h-3" />{formatOffset(off)}
                         </button>
                       ) : (
-                        <span className="text-xs font-mono text-gray-500">{formatOffset(off)}</span>
+                        <span className="tf-meta font-mono">{formatOffset(off)}</span>
                       )}
-                      <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
+                      <div className="tf-micro-hint font-mono mt-0.5">{formatClock(r.timestamp)}</div>
                     </td>
-                    <td className="px-4 py-3 align-top">
+                    <td className="tf-td align-top">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[sev]}</span>
                     </td>
-                    <td className="px-4 py-3 align-top"></td>
+                    <td className="tf-td align-top"></td>
                   </tr>
                 );
               })}
@@ -642,7 +643,7 @@ export default function IntegrityCheckTab({
                 return (
                   <Fragment key={g.key}>
                     <tr className="hover:bg-brand-blue/[0.02] transition-colors">
-                      <td className="px-4 py-3 align-top">
+                      <td className="tf-td align-top">
                         {canExpand ? (
                           <button onClick={() => toggle(g.key)} aria-label={isOpen ? 'Collapse' : 'Expand'}
                             className="text-gray-400 hover:text-brand-blue">
@@ -650,7 +651,7 @@ export default function IntegrityCheckTab({
                           </button>
                         ) : null}
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="tf-td align-top">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${SEV_PILL[tone]}`}>
                             {CATEGORY_ICON[g.category]}
@@ -659,11 +660,11 @@ export default function IntegrityCheckTab({
                           <ConfidenceTag record={g.records[0]} />
                         </div>
                       </td>
-                      <td className="tf-wrap px-4 py-3 align-top text-xs text-gray-600 max-w-[34ch] whitespace-normal break-words">
+                      <td className="tf-td tf-wrap align-top tf-meta max-w-[34ch] whitespace-normal break-words">
                         {describeViolation(g.records[0]) || <span className="text-gray-300">—</span>}
                         <EnvironmentVerificationDetail record={g.records[0]} />
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="tf-td align-top">
                         {canSeek ? (
                           <button onClick={() => seekOffset(g.firstTs)}
                             title="Jump to this moment in the recording"
@@ -671,14 +672,14 @@ export default function IntegrityCheckTab({
                             <Play className="w-3 h-3" />{formatOffset(firstOff)}
                           </button>
                         ) : (
-                          <span className="text-xs font-mono text-gray-500">{formatOffset(firstOff)}</span>
+                          <span className="tf-meta font-mono">{formatOffset(firstOff)}</span>
                         )}
-                        <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(g.firstTs)}</div>
+                        <div className="tf-micro-hint font-mono mt-0.5">{formatClock(g.firstTs)}</div>
                       </td>
-                      <td className="px-4 py-3 align-top">
+                      <td className="tf-td align-top">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[g.severity]}</span>
                       </td>
-                      <td className="px-4 py-3 align-top text-right tabular-nums font-semibold text-gray-800">{g.count}</td>
+                      <td className="tf-td align-top text-right tabular-nums font-semibold text-gray-800">{g.count}</td>
                     </tr>
                     {isOpen && g.records
                       .filter(r => r.timestamp)
@@ -689,25 +690,25 @@ export default function IntegrityCheckTab({
                         const seek = off != null && hasRecording;
                         return (
                           <tr key={`${g.key}-${ri}`} className="bg-slate-50/40">
-                            <td className="px-4 py-2"></td>
-                            <td className="px-4 py-2 text-xs text-gray-400 pl-10">Occurrence {ri + 1}</td>
-                            <td className="tf-wrap px-4 py-2 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
+                            <td className="tf-td"></td>
+                            <td className="tf-td tf-hint pl-10">Occurrence {ri + 1}</td>
+                            <td className="tf-td tf-wrap tf-meta max-w-[34ch] whitespace-normal break-words">
                               {describeViolation(r) || '—'}
                               <EnvironmentVerificationDetail record={r} />
                             </td>
-                            <td className="px-4 py-2">
+                            <td className="tf-td">
                               {seek ? (
                                 <button onClick={() => off != null && hasRecording && onJumpToRecording(off)}
                                   className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono">
                                   <Play className="w-3 h-3" />{formatOffset(off)}
                                 </button>
                               ) : (
-                                <span className="text-xs font-mono text-gray-400">{formatOffset(off)}</span>
+                                <span className="tf-hint font-mono">{formatOffset(off)}</span>
                               )}
-                              <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
+                              <div className="tf-micro-hint font-mono mt-0.5">{formatClock(r.timestamp)}</div>
                             </td>
-                            <td className="px-4 py-2"></td>
-                            <td className="px-4 py-2"></td>
+                            <td className="tf-td"></td>
+                            <td className="tf-td"></td>
                           </tr>
                         );
                       })}
@@ -715,8 +716,8 @@ export default function IntegrityCheckTab({
                       const hidden = g.records.filter(r => r.timestamp).length - OCCURRENCE_LIMIT;
                       return hidden > 0 ? (
                         <tr className="bg-slate-50/40">
-                          <td className="px-4 py-2"></td>
-                          <td colSpan={5} className="px-4 py-2 pl-10 text-xs text-gray-400 italic">
+                          <td className="tf-td"></td>
+                          <td colSpan={5} className="tf-td pl-10 tf-hint italic">
                             +{hidden} more not listed — switch to “By time” to see every occurrence.
                           </td>
                         </tr>
@@ -731,7 +732,154 @@ export default function IntegrityCheckTab({
             </tbody>
           </table>
         </div>
-        <p className="text-2xs text-gray-400 mt-2.5">
+        <MobileRecordList
+          empty={<div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-400 bg-white rounded-xl border border-gray-100`}>No events in this category.</div>}
+        >
+          {logView === 'time' && chronoRows.map(({ g, r }, i) => {
+            const sev = recruiterSeverity(r);
+            const tone = SEV_TONE[sev];
+            const off = offsetSeconds(r.timestamp, startTs);
+            const seek = off != null && hasRecording;
+            return (
+              <MobileRecordCard
+                key={`t-${g.key}-${i}`}
+                idBadge={<span className="tf-micro-hint tabular-nums">#{i + 1}</span>}
+                badges={
+                  <>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[sev]}</span>
+                    <ConfidenceTag record={r} />
+                  </>
+                }
+                title={
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${SEV_PILL[tone]}`}>
+                    {CATEGORY_ICON[g.category]}
+                    {labelOfViolation(r)}
+                  </span>
+                }
+                fields={[
+                  {
+                    label: 'When',
+                    value: (
+                      <>
+                        {seek ? (
+                          <button onClick={() => onJumpToRecording(off)}
+                            title="Jump to this moment in the recording"
+                            className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono">
+                            <Play className="w-3 h-3" />{formatOffset(off)}
+                          </button>
+                        ) : (
+                          <span className="tf-meta font-mono">{formatOffset(off)}</span>
+                        )}
+                        <span className="tf-micro-hint font-mono ml-1.5">{formatClock(r.timestamp)}</span>
+                      </>
+                    ),
+                  },
+                ]}
+              >
+                <div className="mt-2.5 tf-meta whitespace-normal break-words">
+                  <span className="tf-record-field-label">What we saw: </span>
+                  {describeViolation(r) || <span className="text-gray-300">—</span>}
+                  <EnvironmentVerificationDetail record={r} />
+                </div>
+              </MobileRecordCard>
+            );
+          })}
+          {logView === 'type' && shownGroups.map(g => {
+            const tone = SEV_TONE[g.severity];
+            const isOpen = expanded.has(g.key);
+            const firstOff = offsetSeconds(g.firstTs, startTs);
+            const canSeek = firstOff != null && hasRecording;
+            const canExpand = g.count > 1 && g.records.some(r => r.timestamp);
+            const hidden = g.records.filter(r => r.timestamp).length - OCCURRENCE_LIMIT;
+            return (
+              <MobileRecordCard
+                key={g.key}
+                badges={
+                  <>
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[g.severity]}</span>
+                    <ConfidenceTag record={g.records[0]} />
+                  </>
+                }
+                title={
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ${SEV_PILL[tone]}`}>
+                    {CATEGORY_ICON[g.category]}
+                    {g.label}
+                  </span>
+                }
+                actions={canExpand ? (
+                  <button onClick={() => toggle(g.key)} aria-label={isOpen ? 'Collapse' : 'Expand'}
+                    className="text-gray-400 hover:text-brand-blue">
+                    {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                  </button>
+                ) : undefined}
+                fields={[
+                  {
+                    label: 'When',
+                    value: (
+                      <>
+                        {canSeek ? (
+                          <button onClick={() => seekOffset(g.firstTs)}
+                            title="Jump to this moment in the recording"
+                            className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono">
+                            <Play className="w-3 h-3" />{formatOffset(firstOff)}
+                          </button>
+                        ) : (
+                          <span className="tf-meta font-mono">{formatOffset(firstOff)}</span>
+                        )}
+                        <span className="tf-micro-hint font-mono ml-1.5">{formatClock(g.firstTs)}</span>
+                      </>
+                    ),
+                  },
+                ]}
+                footer={<MobileStatChip tone="neutral">{g.count} {g.count === 1 ? 'time' : 'times'}</MobileStatChip>}
+              >
+                <div className="mt-2.5 tf-meta whitespace-normal break-words">
+                  <span className="tf-record-field-label">What we saw: </span>
+                  {describeViolation(g.records[0]) || <span className="text-gray-300">—</span>}
+                  <EnvironmentVerificationDetail record={g.records[0]} />
+                </div>
+                {isOpen && (
+                  <div className="mt-2.5 space-y-2 rounded-lg bg-slate-50/60 p-2.5">
+                    {g.records
+                      .filter(r => r.timestamp)
+                      .sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''))
+                      .slice(0, OCCURRENCE_LIMIT)
+                      .map((r, ri) => {
+                        const off = offsetSeconds(r.timestamp, startTs);
+                        const seek = off != null && hasRecording;
+                        return (
+                          <div key={`${g.key}-${ri}`} className="text-xs">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="tf-hint">Occurrence {ri + 1}</span>
+                              {seek ? (
+                                <button onClick={() => off != null && hasRecording && onJumpToRecording(off)}
+                                  className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono">
+                                  <Play className="w-3 h-3" />{formatOffset(off)}
+                                </button>
+                              ) : (
+                                <span className="tf-hint font-mono">{formatOffset(off)}</span>
+                              )}
+                              <span className="tf-micro-hint font-mono">{formatClock(r.timestamp)}</span>
+                            </div>
+                            <div className="tf-meta whitespace-normal break-words mt-0.5">
+                              {describeViolation(r) || '—'}
+                              <EnvironmentVerificationDetail record={r} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {hidden > 0 && (
+                      <p className="tf-hint italic text-xs">
+                        +{hidden} more not listed — switch to “By time” to see every occurrence.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </MobileRecordCard>
+            );
+          })}
+        </MobileRecordList>
+        <p className="tf-micro-hint mt-2.5">
           {logView === 'type'
             ? <>Grouped by type. {hasRecording
                 ? 'Each time links to that moment in the recording; expand a row to see every occurrence.'
@@ -743,8 +891,8 @@ export default function IntegrityCheckTab({
       {/* ── SCREEN-SHARE VERIFICATION ───────────────────────────────────── */}
       {shareBarAttempts.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Screen-share verification</h3>
-          <p className="text-2xs text-gray-400 mb-3">
+          <h3 className="tf-row-title mb-3 tracking-tight">Screen-share verification</h3>
+          <p className="tf-micro-hint mb-3">
             {shareBarAttempts.length > 1
               ? `The candidate needed ${shareBarAttempts.length} attempts on the "hide the sharing bar" step before the interview was allowed to start. Each attempt below shows the original screen capture and a locally sharpened/contrast-boosted copy sent to the AI at that moment. Click a thumbnail to enlarge.`
               : 'The two images sent to the AI before this interview was allowed to start — the original screen capture and a locally sharpened/contrast-boosted copy of the same capture, used to catch small or collapsed icons. Click a thumbnail to enlarge.'}
@@ -757,11 +905,11 @@ export default function IntegrityCheckTab({
               return (
                 <div key={i} className={shareBarAttempts.length > 1 ? 'pl-3 border-l-2 border-gray-100' : ''}>
                   {shareBarAttempts.length > 1 && (
-                    <div className="text-xs font-semibold text-gray-600 mb-2">
+                    <div className="tf-caption mb-2">
                       Attempt {i + 1}{isLatest ? ' (final — interview started)' : ' (blocked)'}
                     </div>
                   )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+                  <div className="tf-grid-2 max-w-2xl">
                     <ShareBarScreenshotCard
                       interviewId={interviewId} which="original" label="Original capture"
                       attemptIndex={shareBarAttempts.length > 1 ? i : undefined}
@@ -773,28 +921,28 @@ export default function IntegrityCheckTab({
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {attempt.hidden === false && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Sharing bar was still visible</span>
+                      <span className="tf-badge bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Sharing bar was still visible</span>
                     )}
                     {attempt.pip_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Picture-in-Picture detected</span>
+                      <span className="tf-badge bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Picture-in-Picture detected</span>
                     )}
                     {attempt.recorder_overlay_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Screen-recorder overlay detected</span>
+                      <span className="tf-badge bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Screen-recorder overlay detected</span>
                     )}
                     {attempt.foreign_app_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">
+                      <span className="tf-badge bg-destructive-subtle text-destructive ring-1 ring-destructive-line">
                         Foreign app/window detected{attempt.foreign_app_label ? `: ${attempt.foreign_app_label}` : ''}
                       </span>
                     )}
                     {attempt.interview_screen_present === false && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Interview screen not detected</span>
+                      <span className="tf-badge bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Interview screen not detected</span>
                     )}
                     {clean && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">Clean — no issues found</span>
+                      <span className="tf-badge bg-success-subtle text-success ring-1 ring-success-line">Clean — no issues found</span>
                     )}
                   </div>
                   {attempt.checked_at && (
-                    <p className="text-2xs text-gray-400 mt-2">Checked at {formatClock(attempt.checked_at)}</p>
+                    <p className="tf-micro-hint mt-2">Checked at {formatClock(attempt.checked_at)}</p>
                   )}
                 </div>
               );
@@ -806,11 +954,11 @@ export default function IntegrityCheckTab({
       {/* ── VIOLATION EVIDENCE ──────────────────────────────────────────── */}
       {evidenceGroups.length > 0 && (
         <div>
-          <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation evidence</h3>
-          <p className="text-2xs text-gray-400 mb-3">
+          <h3 className="tf-row-title mb-3 tracking-tight">Violation evidence</h3>
+          <p className="tf-micro-hint mb-3">
             One captured frame per flagged item, with a short AI-generated description. Click a thumbnail to enlarge.
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          <div className="tf-grid-3">
             {evidenceGroups.map(g => (
               <EvidenceCard key={g.key} interviewId={interviewId} record={g.record} label={g.label} />
             ))}
@@ -905,7 +1053,7 @@ function EvidenceCard({ interviewId, record, label }: {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         <button
           type="button"
           onClick={() => url && setEnlarged(true)}
@@ -916,12 +1064,12 @@ function EvidenceCard({ interviewId, record, label }: {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+            <div className="w-full h-full flex items-center justify-center tf-hint">Loading…</div>
           )}
         </button>
         <div className="px-3 py-2.5">
-          <div className="text-xs font-semibold text-gray-700">{label}</div>
-          {summary && <p className="text-2xs text-gray-500 mt-1 leading-relaxed">{summary}</p>}
+          <div className="tf-caption">{label}</div>
+          {summary && <p className="tf-micro-hint mt-1 leading-relaxed">{summary}</p>}
         </div>
       </div>
       {enlarged && url && (
@@ -965,7 +1113,7 @@ function ShareBarScreenshotCard({ interviewId, which, label, attemptIndex }: {
 
   return (
     <>
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         <button
           type="button"
           onClick={() => url && setEnlarged(true)}
@@ -976,11 +1124,11 @@ function ShareBarScreenshotCard({ interviewId, which, label, attemptIndex }: {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+            <div className="w-full h-full flex items-center justify-center tf-hint">Loading…</div>
           )}
         </button>
         <div className="px-3 py-2.5">
-          <div className="text-xs font-semibold text-gray-700">{label}</div>
+          <div className="tf-caption">{label}</div>
         </div>
       </div>
       {enlarged && url && (
@@ -1002,12 +1150,12 @@ function GlanceTile({ label, value, tone, sub, dot }: {
   const valColor = tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep'
     : tone === 'info' ? 'text-brand-blue' : 'text-gray-900';
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm px-4 py-3.5">
+    <div className="tf-card-soft px-4 py-3.5">
       <div className="text-2xs uppercase tracking-wide text-gray-400 font-semibold flex items-center gap-1.5">
         {dot && <span className={`w-2 h-2 rounded-full ${TONE_DOT[tone]}`} />}{label}
       </div>
       <div className={`text-3xl font-bold tracking-tight mt-1.5 tabular-nums ${valColor}`}>{value}</div>
-      <div className="text-2xs text-gray-500 mt-1">{sub}</div>
+      <div className="tf-micro-hint mt-1">{sub}</div>
     </div>
   );
 }

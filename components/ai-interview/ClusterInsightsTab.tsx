@@ -144,7 +144,7 @@ function subLabel(entries: QuestionHistoryEntry[], index: number): { tag: string
 function QuestionTable({ groups }: { groups: QGroup[] }) {
   const [openRow, setOpenRow] = useState<Set<number>>(new Set());
   if (groups.length === 0) {
-    return <div className="text-xs text-gray-400 italic px-4 py-3">No questions recorded for this skill.</div>;
+    return <div className="tf-hint italic px-4 py-3">No questions recorded for this skill.</div>;
   }
   const toggle = (i: number) => {
     setOpenRow(p => {
@@ -170,13 +170,13 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
   return (
     <div className="overflow-x-auto tf-table-shell">
       <table className="w-full min-w-[640px] text-xs">
-        <thead className="bg-white text-gray-600 text-xs">
+        <thead className="bg-white tf-meta">
           <tr>
-            <th className="px-3 py-2 text-left font-semibold w-14">Q #</th>
-            <th className="px-3 py-2 text-left font-semibold w-24">Type</th>
-            <th className="px-3 py-2 text-left font-semibold">Question</th>
-            <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
-            <th className="px-3 py-2 text-left font-semibold w-32">Coverage</th>
+            <th className="tf-th-cell text-left font-semibold w-14">Q #</th>
+            <th className="tf-th-cell text-left font-semibold w-24">Type</th>
+            <th className="tf-th-cell text-left font-semibold">Question</th>
+            <th className="tf-th-cell text-left font-semibold">Candidate Response</th>
+            <th className="tf-th-cell text-left font-semibold w-32">Coverage</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
@@ -197,18 +197,18 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
 
             return (
               <tr key={i} className="align-top">
-                <td className="px-3 py-2 align-top">
+                <td className="tf-td align-top">
                   <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                     Q{g.main.question_number}
                   </span>
                 </td>
-                <td className="px-3 py-2 align-top">
+                <td className="tf-td align-top">
                   <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ${mainType.cls}`}>
                     {mainType.text}
                   </span>
                 </td>
-                <td className="px-3 py-2 align-top">
-                  <div className="text-xs font-medium text-gray-800 leading-snug">{qText}</div>
+                <td className="tf-td align-top">
+                  <div className="tf-caption leading-snug">{qText}</div>
                   {hasFu && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {!isOpen ? (
@@ -245,15 +245,15 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2 align-top">
-                  <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap">{aText}</div>
+                <td className="tf-td align-top">
+                  <div className="tf-meta leading-snug whitespace-pre-wrap">{aText}</div>
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {g.followUps.map((fu, fi) => {
                         const sl = subLabel(g.followUps, fi);
                         const fuA = fu.answer || fu.response_text || '—';
                         return (
-                          <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap">
+                          <div key={fi} className="tf-micro-hint leading-snug whitespace-pre-wrap">
                             <span className={`text-2xs font-semibold ${sl.color} mr-1`}>{sl.tag}:</span>
                             {fuA}
                           </div>
@@ -262,7 +262,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2 align-top">
+                <td className="tf-td align-top">
                   <CoverageBadge level={mainLevel} />
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
@@ -294,7 +294,7 @@ export default function ClusterInsightsTab({
 
   if (!clusterInsights || clusterInsights.length === 0) {
     return (
-      <div className="text-center py-16 text-gray-500 text-sm">
+      <div className="text-center py-16 tf-body-muted">
         No cluster insights available for this interview.
       </div>
     );
@@ -321,18 +321,18 @@ export default function ClusterInsightsTab({
           <div className="flex items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-sm font-medium text-gray-300">Overall Capability Score</div>
-              <div className="text-xs text-gray-500 mt-0.5">
+              <div className="tf-meta mt-0.5">
                 Weighted across all sections
               </div>
             </div>
             <div className="text-right">
               <div className="text-4xl font-bold">{capabilityScore}</div>
-              <div className="text-xs text-gray-400">out of 100</div>
+              <div className="tf-hint">out of 100</div>
             </div>
           </div>
           {capabilityScoreReasoning && (
             <div className="mt-3 pt-3 border-t border-gray-700">
-              <div className="text-2xs text-gray-400 leading-relaxed">{capabilityScoreReasoning}</div>
+              <div className="tf-micro-hint leading-relaxed">{capabilityScoreReasoning}</div>
             </div>
           )}
         </div>
@@ -370,7 +370,7 @@ export default function ClusterInsightsTab({
                 {hrQuestions.length > 0 ? (
                   <QuestionTable groups={hrQuestions} />
                 ) : (
-                  <div className="text-xs text-gray-400 italic px-2 py-4">No HR questions recorded.</div>
+                  <div className="tf-hint italic px-2 py-4">No HR questions recorded.</div>
                 )}
               </div>
             ) : (
@@ -388,7 +388,7 @@ export default function ClusterInsightsTab({
                         className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-gray-50 transition-colors text-left"
                       >
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</span>
+                          <span className="tf-row-title">{cluster.cluster_name}</span>
                           <span className={`px-1.5 py-0.5 text-2xs rounded border ${
                             (cluster.priority_label === 'High' || cluster.priority >= 3) ? 'bg-success-subtle text-success border-success-line' :
                             (cluster.priority_label === 'Medium' || cluster.priority === 2) ? 'bg-warning-subtle text-warning border-warning-line' :
@@ -396,7 +396,7 @@ export default function ClusterInsightsTab({
                           }`}>
                             {cluster.priority_label || (cluster.priority >= 3 ? 'High' : cluster.priority === 2 ? 'Medium' : 'Low')} Priority
                           </span>
-                          <span className="text-2xs text-gray-400">
+                          <span className="tf-micro-hint">
                             {cluster.evaluated}/{cluster.total} skills
                           </span>
                         </div>
@@ -410,13 +410,13 @@ export default function ClusterInsightsTab({
                       {cOpen && (
                         <div className="border-t border-gray-50 bg-gray-50/30 divide-y divide-gray-100">
                           {cluster.skill_scores.length === 0 ? (
-                            <div className="text-xs text-gray-400 italic px-6 py-3">No skills in this cluster.</div>
+                            <div className="tf-hint italic px-6 py-3">No skills in this cluster.</div>
                           ) : (
                             cluster.skill_scores.map((s, si) => {
                               const level = skillBandToCoverage(s.band, s.score);
                               return (
                                 <div key={si} className="flex items-center gap-3 px-6 py-2.5">
-                                  <span className="text-sm text-gray-800 font-medium flex-1 min-w-0 truncate">{s.skill}</span>
+                                  <span className="tf-label flex-1 min-w-0 truncate">{s.skill}</span>
                                   <CoverageBadge level={level} />
                                 </div>
                               );

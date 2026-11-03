@@ -162,7 +162,7 @@ function ChangeList({ changes }: { changes: Change[] }) {
   return (
     <ul className="mt-1 space-y-0.5">
       {known.map((c) => (
-        <li key={c.field} className="text-xs text-gray-500 dark:text-slate-400">
+        <li key={c.field} className="tf-meta">
           <span className="font-medium text-gray-700 dark:text-slate-300">{humanize(c.field)}:</span>{' '}
           {c.from !== undefined && <span className="line-through decoration-gray-300 dark:decoration-slate-600">{c.from}</span>}
           {c.from !== undefined && c.to !== undefined && ' → '}
@@ -436,7 +436,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
     body = (
       <div className="rounded-xl border border-destructive-line bg-destructive-subtle py-10 text-center">
         <AlertCircle className="mx-auto mb-3 h-8 w-8 text-destructive" />
-        <p className="text-sm max-sm:text-[13px] font-medium text-destructive-strong">Could not load the team history</p>
+        <p className="text-sm font-medium text-destructive-strong">Could not load the team history</p>
         <p className="mt-1 text-xs text-destructive">Check your connection and try again.</p>
         <Button variant="secondary" size="sm" onClick={refreshAll} className="mt-4">
           Retry
@@ -448,7 +448,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
     body = (
       <div className="space-y-2 sm:space-y-3" aria-busy="true">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-start gap-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4">
+          <div key={i} className="tf-panel flex items-start gap-3 p-3 sm:p-4">
             <Skeleton className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg" />
             <div className="flex-1 space-y-2">
               <div className="flex gap-2"><Skeleton className="h-5 w-24 rounded-full" /><Skeleton className="h-5 w-32" /></div>
@@ -465,16 +465,16 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
         <Clock className="mx-auto mb-3 h-10 w-10 opacity-40" />
         {advancedOn ? (
           <>
-            <p className="text-sm max-sm:text-[13px]">No activity matches these filters</p>
+            <p className="text-sm">No activity matches these filters</p>
             <button type="button" onClick={clearAdvanced} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
               Clear filters
             </button>
           </>
         ) : filter === 'ALL' ? (
-          <p className="text-sm max-sm:text-[13px]">No activity recorded yet</p>
+          <p className="text-sm">No activity recorded yet</p>
         ) : (
           <>
-            <p className="text-sm max-sm:text-[13px]">No “{filterLabel}” activity</p>
+            <p className="text-sm">No “{filterLabel}” activity</p>
             <button type="button" onClick={() => handleFilterChange('ALL')} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
               Show all activity
             </button>
@@ -494,7 +494,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                 <thead className="border-b border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                   <tr>
                     {['Date & time', 'Event', 'Team', 'Member', 'By', 'Details'].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300">{h}</th>
+                      <th key={h} className="tf-th-cell text-left tf-th">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -506,11 +506,11 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                     const memberEvent = entry.event_type.startsWith('MEMBER_');
                     return (
                       <tr key={entry.id} className="align-top hover:bg-brand-blue/[0.02]">
-                        <td className="whitespace-nowrap px-4 py-3 text-xs tabular-nums text-gray-500 dark:text-slate-400">{formatDate(entry.event_at)}</td>
-                        <td className="whitespace-nowrap px-4 py-3">
+                        <td className="tf-td whitespace-nowrap tf-meta tabular-nums">{formatDate(entry.event_at)}</td>
+                        <td className="tf-td whitespace-nowrap">
                           <span className={`inline-block rounded-full px-2.5 py-0.5 text-xs font-medium ${config.bg} ${config.color}`}>{config.label}</span>
                         </td>
-                        <td className="max-w-[14rem] px-4 py-3 text-sm">
+                        <td className="tf-td max-w-[14rem] text-sm">
                           {teamOpenable ? (
                             <button type="button" onClick={() => onOpenTeam!(entry.team_id)} title="Open team details" className="block max-w-full truncate text-left font-medium text-gray-900 hover:text-brand-blue hover:underline dark:text-slate-50">
                               {entry.team_name}
@@ -519,18 +519,18 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                             <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={entry.team_name}>{entry.team_name}</span>
                           )}
                         </td>
-                        <td className="max-w-[12rem] truncate px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                        <td className="tf-td max-w-[12rem] truncate tf-body">
                           {entry.target_user_name || (memberEvent ? <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>)}
                         </td>
-                        <td className="whitespace-nowrap px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
+                        <td className="tf-td whitespace-nowrap tf-body">
                           {entry.actor_name ? (
                             <span className="inline-flex items-center gap-2">
-                              <NameAvatar name={entry.actor_name} size="sm" className="h-6 w-6 text-[10px]" />
+                              <NameAvatar name={entry.actor_name} size="sm" className="h-6 w-6 text-2xs" />
                               {entry.actor_name}
                             </span>
                           ) : <span className="text-gray-300 dark:text-slate-600">—</span>}
                         </td>
-                        <td className="max-w-[18rem] px-4 py-3 text-xs text-gray-500 dark:text-slate-400">
+                        <td className="tf-td max-w-[18rem] tf-meta">
                           {details ? <span className="line-clamp-2" title={details}>{details}</span> : <span className="text-gray-300 dark:text-slate-600">—</span>}
                         </td>
                       </tr>
@@ -544,7 +544,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
         <div className={`relative space-y-2 sm:space-y-3 transition-opacity ${loading ? 'pointer-events-none opacity-50' : ''}`} aria-busy={loading}>
           {loading && (
             <div className="absolute inset-x-0 top-6 z-10 flex justify-center">
-              <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs text-gray-600 shadow-md ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 tf-meta shadow-md ring-1 ring-gray-200 dark:bg-slate-800 dark:ring-slate-700">
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-brand-blue" /> Loading…
               </span>
             </div>
@@ -573,7 +573,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                 </h3>
               )}
               <div
-                className="flex items-start gap-3 sm:flex-wrap sm:gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-colors hover:border-brand-blue/30"
+                className="flex items-start gap-3 sm:flex-wrap sm:gap-4 tf-card-soft p-3 sm:p-4 transition-colors hover:border-brand-blue/30"
               >
                 <div className={`flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-lg sm:rounded-xl ${config.bg}`}>
                   <Icon className={`h-4 w-4 ${config.color}`} />
@@ -589,20 +589,20 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                         type="button"
                         onClick={() => onOpenTeam!(entry.team_id)}
                         title="Open team details"
-                        className="truncate text-left text-sm max-sm:text-[13px] font-medium text-gray-900 hover:text-brand-blue hover:underline dark:text-slate-50"
+                        className="truncate text-left text-sm font-medium text-gray-900 hover:text-brand-blue hover:underline dark:text-slate-50"
                       >
                         {entry.team_name}
                       </button>
                     ) : (
                       <span
-                        className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50"
+                        className="truncate tf-row-name"
                         title={onOpenTeam && entry.event_type !== 'TEAM_DELETED' && !openableTeamIds?.has(entry.team_id) ? 'This team no longer exists' : undefined}
                       >
                         {entry.team_name}
                       </span>
                     )}
                   </div>
-                  <div className="mt-1 text-xs sm:text-sm text-gray-600 dark:text-slate-400">
+                  <div className="mt-1 tf-meta sm:text-sm">
                     {entry.event_type === 'MEMBER_ADDED' && (
                       <span>
                         {entry.target_user_name ? <span className="font-medium">{entry.target_user_name}</span> : <span className="italic text-gray-400 dark:text-slate-500">{UNKNOWN_USER}</span>} was added{byActor}
@@ -636,8 +636,8 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                     {entry.event_type === 'TEAM_UPDATED' && <ChangeList changes={readChanges(entry.details)} />}
                   </div>
                   {/* Phones: who + when on one line under the text. */}
-                  <p className="mt-1.5 flex items-center gap-1.5 text-2xs text-gray-400 dark:text-slate-500 sm:hidden" title={formatDate(entry.event_at)}>
-                    {entry.actor_name && <NameAvatar name={entry.actor_name} size="sm" className="h-5 w-5 text-[9px]" />}
+                  <p className="mt-1.5 flex items-center gap-1.5 tf-micro-hint sm:hidden" title={formatDate(entry.event_at)}>
+                    {entry.actor_name && <NameAvatar name={entry.actor_name} size="sm" className="h-5 w-5 text-2xs" />}
                     {entryTime(entry.event_at)}
                   </p>
                 </div>
@@ -645,7 +645,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
                   {entry.actor_name && (
                     <NameAvatar name={entry.actor_name} size="sm" />
                   )}
-                  <span className="whitespace-nowrap text-xs text-gray-400 dark:text-slate-500" title={formatDate(entry.event_at)}>{entryTime(entry.event_at)}</span>
+                  <span className="whitespace-nowrap tf-hint" title={formatDate(entry.event_at)}>{entryTime(entry.event_at)}</span>
                 </div>
               </div>
               </Fragment>
@@ -686,7 +686,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             placeholder="Search team, member or person…"
             aria-label="Search history"
-            className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-2 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+            className="tf-input pl-8 pr-2 text-xs sm:text-sm"
           />
         </div>
         <div className="grid grid-cols-2 gap-2 lg:flex">
@@ -732,7 +732,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
             onChange={(v) => { setDateFrom(v); setPage(1); }}
             className="w-full lg:w-[140px] max-sm:px-2 max-sm:!text-xs"
           />
-          <span className="text-xs text-gray-400 dark:text-slate-500">to</span>
+          <span className="tf-hint">to</span>
           <DateField
             aria-label="History to date"
             value={dateTo}
@@ -749,7 +749,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
         </div>
         <div className="flex flex-col gap-3 border-t border-gray-200/70 pt-3 dark:border-slate-700/60 lg:flex-row lg:items-center lg:justify-between">
           {/* What's in view (filters applied, every event type). */}
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-300">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 tf-meta">
             {batch && summary.count > 0 ? (
               <>
                 <span className="font-semibold text-gray-900 dark:text-slate-50">
@@ -816,7 +816,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
               type="button"
               onClick={() => setShowExport(true)}
               disabled={total === 0}
-              className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 transition-colors hover:text-brand-blue disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+              className="tf-btn tf-btn-secondary h-8 gap-1.5 border border-gray-200 bg-white px-3 text-xs text-gray-700 transition-colors hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 whitespace-normal justify-start hover:bg-white"
             >
               <Download className="h-3.5 w-3.5" /> Export
             </button>
@@ -826,7 +826,7 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
 
       {/* An honest note when the summary and filters see the latest batch only. */}
       {(advancedOn || summary.count > 0) && batchIsPartial && (
-        <p className="-mt-2 text-2xs text-gray-400 dark:text-slate-500">
+        <p className="-mt-2 tf-micro-hint">
           Search, team, person and date filters and this summary cover the latest {(batch?.length ?? 0).toLocaleString()} of {batchTotal.toLocaleString()} activities.
         </p>
       )}
