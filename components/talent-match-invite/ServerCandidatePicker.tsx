@@ -85,7 +85,7 @@ const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => 
   const status = (m?: string): ServerMatchStatus =>
     m === 'exact_match' || m === 'excellent' ? 'exact_match' : m === 'partial_match' || m === 'partial' ? 'partial_match' : 'no_match';
   /* A scored resume as `/jd/{id}/scored-resumes` returns it (the fields read here). */
-  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number };
+  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number; is_archived?: boolean };
   return [first, ...rest].flatMap((r: { items?: ScoredItem[] }) => r?.items ?? [])
     .filter((it) => it?.resume_id)
     .map((it) => ({
@@ -99,6 +99,9 @@ const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => 
       score: { percent: Number(Number(it.overall_score || 0).toFixed(1)), match_status: status(it.match_status), scored_at: it.created_at ?? null },
       // Not known from this list; the Review step checks it and skips them.
       already_invited: false,
+      // This list — unlike the job's other sources — still lists a resume
+      // after it's archived, so it's the only place that needs to say so.
+      archived: !!it.is_archived,
       version: it.resume_version ?? null,
     }));
 };
@@ -338,7 +341,7 @@ export default function ServerCandidatePicker({
   const [source, setSource] = useState<InviteCandidateSourceTab>(initialSource ?? 'talent-match');
   /* The database tabs follow the resume list's own permissions (the share
      step's rule): locked tabs stay visible, greyed, with the reason. */
-  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermissionCode, permissionsVerified } = useAuth();
   const perms = user?.permissions;
   // The Resume Database page's own rule for Archive / Unarchive.
   const canUnarchive = !!isTenantAdmin || hasPermissionCode('my_resumes:archive');
@@ -349,8 +352,10 @@ export default function ServerCandidatePicker({
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     'talent-match': true,
     'score-resume': true,
-    'my-resumes': !!(perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
-    'internal-db': !!(perms?.canAccessInternalDB || perms?.canViewInternalDB),
+    // Tenant admin sees everything — same rule as usePermissions' menu
+    // visibility — so it never depends on the per-flag values being loaded.
+    'my-resumes': !!(isTenantAdmin || perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
+    'internal-db': !!(isTenantAdmin || perms?.canAccessInternalDB || perms?.canViewInternalDB),
   };
   /* My Resumes' folders, read once the tab is first opened. */
   const [folders, setFolders] = useState<Folder[] | null>(null);
@@ -511,7 +516,7 @@ export default function ServerCandidatePicker({
   /* Could be ticked, units aside; and can be ticked (or unticked) now. */
   const addedDirectly = (r: ServerInviteCandidate) => !!r.email && !!addedEmails?.has(r.email.trim().toLowerCase());
   const canTickBase = (r: ServerInviteCandidate) =>
-    !pickingDisabled && !!r.email && !r.already_invited && (selection.mode === 'ids' || selection.source === source)
+    !pickingDisabled && !!r.email && !r.already_invited && !r.archived && (selection.mode === 'ids' || selection.source === source)
     && (isOn(r) || !addedDirectly(r));
   const canTick = (r: ServerInviteCandidate) => canTickBase(r) && (isOn(r) || canAdd);
   const toggle = (r: ServerInviteCandidate) => {
@@ -546,7 +551,7 @@ export default function ServerCandidatePicker({
       const { items: all } = await loadScoredTab(jdId, params);
       const picked: Record<string, PickedCandidate> = {};
       for (const r of all) {
-        if (!r.email || r.already_invited || addedDirectly(r)) continue;
+        if (!r.email || r.already_invited || r.archived || addedDirectly(r)) continue;
         picked[r.resume_id] = { resumeId: r.resume_id, name: r.name, email: r.email, source: 'score-resume' };
       }
       onSelectionChange({ mode: 'ids', picked });
@@ -584,7 +589,8 @@ export default function ServerCandidatePicker({
 
   /** Why this row cannot be ticked now, or null when it can. */
   const tickBlockReason = (r: ServerInviteCandidate): string | null =>
-    !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
+    !r.email ? 'No email' : r.archived ? 'Archived — unarchive this resume (Resume Database) to invite them'
+      : r.already_invited ? 'Already invited to this version'
       : pickingDisabled ? 'Pick a version first'
       : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
       : !isOn(r) && addedDirectly(r) ? 'Already added in Manual / Upload Excel'
@@ -891,7 +897,6 @@ export default function ServerCandidatePicker({
       onSelect: () => askFor(setDeleteAsk)({ id, name, archived: where === 'archived' }),
     }] : []),
   ];
-  const archivedAllTicked = !!archived?.rows.length && archivedTicked.length === archived.rows.length;
   const unarchive = async (ids: string[]) => {
     if (!canUnarchive || ids.length === 0) return;
     const rootId = flatFolders.find(isRootFolder)?.id;
@@ -1030,7 +1035,13 @@ export default function ServerCandidatePicker({
   });
   useEffect(() => () => { if (revealTimer.current) clearTimeout(revealTimer.current); }, []);
   const dbTabButton = () => {
-    const locked = dbOpen.length === 0;
+    // While the cached (localStorage) permissions are still being re-validated
+    // against /auth/me, "no access" may just be stale — show a neutral
+    // "checking" state instead of the lock, so the tab doesn't flash locked
+    // and then turn clickable a moment later.
+    const checking = dbOpen.length === 0 && !permissionsVerified;
+    const locked = dbOpen.length === 0 && permissionsVerified;
+    const unavailable = locked || checking;
     const on = !addTab && isDbTab(source);
     const count = dbSum(tabCount);
     const picked = dbSum((d) => pickedBySource[d]) ?? 0;
@@ -1040,17 +1051,20 @@ export default function ServerCandidatePicker({
         type="button"
         role="tab"
         aria-selected={on}
-        aria-disabled={locked}
-        onClick={() => { if (!locked) switchDb(tabAccess[lastDb] ? lastDb : dbOpen[0]); }}
-        title={locked ? 'You do not have permission to access the Resume Database' : 'My Resumes and the Shared Database'}
+        aria-disabled={unavailable}
+        aria-busy={checking || undefined}
+        onClick={() => { if (!unavailable) switchDb(tabAccess[lastDb] ? lastDb : dbOpen[0]); }}
+        title={checking ? 'Checking your access…' : locked ? 'You do not have permission to access the Resume Database' : 'My Resumes and the Shared Database'}
         className={`-mb-px shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap rounded-t-md px-2 pt-1.5 pb-2 text-[13px] font-medium border-b-2 transition-colors ${on
           ? 'border-brand-blue text-brand-blue font-semibold'
+          : checking ? 'border-transparent text-gray-500 dark:text-slate-400 cursor-wait'
           : locked ? 'border-transparent text-gray-400 dark:text-slate-600 cursor-not-allowed'
           : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-gray-900 hover:bg-gray-50 dark:hover:text-slate-100 dark:hover:bg-slate-800/60'}`}
       >
         {locked ? <Lock className="w-3.5 h-3.5 shrink-0" aria-hidden="true" /> : <SourceIcon source="internal-db" className="w-3.5 h-3.5" />}
         Resume Database
-        {!locked && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({count !== null ? fmt(count) : '…'})</span>}
+        {checking && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">(…)</span>}
+        {!unavailable && <span className="tabular-nums font-normal text-gray-500 dark:text-slate-500">({count !== null ? fmt(count) : '…'})</span>}
         {picked > 0 && (
           <span className="inline-flex items-center px-1.5 rounded-full bg-brand-blue/10 text-brand-blue text-2xs font-semibold tabular-nums">✓ {fmt(picked)}</span>
         )}
@@ -1059,8 +1073,10 @@ export default function ServerCandidatePicker({
   };
 
   /* Select loaded / Select all matching — after Upload resumes on the
-     Resume Database tab, beside the heading on the job's lists. */
-  const pickControls = (
+     Resume Database tab, beside the heading on the job's lists. Hidden
+     while browsing Archived Resumes: that folder's rows are never
+     invite-eligible, so these must never add them to the selection. */
+  const pickControls = archivedHere ? null : (
     <>
       {!inFilterMode && (
         <label className={`inline-flex items-center gap-1.5 text-xs font-medium ${pickingDisabled || loadedEligible.length === 0 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 dark:text-slate-300 cursor-pointer'}`}>
@@ -1331,15 +1347,14 @@ export default function ServerCandidatePicker({
         ) : (
           <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
             <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
-              <label className={`inline-flex items-center gap-2 min-w-0 ${canUnarchive ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+              <label className="inline-flex items-center gap-2 min-w-0 cursor-not-allowed">
                 <input
                   type="checkbox"
-                  checked={archivedAllTicked}
-                  ref={(el) => { if (el) el.indeterminate = !archivedAllTicked && archivedTicked.length > 0; }}
-                  disabled={!canUnarchive || unarchiving.size > 0}
-                  onChange={() => setArchivedPicks(archivedAllTicked ? new Set() : new Set(archived.rows.map((r) => r.id)))}
-                  aria-label="Tick every listed archived resume"
-                  className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                  checked={false}
+                  disabled
+                  title="Archived resumes can't be selected here — unarchive a resume (⋮ menu) to invite it"
+                  aria-label="Archived resumes cannot be selected for invite"
+                  className="m-0 shrink-0 rounded border-gray-300 cursor-not-allowed"
                 />
                 <span className="truncate">Archived Resumes</span>
               </label>
@@ -1364,15 +1379,17 @@ export default function ServerCandidatePicker({
               const ticked = archivedPicks.has(r.id);
               return (
                 <li key={r.id} className={`flex items-center gap-2.5 px-3 py-2 ${ticked ? 'bg-amber-50/60 dark:bg-amber-500/5' : ''}`}>
-                  {/* Ticks here pick resumes to unarchive — archived resumes are never invited. */}
+                  {/* Archived resumes are never invite-eligible, so this stays
+                      disabled here — unarchive is still one click away via
+                      the ⋮ menu below, outside the invite-selection flow. */}
                   <input
                     type="checkbox"
                     checked={ticked}
-                    disabled={!canUnarchive || busy}
+                    disabled
                     onChange={() => setArchivedPicks((s) => { const next = new Set(s); if (next.has(r.id)) next.delete(r.id); else next.add(r.id); return next; })}
-                    title={canUnarchive ? 'Tick to unarchive' : 'You do not have permission to unarchive resumes'}
-                    aria-label={`Tick ${r.name} to unarchive`}
-                    className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                    title="Archived resumes can't be selected here — unarchive it (⋮ menu) to invite it"
+                    aria-label={`${r.name} is archived and cannot be selected for invite`}
+                    className="m-0 shrink-0 rounded border-gray-300 cursor-not-allowed"
                   />
                   <span aria-hidden="true" className="max-sm:hidden shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-2xs font-semibold text-amber-700 dark:text-amber-400">
                     {initials(r.name)}
@@ -1440,7 +1457,7 @@ export default function ServerCandidatePicker({
             <span className="shrink-0 tabular-nums">{fmt(rows.length)} of {fmt(total)}</span>
           </li>
           {rows.map((r) => {
-            const on = isOn(r) && !!r.email && !r.already_invited;
+            const on = isOn(r) && !!r.email && !r.already_invited && !r.archived;
             const tickable = canTick(r);
             const picked = pickedOf(r);
             const why = tickBlockReason(r) ?? undefined;
@@ -1451,13 +1468,13 @@ export default function ServerCandidatePicker({
                 ref={revealed === r.resume_id ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
                 className={`${revealed === r.resume_id ? 'ring-2 ring-inset ring-info transition-shadow' : ''} ${noUnitsNoun && !on ? 'opacity-50' : ''}`.trim() || undefined}
               >
-                <label title={why} className={`flex items-center gap-2.5 px-3 py-2 ${tickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : 'cursor-not-allowed'} ${on ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}>
+                <label title={why} className={`flex items-center gap-2.5 px-3 py-2 ${tickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : 'cursor-not-allowed'} ${on ? 'bg-blue-50 dark:bg-slate-800/50' : ''} ${r.archived ? 'opacity-60' : ''}`}>
                   <input
                     type="checkbox"
                     checked={on}
                     disabled={!tickable}
                     onChange={() => toggle(r)}
-                    aria-label={`Invite ${r.name}`}
+                    aria-label={r.archived ? `${r.name} is archived and cannot be selected for invite` : `Invite ${r.name}`}
                     className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <span aria-hidden="true" className="max-sm:hidden shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue/10 text-2xs font-semibold text-brand-blue">
@@ -1484,6 +1501,11 @@ export default function ServerCandidatePicker({
                   </span>
                   {r.already_invited && (
                     <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
+                  )}
+                  {r.archived && (
+                    <span title="Archived — unarchive it (Resume Database) to invite this candidate" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                      <Archive className="w-3 h-3" aria-hidden="true" />Archived
+                    </span>
                   )}
                   {on && picked && picked.source !== source && (
                     <span title="Ticked once; it counts for every tab it appears in" className="max-md:hidden shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border border-brand-blue/20 bg-brand-blue/5 text-brand-blue">

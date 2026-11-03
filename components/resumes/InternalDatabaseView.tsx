@@ -245,6 +245,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         uploadedBy: r.uploaded_by_name || 'System',
         versionCount: r.version_count || 1,
         version: r.version || 1,
+        is_archived: r.is_archived || false,
+        isArchived: r.is_archived || false,
+        is_tenant_user_email: r.is_tenant_user_email || false,
+        isTenantUserEmail: r.is_tenant_user_email || false,
         currentCompany: r.current_company,
         previousCompany: r.previous_company,
         noticePeriod: r.notice_period,
@@ -337,14 +341,22 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // A resume whose email matches an existing team member is locked out of
+  // selection entirely — ResumeTable disables its checkbox, but these guard
+  // any other path (e.g. a stale click) from slipping it into the selection.
+  const isTenantUserEmailResume = (resume: Resume): boolean =>
+    !!(resume.is_tenant_user_email ?? resume.isTenantUserEmail);
+
   const handleSelectResume = (id: string) => {
+    const target = resumes.find(r => r.id === id);
+    if (target && isTenantUserEmailResume(target)) return;
     setSelectedResumes(prev =>
       prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
     );
   };
 
   const handleSelectAll = (selected: boolean) => {
-    setSelectedResumes(selected ? resumes.map(r => r.id) : []);
+    setSelectedResumes(selected ? resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id) : []);
   };
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; names: string[] } | null>(null);
@@ -575,6 +587,10 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
       return;
     }
+    if (isTenantUserEmailResume(resume)) {
+      toast.error('This resume belongs to an existing team member and cannot be applied to any job.');
+      return;
+    }
     setResumesForApply([resume]);
     fetchJobs();
     setShowApplyToJobModal(true);
@@ -590,6 +606,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     const archivedCount = selectedResumesList.filter(isResumeArchived).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be applied to any job. Please select active resumes only.`);
+      return;
+    }
+    const tenantUserCount = selectedResumesList.filter(isTenantUserEmailResume).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be applied to any job.`);
       return;
     }
     setResumesForApply(selectedResumesList);
@@ -609,6 +630,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
       return;
     }
+    const tenantUserCount = selectedResumesList.filter(isTenantUserEmailResume).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be used with AI Talent Match.`);
+      return;
+    }
     setResumesForApply(selectedResumesList);
     fetchJobs();
     setShowAITalentMatchModal(true);
@@ -624,6 +650,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       .filter(isResumeArchived).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
+      return;
+    }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isTenantUserEmailResume).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an AI interview.`);
       return;
     }
     openInvite({
@@ -774,6 +807,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       .filter(isResumeArchived).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
+      return;
+    }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(isTenantUserEmailResume).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an assessment.`);
       return;
     }
     openInvite({
@@ -1161,6 +1201,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
         <ResumeTable
           flushCards
+          showTeamMemberBadge
           resumes={paginatedResumes}
           selectedResumes={selectedResumes}
           draggable={false}

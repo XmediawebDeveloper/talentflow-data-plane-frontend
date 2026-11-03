@@ -71,6 +71,9 @@ export interface ScoringResponse {
   candidate_email?: string;
   email?: string;                          // Alias for candidate_email used by some endpoints
   phone?: string;
+  // Whether the underlying resume has been archived — both /scoring/all and
+  // /scoring/jd/{jd_id} include it so Invite can be blocked for it.
+  is_archived?: boolean;
   // Additional resume details
   current_title?: string;
   current_company?: string;

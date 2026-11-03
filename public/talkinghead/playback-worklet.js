@@ -32,6 +32,19 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     // Convert to frames between reports
     this._metricsIntervalFrames = Math.max(128, Math.round(this._sampleRate / intervalHz));
 
+    // Speech clock (Bina caption/lip sync). `_played` counts samples really
+    // output — underrun silence excluded — and never resets; `_queued` is what
+    // is buffered and not yet played. A "clock-mark" from the main thread
+    // (posted in order with the audio) pins where the next utterance starts in
+    // that count. While playing, {type:"clock"} reports the count against the
+    // audio-thread frame every ~20 ms.
+    this._played = 0;
+    this._queued = 0;
+    this._clockId = 0;
+    this._clockMark = 0;
+    this._clockIntervalFrames = Math.max(128, Math.round(this._sampleRate * 0.02));
+    this._lastClockFrame = 0;
+
     this.reset();
   }
 
@@ -42,6 +55,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
     this._bufferQueue = [];
     this._currentChunk = null;
     this._currentChunkOffset = 0;
+    this._queued = 0;
     this._state = PlaybackWorklet.FSM.IDLE;
 
     this._noMoreDataReceived = false;
@@ -76,6 +90,14 @@ class PlaybackWorklet extends AudioWorkletProcessor {
       return;
     }
 
+    // Speech clock: the next queued sample is the start of a new utterance.
+    if (type === "clock-mark") {
+      this._clockId = event.data.id;
+      this._clockMark = this._played + this._queued;
+      this._postClock(currentFrame);
+      return;
+    }
+
     // Main thread has signaled that no more audio chunks will be sent for this utterance.
     if (type === "no-more-data") {
       this._noMoreDataReceived = true;
@@ -107,10 +129,26 @@ class PlaybackWorklet extends AudioWorkletProcessor {
       // data from a previous, interrupted stream from lingering.
       if (this._state === PlaybackWorklet.FSM.PLAYING) {
         // Store as Int16Array view to avoid constructing it in process()
-        this._bufferQueue.push(new Int16Array(data));
+        const samples = new Int16Array(data);
+        this._bufferQueue.push(samples);
+        this._queued += samples.length;
         this._silenceFramesCount = 0; // Reset silence counter on new data
       }
     }
+  }
+
+  _postClock(frame) {
+    this._lastClockFrame = frame;
+    try {
+      this.port.postMessage({
+        type: "clock",
+        id: this._clockId,
+        mark: this._clockMark,
+        played: this._played,
+        frame,
+        queued: this._queued,
+      });
+    } catch (_) { }
   }
 
   process(inputs, outputs, parameters) {
@@ -141,6 +179,7 @@ class PlaybackWorklet extends AudioWorkletProcessor {
           if (this._noMoreDataReceived || isTimedOut) {
             // END OF PLAYBACK: Either explicitly signaled or timed out.
             if (!this._hasSentEnded) {
+              this._postClock(currentFrame + blockSize);
               this.port.postMessage({ type: "playback-ended" });
               this._hasSentEnded = true;
             }
@@ -188,7 +227,14 @@ class PlaybackWorklet extends AudioWorkletProcessor {
 
         this._currentChunkOffset += samplesToCopy;
         samplesCopied += samplesToCopy;
+        this._played += samplesToCopy;
+        this._queued = Math.max(0, this._queued - samplesToCopy);
       }
+    }
+
+    if (this._state === PlaybackWorklet.FSM.PLAYING
+        && currentFrame + blockSize - this._lastClockFrame >= this._clockIntervalFrames) {
+      this._postClock(currentFrame + blockSize);
     }
 
     // Zero-fill the remainder, if any, once per block

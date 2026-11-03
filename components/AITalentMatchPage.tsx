@@ -181,6 +181,8 @@ interface MatchInviteRow {
   phone?: string;
   title?: string;
   resumeId?: string;
+  /** An archived resume can't be invited to anything until it's unarchived. */
+  isArchived?: boolean;
 }
 
 /* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
@@ -480,6 +482,7 @@ export default function AITalentMatchPage({
     "You do not have permission to invite to an assessment from AI Talent Match (needs 'Invite to Assessment' under AI Talent Match and 'Invite Candidates' under Assessment)";
   const AI_INTERVIEW_INVITE_DENIED =
     "You do not have permission to invite to an AI interview from AI Talent Match (needs 'Invite to AI Interview' under AI Talent Match and 'Invite Candidates' under AI Interview)";
+  const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 
 
   /* 'details' used to be its own viewMode (the "Match Details" page) — it and
@@ -2404,6 +2407,7 @@ export default function AITalentMatchPage({
     phone: c.phone,
     title: c.title,
     resumeId: c.resumeId,
+    isArchived: c.isArchived,
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
@@ -2429,6 +2433,8 @@ export default function AITalentMatchPage({
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
     const rowJobLock = jobLockFor(row.jobId, jobTitle);
+    // An archived resume blocks every invite, same as the resume detail page.
+    const rowLock = row.isArchived ? ARCHIVED_ACTION_MESSAGE : rowJobLock;
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -2444,11 +2450,12 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAssessmentFromMatch,
           deniedReason: ASSESSMENT_INVITE_DENIED,
-          // A Disabled / Archived JD: nothing can be created or sent for it.
-          extraDisabled: !!rowJobLock,
-          extraDisabledReason: rowJobLock ?? undefined,
+          // A Disabled / Archived JD, or an archived resume: nothing can be
+          // created or sent for it.
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAssessmentFromMatch || rowJobLock) {
+            if (!canInviteAssessmentFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
@@ -2462,10 +2469,10 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAIInterviewFromMatch,
           deniedReason: AI_INTERVIEW_INVITE_DENIED,
-          extraDisabled: !!rowJobLock,
-          extraDisabledReason: rowJobLock ?? undefined,
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAIInterviewFromMatch || rowJobLock) {
+            if (!canInviteAIInterviewFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
@@ -3432,6 +3439,7 @@ export default function AITalentMatchPage({
             phone: row.phone,
             title: row.title,
             resumeId: job.resumeId,
+            isArchived: row.best?.isArchived,
           },
           'candidates',
           job.jobTitle,
@@ -3451,6 +3459,7 @@ export default function AITalentMatchPage({
           phone: row.phone,
           title: row.title,
           resumeId: j.resumeId,
+          isArchived: row.best?.isArchived,
         }));
     /* Job Titles cell: the first two titles and a "+N more" chip; a click
        opens a small popup listing every title under "All (N)", each with how
@@ -5454,21 +5463,33 @@ export default function AITalentMatchPage({
                                 </DropdownMenuItem>
                                 {/* Same two invites as View by Candidates' per-job menu. */}
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isArchived}
                                   aria-disabled={!canInviteAssessmentFromMatch || undefined}
-                                  title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAssessmentForJobMatch(row, job)}
+                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAssessmentForJobMatch(row, job);
+                                  }}
                                 >
                                   <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isArchived}
                                   aria-disabled={!canInviteAIInterviewFromMatch || undefined}
-                                  title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAIInterviewForJobMatch(row, job)}
+                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAIInterviewForJobMatch(row, job);
+                                  }}
                                 >
                                   <Video className="w-4 h-4 text-menu-icon-ai" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>

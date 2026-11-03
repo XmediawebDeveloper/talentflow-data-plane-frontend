@@ -84,6 +84,10 @@ export const convertApiResumeToRow = (r: ApiResume): Resume => ({
   // Archive status
   isArchived: r.is_archived || false,
   archivedAt: r.archived_at,
+  // Pre-existing resume whose email matches a current team member's login —
+  // uploads are blocked at the source now, but older rows still need this
+  // flag so the table can grey them out and block selection/actions.
+  isTenantUserEmail: r.is_tenant_user_email || false,
 });
 
 /** One API folder (and its subtree) in the shape the folder UI reads. */
