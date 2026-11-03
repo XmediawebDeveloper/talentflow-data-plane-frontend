@@ -39,6 +39,35 @@ function readIsOrgLogin() {
   return subdomain || !!new URLSearchParams(window.location.search).get("org");
 }
 
+/**
+ * Nav label whose letters roll up one after another on hover, revealing an
+ * accent-coloured copy underneath. Screen readers get the plain label once.
+ */
+function RollText({ text }: { text: string }) {
+  return (
+    <span className="relative inline-block">
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true" className="inline-flex overflow-hidden leading-5">
+        {Array.from(text).map((char, i) => {
+          const glyph = char === " " ? " " : char;
+          const delay = { transitionDelay: `${i * 22}ms` };
+          const roll =
+            "block transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/nav:-translate-y-full motion-reduce:transition-none";
+          return (
+            <span key={i} className="relative inline-block">
+              <span className={roll} style={delay}>
+                {glyph}
+              </span>
+              <span className={`${roll} absolute left-0 top-full text-mkt-accent`} style={delay}>
+                {glyph}
+              </span>
+            </span>
+          );
+        })}
+      </span>
+    </span>
+  );
+}
 
 /**
  * Header for the redesigned landing and pricing pages. Same links, auth and
@@ -135,26 +164,32 @@ export function SiteHeader() {
   const sectionHref = (item: (typeof NAV_ITEMS)[number]) =>
     isLanding ? `#${item.section}` : `/#${item.section}`;
 
-  // Slide the marker to the current link (or hide it when there is none).
-  useIsoLayoutEffect(() => {
-    const nav = navRef.current;
+  // Slide the marker pill to a link (or hide it when there is none). The pill
+  // follows the pointer across the nav and settles back on the current item.
+  const moveMarker = (target: HTMLElement | null) => {
     const marker = markerRef.current;
-    if (!nav || !marker) return;
-    const active = nav.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!marker) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!active) {
-      gsap.to(marker, { autoAlpha: 0, duration: reduce ? 0 : 0.2 });
+    gsap.killTweensOf(marker);
+    if (!target) {
+      gsap.to(marker, { autoAlpha: 0, scale: 0.92, duration: reduce ? 0 : 0.25, ease: "power2.out" });
       return;
     }
     const wasHidden = gsap.getProperty(marker, "autoAlpha") === 0;
-    const target = { x: active.offsetLeft, width: active.offsetWidth };
+    const to = { x: target.offsetLeft, width: target.offsetWidth };
     if (wasHidden || reduce) {
-      gsap.set(marker, target);
-      gsap.to(marker, { autoAlpha: 1, duration: reduce ? 0 : 0.2 });
+      gsap.set(marker, { ...to, scale: reduce ? 1 : 0.85 });
+      gsap.to(marker, { autoAlpha: 1, scale: 1, duration: reduce ? 0 : 0.35, ease: "back.out(2)" });
     } else {
-      gsap.to(marker, { ...target, autoAlpha: 1, duration: 0.45, ease: "power3.out" });
+      gsap.to(marker, { ...to, autoAlpha: 1, scale: 1, duration: 0.5, ease: "elastic.out(1, 0.75)" });
     }
-  }, [activeSection, pathname, mounted]);
+  };
+
+  const activeLink = () => navRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
+
+  useIsoLayoutEffect(() => {
+    moveMarker(activeLink());
+  },[activeSection, pathname, mounted]);
 
   // Sheet links arrive in sequence so the menu reads top-down.
   useGSAP(
@@ -179,7 +214,9 @@ export function SiteHeader() {
       type="button"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       className="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition-colors hover:bg-slate-900/5 hover:text-mkt-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:text-slate-400 dark:hover:bg-white/10"
-      aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      // Theme is only known in the browser; until mounted, render the same
+      // neutral label the server did so hydration matches (like the icon below).
+      aria-label={!mounted ? "Toggle theme" : resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {mounted ? (
         resolvedTheme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />
@@ -207,7 +244,12 @@ export function SiteHeader() {
           <img src="/logos/talent_flow_logo.png" alt="TalentFlow" className="h-7 w-auto sm:h-9" />
         </Link>
 
-        <nav ref={navRef} aria-label="Main" className="relative hidden items-center lg:flex">
+        <nav
+          ref={navRef}
+          aria-label="Main"
+          className="relative hidden items-center lg:flex"
+          onMouseLeave={() => moveMarker(activeLink())}
+        >
           <span
             ref={markerRef}
             aria-hidden="true"
@@ -221,11 +263,19 @@ export function SiteHeader() {
                 href={sectionHref(item)}
                 prefetch={false}
                 aria-current={active ? "true" : undefined}
-                className={`relative rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
+                onMouseEnter={(e) => moveMarker(e.currentTarget)}
+                onFocus={(e) => moveMarker(e.currentTarget)}
+                onBlur={() => moveMarker(activeLink())}
+                className={`group/nav relative rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
                   active ? "text-mkt-ink" : "text-slate-500 hover:text-mkt-ink dark:text-slate-400"
                 }`}
               >
-                {item.label}
+                <RollText text={item.label} />
+                {/* Accent dot that pops in under the label on hover. */}
+                <span
+                  aria-hidden="true"
+                  className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 scale-0 rounded-full bg-mkt-accent opacity-0 transition-[scale,opacity] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover/nav:scale-100 group-hover/nav:opacity-100 motion-reduce:transition-none"
+                />
               </Link>
             );
           })}

@@ -10,8 +10,15 @@ import { display, DISPLAY } from "@/components/marketing/fonts";
 import { Cta } from "@/components/marketing/Cta";
 import { MarketingFaq } from "@/components/marketing/MarketingFaq";
 import { MotionNoScript, PageTitle, PRE, RevealGroup, RevealHeading } from "@/components/marketing/motion";
-import { PLAN_RAIL, PLAN_RAIL_ITEM, PlanCard, SwipeHint } from "@/components/marketing/PlanCard";
+import { PLAN_RAIL } from "@/components/marketing/PlanCard";
+import { PlanGroups } from "@/components/marketing/pricing/PlanGroups";
+import { PricingHeroStack } from "@/components/marketing/pricing/PricingHeroStack";
 import type { MarketingPlan } from "@/components/marketing/plans";
+import {
+  PlanEssentialsSection,
+  pricingFaqItems,
+  UnitsSection,
+} from "@/components/marketing/pricing/PricingExplainers";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -549,14 +556,6 @@ export default function PricingPage() {
   const toggleDisabled = !hasAnyMonthly || !hasAnyAnnual;
   const bestSaving = plans.reduce((best, plan) => Math.max(best, Math.round(plan.discountPercentage ?? 0)), 0);
 
-  // Column count follows the number of cards, so a row never ends in an orphan.
-  const gridCols =
-    gridPlans.length >= 4
-      ? 'sm:grid-cols-2 xl:grid-cols-4'
-      : gridPlans.length === 3
-        ? 'sm:grid-cols-2 lg:grid-cols-3'
-        : 'sm:grid-cols-2';
-
   const SHELL = 'mx-auto w-full max-w-[1200px] xl:max-w-[1320px] 2xl:max-w-[1480px] px-4 sm:px-6 lg:px-8';
   const H2 = `${DISPLAY} text-[clamp(1.5rem,3.4vw,2.5rem)] font-bold leading-[1.1] tracking-[-0.03em] text-mkt-ink`;
 
@@ -569,10 +568,10 @@ export default function PricingPage() {
           aria-hidden="true"
           className="pointer-events-none absolute -right-40 -top-48 h-[560px] w-[560px] rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.12),transparent)] dark:bg-[radial-gradient(closest-side,rgba(76,123,232,0.16),transparent)]"
         />
-        <div className={`${SHELL} relative flex flex-col gap-5 pb-7 pt-8 sm:gap-8 sm:pb-12 sm:pt-20 lg:flex-row lg:items-end lg:justify-between lg:pb-14`}>
+        <div className={`${SHELL} relative grid grid-cols-1 items-center gap-2 pb-4 pt-8 sm:pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-8 lg:pb-8`}>
           <div className="max-w-2xl">
             <PageTitle
-              lines={['Plans for every', 'size of hiring team']}
+              lines={['Start small.', "Grow when you're ready."]}
               className={`${DISPLAY} text-[clamp(1.95rem,5.6vw,4.25rem)] font-extrabold leading-[1] tracking-[-0.045em]`}
             />
             <RevealGroup immediate delay={0.5}>
@@ -581,24 +580,29 @@ export default function PricingPage() {
                 data-pre
                 className={`${PRE} mt-3.5 max-w-xl text-[15px] leading-relaxed text-slate-600 dark:text-slate-300 sm:mt-6 sm:text-lg`}
               >
+                Simple plans plus usage units, so you only pay for what you use.{' '}
                 {freeTrial
-                  ? `Start with a ${freeTrial.trial_days}-day free trial. No credit card required.`
-                  : 'Start with a free trial. No credit card required.'}
+                  ? `Start with a ${freeTrial.trial_days}-day free trial.`
+                  : 'Start with a free trial.'}
               </p>
             </RevealGroup>
+            {!isLoading && plans.length > 0 && (
+              <RevealGroup immediate delay={0.6} className="mt-6 sm:mt-8">
+                <div data-reveal>
+                  <BillingToggle
+                    isYearly={isYearly}
+                    onChange={setIsYearly}
+                    savePercent={toggleDisabled ? 0 : bestSaving}
+                    disabled={toggleDisabled}
+                  />
+                </div>
+              </RevealGroup>
+            )}
           </div>
-          {!isLoading && plans.length > 0 && (
-            <RevealGroup immediate delay={0.2} className="shrink-0">
-              <div data-reveal>
-                <BillingToggle
-                  isYearly={isYearly}
-                  onChange={setIsYearly}
-                  savePercent={toggleDisabled ? 0 : bestSaving}
-                  disabled={toggleDisabled}
-                />
-              </div>
-            </RevealGroup>
-          )}
+          {/* 3D cost flow: plan → usage units → what you pay, from live plan data. */}
+          <div className="min-w-0 overflow-hidden lg:overflow-visible">
+            <PricingHeroStack plans={gridPlans} isYearly={isYearly} />
+          </div>
         </div>
       </section>
 
@@ -629,16 +633,7 @@ export default function PricingPage() {
               No plans are on sale right now. Contact us and we&apos;ll set you up directly.
             </p>
           ) : (
-            <>
-              <RevealGroup immediate delay={0.25} stagger={0.07} y={40} className={`${PLAN_RAIL} ${gridCols}`}>
-                {gridPlans.map(plan => (
-                  <div key={plan.id} data-reveal className={PLAN_RAIL_ITEM}>
-                    <PlanCard plan={plan} isYearly={isYearly} />
-                  </div>
-                ))}
-              </RevealGroup>
-              <SwipeHint count={gridPlans.length} />
-            </>
+            <PlanGroups plans={gridPlans} isYearly={isYearly} />
           )}
 
           {/* Custom plan — a band rather than another card: it has no price,
@@ -653,11 +648,11 @@ export default function PricingPage() {
               <div className="relative">
                 <h2 className={`${DISPLAY} text-xl font-bold tracking-[-0.025em] sm:text-3xl`}>Custom</h2>
                 <p className="mt-2 max-w-md text-sm sm:mt-3 sm:text-[15px] leading-relaxed text-white/70">
-                  Tailored for large teams with custom requirements. Users, jobs, resume storage,
-                  scores, assessments and AI interviews are all unlimited.
+                  A plan sized to your team. Tell us how you hire and we&apos;ll put together
+                  the right mix of users and usage units.
                 </p>
                 <Cta href="/contact" variant="light" size="sm" magnetic className="mt-5 h-10 px-5 sm:mt-7 sm:h-11 sm:px-6">
-                  Contact sales
+                  Talk to Sales
                 </Cta>
               </div>
               {customFeatures.length > 0 && (
@@ -683,7 +678,7 @@ export default function PricingPage() {
             <RevealHeading text="Top up with add-ons" className={H2} />
             <RevealGroup>
               <p data-reveal className="mt-3 max-w-sm text-[15px] sm:mt-4 sm:text-base leading-relaxed text-slate-600 dark:text-slate-400">
-                Run out of credits before your plan renews? Add units without changing plan.
+                Top up anytime with add-on unit packs. No plan change needed.
               </p>
             </RevealGroup>
           </div>
@@ -737,10 +732,14 @@ export default function PricingPage() {
         </div>
       </section>
 
+      {/* Explainers: how usage units work, then plans and billing at a glance. */}
+      <UnitsSection />
+      <PlanEssentialsSection />
+
       {/* FAQ */}
       <section className="py-12 sm:py-24 lg:py-28">
         <div className={SHELL}>
-          <MarketingFaq trialDays={freeTrial?.trial_days ?? null} />
+          <MarketingFaq items={pricingFaqItems(freeTrial?.trial_days ?? null)} />
         </div>
       </section>
     </div>
