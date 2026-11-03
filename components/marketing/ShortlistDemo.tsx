@@ -5,16 +5,24 @@ import { Pause, Play } from "lucide-react";
 import { gsap, ScrollTrigger, useGSAP } from "@/lib/gsap";
 import { DISPLAY } from "./fonts";
 
-/** Sample applicants, in the order they applied. */
+/** Sample resumes from the database, in the order they were stored. Match score is 1 to 10. */
 const APPLICANTS = [
-  { initials: "RV", name: "Rahul Verma", role: "Frontend engineer, 4 years", score: 62 },
-  { initials: "AR", name: "Ananya Rao", role: "React lead, 8 years", score: 91 },
-  { initials: "TB", name: "Tom Becker", role: "Full-stack developer, 2 years", score: 48 },
-  { initials: "KM", name: "Krish Menon", role: "Senior UI engineer, 7 years", score: 87 },
-  { initials: "SL", name: "Sara Lindqvist", role: "JavaScript developer, 5 years", score: 73 },
-  { initials: "MI", name: "Meera Iyer", role: "Staff frontend engineer, 10 years", score: 95 },
-  { initials: "DA", name: "Diego Alvarez", role: "Web developer, 3 years", score: 55 },
+  { initials: "RV", name: "Rahul Verma", role: "Frontend engineer, 4 years", score: 6 },
+  { initials: "AR", name: "Ananya Rao", role: "React lead, 8 years", score: 9 },
+  { initials: "TB", name: "Tom Becker", role: "Full-stack developer, 2 years", score: 3 },
+  { initials: "KM", name: "Krish Menon", role: "Senior UI engineer, 7 years", score: 8 },
+  { initials: "SL", name: "Sara Lindqvist", role: "JavaScript developer, 5 years", score: 5 },
+  { initials: "MI", name: "Meera Iyer", role: "Staff frontend engineer, 10 years", score: 9 },
+  { initials: "DA", name: "Diego Alvarez", role: "Web developer, 3 years", score: 4 },
 ];
+
+/** AI Talent Match fit label for a 1–10 match score (illustrative bands). */
+function fitOf(score: number) {
+  if (score >= 9) return { label: "Excellent fit", tone: "bg-mkt-cyan/12 text-mkt-cyan-ink" };
+  if (score >= 7) return { label: "Good fit", tone: "bg-mkt-accent/10 text-mkt-accent" };
+  if (score >= 5) return { label: "Moderate fit", tone: "bg-mkt-amber/15 text-mkt-amber-ink" };
+  return { label: "Low fit", tone: "bg-slate-900/[0.06] text-slate-600 dark:bg-white/10 dark:text-slate-300" };
+}
 
 const SHORTLIST_SIZE = 3;
 
@@ -27,16 +35,16 @@ const RANKS = (() => {
 })();
 
 const STATUS = {
-  waiting: "248 applicants waiting",
-  screening: "Scoring applicants against the role",
-  ranking: "Ranking by match",
-  done: "Top 3 shortlisted",
+  waiting: "AI Talent Match · Resume Database",
+  screening: "Matching every resume to the job",
+  ranking: "Ranking the best fits first",
+  done: "Top 3 ready to shortlist",
 };
 
 /**
- * The hero's one orchestrated moment: applicants arrive unscored, each is
- * scored in turn, the list re-sorts itself by match, and the top three are
- * shortlisted. Reduced-motion visitors get the finished state immediately.
+ * The hero's one orchestrated moment: AI Talent Match gives each resume a
+ * 1–10 match score, the list re-sorts itself best fit first, and every row
+ * gets its fit label. Reduced-motion visitors get the finished state immediately.
  */
 export function ShortlistDemo() {
   const root = useRef<HTMLDivElement>(null);
@@ -85,7 +93,8 @@ export function ShortlistDemo() {
           const bars = gsap.utils.toArray<HTMLElement>("[data-bar]", el);
           const scores = gsap.utils.toArray<HTMLElement>("[data-score]", el);
           const chips = gsap.utils.toArray<HTMLElement>("[data-chip]", el);
-          const shortlistChips = chips.filter((_, i) => RANKS[i] < SHORTLIST_SIZE);
+          // Every row earns its fit label once the list is ranked.
+          const shortlistChips = chips;
           const control = el.querySelector<HTMLElement>("[data-control]")!;
           const status = el.querySelector<HTMLElement>("[data-status]")!;
           const setStatus = (text: string) => () => {
@@ -119,7 +128,7 @@ export function ShortlistDemo() {
               { backgroundColor: "rgba(7,156,196,0.08)", duration: 0.25, yoyo: true, repeat: 1 },
               at
             )
-              .fromTo(bars[i], { scaleX: 0 }, { scaleX: applicant.score / 100, duration: 0.7 }, at)
+              .fromTo(bars[i], { scaleX: 0 }, { scaleX: applicant.score / 10, duration: 0.7 }, at)
               .fromTo(
                 counter,
                 { value: 0 },
@@ -254,8 +263,8 @@ export function ShortlistDemo() {
         </div>
 
         <p className="sr-only">
-          Example: seven applicants are scored against the role, ranked by match, and the
-          top three are shortlisted.
+          Example: AI Talent Match gives seven resumes a match score from 1 to 10, ranks the
+          best fits first and labels each one an Excellent, Good, Moderate or Low fit.
         </p>
         <ol data-list aria-hidden="true" className="relative px-1.5 py-1.5 sm:px-3 sm:py-2">
           {APPLICANTS.map((applicant, i) => (
@@ -272,9 +281,9 @@ export function ShortlistDemo() {
                   <span className="truncate text-[13px] font-semibold text-mkt-ink sm:text-sm">{applicant.name}</span>
                   <span
                     data-chip
-                    className="invisible shrink-0 rounded-full bg-mkt-amber/15 px-1.5 py-0.5 text-[10px] font-semibold sm:px-2 sm:text-[11px] text-mkt-amber-ink opacity-0"
+                    className={`invisible shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold opacity-0 sm:px-2 sm:text-[11px] ${fitOf(applicant.score).tone}`}
                   >
-                    Shortlisted
+                    {fitOf(applicant.score).label}
                   </span>
                 </span>
                 <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400 sm:text-xs">
@@ -300,7 +309,7 @@ export function ShortlistDemo() {
         </ol>
 
         <div className="flex items-center justify-between gap-3 border-t border-slate-900/[0.06] px-4 py-2 dark:border-white/[0.08] sm:gap-4 sm:px-6 sm:py-3">
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 sm:text-xs">Every score carries its reasoning</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 sm:text-xs">Match score 1–10 · send the shortlist to Resume Scoring</p>
           {/* The loop never ends on its own, so it can always be stopped. */}
           <button
             type="button"

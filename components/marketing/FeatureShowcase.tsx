@@ -2,11 +2,12 @@
 
 import { useRef, useState } from "react";
 import { gsap, useGSAP, withMotion } from "@/lib/gsap";
-import { Sparkles, ClipboardCheck, Video, Users, Check, X } from "lucide-react";
+import { Check, ClipboardCheck, FileText, Library, MessagesSquare, Mic, Play, ShieldCheck } from "lucide-react";
 
 /* ------------------------------------------------------------------ *
- * Previews — each feature shows the artefact it actually produces,
- * drawn in the same panel language as the hero shortlist.
+ * Previews — each module shows the artefact it actually produces,
+ * drawn in the same panel language as the hero match list. Every
+ * preview is sample data and is labelled as such.
  * ------------------------------------------------------------------ */
 
 function PreviewFrame({
@@ -20,8 +21,11 @@ function PreviewFrame({
 }) {
   return (
     <div className="flex h-full flex-col rounded-[20px] border border-slate-900/[0.08] bg-mkt-surface p-4 shadow-[0_30px_60px_-36px_rgba(15,60,153,0.35)] dark:border-white/10 sm:p-6">
-      <p className="border-b border-slate-100 pb-3 text-xs font-semibold text-slate-500 dark:border-white/10 dark:text-slate-400">
-        {label}
+      <p className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-xs font-semibold text-slate-500 dark:border-white/10 dark:text-slate-400">
+        <span className="min-w-0 truncate">{label}</span>
+        <span className="shrink-0 rounded-full bg-mkt-cyan/10 px-2 py-0.5 text-[11px] font-semibold text-mkt-cyan-ink">
+          Sample
+        </span>
       </p>
       <div className="flex-1 py-3 sm:py-4">{children}</div>
       <p className="border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-white/10 dark:text-slate-400">
@@ -31,93 +35,120 @@ function PreviewFrame({
   );
 }
 
+const VERDICT_TONE = {
+  "Exact Match": "bg-mkt-cyan/12 text-mkt-cyan-ink",
+  "Partial Match": "bg-mkt-amber/12 text-mkt-amber-ink",
+  "No Match": "bg-slate-900/[0.06] text-slate-600 dark:bg-white/10 dark:text-slate-300",
+} as const;
+
 function ScoringPreview() {
-  const criteria = [
-    { label: "Skills match", value: 94 },
-    { label: "Experience", value: 88 },
-    { label: "Domain fit", value: 76 },
-    { label: "Location", value: 45 },
+  const criteria: { label: string; verdict: keyof typeof VERDICT_TONE; reason: string }[] = [
+    { label: "Must-have skills", verdict: "Exact Match", reason: "Java, Spring Boot and SQL used in recent roles" },
+    { label: "Experience", verdict: "Exact Match", reason: "7 years against the 5 to 8 asked for" },
+    { label: "Nice-to-have skills", verdict: "Partial Match", reason: "Kafka in two projects, no Docker mentioned" },
+    { label: "Industry", verdict: "No Match", reason: "Retail background, the role asks for banking" },
   ];
 
   return (
-    <PreviewFrame label="Ananya Rao, score breakdown" footer="Every score carries its reasoning">
+    <PreviewFrame
+      label="Ananya Rao · Senior Java Developer"
+      footer="Strengths and gaps in plain words · export to Excel, CSV or PDF"
+    >
       <ul className="space-y-3">
         {criteria.map((row) => (
-          <li key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-            <span className="text-sm text-slate-600 dark:text-slate-300">{row.label}</span>
-            <span className="flex items-center gap-3">
-              <span className="hidden h-1.5 w-24 overflow-hidden rounded-full bg-slate-200 dark:bg-white/10 sm:block">
-                <span
-                  data-fill
-                  className={`block h-full origin-left rounded-full ${
-                    row.value >= 80 ? "bg-mkt-cyan" : row.value >= 60 ? "bg-mkt-amber" : "bg-slate-400"
-                  }`}
-                  style={{ width: `${row.value}%` }}
-                />
-              </span>
-              <span className="w-9 text-right text-sm font-semibold tabular-nums text-mkt-ink">
-                {row.value}
-              </span>
+          <li key={row.label} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5">
+            <span className="text-sm font-medium text-mkt-ink">{row.label}</span>
+            <span
+              className={`row-span-2 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ${VERDICT_TONE[row.verdict]}`}
+            >
+              {row.verdict}
             </span>
+            <span className="text-xs leading-relaxed text-slate-500 dark:text-slate-400">{row.reason}</span>
           </li>
         ))}
       </ul>
-      <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-mkt-cyan/10 px-2.5 py-1 text-xs font-medium text-mkt-cyan-ink">
-        <Check className="h-3.5 w-3.5" />
-        Strong match, shortlisted
-      </p>
     </PreviewFrame>
   );
 }
 
 function AssessmentPreview() {
-  const options = [
-    { text: "useMemo caches the rendered output", correct: false },
-    { text: "useMemo caches an expensive computation", correct: true },
-    { text: "useMemo replaces useState", correct: false },
-  ];
+  const rounds = ["Technical", "Coding", "HR"];
+  const checks = ["Identity check", "Full-screen mode", "Camera and screen recording"];
 
   return (
-    <PreviewFrame label="React quiz, question 3 of 12" footer="Graded the moment it is submitted">
-      <p className="text-sm font-medium text-mkt-ink">
-        What does useMemo do in a React component?
-      </p>
-      <ul className="mt-3 space-y-2">
-        {options.map((option) => (
+    <PreviewFrame
+      label="Senior Java Developer · AI Assessment"
+      footer="Fresh questions for every candidate, at the same difficulty and on the same topics"
+    >
+      <ul className="flex flex-wrap gap-1.5" aria-label="Rounds">
+        {rounds.map((round) => (
           <li
-            key={option.text}
-            className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 text-sm ${
-              option.correct
-                ? "border-mkt-cyan/40 bg-mkt-cyan/[0.07] text-mkt-ink"
-                : "border-slate-200/80 text-slate-600 dark:border-white/10 dark:text-slate-400"
-            }`}
+            key={round}
+            className="inline-flex items-center gap-1 rounded-full bg-mkt-accent/10 px-2.5 py-1 text-xs font-semibold text-mkt-accent"
           >
-            {option.correct ? (
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-mkt-cyan" />
-            ) : (
-              <X className="mt-0.5 h-4 w-4 shrink-0 text-slate-300 dark:text-slate-600" />
-            )}
-            {option.text}
+            <Check aria-hidden="true" className="h-3.5 w-3.5" />
+            {round}
           </li>
         ))}
       </ul>
+
+      {/* The coding round's editor, in miniature. */}
+      <div className="mt-3 overflow-hidden rounded-xl border border-slate-900/[0.08] dark:border-white/10">
+        <div className="flex items-center justify-between gap-2 border-b border-slate-900/[0.06] bg-slate-900/[0.03] px-3 py-1.5 text-[11px] text-slate-500 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-slate-400">
+          <span className="font-semibold">Coding round · Python</span>
+          <span className="inline-flex items-center gap-1 font-semibold text-mkt-accent">
+            <Play aria-hidden="true" className="h-3 w-3" /> Run
+          </span>
+        </div>
+        <pre className="overflow-x-auto px-3 py-2 font-mono text-[11px] leading-relaxed text-slate-600 dark:text-slate-300 sm:text-xs">
+          {"def top_k(scores, k):\n    return sorted(scores, reverse=True)[:k]"}
+        </pre>
+      </div>
+
+      <ul className="mt-3 grid gap-1.5 sm:grid-cols-3" aria-label="Proctoring">
+        {checks.map((check) => (
+          <li key={check} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-300">
+            <ShieldCheck aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-mkt-cyan" />
+            {check}
+          </li>
+        ))}
+      </ul>
+
+      <dl className="mt-3 flex flex-wrap items-end justify-between gap-2 border-t border-slate-100 pt-3 dark:border-white/10">
+        <div>
+          <dt className="text-xs text-slate-500 dark:text-slate-400">Recommendation</dt>
+          <dd className="mt-0.5 text-sm font-semibold text-mkt-ink">Strong Yes</dd>
+        </div>
+        <div className="text-right">
+          <dt className="text-xs text-slate-500 dark:text-slate-400">Scale</dt>
+          <dd className="mt-0.5 text-xs text-slate-600 dark:text-slate-300">Strong Yes to Strong No</dd>
+        </div>
+      </dl>
     </PreviewFrame>
   );
 }
 
 function InterviewPreview() {
   const transcript = [
-    { time: "04:12", text: "Walk me through the migration you led." },
-    { time: "04:20", text: "We moved 40 services off the monolith in two quarters…" },
+    { speaker: "Bina", text: "Walk me through a Java service you designed." },
+    { speaker: "Krish", text: "I built a payments service on Spring Boot and ran it in containers…" },
+    { speaker: "Bina", text: "You mentioned containers. How did you set up Docker for it?" },
   ];
 
   return (
-    <PreviewFrame label="Krish Menon, AI interview" footer="Recorded, transcribed, scored">
-      <ul className="space-y-3">
-        {transcript.map((line) => (
-          <li key={line.time} className="flex gap-3">
-            <span className="pt-0.5 text-xs font-medium tabular-nums text-slate-400 dark:text-slate-500">
-              {line.time}
+    <PreviewFrame label="Krish Menon · AI Interview with Bina" footer="Full recording and transcript · checked by a second AI">
+      <ul className="space-y-2.5">
+        {transcript.map((line, i) => (
+          <li key={i} className="flex gap-3">
+            <span
+              className={`mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full text-[10px] font-bold ${
+                line.speaker === "Bina"
+                  ? "bg-mkt-accent-solid text-white"
+                  : "bg-slate-900/[0.06] text-slate-600 dark:bg-white/10 dark:text-slate-300"
+              }`}
+            >
+              {line.speaker === "Bina" ? <Mic aria-hidden="true" className="h-3 w-3" /> : <span aria-hidden="true">KM</span>}
+              <span className="sr-only">{line.speaker}:</span>
             </span>
             <span className="text-sm text-slate-600 dark:text-slate-300">{line.text}</span>
           </li>
@@ -125,17 +156,13 @@ function InterviewPreview() {
       </ul>
       <dl className="mt-4 grid grid-cols-3 gap-2 border-t border-slate-100 pt-4 dark:border-white/10">
         {[
-          { label: "Clarity", value: "High" },
-          { label: "Depth", value: "High" },
-          { label: "Sentiment", value: "+0.62" },
+          { label: "Overall", value: "82/100" },
+          { label: "Mode", value: "Timed" },
+          { label: "Risk level", value: "Low" },
         ].map((metric) => (
           <div key={metric.label}>
-            <dt className="text-xs text-slate-500 dark:text-slate-400">
-              {metric.label}
-            </dt>
-            <dd className="mt-0.5 text-sm font-semibold tabular-nums text-mkt-ink">
-              {metric.value}
-            </dd>
+            <dt className="text-xs text-slate-500 dark:text-slate-400">{metric.label}</dt>
+            <dd className="mt-0.5 text-sm font-semibold tabular-nums text-mkt-ink">{metric.value}</dd>
           </div>
         ))}
       </dl>
@@ -143,36 +170,24 @@ function InterviewPreview() {
   );
 }
 
-function CollaborationPreview() {
-  const thread = [
-    { initials: "PM", name: "Priya M.", note: "Strong on system design. Advance.", verdict: "Advance" },
-    { initials: "JT", name: "Jon T.", note: "Wants to see more testing depth.", verdict: "Hold" },
+function QuestionBankPreview() {
+  const questions = [
+    { text: "Are you open to working from our Pune office?", type: "Yes/No" },
+    { text: "Why are you looking for a new role?", type: "Text" },
+    { text: "Are you comfortable with rotational shifts?", type: "Yes/No" },
   ];
 
   return (
-    <PreviewFrame label="Hiring panel, Senior React Engineer" footer="One record, every reviewer">
-      <ul className="space-y-3">
-        {thread.map((entry) => (
-          <li key={entry.initials} className="flex items-start gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mkt-accent-solid/10 text-2xs font-semibold text-mkt-accent dark:bg-white/10 dark:text-slate-200">
-              {entry.initials}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-mkt-ink">{entry.name}</span>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    entry.verdict === "Advance"
-                      ? "bg-mkt-cyan/12 text-mkt-cyan-ink"
-                      : "bg-mkt-amber/12 text-mkt-amber-ink"
-                  }`}
-                >
-                  {entry.verdict}
-                </span>
-              </span>
-              <span className="mt-0.5 block text-sm text-slate-600 dark:text-slate-400">
-                {entry.note}
-              </span>
+    <PreviewFrame label="HR Question Bank · your company's questions" footer="Used in both AI Assessments and AI Interviews">
+      <ul className="space-y-2.5">
+        {questions.map((q) => (
+          <li
+            key={q.text}
+            className="flex items-start justify-between gap-3 rounded-lg border border-slate-200/80 px-3 py-2.5 dark:border-white/10"
+          >
+            <span className="text-sm text-mkt-ink">{q.text}</span>
+            <span className="shrink-0 rounded-full bg-slate-900/[0.05] px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-white/[0.08] dark:text-slate-300">
+              {q.type}
             </span>
           </li>
         ))}
@@ -187,44 +202,44 @@ const FEATURES = [
   {
     id: "scoring",
     stage: "Screening",
-    icon: Sparkles,
-    title: "AI resume scoring",
+    icon: FileText,
+    title: "Resume Scoring",
     description:
-      "Every resume is ranked against the job description with 95% accuracy, so the shortlist is ready before you open the first CV.",
+      "One clear score with real reasons. Job title, experience, skills, education, industry, location and job stability are each judged an Exact, Partial or No Match.",
     Preview: ScoringPreview,
   },
   {
     id: "assessments",
-    stage: "Assessment",
+    stage: "Skills test",
     icon: ClipboardCheck,
-    title: "Smart assessments",
+    title: "AI Assessments",
     description:
-      "Build role-specific tests and quizzes that grade themselves and feed straight back into the candidate's profile.",
+      "Proctored Technical, Coding and HR rounds built from your JD, with a code editor for 13 languages and a recommendation from Strong Yes to Strong No.",
     Preview: AssessmentPreview,
   },
   {
     id: "interviews",
     stage: "Interview",
-    icon: Video,
-    title: "Video interviews",
+    icon: MessagesSquare,
+    title: "AI Interviews",
     description:
-      "Run and record interviews in the platform, with transcripts and AI-assisted signals on clarity, depth and sentiment.",
+      "Bina interviews by voice, asks follow-up questions and hands you a report with an overall score out of 100 and a Low, Medium or High risk level.",
     Preview: InterviewPreview,
   },
   {
-    id: "collaboration",
-    stage: "Decision",
-    icon: Users,
-    title: "Team collaboration",
+    id: "questions",
+    stage: "Shared",
+    icon: Library,
+    title: "HR Question Bank",
     description:
-      "Hiring managers and interviewers leave verdicts on one shared record, so the decision never lives in someone's inbox.",
-    Preview: CollaborationPreview,
+      "Save your company's own HR questions once, with text or Yes/No answers, and use them in AI Assessments and AI Interviews.",
+    Preview: QuestionBankPreview,
   },
 ];
 
 /**
- * The features read as the four stages of a hire. Picking a stage shows the
- * artefact that stage produces rather than another card of adjectives.
+ * The evaluation modules, in the order a candidate meets them. Picking one
+ * shows the artefact it produces rather than another card of adjectives.
  */
 export function FeatureShowcase() {
   const [activeId, setActiveId] = useState(FEATURES[0].id);
@@ -232,8 +247,8 @@ export function FeatureShowcase() {
   const panelRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
 
-  // The artefact assembles itself: panel rises, its rows arrive in order and
-  // score bars fill. First time on scroll-in, then on every stage switch.
+  // The artefact assembles itself: panel rises and its rows arrive in order.
+  // First time on scroll-in, then on every switch.
   useGSAP(
     () => {
       const panel = panelRef.current!;
@@ -249,12 +264,6 @@ export function FeatureShowcase() {
           { y: 10, autoAlpha: 0 },
           { y: 0, autoAlpha: 1, duration: 0.45, stagger: 0.06, ease: "power3.out" },
           first ? 0 : 0.1
-        );
-        tl.fromTo(
-          panel.querySelectorAll("[data-fill]"),
-          { scaleX: 0 },
-          { scaleX: 1, duration: 0.9, stagger: 0.08, ease: "power3.out" },
-          "<0.1"
         );
       });
     },
@@ -273,11 +282,11 @@ export function FeatureShowcase() {
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)] lg:gap-10">
-      {/* Stage list — the section's spine. Below lg it becomes a scrolling
+      {/* Module list — the section's spine. Below lg it becomes a scrolling
           strip that bleeds into the gutter, so a clipped card reads as more. */}
       <div
         role="tablist"
-        aria-label="Product capabilities"
+        aria-label="Product modules"
         aria-orientation="vertical"
         className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-col lg:gap-0 lg:overflow-visible lg:px-0 lg:pb-0"
         onKeyDown={(event) => {
@@ -314,7 +323,7 @@ export function FeatureShowcase() {
                   : "hover:bg-slate-100/70 lg:hover:bg-transparent dark:hover:bg-white/[0.04]"
               }`}
             >
-              {/* Active marker: a rule that only the chosen stage carries. */}
+              {/* Active marker: a rule that only the chosen module carries. */}
               <span
                 aria-hidden="true"
                 className={`absolute left-0 top-0 hidden h-full w-[3px] rounded-full bg-mkt-amber transition-opacity lg:block ${
@@ -345,7 +354,7 @@ export function FeatureShowcase() {
                 </span>
               </span>
 
-              {/* The description belongs to the open stage only. */}
+              {/* The description belongs to the open module only. */}
               <span
                 className={`hidden text-sm leading-relaxed text-slate-600 dark:text-slate-400 lg:block lg:pl-5 ${
                   selected ? "lg:mt-3" : "lg:h-0 lg:overflow-hidden"
