@@ -888,7 +888,6 @@ export default function ServerCandidatePicker({
       onSelect: () => askFor(setDeleteAsk)({ id, name, archived: where === 'archived' }),
     }] : []),
   ];
-  const archivedAllTicked = !!archived?.rows.length && archivedTicked.length === archived.rows.length;
   const unarchive = async (ids: string[]) => {
     if (!canUnarchive || ids.length === 0) return;
     const rootId = flatFolders.find(isRootFolder)?.id;
@@ -1049,8 +1048,10 @@ export default function ServerCandidatePicker({
   };
 
   /* Select loaded / Select all matching — after Upload resumes on the
-     Resume Database tab, beside the heading on the job's lists. */
-  const pickControls = (
+     Resume Database tab, beside the heading on the job's lists. Hidden
+     while browsing Archived Resumes: that folder's rows are never
+     invite-eligible, so these must never add them to the selection. */
+  const pickControls = archivedHere ? null : (
     <>
       {!inFilterMode && (
         <label className={`inline-flex items-center gap-1.5 text-xs font-medium ${pickingDisabled || loadedEligible.length === 0 ? 'text-gray-400 cursor-not-allowed' : 'text-gray-700 dark:text-slate-300 cursor-pointer'}`}>
@@ -1312,15 +1313,14 @@ export default function ServerCandidatePicker({
         ) : (
           <ul className="rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 max-h-72 overflow-y-auto">
             <li className="sticky top-0 z-[1] flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-50 dark:bg-slate-800 text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">
-              <label className={`inline-flex items-center gap-2 min-w-0 ${canUnarchive ? 'cursor-pointer' : 'cursor-not-allowed'}`}>
+              <label className="inline-flex items-center gap-2 min-w-0 cursor-not-allowed">
                 <input
                   type="checkbox"
-                  checked={archivedAllTicked}
-                  ref={(el) => { if (el) el.indeterminate = !archivedAllTicked && archivedTicked.length > 0; }}
-                  disabled={!canUnarchive || unarchiving.size > 0}
-                  onChange={() => setArchivedPicks(archivedAllTicked ? new Set() : new Set(archived.rows.map((r) => r.id)))}
-                  aria-label="Tick every listed archived resume"
-                  className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                  checked={false}
+                  disabled
+                  title="Archived resumes can't be selected here — unarchive a resume (⋮ menu) to invite it"
+                  aria-label="Archived resumes cannot be selected for invite"
+                  className="m-0 shrink-0 rounded border-gray-300 cursor-not-allowed"
                 />
                 <span className="truncate">Archived Resumes</span>
               </label>
@@ -1345,15 +1345,17 @@ export default function ServerCandidatePicker({
               const ticked = archivedPicks.has(r.id);
               return (
                 <li key={r.id} className={`flex items-center gap-2.5 px-3 py-2 ${ticked ? 'bg-amber-50/60 dark:bg-amber-500/5' : ''}`}>
-                  {/* Ticks here pick resumes to unarchive — archived resumes are never invited. */}
+                  {/* Archived resumes are never invite-eligible, so this stays
+                      disabled here — unarchive is still one click away via
+                      the ⋮ menu below, outside the invite-selection flow. */}
                   <input
                     type="checkbox"
                     checked={ticked}
-                    disabled={!canUnarchive || busy}
+                    disabled
                     onChange={() => setArchivedPicks((s) => { const next = new Set(s); if (next.has(r.id)) next.delete(r.id); else next.add(r.id); return next; })}
-                    title={canUnarchive ? 'Tick to unarchive' : 'You do not have permission to unarchive resumes'}
-                    aria-label={`Tick ${r.name} to unarchive`}
-                    className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                    title="Archived resumes can't be selected here — unarchive it (⋮ menu) to invite it"
+                    aria-label={`${r.name} is archived and cannot be selected for invite`}
+                    className="m-0 shrink-0 rounded border-gray-300 cursor-not-allowed"
                   />
                   <span aria-hidden="true" className="max-sm:hidden shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 dark:bg-amber-500/10 text-2xs font-semibold text-amber-700 dark:text-amber-400">
                     {initials(r.name)}
