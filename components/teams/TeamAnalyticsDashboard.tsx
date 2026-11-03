@@ -937,6 +937,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
             </Button>
           )}
           <ExportFormatModal
+            tone="plain"
             open={showExportModal}
             onClose={() => setShowExportModal(false)}
             title="Export Team Analytics"

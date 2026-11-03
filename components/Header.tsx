@@ -627,10 +627,11 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     : rawBillingPeriod
     ? `${rawBillingPeriod.charAt(0).toUpperCase()}${rawBillingPeriod.slice(1).toLowerCase()} plan`
     : null;
-  const renewalSource = quotaData?.plan_expiry_date
-    || quotaData?.billing_period?.end
-    || quotaData?.trial_end_date
-    || quotaData?.trial_info?.trial_end_date;
+  // Trial: only the trial's own end date — billing_period is the monthly usage
+  // cycle and would show a 14-day trial as ending at month end.
+  const renewalSource = quotaData?.is_trial
+    ? (quotaData?.trial_end_date || quotaData?.trial_info?.trial_end_date)
+    : (quotaData?.plan_expiry_date || quotaData?.billing_period?.end);
   const renewalDate = renewalSource ? new Date(renewalSource) : null;
   const renewalValid = !!(renewalDate && !isNaN(renewalDate.getTime()));
   const renewalLabel = renewalValid

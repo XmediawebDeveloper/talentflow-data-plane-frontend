@@ -62,6 +62,7 @@ import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
@@ -2337,14 +2338,24 @@ export default function AITalentMatchPage({
         ticks come back, the job is re-checked, and the invite opens for the
         same candidates. Nothing published → ticks back, no invite. */
   const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
+  /** A JD's status, capitalised ('Published', 'Disabled', 'Archived', …), from
+   *  whichever source has it. `jobs` starts from the user's OWN JDs (my-jds),
+   *  so in a tenant where someone else created the job it can be missing —
+   *  then the job's lineage, then the match session's own `jd_status` (sent
+   *  for every session, whoever created the JD). Undefined = unknown. */
+  const jdStatusOf = (jdId: string): string | undefined => {
+    const raw = jobs.find(j => j.id === jdId)?.status
+      || lineageByJob[historyKeyForJd(jdId)]?.find(v => v.id === jdId)?.status
+      || allMatchSessions.find(s => s.jd_id === jdId && s.jd_status)?.jd_status;
+    if (!raw) return undefined;
+    const lower = raw.toLowerCase();
+    if (lower === 'active') return 'Published';
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  };
   const inviteTargetJobOf = (jdId: string, title?: string): InviteTargetJob => {
     const job = jobs.find(j => j.id === jdId);
-    /* `jobs` can miss an older (e.g. disabled) version — fall back to that
-       version's own lineage status, so its invites still lock. Capitalised,
-       as resolveSelectionJobLock compares 'Archived' / 'Disabled'. */
-    const raw = job?.status || lineageByJob[historyKeyForJd(jdId)]?.find(v => v.id === jdId)?.status;
-    const status = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : undefined;
-    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status };
+    // Capitalised, as resolveSelectionJobLock compares 'Archived' / 'Disabled'.
+    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status: jdStatusOf(jdId) };
   };
   /** 'JD is disabled' / 'JD is archived' when that JD can't be scored or
    *  invited to; null otherwise. Gates every per-candidate Score / Create action. */
@@ -4299,12 +4310,15 @@ export default function AITalentMatchPage({
                                 <td className="px-4 py-4 align-top">
                                   <div className="flex items-start gap-3">
                                     <div className="min-w-0">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
-                                      >
-                                        {row.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                        >
+                                          {row.name || 'Candidate'}
+                                        </button>
+                                        {row.best?.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {row.email && <div className="tf-meta truncate">{row.email}</div>}
                                     </div>
                                   </div>
@@ -4589,12 +4603,15 @@ export default function AITalentMatchPage({
                           <div className="min-w-0 flex-1">
                             {/* max-w-full: a button sizes to its text, so without it `truncate`
                                 never engaged and a long name ran past the card on a phone. */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                            >
-                              {row.name || 'Candidate'}
-                            </button>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                              >
+                                {row.name || 'Candidate'}
+                              </button>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
+                            </div>
                             {row.email && <div className="tf-meta truncate">{row.email}</div>}
                           </div>
                         </div>
@@ -5141,7 +5158,10 @@ export default function AITalentMatchPage({
                       <div className="flex items-start gap-2.5">
                         <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                            {row.best?.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
@@ -5286,6 +5306,7 @@ export default function AITalentMatchPage({
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
                             </div>
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
@@ -5480,7 +5501,10 @@ export default function AITalentMatchPage({
                             className="mt-0.5 flex-shrink-0"
                           />
                           <div className="min-w-0">
-                            <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
+                            </div>
                             <div className="tf-meta truncate">{job.jobTitle}</div>
                           </div>
                         </div>
@@ -6049,17 +6073,20 @@ export default function AITalentMatchPage({
                                       {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
                                     </button>
                                     <div className="min-w-0 flex-1">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                        }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                                        title={c.name}
-                                      >
-                                        {c.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                          }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                                          title={c.name}
+                                        >
+                                          {c.name || 'Candidate'}
+                                        </button>
+                                        {c.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
                                     <span
@@ -6172,17 +6199,20 @@ export default function AITalentMatchPage({
                                     <td className="px-3 py-2.5 align-middle">
                                       <div className="flex items-center min-w-0">
                                         <div className="min-w-0">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                            }}
-                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
-                                            title={c.name}
-                                          >
-                                            {c.name || 'Candidate'}
-                                          </button>
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                              }}
+                                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
+                                              title={c.name}
+                                            >
+                                              {c.name || 'Candidate'}
+                                            </button>
+                                            {c.isArchived && <ResumeArchivedBadge />}
+                                          </div>
                                           {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
                                       </div>
@@ -6318,11 +6348,12 @@ export default function AITalentMatchPage({
                         )}
                         {/* Status — only when it isn't the norm here
                             (Published / Republished), as on Resume Scoring. */}
-                        {jobData && (() => {
-                          const raw = jobData.status || 'published';
+                        {(() => {
+                          // jdStatusOf: also covers jobs missing from `jobs` (created by someone else).
+                          const raw = jdStatusOf(item.jobId) || 'published';
                           const label = getDisplayStatus(
                             raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
-                            jobData.publishCount,
+                            jobData?.publishCount,
                           );
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
@@ -6559,9 +6590,10 @@ export default function AITalentMatchPage({
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />v{jobData.currentVersion}
                           </span>
                         )}
-                        {jobData && (() => {
-                          const raw = jobData.status || 'published';
-                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData.publishCount);
+                        {(() => {
+                          // jdStatusOf: also covers jobs missing from `jobs` (created by someone else).
+                          const raw = jdStatusOf(item.jobId) || 'published';
+                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData?.publishCount);
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
                           return (
@@ -7356,7 +7388,7 @@ export default function AITalentMatchPage({
       || '';
     const resultsJobCode = selectedJobData?.jobId || resultsLineageEntry?.job_id;
     const resultsVersionNumber = resultsLineageEntry?.version_number ?? selectedJobData?.currentVersion;
-    const resultsJobStatus = (resultsLineageEntry?.status || selectedJobData?.status || '').toLowerCase();
+    const resultsJobStatus = (resultsLineageEntry?.status || selectedJobData?.status || jdStatusOf(selectedJob) || '').toLowerCase();
     const canRunAgainHere = resultsJobStatus !== 'disabled' && resultsJobStatus !== 'archived';
 
     const matchedVersionOptions: { jdId: string; number: number; matchedAt?: Date; session?: AIMatchSessionVersion['session'] }[] = (historyVersionsByJob[resultsHistoryKey] ?? [])
