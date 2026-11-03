@@ -1,4 +1,5 @@
 import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -16,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
@@ -288,6 +290,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const { open: openInvite } = useInviteDialog();
 
   // AS-25: PDF download state
   const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
@@ -1626,6 +1629,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
+  /* Actions › Create / Send Assessment | AI Interview: the ticked candidates
+     (one per email) into the invite popup — the host's (Job Details), else
+     the shared one, for this job. */
+  const inviteSelected = (kind: 'assessment' | 'interview') => {
+    const seen = new Set<string>();
+    const candidates: InviteCandidate[] = displayResults
+      .filter((c) => selectedRows.includes(c.id) && c.email)
+      .filter((c) => { const k = c.email.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((c) => ({ id: c.resumeId || c.id, name: c.name, email: c.email, phone: c.phone, resumeId: c.resumeId }));
+    if (onOpenInviteDialog) { onOpenInviteDialog(kind, candidates); return; }
+    openInvite({
+      kind,
+      job: jdId ? { jdId, jdTitle: jdTitle || '', jdCode: jdShortId || undefined, versionNumber: jdVersion || undefined } : undefined,
+      candidates,
+      onSent: () => setSelectedRows([]),
+    });
+  };
 
   /* Report the table's record count (`totalItems`, set below) to the host.
      Runs after every render but only calls out when the number changes; the
@@ -2361,7 +2381,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               of line; h-9 matches the toolbar band. Holds Customize Columns
               and Export plus the selection-bound Download PDF Reports. */}
           {portaled && selectedRows.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2410,6 +2430,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                     </span>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                  <RowInviteItems onInvite={inviteSelected} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -2422,7 +2444,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <X className="w-4 h-4" />
               Clear
             </button>
-          </div>
+          </StickyBulkBar>
           )}
 
           {/* More Filters. Embedded in Job Details: the AI Talent Match tab's
@@ -2465,7 +2487,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               />
               {/* AS-26: Bulk PDF download — once a row is ticked. */}
               {selectedRows.length > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
@@ -2501,6 +2523,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                       </span>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                    <RowInviteItems onInvite={inviteSelected} />
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button
@@ -2512,7 +2536,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <X className="w-4 h-4" />
                   Clear
                 </button>
-              </div>
+              </StickyBulkBar>
               )}
               {/* Status pills — as the Job Openings page's All Jobs /
                   Published / Draft … Same state the dropdown drove. */}

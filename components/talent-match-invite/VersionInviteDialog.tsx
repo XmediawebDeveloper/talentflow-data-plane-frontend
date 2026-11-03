@@ -1,16 +1,17 @@
 'use client';
 
-import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps } from 'react';
+import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { saveInviteUnitsHandoff, USAGE_QUOTAS_FROM_INVITE_URL, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
-import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
+import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickReveal, type PickerSelection } from './ServerCandidatePicker';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode, type PickedPerson } from './ExtraCandidatesInput';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
 import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
 import InviteMessageStep from './InviteMessageStep';
@@ -129,6 +130,8 @@ export default function VersionInviteDialog({
   inviteDeniedReason,
   preselect = true,
   pickInto,
+  openOn,
+  restore,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -144,6 +147,12 @@ export default function VersionInviteDialog({
    *  the page's ticked resumes are picked in that list (shown ticked there,
    *  not sent as page candidates) and the Resume Database tab opens on it. */
   pickInto?: 'my-resumes' | 'internal-db';
+  /** Opened from the AI Talent Match / Score Resume page: that list's tab
+   *  opens first (the page's candidates are still sent as they are). */
+  openOn?: 'talent-match' | 'score-resume';
+  /** Back from Usage & Quotas (Add units): how far the popup had got — the
+   *  version, the picks, the rows added, the tab — put back as it was. */
+  restore?: InviteUnitsRestore;
   /** The version the button is for (a version row's Invite, Invite More):
    *  the Version step is left out. Omitted: the cards, newest sendable ticked. */
   versionId?: string;
@@ -220,18 +229,23 @@ export default function VersionInviteDialog({
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(!off && !!job);
   const [error, setError] = useState<string | null>(null);
-  const [versionId, setVersionId] = useState<string | null>(null);
+  const [versionId, setVersionId] = useState<string | null>(restore?.versionId ?? null);
   const [step, setStep] = useState<Step | null>(null);
   /* The page's candidates with an email go straight into the send (no email,
      no invite — said once in Review). `preselect` false lists them left out.
-     With `pickInto` they are the list's own picks instead (`pagePicks`). */
-  const recipients = pickInto ? [] : candidates.filter((c) => c.email);
-  const [pagePicks] = useState<PickerSelection>(() => (pickInto
+     With `pickInto` they are the list's own picks instead (`pagePicks`) —
+     and so from AI Talent Match for one job: ticked in its AI Talent Match
+     tab (a pick with no resume id stays a page candidate). */
+  const listPicks: InviteCandidateSourceTab | undefined = pickInto ?? (openOn === 'talent-match' && jdId ? 'talent-match' : undefined);
+  const recipients = pickInto ? []
+    : listPicks ? candidates.filter((c) => c.email && !c.resumeId)
+    : candidates.filter((c) => c.email);
+  const [pagePicks] = useState<PickerSelection>(() => (listPicks
     ? {
         mode: 'ids',
         picked: Object.fromEntries(candidates
           .filter((c) => c.email && c.resumeId)
-          .map((c) => [c.resumeId!, { resumeId: c.resumeId!, name: c.name, email: c.email, source: pickInto }])),
+          .map((c) => [c.resumeId!, { resumeId: c.resumeId!, name: c.name, email: c.email, source: listPicks }])),
       }
     : EMPTY_SELECTION));
   const noEmailCount = candidates.filter((c) => !c.email).length;
@@ -239,19 +253,25 @@ export default function VersionInviteDialog({
     preselect ? {} : Object.fromEntries(recipients.map((c) => [reviewKey({ resume_id: c.resumeId, email: c.email }), 'extra' as const]))
   ));
   const [reviewCounts, setReviewCounts] = useState<ReviewCounts | null>(null);
-  const [message, setMessage] = useState('');
-  const messageTouched = useRef(false);
-  const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
+  const [message, setMessage] = useState(restore?.message ?? '');
+  const messageTouched = useRef(restore?.message !== undefined);
+  const [expiryDays, setExpiryDays] = useState(restore?.expiryDays ?? DEFAULT_EXPIRY_DAYS);
   const [quotaAvailable, setQuotaAvailable] = useState<number | null>(null);
   const [quotaUnlimited, setQuotaUnlimited] = useState(false);
   /* Pick from lists: the picked rows or the filter — never the rows themselves. */
-  const [serverSelection, setServerSelection] = useState<PickerSelection>(pagePicks);
+  const [serverSelection, setServerSelection] = useState<PickerSelection>(restore?.selection ?? pagePicks);
   /* Added by email (typed / Excel). */
-  const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
-  const [extraCounts, setExtraCounts] = useState<ExtraCounts>({ manual: 0, excel: 0 });
+  const [extras, setExtras] = useState<BulkExtraCandidate[]>(restore?.extras ?? []);
+  const [extraCounts, setExtraCounts] = useState<ExtraCounts>(() => {
+    const excel = (restore?.extras ?? []).filter((x) => x.invite_source === 'Excel upload').length;
+    return { manual: (restore?.extras?.length ?? 0) - excel, excel };
+  });
   /* The candidates step's open tab when it is Manual / Upload Excel (null =
-     one of the lists), and a key that empties what was added directly. */
-  const [addTab, setAddTab] = useState<ExtraMode | null>(null);
+     one of the lists), and a key that empties what was added directly.
+     Opens on Manual — or, opened from a list's own page (My Resumes, Shared
+     Database, AI Talent Match, Score Resume), on that list. */
+  const openTab: ExtraMode | null = pickInto || openOn ? null : 'manual';
+  const [addTab, setAddTab] = useState<ExtraMode | null>(restore ? restore.addTab : openTab);
   const [extrasKey, setExtrasKey] = useState(0);
   /* The candidates step, once opened, stays mounted (hidden on other steps). */
   const [candidatesMounted, setCandidatesMounted] = useState(false);
@@ -317,10 +337,16 @@ export default function VersionInviteDialog({
       // version → Candidates; else the Version step. Picked from the list
       // (Resume Database and the other job-less buttons): step 1, Add
       // candidates — the page's candidates are already in, so it skipped
-      // straight to Review.
-      setStep(!chosen ? 'version'
+      // straight to Review. From AI Talent Match the page's picks open on
+      // Candidates instead (step 2): seen with the rest of the list first.
+      // Back from Add units: the step it was on, while its version still sends.
+      const restored = restore?.versionId ? pool.find((v) => v.id === restore.versionId && v.sendable) : undefined;
+      setStep(restore ? (restored ? restore.step : 'version')
+        : !chosen ? 'version'
         : fromListPick.current ? (fixed ? 'candidates' : 'version')
-        : recipients.length > 0 ? 'review' : fixed ? 'candidates' : 'version');
+        : openOn === 'talent-match' && (recipients.length > 0 || selectionCount(pagePicks) > 0) ? 'candidates'
+        : recipients.length > 0 ? 'review'
+        : fixed ? 'candidates' : 'version');
       fromListPick.current = false;
     }
     setVersionId((cur) => {
@@ -410,6 +436,10 @@ export default function VersionInviteDialog({
      everyone added so far. Null = no limit (unlimited plan, or the units
      could not be read — the server checks at send). */
   const unitsRoom = quotaAvailable === null ? null : quotaAvailable - recipientCount;
+  /* No units left at all: picking is greyed out, and Next is held from the
+     candidates step on (the Version step stays open to look at). */
+  const noUnits = quotaAvailable !== null && quotaAvailable <= 0;
+  const unitsNoun = kind === 'interview' ? 'AI interview' : 'Assessment';
   /* How many typed-in / Excel rows fit: the units available (or the backend's
      per-send cap on unlimited plans), less everyone already picked elsewhere. */
   const extraLimitByUnits = !quotaUnlimited && quotaAvailable !== null && quotaAvailable < MAX_EXTRA_CANDIDATES;
@@ -572,7 +602,7 @@ export default function VersionInviteDialog({
     // The page's own picks come back with the next pick from the list.
     setServerSelection(pagePicks);
     setCandidatesMounted(false);
-    setAddTab(null);
+    setAddTab(openTab);
     setVerNote(null);
     messageTouched.current = false;
   };
@@ -704,6 +734,67 @@ export default function VersionInviteDialog({
     setQuotaKey((k) => k + 1);
     return res.link;
   };
+
+  /* Everyone picked outside Manual / Upload Excel — the Manual tab says a
+     typed email among them is already included, and asks about a typed name
+     among them (same person, another email?). */
+  const pickedPeople: PickedPerson[] = [
+    ...recipients.map((c) => ({ name: c.name, email: c.email, sourceLabel: 'this page' })),
+    ...(serverSelection.mode === 'ids'
+      ? Object.values(serverSelection.picked).map((x) => ({
+          name: x.name, email: x.email, sourceLabel: TAB_LABEL[x.source], sourceKey: x.source, resumeId: x.resumeId,
+        }))
+      : []),
+  ];
+  /* Manual's View: the pick shown in its own tab. */
+  const revealPick = useRef<((r: PickReveal) => void) | null>(null);
+  const viewPicked = (p: PickedPerson) => {
+    if (!p.resumeId || !p.sourceKey) return;
+    revealPick.current?.({ source: p.sourceKey as InviteCandidateSourceTab, resumeId: p.resumeId, email: p.email });
+  };
+
+  /* Add units: the popup saved as it is, then Usage & Quotas; buying and
+     coming back reopens it here. Without access to Usage & Quotas, who to
+     ask instead. */
+  const router = useRouter();
+  const canAddUnits = can('canViewUsage');
+  const addUnits = () => {
+    saveInviteUnitsHandoff({
+      request: {
+        kind,
+        job: job ? { jdId: job.jdId, jdCode: job.jdCode, jdTitle: job.jdTitle, versionNumber: job.jobVersionNumber } : undefined,
+        versionId: fixedVersionId,
+        candidates,
+        preselect,
+        pickInto,
+        openOn,
+        hideDuplicate,
+        inviteGate: { allowed: inviteAllowed, reason: inviteDeniedReason },
+      },
+      restore: {
+        step: current === 'version' ? 'version' : 'candidates',
+        versionId,
+        selection: serverSelection,
+        extras,
+        addTab,
+        ...(messageTouched.current ? { message, expiryDays } : {}),
+      },
+      noun: unitsNoun,
+      candidateCount: recipientCount,
+    });
+    // The popup's own history entry is swapped for Usage & Quotas (replace),
+    // so Back from there lands on this page — not taken off with history.back().
+    guard.current.active = false;
+    onClose();
+    router.replace(USAGE_QUOTAS_FROM_INVITE_URL);
+  };
+  const addUnitsAction: ReactNode = canAddUnits ? (
+    <Button variant="primary" size="sm" onClick={addUnits} className="shrink-0 whitespace-nowrap">
+      Add units
+    </Button>
+  ) : (
+    <span className="block text-xs font-medium">Contact your workspace admin to add units.</span>
+  );
 
   /* An email typed in that is already picked elsewhere — said at once. */
   const takenEmail = (email: string): string | null => {
@@ -909,7 +1000,7 @@ export default function VersionInviteDialog({
      same review the Review step uses, per version. Said in the candidates
      footer, so a first-time user sees why 62 became 61. */
   const pagePickIds = Object.keys(pagePicks.mode === 'ids' ? pagePicks.picked : {});
-  const pageCheckKey = pickInto && job && sendableId && pagePickIds.length ? `${sendableId}` : null;
+  const pageCheckKey = listPicks && job && sendableId && pagePickIds.length ? `${sendableId}` : null;
   const [pageCheck, setPageCheck] = useState<{ key: string; invited: number; other: number } | null>(null);
   useEffect(() => {
     if (!pageCheckKey || !job || !selected) return;
@@ -935,7 +1026,7 @@ export default function VersionInviteDialog({
   }, [pageCheckKey]);
   const pageCheckNow = pageCheck && pageCheck.key === pageCheckKey ? pageCheck : null;
   const pageTip = (() => {
-    if (!pickInto || candidates.length === 0) return null;
+    if (!listPicks || candidates.length === 0) return null;
     const parts: string[] = [];
     if (noEmailCount > 0) parts.push(`${noEmailCount.toLocaleString()} without email`);
     if (pageCheckNow?.invited) parts.push(`${pageCheckNow.invited.toLocaleString()} already invited to ${versionTag}`);
@@ -963,6 +1054,8 @@ export default function VersionInviteDialog({
               ? (!selected?.sendable ? `Select ${article} version to continue` : `${versionTag} picked`)
               : deniedTitle
                 ? deniedTitle
+              : noUnits
+                ? 'No units left — add units to continue.'
               : current === 'candidates' && recipientCount === 0
                 ? 'Add at least one candidate to continue'
                 : current === 'review' && reviewCounts && selectedNow === 0
@@ -979,7 +1072,7 @@ export default function VersionInviteDialog({
   const stepReady = (s: Step): boolean => s === 'version'
     ? !!selected?.sendable
     : s === 'candidates'
-      ? recipientCount > 0 && !pickingOff
+      ? recipientCount > 0 && !pickingOff && !noUnits
       : s === 'review'
         ? !!reviewCounts && reviewCounts.invite > 0 && !quotaShort && !jobLock && perms.canInvite
         : canSend;
@@ -1007,15 +1100,22 @@ export default function VersionInviteDialog({
   const latestId = (jobWideVersions ?? listedVersions(kind, versions))[0]?.id;
   const jobName = job ? job.jdTitle || selected?.raw?.jd_title || selected?.name || '' : '';
   const pickedName = selected ? `${jobName || selected.name} · v${selected.version}` : '—';
-  const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void }[] = [];
+  const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void; action?: ReactNode }[] = [];
   if (inSteps && deniedTitle) {
     alerts.push({ tone: 'warn', text: !inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `Sending invites needs the Invite permission for ${label.plural}. Ask a workspace admin.` });
   }
   if (inSteps && verNote) alerts.push({ tone: 'info', text: verNote, onDismiss: () => setVerNote(null) });
-  if (inSteps && quotaShort && current !== 'version') {
+  if (inSteps && noUnits && current === 'version') {
+    alerts.push({ tone: 'danger', text: `No ${unitsNoun} units left. You can view versions, but invites can't be sent until units are added.`, action: addUnitsAction });
+  }
+  if (inSteps && quotaShort && current !== 'version' && noUnits) {
+    // Nothing to deselect towards: the picks are kept for when units are added.
+    alerts.push({ tone: 'danger', text: `${plural(willInvite, 'candidate')} ${willInvite === 1 ? 'is' : 'are'} selected, but no ${unitsNoun} units are left. Add units to send, or close and come back later.`, action: addUnitsAction });
+  } else if (inSteps && quotaShort && current !== 'version') {
     alerts.push({ tone: 'danger', text: `Only ${plural(quotaAvailable ?? 0, 'unit')} ${quotaAvailable === 1 ? 'is' : 'are'} available for ${plural(willInvite, 'candidate')}. Deselect ${shortBy.toLocaleString()} to continue, or add units.` });
   }
-  if (inSteps && current === 'candidates' && !quotaShort && unitsRoom === 0) {
+  // No units at all is said on the lists themselves (greyed, with the reason).
+  if (inSteps && current === 'candidates' && !quotaShort && unitsRoom === 0 && !noUnits) {
     alerts.push({
       tone: 'warn',
       text: recipientCount === 0
@@ -1142,17 +1242,18 @@ export default function VersionInviteDialog({
             {alerts.length > 0 && (
               <div className="mb-4 space-y-2">
                 {alerts.map((al) => (
-                  <p key={al.text} role={al.tone === 'info' ? 'status' : 'alert'} className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm ${ALERT_TONE[al.tone]}`}>
-                    <span className="flex items-start gap-2 min-w-0">
+                  <div key={al.text} role={al.tone === 'info' ? 'status' : 'alert'} className={`flex flex-wrap items-start justify-between gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 text-sm ${ALERT_TONE[al.tone]}`}>
+                    <span className="flex items-start gap-2 min-w-0 flex-1 basis-60">
                       {al.tone === 'info' ? <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />}
                       <span>{al.text}</span>
                     </span>
+                    {al.action && <span className="pl-6 sm:pl-0">{al.action}</span>}
                     {al.onDismiss && (
                       <button type="button" onClick={al.onDismiss} aria-label="Dismiss" className="shrink-0 inline-flex items-center justify-center w-6 h-6 -mr-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                         <X className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     )}
-                  </p>
+                  </div>
                 ))}
               </div>
             )}
@@ -1312,7 +1413,7 @@ export default function VersionInviteDialog({
                   </p>
                 </div>
                 <ServerCandidatePicker
-                  initialSource={pickInto}
+                  initialSource={pickInto ?? openOn}
                   selectedTotal={addedCount}
                   onClearSelection={clearCandidates}
                   jdId={job.jdId}
@@ -1327,6 +1428,9 @@ export default function VersionInviteDialog({
                   addCounts={extraCounts}
                   room={unitsRoom}
                   addedEmails={addedEmails}
+                  revealRef={revealPick}
+                  noUnitsNoun={noUnits ? unitsNoun : null}
+                  noUnitsAction={addUnitsAction}
                   addPanel={(
                     <ExtraCandidatesInput
                       key={extrasKey}
@@ -1340,6 +1444,11 @@ export default function VersionInviteDialog({
                       checkEmail={checkEmail}
                       checkEmails={checkEmails}
                       onUseExisting={useExistingCandidate}
+                      picked={pickedPeople}
+                      onViewPicked={viewPicked}
+                      noUnitsNoun={noUnits ? unitsNoun : null}
+                      noUnitsAction={addUnitsAction}
+                      initialRows={restore?.extras}
                       maxRows={extraMaxRows}
                       limitByUnits={extraLimitByUnits}
                     />
@@ -1399,7 +1508,7 @@ export default function VersionInviteDialog({
                       disabled={!inSteps || (nextDisabled && !(current === 'send' && !perms.canInvite))}
                       aria-disabled={!inSteps || nextDisabled}
                       aria-label={primaryLabel}
-                      title={current === 'send' ? deniedTitle : undefined}
+                      title={current !== 'version' && noUnits ? `No ${unitsNoun} units left.` : current === 'send' ? deniedTitle : undefined}
                       className={`flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : current === 'send' ? <Mail className="w-4 h-4" /> : null}

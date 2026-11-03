@@ -1,7 +1,9 @@
 'use client';
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useState, type ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { clearInviteUnitsHandoff, INVITE_UNITS_PARAM, readInviteUnitsHandoff, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
 import VersionInviteDialog from './VersionInviteDialog';
 import type { InviteCandidate, InviteKind } from './inviteVersions';
 
@@ -33,6 +35,10 @@ export interface OpenInviteRequest {
   /** Opened from the Resume Database's My Resumes / Shared Database table:
    *  `candidates` are ticked in that list and its tab opens first. */
   pickInto?: 'my-resumes' | 'internal-db';
+  /** Opened from the AI Talent Match / Score Resume page: its tab opens first. */
+  openOn?: 'talent-match' | 'score-resume';
+  /** Back from Usage & Quotas: how far the popup had got. */
+  restore?: InviteUnitsRestore;
   /** Host-specific entry-point gate (AI Talent Match's own invite permission). */
   inviteGate?: { allowed: boolean; reason?: string };
   hideDuplicate?: boolean;
@@ -52,6 +58,23 @@ const InviteDialogContext = createContext<{ open: (req: OpenInviteRequest) => vo
 export function InviteDialogProvider({ children }: { children: ReactNode }) {
   const [req, setReq] = useState<OpenInviteRequest | null>(null);
   const open = useCallback((r: OpenInviteRequest) => setReq(r), []);
+  /* Back from Usage & Quotas (the popup's Add units): the page carries
+     `?invite_units=1`; the popup reopens as it was left, and the marker is
+     taken off the address. */
+  const pathname = usePathname();
+  const reopenFromUnits = useEffectEvent(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get(INVITE_UNITS_PARAM) !== '1') return;
+    url.searchParams.delete(INVITE_UNITS_PARAM);
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}${url.hash}`);
+    const h = readInviteUnitsHandoff();
+    clearInviteUnitsHandoff();
+    if (h) setReq({ ...h.request, restore: h.restore });
+  });
+  // The marker and the record live in the address / sessionStorage, read
+  // after each navigation — browser-only, so not in render.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { reopenFromUnits(); }, [pathname]);
   const value = useMemo(() => ({ open }), [open]);
   return (
     <InviteDialogContext.Provider value={value}>
@@ -91,6 +114,8 @@ export function InviteDialogMount({ request, onClose }: { request: OpenInviteReq
       versionId={request.versionId}
       preselect={request.preselect ?? true}
       pickInto={request.pickInto}
+      openOn={request.openOn}
+      restore={request.restore}
       disabledReason={disabledReason}
       hideDuplicate={request.hideDuplicate}
       inviteAllowed={request.inviteGate ? request.inviteGate.allowed : true}

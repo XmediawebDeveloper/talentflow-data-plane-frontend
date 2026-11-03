@@ -1,6 +1,7 @@
 'use client'
 
 import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -1515,7 +1516,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 `basis-full order-last` drops this group onto its own line at the
                 bottom of the wrap-row. */}
             {sortedJobs.length > 0 && hasSelection && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
                 {hasSelection && (
@@ -1637,7 +1638,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     Clear
                   </button>
                 )}
-              </div>
+              </StickyBulkBar>
             )}
 
             {/* Status tabs */}

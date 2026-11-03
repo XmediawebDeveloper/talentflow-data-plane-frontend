@@ -3,7 +3,7 @@
 import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, Search, Trash2, Download, FileArchive, Users, Info } from 'lucide-react';
+import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -33,16 +33,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -368,7 +359,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     setSelectedResumes(selected ? resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id) : []);
   };
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; names: string[] } | null>(null);
 
   const executeDelete = async (ids: string[]) => {
     try {
@@ -381,12 +372,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     }
   };
 
+  const resumeName = (id: string) => {
+    const r = resumes.find(r => r.id === id);
+    return r?.candidate_name || r?.file_name || 'this resume';
+  };
+
   const handleDelete = (id: string) => {
-    setDeleteConfirm({ ids: [id] });
+    setDeleteConfirm({ ids: [id], names: [resumeName(id)] });
   };
 
   const handleDeleteResumes = (ids: string[]) => {
-    setDeleteConfirm({ ids });
+    setDeleteConfirm({ ids, names: ids.map(resumeName) });
   };
 
   // Returns a result because UploadModal's onUpload contract is
@@ -1359,47 +1355,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         />
       )}
       {/* Delete Resume Confirmation Dialog */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
-        <AlertDialogContent className="sm:max-w-lg" hideClose>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                  Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? `${deleteConfirm.ids.length} Resumes` : 'Resume'}
-                </AlertDialogTitle>
-              </div>
-            </div>
-            <AlertDialogDescription asChild>
-              <p className="mt-2 tf-body">
-                {deleteConfirm && deleteConfirm.ids.length > 1
-                  ? <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteConfirm.ids.length} resumes</span>? Once deleted, they will be permanently removed and cannot be recovered.</>
-                  : 'Are you sure you want to delete this resume? Once deleted, the resume will be permanently removed and cannot be recovered.'
-                }
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
-              onClick={() => {
-                if (deleteConfirm) {
-                  executeDelete(deleteConfirm.ids);
-                  setDeleteConfirm(null);
-                }
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? 'Resumes' : 'Resume'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteResumeDialog
+        open={!!deleteConfirm}
+        names={deleteConfirm?.names ?? []}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm) {
+            executeDelete(deleteConfirm.ids);
+            setDeleteConfirm(null);
+          }
+        }}
+      />
 
       {/* ZIP Download Confirmation Modal */}
       {isZipDownloadModalOpen && (

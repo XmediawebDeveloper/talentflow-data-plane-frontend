@@ -43,7 +43,7 @@ export default function InviteQuotaBar({ kind, onStats, refreshKey = 0 }: {
   const shell = 'flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:max-w-[32.5rem] sm:flex-1 rounded-lg border px-3 py-2';
   if (loading) {
     return (
-      <div className={`${shell} border-gray-200 dark:border-slate-700 text-xs text-gray-500 dark:text-slate-400`}>
+      <div className={`${shell} border-info-line bg-info-subtle text-xs font-medium text-info-strong`}>
         <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" />Checking units…</span>
       </div>
     );
@@ -51,8 +51,8 @@ export default function InviteQuotaBar({ kind, onStats, refreshKey = 0 }: {
   if (!stats) return null;
   if (isUnlimitedQuota(stats)) {
     return (
-      <div className={`${shell} border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40`}>
-        <span className="text-xs font-medium text-gray-700 dark:text-slate-300">{noun} units · Unlimited</span>
+      <div className={`${shell} border-info-line bg-info-subtle`}>
+        <span className="text-xs font-semibold text-info-strong">{noun} units · Unlimited</span>
       </div>
     );
   }
@@ -65,24 +65,27 @@ export default function InviteQuotaBar({ kind, onStats, refreshKey = 0 }: {
   const used = Math.round(pct(consumed + pending));
 
   return (
-    <div className={`${shell} ${out ? 'border-destructive-line bg-destructive-subtle' : low ? 'border-warning-line bg-warning-subtle' : 'border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/40'}`}>
+    <div className={`${shell} ${out ? 'border-destructive-line bg-destructive-subtle' : low ? 'border-warning-line bg-warning-subtle' : 'border-info-line bg-info-subtle'}`}>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-        <span className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400 whitespace-nowrap">{noun} units</span>
-        <span className={`text-sm tabular-nums font-semibold whitespace-nowrap ${out ? 'text-destructive' : low ? 'text-warning-strong' : 'text-gray-900 dark:text-slate-50'}`}>
+        <span className="text-2xs font-bold uppercase tracking-wider text-info-strong whitespace-nowrap">{noun} units</span>
+        <span className={`text-sm tabular-nums font-semibold whitespace-nowrap ${out ? 'text-destructive' : low ? 'text-warning-strong' : 'text-foreground'}`}>
           {available.toLocaleString()}
-          <span className="font-normal text-gray-500 dark:text-slate-400"> / {total_quota.toLocaleString()} available</span>
+          <span className="font-medium text-foreground"> / {total_quota.toLocaleString()} available</span>
         </span>
-        <div className="flex h-1.5 flex-1 min-w-[3.75rem] basis-20 overflow-hidden rounded-full bg-gray-200/80 dark:bg-slate-700" role="img" aria-label={`${used}% of units used`}>
+        <div className="flex h-1.5 flex-1 min-w-[3.75rem] basis-20 overflow-hidden rounded-full bg-card" role="img" aria-label={`${used}% of units used`}>
           <div className={`h-full ${out ? 'bg-destructive' : low ? 'bg-brand-orange' : 'bg-brand-blue'}`} style={{ width: `${pct(consumed)}%` }} />
           <div className="h-full bg-brand-cyan/70" style={{ width: `${pct(pending)}%` }} />
         </div>
-        <span className={`inline-flex items-center px-1.5 py-px rounded-full text-2xs font-semibold border whitespace-nowrap ${
-          out ? 'border-destructive-line bg-white/60 text-destructive' : low ? 'border-warning-line bg-white/60 text-warning-strong' : 'border-success-line bg-success-subtle text-success-strong'
-        }`}>
-          {free}% free
+        <span
+          title={out ? `Sending is paused until ${noun} units are added.` : undefined}
+          className={`inline-flex items-center px-1.5 py-px rounded-full text-2xs font-semibold border whitespace-nowrap ${
+            out ? 'border-destructive-line bg-card text-destructive' : low ? 'border-warning-line bg-card text-warning-strong' : 'border-success-line bg-success-subtle text-success-strong'
+          }`}
+        >
+          {out ? 'No units left' : `${free}% free`}
         </span>
       </div>
-      <p className="max-sm:hidden flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-4 text-gray-500 dark:text-slate-400 tabular-nums">
+      <p className="max-sm:hidden flex flex-wrap gap-x-3 gap-y-0.5 text-2xs leading-4 font-medium text-foreground tabular-nums">
         <span>Total {total_quota.toLocaleString()} · Attended (consumed) {consumed.toLocaleString()} · Pending invitations (held) {pending.toLocaleString()}</span>
         {pending > 0 && (
           <span className="inline-flex items-center gap-1">

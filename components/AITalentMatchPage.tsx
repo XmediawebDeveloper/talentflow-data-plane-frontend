@@ -1,9 +1,10 @@
 'use client';
 
 import Image from 'next/image';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown } from 'lucide-react';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -2392,6 +2393,7 @@ export default function AITalentMatchPage({
       request={createSendRequest}
       onClose={() => setCreateSendRequest(null)}
       inviteGate={inviteGateFor}
+      openOn="talent-match"
     />
   );
   const peopleIn = (rows: MatchInviteRow[]) =>
@@ -3218,6 +3220,7 @@ export default function AITalentMatchPage({
         job: oneJobId ? inviteDialogJobOf(oneJobId) : undefined,
         candidates,
         inviteGate: inviteGateFor(kind),
+        openOn: 'talent-match',
       });
     };
 
@@ -3577,7 +3580,7 @@ export default function AITalentMatchPage({
       const interviewAllowed = canInviteAIInterviewFromMatch && !selectionJobLock;
       const interviewReason = selectionJobLock ?? AI_INTERVIEW_INVITE_DENIED;
       return (
-        <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+        <StickyBulkBar className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -3726,7 +3729,7 @@ export default function AITalentMatchPage({
             <X className="w-4 h-4" />
             Clear
           </button>
-        </div>
+        </StickyBulkBar>
       );
     };
 
@@ -7934,11 +7937,6 @@ export default function AITalentMatchPage({
                 // or the job's existing Assessment/AI Interview setup.
                 const jobLock = resolveSelectionJobLock(target);
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
-                // Whether this job already has an AI Assessment / AI Interview
-                // set up: true → only Send applies, false → only Create applies,
-                // undefined (still loading) → neither is gated on it.
-                const asmtConfigured = inviteTargets.hasAssessment(selectedJob);
-                const intvConfigured = inviteTargets.hasAIInterview(selectedJob);
                 return (
                   <>
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
@@ -7992,71 +7990,36 @@ export default function AITalentMatchPage({
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {/* Assessment — Create and Send as separate items. The one
-                            that doesn't apply to this job (already set up → can't
-                            Create; not set up → nothing to Send) is disabled. */}
+                        {/* Create / Send — the one popup for both (it offers
+                            Create when the job has none yet, else Send). */}
                         {(() => {
-                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true || !!jobLock;
-                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false || !!jobLock;
+                          const asmtDisabled = !canInviteAssessmentFromMatch || !!jobLock;
+                          const intvDisabled = !canInviteAIInterviewFromMatch || !!jobLock;
                           return (
                             <>
                               <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={createDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === true ? 'This job already has an assessment' : undefined}
+                                className={`${actionsMenuItemClass} ${asmtDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={asmtDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
-                                  if (createDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('assessment', selectedJob, rows);
-                                }}
-                              >
-                                <Plus className="w-4 h-4 text-menu-icon-view" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Create Assessment</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
-                                onSelect={(e) => {
-                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  if (asmtDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('assessment', selectedJob, rows);
                                 }}
                               >
                                 <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Send Assessment</span>
-                              </DropdownMenuItem>
-                            </>
-                          );
-                        })()}
-                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {/* AI Interview — Create and Send as separate items, same rule. */}
-                        {(() => {
-                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true || !!jobLock;
-                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false || !!jobLock;
-                          return (
-                            <>
-                              <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={createDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === true ? 'This job already has an AI interview' : undefined}
-                                onSelect={(e) => {
-                                  if (createDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('interview', selectedJob, rows);
-                                }}
-                              >
-                                <Plus className="w-4 h-4 text-menu-icon-ai" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Create AI Interview</span>
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
+                                className={`${actionsMenuItemClass} ${intvDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={intvDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
-                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  if (intvDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('interview', selectedJob, rows);
                                 }}
                               >
                                 <Video className="w-4 h-4 text-menu-icon-ai" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Send AI Interview</span>
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
                               </DropdownMenuItem>
                             </>
                           );
