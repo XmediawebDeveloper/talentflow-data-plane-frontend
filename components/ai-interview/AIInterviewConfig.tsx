@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import {
   Clock, Plus, X, Sparkles, CheckCircle2, Loader2,
@@ -717,7 +718,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
         {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
           <div className="flex items-start gap-2 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded-lg">
             <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-destructive">
+            <p className="tf-error">
               Add at least one entry of type <strong>Skill</strong> here.
               All current entries are Commands, which can&apos;t be assessed as a standalone competency.
             </p>
@@ -2438,15 +2439,16 @@ export default function AIInterviewConfig() {
     return '';
   })();
   const canContinueToClusters = !continueDisabledReason;
-  const experienceRange =
-    selectedJd?.experience_min != null && selectedJd?.experience_max != null
-      ? `${selectedJd.experience_min}–${selectedJd.experience_max} yrs`
-      : selectedJd?.experience_min != null
-      ? `${selectedJd.experience_min}+ yrs`
-      : selectedJd?.experience_max != null
-      ? `Up to ${selectedJd.experience_max} yrs`
-      : '';
-  const experienceSummary = [experienceRange, selectedJd?.job_level].filter(Boolean).join(' • ');
+  // Shared wording: the JD's own years with the level name, or
+  // "Senior Level (years not stated)" - never a level band shown as years.
+  const experienceSummary = formatJdExperience(
+    {
+      jobLevel: selectedJd?.job_level || (selectedJd as { experience_level?: string | null } | undefined)?.experience_level,
+      experienceMin: selectedJd?.experience_min,
+      experienceMax: selectedJd?.experience_max,
+    },
+    { includeLevel: true },
+  ) || '';
   const clusterMaxCountSummary = [
     `Must-to-Have: ${timedAllocation.mthMaxClusters}`,
     ...(nth.enabled ? [`Nice-to-Have: ${timedAllocation.nthMaxClusters}`] : []),
@@ -3875,7 +3877,7 @@ export default function AIInterviewConfig() {
                           {cameraError && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
                               <AlertCircle className="w-6 h-6 text-destructive mb-1" />
-                              <p className="text-xs text-destructive text-center px-4">{cameraError}</p>
+                              <p className="tf-error text-center px-4">{cameraError}</p>
                             </div>
                           )}
                         </div>

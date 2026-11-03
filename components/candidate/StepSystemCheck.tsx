@@ -347,8 +347,9 @@ const scrollBehavior = (): ScrollBehavior =>
   typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
 
 /** Length of the voice-enrollment capture — drives the progress bar and the
- *  record bar's "00:05 / 00:12" clock. */
-const VOICE_CAPTURE_SECONDS = 12;
+ *  record bar's "00:05 / 00:15" clock. Must match the recordPcm16 duration
+ *  in CandidateAIInterviewPortal's onEnrollVoice. */
+const VOICE_CAPTURE_SECONDS = 15;
 
 /** Seconds the recording dot takes to fade in/out (see FadePresence below). */
 const RECORDING_DOT_FADE_S = 0.3;
@@ -684,11 +685,18 @@ export default function StepSystemCheck({
     const audio = voicePlaybackAudioRef.current;
     if (!audio) return;
     if (audio.paused) {
-      // load(), not currentTime = 0: the WebM blob has no seek index, so
-      // Chrome can ignore the seek and resume from where it was paused.
-      // Reloading always restarts at 0:00.
+      // Every Play starts the clip from 0:00. The WebM blob has no seek index,
+      // so a bare `currentTime = 0` can be ignored by Chrome; reload it, wait
+      // until the first frame is decoded, then rewind explicitly and play.
+      // (Calling play() straight after load() could start mid-clip or race
+      // the reload.)
+      setVoicePlayProgress(0);
+      const start = () => {
+        try { audio.currentTime = 0; } catch { /* not seekable yet — load() already reset it */ }
+        void audio.play().then(() => setVoicePlaying(true)).catch(() => setVoicePlaying(false));
+      };
+      audio.addEventListener('loadeddata', start, { once: true });
       audio.load();
-      void audio.play().then(() => setVoicePlaying(true)).catch(() => setVoicePlaying(false));
     } else {
       audio.pause();
       setVoicePlaying(false);
@@ -720,7 +728,7 @@ export default function StepSystemCheck({
     }
   }, [voiceEnrollStatus]);
 
-  // Drive the recording progress bar (~12 s capture) for visible feedback.
+  // Drive the recording progress bar (~15 s capture) for visible feedback.
   useEffect(() => {
     if (voiceEnrollStatus !== 'recording') return;
     const started = performance.now();
@@ -904,9 +912,9 @@ export default function StepSystemCheck({
     setVoiceEnrollStatus('recording');
     setVoiceEnrollProgress(0);
     voiceEnrollPromiseRef.current = onEnrollVoice(streamRef.current, (phase) => {
-      // 12 s capture done → "Checking your voice sample…" while the sample is
+      // 15 s capture done → "Checking your voice sample…" while the sample is
       // uploaded and verified. Before, the status stayed 'recording' for that
-      // whole wait, so the panel read "Recording — keep speaking… 00:12 / 00:12"
+      // whole wait, so the panel read "Recording — keep speaking… 00:15 / 00:15"
       // for seconds after recording had actually stopped.
       if (!mountedRef.current || voiceEnrollAttemptIdRef.current !== attemptId) return;
       if (phase === 'verifying') setVoiceEnrollProgress(100);
@@ -2421,7 +2429,7 @@ export default function StepSystemCheck({
                   {deviceInfo.isMobile && (
                     <div className="mx-5 mb-4 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
                       <p className="text-sm text-destructive font-medium">Mobile devices are not supported</p>
-                      <p className="text-xs text-destructive mt-0.5">
+                      <p className="tf-error mt-0.5">
                         AI interviews must be completed on a desktop or laptop computer. Switching to &quot;Desktop Mode&quot; in your mobile browser does not bypass this restriction.
                       </p>
                     </div>
@@ -2474,7 +2482,7 @@ export default function StepSystemCheck({
                     {blockedBrowserName === 'Brave' && (
                       <div className="p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
                         <p className="text-sm text-destructive-strong font-medium">Brave browser is blocked for AI interviews.</p>
-                        <p className="text-xs text-destructive mt-1">
+                        <p className="tf-error mt-1">
                           Please open this interview link in Chrome, Edge, or Safari.
                         </p>
                       </div>

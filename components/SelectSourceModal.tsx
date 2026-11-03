@@ -30,6 +30,7 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import UploadModal from './UploadModal';
+import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -240,6 +241,9 @@ export default function SelectSourceModal({
   const [scoringStats, setScoringStats] = useState({ queued: 0, processing: 0, completed: 0, failed: 0 });
   // Upload modal state
   const [showUploadModal, setShowUploadModal] = useState(false);
+  /* Set only by a folder's "Upload to Folder": the upload's folder dropdown
+     then lists just that folder and its subfolders. */
+  const [uploadScopeFolderId, setUploadScopeFolderId] = useState<string | undefined>();
 
   // Minimized state for the bulk-scoring progress popup. Kept here (not inside
   // BulkScoringProgressModal) so "expand" from the floating indicator can bring
@@ -800,173 +804,8 @@ export default function SelectSourceModal({
     onClose();
   };
 
-  // Handle resume upload
-  const handleUpload = async (files: File[], folderId?: string) => {
-    try {
-      if (files.length === 0) {
-        return {
-          success: false,
-          error: 'No file provided'
-        };
-      }
-
-      // For bulk upload, upload all files sequentially
-      if (files.length > 1) {
-        const results = await Promise.allSettled(
-          files.map(file => resumeService.upload(file, folderId))
-        );
-        await fetchData();
-        const uploadedResumes = results
-          .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled' && !!r.value?.id)
-          .map(r => ({ id: r.value.id as string, candidateName: (r.value.candidate_name as string) || 'Resume' }));
-        if (uploadedResumes.length > 0) {
-          const failedCount = files.length - uploadedResumes.length;
-          if (failedCount > 0) {
-            toast.error(`${failedCount} of ${files.length} resumes could not be uploaded (invalid, non-English or duplicate).`);
-          }
-          return {
-            success: true,
-            resumeId: uploadedResumes[0].id,
-            candidateName: uploadedResumes[0].candidateName,
-            uploadedResumes,
-          };
-        }
-        // All files rejected — re-throw the first rejection so the catch
-        // below maps 409 → DuplicateResumeDetectedModal payload instead of
-        // surfacing axios's raw "Request failed with status code 409".
-        const firstRejection = results.find(r => r.status === 'rejected') as PromiseRejectedResult | undefined;
-        if (firstRejection) throw firstRejection.reason;
-        return { success: false, error: 'Upload failed' };
-      }
-
-      const response = await resumeService.upload(files[0], folderId);
-      await fetchData();
-
-      return {
-        success: true,
-        resumeId: response.id,
-        candidateName: response.candidate_name,
-        uploadedResumes: [{ id: response.id, candidateName: response.candidate_name || 'Resume' }],
-      };
-    } catch (error: any) {
-      console.error('Upload error:', error);
-
-      // Handle 409 duplicate resume
-      if (error?.response?.status === 409) {
-        const detail = error?.response?.data?.detail;
-        const existingResume = detail?.existing_resume;
-        const isExactDuplicate = detail?.is_exact_duplicate ?? true;
-        const contentDifferences = detail?.content_differences || [];
-
-        if (existingResume) {
-          return {
-            success: false,
-            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Shared Resume Database.`,
-            existingResume: {
-              id: existingResume.id,
-              candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
-              email: existingResume.email || '',
-              currentTitle: existingResume.current_title || '',
-              folderName: existingResume.folder_name || '',
-              uploadedAt: existingResume.upload_date || '',
-              version: existingResume.version || 1,
-            },
-            duplicateData: {
-              file: files[0],
-              existingResume: {
-                id: existingResume.id,
-                candidate_name: existingResume.candidate_name || existingResume.file_name || 'Unknown',
-                email: existingResume.email || '',
-                folder_name: existingResume.folder_name,
-                folder_path: existingResume.folder_path || 'My Resumes',
-                upload_date: existingResume.upload_date || '',
-                file_size: existingResume.file_size || 0,
-                file_name: existingResume.file_name || '',
-                version: existingResume.version || 1,
-                version_count: existingResume.version_count || existingResume.version || 1,
-              },
-              contentDifferences,
-              isDuplicate: isExactDuplicate,
-            }
-          };
-        }
-
-        return {
-          success: false,
-          error: 'This resume already exists in the system.',
-        };
-      }
-
-      // Handle 400 validation errors
-      if (error?.response?.status === 400) {
-        const detail = error?.response?.data?.detail;
-
-        if (detail?.error === 'INVALID_RESUME') {
-          return {
-            success: false,
-            error: detail?.message || 'The uploaded file does not appear to be a valid resume. It may be a scorecard, invoice, or other document type.',
-          };
-        }
-
-        if (detail?.error === 'NO_CONTENT') {
-          return {
-            success: false,
-            error: detail?.message || 'The resume file has no readable content. The file may be blank, image-only, or heavily formatted.',
-          };
-        }
-
-        return {
-          success: false,
-          error: detail?.message || `Failed to upload ${files[0]?.name || 'file'}`,
-        };
-      }
-
-      // Handle 403 — read-only mode, quota exhausted, or permission denied
-      if (error?.response?.status === 403) {
-        const detail = error?.response?.data?.detail;
-
-        if (detail?.error === 'READ_ONLY_MODE') {
-          return {
-            success: false,
-            error: 'Uploads are disabled because your account is in read-only mode. Please contact your administrator.',
-          };
-        }
-
-        if (detail?.error === 'QUOTA_EXHAUSTED') {
-          return {
-            success: false,
-            error: detail?.message || 'Resume upload quota exhausted. Please upgrade your plan to upload more resumes.',
-          };
-        }
-
-        return {
-          success: false,
-          error: 'You do not have permission to upload resumes. Please contact your administrator.',
-        };
-      }
-
-      // Handle 503 — AI parsing service unavailable (e.g. RU_OPENAI_API_KEY not configured)
-      if (error?.response?.status === 503) {
-        const detail = error?.response?.data?.detail;
-        return {
-          success: false,
-          error: detail?.message || 'Resume upload is temporarily unavailable. Please try again later or contact your administrator.',
-        };
-      }
-
-      // Fall back to whatever reason the backend gave, even for status codes
-      // not explicitly handled above, instead of a generic message that hides
-      // why the upload actually failed.
-      {
-        const detail = error?.response?.data?.detail;
-        const backendMessage = typeof detail === 'string' ? detail : detail?.message;
-        return {
-          success: false,
-          error: backendMessage || `Failed to upload ${files[0]?.name || 'file'}`,
-        };
-      }
-    }
-  };
+  // Handle resume upload — shared with the invite popup's My Resumes.
+  const handleUpload = (files: File[], folderId?: string) => uploadResumeFiles(files, folderId, fetchData);
 
   /* Rename from a folder's (+) menu — the Resume Database page's rules:
      no markup, the length cap, Archived Resumes keeps its name, and no two
@@ -1277,6 +1116,7 @@ export default function SelectSourceModal({
                   if (!canUploadResumes) return;
                   // The upload targets the selected folder (UploadModal's targetFolder).
                   setSelectedFolder(folderId);
+                  setUploadScopeFolderId(folderId);
                   setShowUploadModal(true);
                 }}
                 hideDeleteFolder
@@ -1628,7 +1468,8 @@ export default function SelectSourceModal({
           tenant={tenant}
           uploadSection="my-resumes"
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
-          onClose={() => setShowUploadModal(false)}
+          scopeFolderId={uploadScopeFolderId}
+          onClose={() => { setShowUploadModal(false); setUploadScopeFolderId(undefined); }}
           onUpload={handleUpload}
           onCreateFolder={handleCreateFolder}
           onScoreResume={handleAutoSelectAfterUpload}

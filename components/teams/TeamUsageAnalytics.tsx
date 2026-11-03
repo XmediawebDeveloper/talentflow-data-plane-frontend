@@ -27,7 +27,7 @@ import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-
 import ListPagination from '@/components/ListPagination';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type TableSort } from '@/components/ui/sortable-header';
 import { UNIT_ICON, TOTAL_UNITS_ICON } from '@/lib/constants/unitColors';
-import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState } from './reportControls';
+import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHelp, UnitStatCard, UNIT_STAT_GRID, useSessionState, ReportScopeBadge } from './reportControls';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import UnitActivityLog from './UnitActivityLog';
@@ -36,13 +36,13 @@ import UnitActivityLog from './UnitActivityLog';
 
 const UNIT_COLORS: Record<string, string> = {
   RS:  'text-blue-600   bg-blue-50   border-blue-200',
-  AS:  'text-purple-600 bg-purple-50 border-purple-200',
+  AS:  'text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan bg-brand-cyan/10 border-brand-cyan/30',
   AIU: 'text-success  bg-success-subtle  border-success-line',
   RU:  'text-orange-600 bg-orange-50 border-orange-200',
 };
 
 const UNIT_DOT: Record<string, string> = {
-  RS: 'bg-blue-500', AS: 'bg-purple-500', AIU: 'bg-success', RU: 'bg-orange-500',
+  RS: 'bg-blue-500', AS: 'bg-brand-cyan', AIU: 'bg-success', RU: 'bg-orange-500',
 };
 
 const STATUS_STYLES: Record<string, string> = {
@@ -178,7 +178,7 @@ const UNIT_TYPE_LABEL: Record<string, string> = {
 
 const ENTRY_UNIT_BADGE_EXTENDED: Record<string, string> = {
   RS:        'bg-blue-100 text-blue-700',
-  AS:        'bg-purple-100 text-purple-700',
+  AS:        'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan',
   AIU:       'bg-success-subtle text-success',
   RU:        'bg-orange-100 text-orange-700',
   max_seats: 'bg-slate-100 text-slate-600',
@@ -378,7 +378,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                         {e.overall_score != null && <span className="normal-case">Score <span className="font-semibold text-gray-600 dark:text-slate-300">{e.overall_score}%</span></span>}
                       </p>
                     )}
-                    {e.failure_reason && <p className="mt-0.5 text-xs text-destructive">{e.failure_reason}</p>}
+                    {e.failure_reason && <p className="mt-0.5 tf-error">{e.failure_reason}</p>}
                   </td>
                   <td className="tf-td whitespace-nowrap text-right">
                     {/* Units charged only — the before → after balance was the whole
@@ -682,7 +682,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${as_ > 0 ? 'bg-purple-100 text-purple-700 ring-1 ring-purple-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
               {formatMeasure(as_, measure)}
             </span>
             <ReturnedNote member={member} k="AS" />
@@ -1328,7 +1328,8 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
                 {UNIT_KEYS.map((k) => (
                   <th key={k} className={TH} aria-sort={ariaSort(sort, k)}>
                     <SortableHeader
-                      label={<><span className={`w-2 h-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                      label={<><span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="text-left leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    className="gap-1.5 sm:gap-2"
                       column={k}
                       sort={sort}
                     />
@@ -1580,6 +1581,13 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   return (
     <MeasureContext.Provider value={measure}>
     <div>
+      {/* Whose usage this is: every team (tenant admin) or only the viewer's teams. */}
+      <ReportScopeBadge
+        isTenantAdmin={isTenantAdmin}
+        teamNames={teams.map((t) => t.team_name || 'Unknown')}
+        loading={loading}
+        className="mb-3"
+      />
       {/* Summary stats — each card also sorts the table below by its column,
           and says how it moved against the previous period of the same length. */}
       <div className={`${UNIT_STAT_GRID} mb-4 sm:mb-6`}>
@@ -1682,6 +1690,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           {/* User level fetches every team's members inside onExport, so the
               modal's own spinner covers that wait. */}
           <ExportFormatModal
+            tone="plain"
             open={exportScope !== null}
             onClose={() => setExportScope(null)}
             title={exportScope === 'user' ? 'Export Team Usage by User' : 'Export Team Usage'}
@@ -1855,7 +1864,8 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                 // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
                 <th key={k} className="tf-th-cell text-left tf-th" aria-sort={ariaSort(teamSort, k)}>
                   <SortableHeader
-                    label={<><span className={`w-2 h-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    label={<><span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="text-left leading-tight">{UNIT_FULL_NAME[k]}</span></>}
+                    className="gap-1.5 sm:gap-2"
                     column={k}
                     sort={teamSort}
                   />

@@ -460,7 +460,7 @@ export default function BrandingPage() {
               </div>
             )}
             {!cloudflareProxied && domainError && (
-              <p className="mt-2 text-xs text-destructive flex items-center gap-1">
+              <p className="mt-2 tf-error flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
                 {domainError}
               </p>

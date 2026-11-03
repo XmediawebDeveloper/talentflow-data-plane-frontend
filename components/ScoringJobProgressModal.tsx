@@ -395,7 +395,7 @@ export default function ScoringJobProgressModal({
                       {item.candidateName || 'Unknown Candidate'}
                     </p>
                     {item.status === 'failed' && item.errorMessage && (
-                      <p className="text-xs text-destructive truncate">{item.errorMessage}</p>
+                      <p className="tf-error truncate">{item.errorMessage}</p>
                     )}
                   </div>
 

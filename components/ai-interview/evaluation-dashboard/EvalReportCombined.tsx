@@ -646,12 +646,12 @@ export async function exportEvalReportPDF(
   y += insightHeight + 4;
   // ── Skills Assessment Summary ─────────────────────────────────────
   // Every skill in one table — the on-screen report's Skills Assessment
-  // Summary (same flattening, P-tag/weight and Demonstrated/Weak/Not
-  // demonstrated status), so strengths and gaps read without the
-  // question-by-question pages.
+  // Summary (same flattening and Demonstrated/Weak/Not demonstrated status),
+  // so strengths and gaps read without the question-by-question pages.
+  // Columns: Skill · Score · Status (Cluster, Type and Weight are not shown).
   {
     const flatten = (clusters: typeof mustHaveClusters) => clusters.flatMap((c) =>
-      c.skills.map((s) => ({ name: s.name, score: s.score, asked: s.asked, askedKnown: s.askedKnown, cluster: c.name, ...priorityLabel(c.priority) })));
+      c.skills.map((s) => ({ name: s.name, score: s.score, asked: s.asked, askedKnown: s.askedKnown })));
     const groups = [
       { title: 'Must-Have Skills', rows: sectionsPresent.mustHave ? flatten(mustHaveClusters) : [] },
       { title: 'Nice-to-Have Skills', rows: sectionsPresent.niceToHave ? flatten(niceToHaveClusters) : [] },
@@ -659,13 +659,12 @@ export async function exportEvalReportPDF(
 
     if (groups.length > 0) {
       sectionBar('SKILLS ASSESSMENT SUMMARY', indigo);
-      const cSkill = M + 2, cCluster = M + 66, cType = M + 112, cWeight = M + 129;
-      const cBar = M + 134, barW = 18, cScore = M + 162, cStatus = M + 164;
+      const cSkill = M + 2;
+      const cBar = M + 128, barW = 22, cScore = M + 160, cStatus = M + 163;
       const head = () => {
         fill(bgc); doc.rect(M, y, CW, 6, 'F');
         doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5); txt(sub);
-        doc.text('Skill', cSkill, y + 4); doc.text('Cluster', cCluster, y + 4);
-        doc.text('Type', cType, y + 4); doc.text('Weight', cWeight, y + 4, { align: 'right' });
+        doc.text('Skill', cSkill, y + 4);
         doc.text('Score', cBar, y + 4); doc.text('Status', cStatus, y + 4);
         y += 7;
       };
@@ -677,16 +676,10 @@ export async function exportEvalReportPDF(
         head();
         g.rows.forEach((r) => {
           doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
-          const nameLines = splitSafe(r.name, cCluster - cSkill - 3);
-          const clusterLines = splitSafe(r.cluster || '—', cType - cCluster - 3);
-          const h = Math.max(nameLines.length, clusterLines.length) * 3.6 + 1.6;
+          const nameLines = splitSafe(r.name, cBar - cSkill - 4);
+          const h = nameLines.length * 3.6 + 1.6;
           if (y + h > pageH - M - 4) { doc.addPage(); y = M; head(); }
           txt(ink); doc.text(nameLines, cSkill, y + 3);
-          txt(sub); doc.text(clusterLines, cCluster, y + 3);
-          doc.setFont('helvetica', 'bold'); doc.setFontSize(7);
-          txt(r.tag === 'P1' ? indigo : r.tag === 'P2' ? amber : faint); doc.text(r.tag, cType, y + 3);
-          doc.setFont('helvetica', 'normal'); doc.setFontSize(8); txt(sub);
-          doc.text(String(r.weight), cWeight, y + 3, { align: 'right' });
           const rowNotAssessed = isNotAssessed(r);
           bar(cBar, y + 1.3, barW, rowNotAssessed ? 0 : r.score, rowNotAssessed ? faint : scoreRGB(r.score));
           doc.setFont('helvetica', 'bold'); txt(rowNotAssessed ? faint : scoreRGB(r.score));

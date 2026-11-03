@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useCallback, useRef, useEffect, memo } from "react";
+import { useState, useCallback, useRef, useEffect, memo, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
@@ -323,6 +323,11 @@ const RECORDING_STALL_RECHECK_MS = 6_000;
 // Per-tick reveal tracing (console.debug every 200 ms while Bina speaks).
 // Off in shipped builds; flip locally when tuning caption sync.
 const REVEAL_DEBUG = false;
+// Stall telemetry while Bina speaks: a reveal-tick gap (interval 200 ms) or a
+// long task at least this long is logged on its own line.
+const CAPTION_STALL_LOG_MS = 600;
+// Long tasks shorter than this are ignored (normal render work).
+const LONG_TASK_LOG_MS = 200;
 // The text reveal is anchored to audio playback so caption ≈ voice. But tracking
 // the audio position EXACTLY makes the text always trail the word you already
 // hear ("voice comes before text"). We reveal this many ms AHEAD of the audio
@@ -334,11 +339,14 @@ const REVEAL_LEAD_MS = 550;
 // audio duration. Prior only — replaced by the previous turn's MEASURED rate
 // (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
 // to voice, language and AI_TTS_SPEED instead of trusting a constant.
-// 12 rather than the ~14 of a normal-rate voice because the backend ships
-// AI_TTS_SPEED = 0.85 (Bina speaks ~15% slower). Deliberately conservative:
-// undershooting makes the caption trail slightly, overshooting makes it outrun
-// the voice — the exact symptom this system exists to prevent.
-const DEFAULT_REVEAL_CPS = 12;
+// The prior only paces the FIRST turn — the long intro, whose audio arrives over
+// ~9 s, so its error builds up before audio_end. Measured at AI_TTS_SPEED 0.85
+// (staging 2026-11-02, ai-458fd0bb): intro 890 chars / 52.6 s = 16.9 cps. The
+// old 12 left the caption ~48 chars behind at audio_end, which then typed in a
+// visible burst on "…for the <role> role. In this position" every interview.
+// Kept a little under the measurement: a slight lag catches up gently, running
+// ahead would freeze the caption until the voice catches up.
+const DEFAULT_REVEAL_CPS = 16;
 // Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
@@ -521,14 +529,100 @@ const MessageRowMemo = memo(MessageRow);
 // surrounding messages list / chrome to reconcile. React.memo on the
 // single `text` prop — when token reveal pushes a new substring, only
 // this component renders.
-interface LiveAIBubbleProps {
-  text: string;
+//
+// The revealed text lives in a tiny store the bubble subscribes to, NOT in
+// InterviewUI state: a state update re-rendered the whole 12k-line component 5x
+// a second while Bina spoke, adding main-thread load. When the main thread
+// stalls, Bina's voice (audio thread) keeps playing while the caption freezes
+// and then jumps ahead (staging 2026-11-02). Now a tick re-renders only this.
+interface CaptionStore {
+  get: () => string;
+  set: (text: string) => void;
+  subscribe: (fn: () => void) => () => void;
 }
 
-const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
+function createCaptionStore(): CaptionStore {
+  let text = "";
+  const subs = new Set<() => void>();
+  return {
+    get: () => text,
+    set: (next: string) => {
+      if (next === text) return;
+      text = next;
+      subs.forEach((fn) => fn());
+    },
+    subscribe: (fn: () => void) => {
+      subs.add(fn);
+      return () => { subs.delete(fn); };
+    },
+  };
+}
+
+interface LiveAIBubbleProps {
+  store: CaptionStore;
+}
+
+// Typewriter: the reveal clock moves the TARGET in ~3-char steps every 200 ms
+// (and further after a main-thread stall), which looked word-by-word / jumpy.
+// The bubble types toward the target one letter at a time on animation frames,
+// trailing it by about one tick; after a stall it types the backlog fast but
+// visibly instead of popping it in. Text is written straight to the DOM node,
+// so no React render per letter.
+const TYPE_TRAIL_MS = 220;          // normal lag behind the reveal target
+const TYPE_MAX_CPS = 45;            // backlog catch-up: ~2.5x Bina's pace, reads as quick typing, not a fast-forward
+const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
+
+const LiveAIBubble = (({ store }: LiveAIBubbleProps) => {
+  const text = useSyncExternalStore(store.subscribe, store.get, store.get);
   if (process.env.NODE_ENV !== 'production') {
     console.debug('[render] LiveAIBubble');
   }
+  const typedRef = useRef<HTMLSpanElement>(null);
+  const shownRef = useRef(0);        // fractional count of letters on screen
+  const shownTextRef = useRef("");
+  const rafRef = useRef<number | null>(null);
+  const lastFrameRef = useRef(0);
+  useEffect(() => {
+    const target = text;
+    // Text replaced rather than extended (llm_correction): keep only the part
+    // that still matches, then type the rest.
+    if (!target.startsWith(shownTextRef.current)) {
+      let i = 0;
+      const prev = shownTextRef.current;
+      while (i < prev.length && i < target.length && prev[i] === target[i]) i++;
+      shownRef.current = i;
+      shownTextRef.current = target.slice(0, i);
+      if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+    }
+    if (rafRef.current !== null) return; // loop already running; it reads `text` via store
+    lastFrameRef.current = 0;
+    const step = (now: number) => {
+      const goal = store.get();
+      const dt = lastFrameRef.current ? Math.min(now - lastFrameRef.current, 100) : 16;
+      lastFrameRef.current = now;
+      const backlog = goal.length - shownRef.current;
+      if (backlog <= 0) {
+        rafRef.current = null;
+        return;
+      }
+      const perMs = Math.max(
+        Math.min(backlog / TYPE_TRAIL_MS, TYPE_MAX_CPS / 1000),
+        backlog / TYPE_MAX_CATCHUP_MS,
+      );
+      shownRef.current = Math.min(goal.length, shownRef.current + perMs * dt);
+      const n = Math.floor(shownRef.current);
+      if (n !== shownTextRef.current.length) {
+        shownTextRef.current = goal.slice(0, n);
+        if (typedRef.current) typedRef.current.textContent = shownTextRef.current;
+      }
+      rafRef.current = requestAnimationFrame(step);
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [text, store]);
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    rafRef.current = null;
+  }, []);
   return (
     <div className="flex gap-2">
       <img
@@ -554,7 +648,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
               look as the Practice Session bubble (StepSamplePractice). */}
           <style>{`@keyframes tfLiveCaret {0%,100%{opacity:1}50%{opacity:0.25}}`}</style>
           <p className="text-sm leading-relaxed whitespace-pre-line break-words">
-            {text}
+            <span ref={typedRef} />
             <span className="inline-block w-1.5 h-3.5 ml-0.5 -mb-0.5 bg-violet-600 dark:bg-violet-400 align-middle" style={{ animation: 'tfLiveCaret 1.4s ease-in-out infinite' }} aria-hidden="true" />
           </p>
         </div>
@@ -620,7 +714,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // transcript the candidate sees while speaking.
   const currentTranscriptRef = useRef("");
   const liveTranscriptDisplayRef = useRef("");
-  const [currentAiText, setCurrentAiText] = useState("");
+  // Bina's revealed caption: text in captionStore (only LiveAIBubble renders
+  // it), plus whether there is any - the only part the parent layout needs.
+  const [captionStore] = useState(createCaptionStore);
+  const [hasAiText, setHasAiText] = useState(false);
+  const setCurrentAiText = useCallback((text: string) => {
+    captionStore.set(text);
+    setHasAiText(text.length > 0);
+  }, [captionStore]);
   const [status, setStatus] = useState("Connecting...");
   const [lindaAvatarSrc, setLindaAvatarSrc] = useState("/linda-avatar.webp");
   /** True while Bina is currently streaming a question that the backend
@@ -3336,11 +3437,26 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // on their chosen device — it used to start undefined, so turn 1 opened the OS
   // default and their selection never took effect.
   //
-  // The pin is still cleared at turn end (see teardownRecordingMedia) so a later
-  // turn can follow a legitimate device change rather than staying stuck on a
-  // device that has since been unplugged; getDedicatedRecordingAudioStream falls
-  // back from exact() → default, so a vanished pin degrades gracefully.
+  // The pin is dropped only when the pinned device is unplugged mid-answer (see
+  // handleDeviceChange) — a skip or a normal turn end keeps it. When it is
+  // gone, getDedicatedRecordingAudioStream tries the System Check mic
+  // (homeMicDeviceIdRef) before any unconstrained default.
   const pinnedAudioDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
+  // The mic the candidate approved at System Check (or, without one, the
+  // proctoring stream's first device). Never rewritten — interviewMicDeviceIdRef
+  // follows allowed swaps, this stays the known-good device to return to.
+  const homeMicDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
+  useEffect(() => {
+    if (!homeMicDeviceIdRef.current && initialMicDeviceId) homeMicDeviceIdRef.current = initialMicDeviceId;
+  }, [initialMicDeviceId]);
+  // Answer mics that were open but delivered no signal (see noteMicSignal).
+  // A device leaves the set as soon as it carries sound again.
+  const deadMicIdsRef = useRef<Set<string>>(new Set());
+  const micSignalRef = useRef<{ deviceId?: string; label?: string; lastSignalAt: number; lastFrameAt: number; hadSignal: boolean; flagged: boolean }>({
+    lastSignalAt: 0, lastFrameAt: 0, hadSignal: false, flagged: true,
+  });
+  const [micNoSignal, setMicNoSignal] = useState(false);
+  const micNoSignalRef = useRef(false);
   const audioDeviceChangeListenerRef = useRef<(() => void) | null>(null);
   // AnalyserNode tapped off the mic source for the live recording waveform UI.
   // Passive sink (source→analyser only, never →destination, so no echo).
@@ -3782,6 +3898,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
   const measuredRevealCpsRef = useRef<number | null>(null);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
+  // kept playing, caption froze for seconds then jumped). Reset at the first
+  // chunk of each Bina turn, summarised once in saveAiMessage.
+  const revealLastTickMsRef = useRef(0);
+  const binaStallStatsRef = useRef({ longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 });
   const startRecordingInternalRef = useRef<() => void>(() => {});
   const disconnectRef = useRef<() => void>(() => {});
 
@@ -4577,6 +4698,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     mediaStreamRef.current = null;
     releaseAudioCaptureNodes();
     micAnalyserRef.current = null;
+    // The no-signal check re-arms when the next mic opens.
+    micSignalRef.current = { ...micSignalRef.current, flagged: true };
+    if (micNoSignalRef.current) {
+      micNoSignalRef.current = false;
+      setMicNoSignal(false);
+    }
   }, [releaseAudioCaptureNodes]);
 
   // Classify the active mic from its device label. Heuristic (labels vary by
@@ -4728,17 +4855,20 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     };
 
     const attempts: Array<{ label: string; constraints: MediaStreamConstraints }> = [];
-    if (pinnedAudioDeviceIdRef.current) {
-      attempts.push({
-        label: "pinned_device",
-        constraints: {
-          audio: {
-            ...headsetFriendlyAudio,
-            deviceId: { exact: pinnedAudioDeviceIdRef.current },
-          },
-        },
-      });
-    }
+    const exactAttempt = (label: string, deviceId: string) => ({
+      label,
+      constraints: { audio: { ...headsetFriendlyAudio, deviceId: { exact: deviceId } } },
+    });
+    // Specific devices before any unconstrained request: an unconstrained
+    // getUserMedia is not guaranteed to pick the OS default — on a desktop
+    // with a USB mic it opened the empty Realtek jack (staging 2026-11-02).
+    // A device that just gave no signal goes behind the System Check mic.
+    const pinnedId = pinnedAudioDeviceIdRef.current;
+    const homeId = homeMicDeviceIdRef.current;
+    const pinnedDead = Boolean(pinnedId && deadMicIdsRef.current.has(pinnedId));
+    if (pinnedId && !pinnedDead) attempts.push(exactAttempt("pinned_device", pinnedId));
+    if (homeId && homeId !== pinnedId) attempts.push(exactAttempt("system_check_device", homeId));
+    if (pinnedId && pinnedDead) attempts.push(exactAttempt("pinned_device", pinnedId));
     attempts.push({
       label: "headset_friendly_audio",
       constraints: { audio: headsetFriendlyAudio },
@@ -4841,6 +4971,22 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     }
     // Always use full tokenBuffer — currentAiTextRef may be partially revealed
     const text = tokenBufferRef.current.trim();
+    {
+      const st = binaStallStatsRef.current;
+      if (text && (st.longTasks > 0 || st.captionStalls > 0)) {
+        console.log('[INTERVIEW-DEBUG] Bina turn main-thread summary', {
+          question: questionNumberRef.current,
+          audioSec: Number((currentTurnAudioMsRef.current / 1000).toFixed(1)),
+          longTasks: st.longTasks,
+          blockedMs: Math.round(st.blockedMs),
+          maxTaskMs: Math.round(st.maxTaskMs),
+          captionStalls: st.captionStalls,
+          maxStallMs: Math.round(st.maxStallMs),
+          maxJumpChars: st.maxJumpChars,
+        });
+      }
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+    }
     // Learn Bina's real speaking rate from this completed turn so the NEXT
     // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
     // here because this is the one place where both the final text length and
@@ -4933,7 +5079,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     if (revealTimerRef.current) {
       clearInterval(revealTimerRef.current);
     }
+    revealLastTickMsRef.current = 0;
     revealTimerRef.current = setInterval(() => {
+      // Interval is 200 ms; a much longer gap means the main thread was
+      // blocked, so the caption froze while the voice played on.
+      const tickNow = performance.now();
+      const tickGapMs = revealLastTickMsRef.current > 0 ? tickNow - revealLastTickMsRef.current : 0;
+      revealLastTickMsRef.current = tickNow;
+      const charsBeforeTick = revealedCharsRef.current;
       const fullText = tokenBufferRef.current;
       if (fullText.length === 0) return;
       // Captions never lead an inaudible voice: hold until TalkingHead reports
@@ -5044,6 +5197,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         currentAiTextRef.current = revealedText;
         setCurrentAiText(revealedText);
       }
+      if (tickGapMs >= CAPTION_STALL_LOG_MS && isPlayingRef.current) {
+        const jumpChars = revealedCharsRef.current - charsBeforeTick;
+        const st = binaStallStatsRef.current;
+        st.captionStalls += 1;
+        st.maxStallMs = Math.max(st.maxStallMs, tickGapMs);
+        st.maxJumpChars = Math.max(st.maxJumpChars, jumpChars);
+        console.warn('[INTERVIEW-DEBUG] caption stalled - main thread blocked while Bina spoke', {
+          gapMs: Math.round(tickGapMs),
+          jumpChars,
+          revealed: revealedCharsRef.current,
+          total: fullText.length,
+          playedSec: Number(playedSec.toFixed(1)),
+          question: questionNumberRef.current,
+        });
+      }
       // NOTE: We intentionally do NOT clear the interval when the text is
       // fully revealed. The loop keeps running so we remain ready for
       // streamed additions, and `saveAiMessage` (called by finalizePlayback
@@ -5069,6 +5237,34 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   useEffect(() => {
     return () => { stopRevealingTokens(); };
   }, [stopRevealingTokens]);
+
+  // Long tasks (main thread busy >= LONG_TASK_LOG_MS) while Bina's voice plays:
+  // counted into the per-turn summary; the big ones are logged individually so
+  // the next test shows WHEN the caption froze and for how long.
+  useEffect(() => {
+    if (typeof PerformanceObserver === 'undefined') return;
+    if (!(PerformanceObserver.supportedEntryTypes || []).includes('longtask')) return;
+    const obs = new PerformanceObserver((list) => {
+      if (!isPlayingRef.current) return;
+      for (const entry of list.getEntries()) {
+        if (entry.duration < LONG_TASK_LOG_MS) continue;
+        const st = binaStallStatsRef.current;
+        st.longTasks += 1;
+        st.blockedMs += entry.duration;
+        st.maxTaskMs = Math.max(st.maxTaskMs, entry.duration);
+        if (entry.duration >= CAPTION_STALL_LOG_MS) {
+          const attr = (entry as PerformanceEntry & { attribution?: Array<{ containerType?: string; containerName?: string; containerSrc?: string }> }).attribution?.[0];
+          console.warn('[INTERVIEW-DEBUG] long task while Bina spoke', {
+            durationMs: Math.round(entry.duration),
+            container: attr ? `${attr.containerType || ''} ${attr.containerName || attr.containerSrc || ''}`.trim() : undefined,
+            question: questionNumberRef.current,
+          });
+        }
+      }
+    });
+    try { obs.observe({ type: 'longtask', buffered: false }); } catch { return; }
+    return () => obs.disconnect();
+  }, []);
 
   // Web Speech API for real-time transcription
   // Accumulates ALL finalized segments + current interim so the user
@@ -5447,6 +5643,8 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // clock anchor (firstChunkStartCtxSecRef) is stamped inside
       // trackPlaybackChunk, which has the real scheduled start time.
       firstPcmAtMsRef.current = Date.now();
+      binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
+      revealLastTickMsRef.current = 0;
       isPlayingRef.current = true;
       isAiSpeakingRef.current = true;
       setIsAiSpeaking(true);
@@ -8143,6 +8341,87 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
   useEffect(() => { holdRecordingForOutageRef.current = holdRecordingForOutage; }, [holdRecordingForOutage]);
 
+  // Dead answer mic: the track is live and unmuted, but the device delivers
+  // (near) digital silence — an empty jack, or a USB mic that stopped
+  // streaming. Nothing else notices: the browser reports the track as fine and
+  // the VAD just sees a silent candidate (staging 2026-11-02: Q4-Q5 on an
+  // empty Realtek jack → "Are you there?" → skipped while the candidate spoke).
+  // Called with every chunk's RAW level, before the silent-frame early return.
+  // No frame above DEAD_MIC_LEVEL for 6 s since the mic opened (never any
+  // signal), or for 15 s after it did carry sound: switch back to the System
+  // Check mic when it is connected and not itself dead, otherwise tell the
+  // candidate. The longer mid-answer window is because browser noise
+  // suppression can hold a working mic near zero through a thinking pause
+  // (Oct 26 logs); a never-any-signal mic is the dead-jack signature.
+  const noteMicSignal = useCallback((rawLevel: number) => {
+    const DEAD_MIC_LEVEL = 0.0003; // mean |amplitude|, ≈ -70 dBFS
+    const DEAD_FROM_OPEN_MS = 6000;
+    const DEAD_AFTER_SIGNAL_MS = 15000;
+    const s = micSignalRef.current;
+    const now = Date.now();
+    // Chunks stop while muted / blocked; don't count that gap as silence.
+    if (now - s.lastFrameAt > 1000) s.lastSignalAt = now;
+    s.lastFrameAt = now;
+    if (rawLevel >= DEAD_MIC_LEVEL) {
+      s.lastSignalAt = now;
+      s.hadSignal = true;
+      if (s.deviceId) deadMicIdsRef.current.delete(s.deviceId);
+      if (s.flagged) {
+        s.flagged = false;
+        if (micNoSignalRef.current) {
+          micNoSignalRef.current = false;
+          setMicNoSignal(false);
+          console.log('[INTERVIEW-DEBUG] Answer mic signal is back', { label: s.label });
+        }
+      }
+      return;
+    }
+    if (s.flagged || now - s.lastSignalAt < (s.hadSignal ? DEAD_AFTER_SIGNAL_MS : DEAD_FROM_OPEN_MS)) return;
+    s.flagged = true;
+    const deadId = s.deviceId;
+    if (deadId) deadMicIdsRef.current.add(deadId);
+    const homeId = homeMicDeviceIdRef.current;
+    void (async () => {
+      let homePresent = false;
+      if (homeId && homeId !== deadId && !deadMicIdsRef.current.has(homeId)) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          homePresent = devices.some(d => d.kind === 'audioinput' && d.deviceId === homeId);
+        } catch { /* can't judge → no switch */ }
+      }
+      if (micSignalRef.current !== s || !isRecordingRef.current) return; // turn moved on
+      if (homePresent && homeId) {
+        console.warn('[INTERVIEW-DEBUG] Answer mic gives no signal — switching back to the System Check mic', {
+          deadLabel: s.label, deadId: deadId?.slice(0, 8), homeId: homeId.slice(0, 8), silentMs: now - s.lastSignalAt, hadSignal: s.hadSignal,
+        });
+        // Same hold-and-reopen as an unplug: the answer stays open and
+        // continues on the reopened mic.
+        holdRecordingForOutageRef.current();
+        pinnedAudioDeviceIdRef.current = homeId;
+        setTimeout(() => {
+          if (
+            isRecordingRef.current === false &&
+            wsRef.current?.readyState === WebSocket.OPEN &&
+            !isAiSpeakingRef.current &&
+            !isProcessingRef.current &&
+            !isMutedRef.current &&
+            !isFaceBlockedRef.current &&
+            !isMediaPausedRef.current
+          ) {
+            startRecordingInternalRef.current();
+          }
+        }, 100);
+        return;
+      }
+      console.warn('[INTERVIEW-DEBUG] Answer mic gives no signal — no working alternative, asking the candidate to check it', {
+        deadLabel: s.label, deadId: deadId?.slice(0, 8), homeId: homeId?.slice(0, 8) ?? null, hadSignal: s.hadSignal,
+        homeDead: Boolean(homeId && deadMicIdsRef.current.has(homeId)),
+      });
+      micNoSignalRef.current = true;
+      setMicNoSignal(true);
+    })();
+  }, []);
+
   const abortRecordingForSkip = useCallback(() => {
     // A deliberate skip abandons the turn — any held-answer resume is void.
     resumingHeldAnswerRef.current = false;
@@ -8171,7 +8450,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     clearNoResponseTimer();
     clearMaxRecordingTimer();
     removeAudioDeviceChangeListener();
-    pinnedAudioDeviceIdRef.current = undefined;
+    // Keep the pinned answer mic. Skipping a question says nothing about the
+    // device; clearing the pin here made the next turn open an unconstrained
+    // getUserMedia, which Chrome resolved to an empty Realtek jack instead of
+    // the approved USB mic, then re-pinned to it — every later answer was
+    // silent (staging 2026-11-02, ai-cb4890b9). Only the unplug path drops it.
     setIsCandidateTranscriptProcessing(false);
     setCurrentTranscript("");
     currentTranscriptRef.current = "";
@@ -8378,6 +8661,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         stream.getAudioTracks().forEach(t => { t.enabled = false; });
       }
       mediaStreamRef.current = stream;
+      {
+        const t = stream.getAudioTracks()[0];
+        const openedAt = Date.now();
+        micSignalRef.current = {
+          deviceId: t?.getSettings?.().deviceId,
+          label: t?.label,
+          lastSignalAt: openedAt,
+          lastFrameAt: openedAt,
+          hadSignal: false,
+          flagged: false,
+        };
+      }
 
       // Use native sample rate — 16kHz AudioContext causes silent worklets on some browsers.
       // Downsampling to 16kHz is done manually before sending to backend.
@@ -8545,6 +8840,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         let sum = 0;
         for (let i = 0; i < input.length; i++) { sum += Math.abs(input[i]); }
         const rawLevel = sum / input.length;
+        noteMicSignal(rawLevel);
 
         // Skip empty frames — AudioWorklet can produce zero-filled frames.
         // Checked on the RAW level so boosting can't un-skip a silent frame.
@@ -11230,7 +11526,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       />
                     </div>
                   </div>
-                  {isRecording && !isMuted && micInputLow && (
+                  {isRecording && !isMuted && micNoSignal ? (
+                    <div role="alert" className="mt-1 max-w-[14rem] text-2xs leading-tight text-red-200">
+                      We can&apos;t hear your microphone. Check it is plugged in and not muted, then keep speaking.
+                    </div>
+                  ) : isRecording && !isMuted && micInputLow && (
                     <div className="mt-1 max-w-[14rem] text-2xs leading-tight text-amber-200">
                       Microphone input is low. Check headset mic or system input.
                     </div>
@@ -11483,7 +11783,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           >
             {/* Hidden while the centred "Preparing your interview…" card is up
                 (turnBanner 'starting') — it peeked out above the card. */}
-            {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
+            {messages.length === 0 && !hasAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
               && (binaHasSpoken || isClosing || isRecording) && (
               <div className="flex items-center justify-center h-full">
                 <p className="tf-body-muted text-center">Conversation will appear here...</p>
@@ -11728,10 +12028,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Live AI text (streaming) — violet (matches AI bubble).
                 Extracted into <LiveAIBubbleMemo> so the 80 ms token-reveal
                 ticks only reconcile this bubble, not the full chat tree. */}
-            {currentAiText && <LiveAIBubbleMemo text={currentAiText} />}
+            {hasAiText && <LiveAIBubbleMemo store={captionStore} />}
 
             {/* Thinking dots — violet (matches AI bubble) */}
-            {isProcessing && !isCandidateTranscriptProcessing && !currentAiText && (
+            {isProcessing && !isCandidateTranscriptProcessing && !hasAiText && (
               <div className="flex gap-2">
                 <img
                   src="/linda-avatar.webp"

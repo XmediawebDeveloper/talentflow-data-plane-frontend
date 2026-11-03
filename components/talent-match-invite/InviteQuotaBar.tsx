@@ -15,11 +15,16 @@ export const isUnlimitedQuota = (s: InviteQuotaStats | null) => !!s && s.total_q
  * The invite popup's units, in its header (AS units for assessments, AIU for
  * AI interviews): available of total, a thin bar (used, then held by open
  * invitations) and how much is free; under it the total, what attended
- * candidates consumed and what pending invitations hold. Read once per
- * opening. `onStats` hands the numbers to the popup so Send is held back
- * when they run short.
+ * candidates consumed and what pending invitations hold (phones: the first
+ * line only). Read once per opening, and again whenever `refreshKey`
+ * changes (a Copy Link used a unit). `onStats` hands the numbers to the
+ * popup so Send is held back when they run short.
  */
-export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; onStats?: (s: InviteQuotaStats | null) => void }) {
+export default function InviteQuotaBar({ kind, onStats, refreshKey = 0 }: {
+  kind: InviteKind;
+  onStats?: (s: InviteQuotaStats | null) => void;
+  refreshKey?: number;
+}) {
   const [stats, setStats] = useState<InviteQuotaStats | null>(null);
   const [loading, setLoading] = useState(true);
   const noun = kind === 'interview' ? 'AI interview' : 'Assessment';
@@ -33,7 +38,7 @@ export default function InviteQuotaBar({ kind, onStats }: { kind: InviteKind; on
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [kind]);
+  }, [kind, refreshKey]);
 
   const shell = 'flex flex-col gap-1 min-w-0 w-full sm:w-auto sm:max-w-[32.5rem] sm:flex-1 rounded-lg border px-3 py-2';
   if (loading) {

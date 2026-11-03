@@ -6,6 +6,7 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
@@ -26,7 +27,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { handleUnauthorized } from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
-import { formatJobExperienceText, formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatJobExperienceText, formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -41,6 +42,9 @@ interface ScoredResume {
   candidateName: string;
   email: string;
   phone: string;
+  // Whether the underlying resume has been archived — blocks inviting this
+  // candidate, same rule as the Scored Resumes table (ScoredResumesTable.tsx).
+  isArchived?: boolean;
   matchStatus: string;
   scorePercentage: number;
   // Human-readable breakdown of how scorePercentage was derived (Required/
@@ -136,6 +140,10 @@ const HEADER_ACTION_BTN_LOCKED =
 /** Create / Send / candidate action button when the user lacks the permission. */
 const CREATE_SEND_BUTTON_LOCKED_CLASS =
   'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+
+/** Same wording as ScoredResumesTable.tsx's ARCHIVED_RESUME_MESSAGE — kept in
+ *  sync so the reason reads identically wherever this candidate is invited from. */
+const ARCHIVED_RESUME_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 
 /** Email / phone / location chip — the resume view's contact badge
  *  (resume-view/[id]), on this card's white instead of its tinted one. */
@@ -332,15 +340,28 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // With the host's Create / Send popup, nothing published yet is no block —
   // the popup offers Create.
   const viaInviteDialog = !!onOpenInviteDialog;
+  /* The JD this score belongs to (loaded below for the Overview tab). A Disabled
+     or Archived JD can't be invited to — same rule as the job's scored-resumes list. */
+  const [jdDetails, setJdDetails] = useState<any>(null);
+  const jdStatusLower = String(jdDetails?.status || '').toLowerCase();
+  const jdLocked = jdStatusLower === 'disabled' || jdStatusLower === 'archived';
+  const jdLockReason = jdStatusLower === 'archived' ? 'JD is archived' : 'JD is disabled';
+  // An archived resume can't be invited either — same rule as the Scored
+  // Resumes table (ScoredResumesTable.tsx's rowCanInviteAssessment / AIInterview).
+  // Checked ahead of the JD lock below so its own message always wins when both
+  // are true, matching the table's precedence.
+  const resumeArchived = !!resume.isArchived;
+  const inviteBlockedByRecord = resumeArchived || jdLocked;
+  const inviteBlockedByRecordReason = resumeArchived ? ARCHIVED_RESUME_MESSAGE : jdLockReason;
   const canInviteAssessment =
-    mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
+    !inviteBlockedByRecord && mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
   const canInviteAIInterview =
-    mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
+    !inviteBlockedByRecord && mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
   /* Permitted, in the plan, and the job settled as having none yet -> the
      entry greys out with "+ Create ..." under it (Resume Scoring hosts only). */
   const inviteTargetsSettled = inviteTargets.known && !inviteTargets.loading;
-  const assessmentMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
-  const aiInterviewMissing = !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
+  const assessmentMissing = !inviteBlockedByRecord && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
+  const aiInterviewMissing = !inviteBlockedByRecord && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
   // Every option the user is permitted to pick is outside the plan.
   const invitePlanLocked = canInvite &&
     (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
@@ -352,7 +373,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
      and why it is disabled, as a tooltip. */
   const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
   const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
-    !may ? 'You do not have permission to invite candidates' : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
+    !may ? 'You do not have permission to invite candidates' : inviteBlockedByRecord ? inviteBlockedByRecordReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -420,7 +441,6 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
   const [fullResumeLoaded, setFullResumeLoaded] = useState(false);
-  const [jdDetails, setJdDetails] = useState<any>(null);
   // Upload history for the Version History section. Kept separate from
   // `fullResumeData` because it comes from its own endpoint — the resume record
   // carries only a count, not the per-version rows.
@@ -1493,7 +1513,10 @@ Best regards`);
             {/* No inset: the name, years and version badge start on the same
                 left edge as the contact badges and action buttons below. */}
             <div className="min-w-0">
-              <h1 className="tf-page-title mb-2 truncate">{resume.candidateName}</h1>
+              <h1 className="tf-page-title mb-2 truncate flex items-center gap-2">
+                <span className="truncate">{resume.candidateName}</span>
+                {resumeArchived && <ResumeArchivedBadge />}
+              </h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
@@ -1689,6 +1712,8 @@ Best regards`);
                     inviteDisabled
                       ? (!canInvite
                           ? 'You do not have permission to invite candidates'
+                          : inviteBlockedByRecord
+                            ? inviteBlockedByRecordReason
                           : invitePlanLocked
                             ? PLAN_LOCKED_MESSAGE
                             : 'No published assessment or AI interview for this job yet')
@@ -1725,7 +1750,7 @@ Best regards`);
                         onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
                         disabled={mayInviteAssessment && !canInviteAssessment}
                         aria-disabled={!mayInviteAssessment}
-                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : inviteBlockedByRecord ? inviteBlockedByRecordReason : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
                         className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
                           mayInviteAssessment ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
                         }`}
@@ -1745,7 +1770,7 @@ Best regards`);
                         onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
                         disabled={mayInviteAIInterview && !canInviteAIInterview}
                         aria-disabled={!mayInviteAIInterview}
-                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : inviteBlockedByRecord ? inviteBlockedByRecordReason : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
                         className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
                           mayInviteAIInterview ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
                         }`}
@@ -1854,6 +1879,16 @@ Best regards`);
                 {(resume.jobVersion ?? jdDetails?.version_number) != null && (
                   <span className="tf-badge ml-1.5 bg-brand-orange-deep text-white align-middle">
                     v{resume.jobVersion ?? jdDetails?.version_number}.0
+                  </span>
+                )}
+                {/* Disabled / Archived JD — say so next to the job it was scored against. */}
+                {jdLocked && (
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 ml-1.5 rounded-full text-xs font-medium border align-middle whitespace-nowrap ${jdStatusBadgeClass(jdStatusLower)}`}
+                    title={`${jdLockReason} — invites are turned off for this job`}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                    {jdStatusLower === 'archived' ? 'Archived' : 'Disabled'}
                   </span>
                 )}
               </span>
@@ -2945,7 +2980,7 @@ Best regards`);
                       )}
                       <h3
                         onClick={() => setShowJdNavConfirm(true)}
-                        className="text-base sm:text-lg font-semibold text-gray-900 hover:text-brand-blue transition-colors cursor-pointer"
+                        className="tf-section-title hover:text-brand-blue transition-colors cursor-pointer"
                       >
                         {jdDetails.title || jobTitle}
                       </h3>
@@ -3082,6 +3117,9 @@ Best regards`);
                     /* `jdExperienceLabel` falls back to the words "Not specified",
                        so the value (and its badge) is gated on the RANGE. */
                     experience={jdDetails?.experience_min != null || jdDetails?.experience_max != null ? jdExperienceLabel : null}
+                    experienceLevelOnly={jdDetails?.experience_min != null || jdDetails?.experience_max != null
+                      ? null
+                      : formatExperienceLevelName(jdDetails?.job_level || jdDetails?.experience_level)}
                     experienceNote={jdRequirementLabel(jdDetails.experience_mandatory)}
                     industry={jdDetails.industry_type ? prettifyCode(jdDetails.industry_type) : null}
                     industryNote={jdDetails.industry_type
@@ -3492,9 +3530,9 @@ Best regards`);
                             <div className="flex items-center gap-2">
                               <span className="w-2 h-2 bg-destructive rounded-full"></span>
                               <span className="text-sm font-semibold text-destructive-strong">Version {older.version}</span>
-                              <span className="text-xs text-destructive ml-1">(older)</span>
+                              <span className="tf-error ml-1">(older)</span>
                             </div>
-                            <p className="text-xs text-destructive mt-0.5 truncate">{older.fileName}</p>
+                            <p className="tf-error mt-0.5 truncate">{older.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
                             <div className="tf-panel p-5 max-sm:p-3">

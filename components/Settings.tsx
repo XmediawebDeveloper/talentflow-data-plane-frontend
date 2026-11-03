@@ -1319,7 +1319,7 @@ export default function Settings() {
                       </button>
                     </div>
                     {newPassword.length > 0 && newPassword.length < 6 && (
-                      <p className="text-xs text-destructive mt-1">Password must be at least 6 characters</p>
+                      <p className="tf-error mt-1">Password must be at least 6 characters</p>
                     )}
                   </div>
 
@@ -1345,7 +1345,7 @@ export default function Settings() {
                       </button>
                     </div>
                     {confirmPassword.length > 0 && newPassword !== confirmPassword && (
-                      <p className="text-xs text-destructive mt-1">Passwords do not match</p>
+                      <p className="tf-error mt-1">Passwords do not match</p>
                     )}
                     {confirmPassword.length > 0 && newPassword === confirmPassword && newPassword.length >= 6 && (
                       <p className="text-xs text-brand-cyan mt-1 flex items-center gap-1 font-semibold">

@@ -23,6 +23,7 @@ export default function DeleteConfirmDialog({
 }: DeleteConfirmDialogProps) {
   return (
     <AppModal
+      tone="plain"
       open={open}
       onCancel={() => onOpenChange(false)}
       cancelDisabled={isDeleting}

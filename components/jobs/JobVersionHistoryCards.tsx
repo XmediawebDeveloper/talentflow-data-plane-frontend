@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import type { Job } from '@/lib/types/types';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import {
   formatEmploymentType,
   getCreationMethodConfig,
@@ -103,7 +103,7 @@ export default function JobVersionHistoryCards({
             const detail = versionDetails[version.id];
             const methodConfig = detail ? getCreationMethodConfig(detail.creation_method) : null;
             const experienceText = detail
-              ? formatJobExperienceText({
+              ? formatJdExperience({
                   jobLevel: detail.job_level || detail.experience_level,
                   experienceMin: detail.experience_min,
                   experienceMax: detail.experience_max,

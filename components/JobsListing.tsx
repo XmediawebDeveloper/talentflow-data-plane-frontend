@@ -234,6 +234,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
       salaryRange: 'all',
       datePostedFrom: '',
       datePostedTo: '',
+      createdBy: 'all',
+      workMode: 'all',
     },
     countFilters: (f) =>
       [
@@ -248,6 +250,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         f.salaryRange !== 'all',
         f.datePostedFrom !== '',
         f.datePostedTo !== '',
+        f.createdBy !== 'all',
+        f.workMode !== 'all',
       ].filter(Boolean).length,
   });
   const searchQuery = search.appliedQuery;
@@ -263,6 +267,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     salaryRange: salaryRangeFilter,
     datePostedFrom: datePostedFromFilter,
     datePostedTo: datePostedToFilter,
+    createdBy: createdByFilter,
+    workMode: workModeFilter,
   } = search.filters;
 
   // Sync status filter with URL parameter changes
@@ -387,7 +393,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
-      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
+      applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
     },
     (s) => {
@@ -425,6 +431,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         salaryRange: typeof s.salaryRangeFilter === 'string' ? s.salaryRangeFilter : 'all',
         datePostedFrom: typeof s.datePostedFromFilter === 'string' ? s.datePostedFromFilter : '',
         datePostedTo: typeof s.datePostedToFilter === 'string' ? s.datePostedToFilter : '',
+        createdBy: typeof s.createdByFilter === 'string' ? s.createdByFilter : 'all',
+        workMode: typeof s.workModeFilter === 'string' ? s.workModeFilter : 'all',
       });
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as JobSortBy);
       if (s.sortOrder === 'asc' || s.sortOrder === 'desc') setSortOrder(s.sortOrder);
@@ -455,6 +463,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
     const matchesIndustry = industryFilter === 'all' || job.industry_type === industryFilter;
     const matchesEmploymentType = employmentTypeFilter === 'all' || job.employmentType === employmentTypeFilter;
+    const matchesCreatedBy = createdByFilter === 'all' || job.postedBy?.trim() === createdByFilter;
+    const matchesWorkMode = workModeFilter === 'all' || job.workMode?.trim().toLowerCase() === workModeFilter;
 
     // Creation method filter (Manual vs AI) - null means show all
     const matchesCreationMethod = creationMethodFilter === null ||
@@ -533,7 +543,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
        the status the pill asks for may not be among these rows at all. */
     return matchesSearch && matchesLocation && matchesDepartment &&
            matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
-           matchesApplicants && matchesCreationMethod;
+           matchesApplicants && matchesCreationMethod && matchesCreatedBy && matchesWorkMode;
   };
 
   /* ── One row per job on "All Jobs" — one row per MATCHING version on a status tab ──
@@ -875,6 +885,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const uniqueLocations = Array.from(new Set(jobs.map(job => job.location).filter(Boolean))).sort(byName);
   const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean))).sort(byName);
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
+  const uniqueCreators = Array.from(new Set(jobs.map(job => job.postedBy?.trim()).filter(Boolean))).sort(byName);
+  const uniqueWorkModes = Array.from(new Set(jobs.map(job => job.workMode?.trim().toLowerCase()).filter(Boolean))).sort(byName);
 
   // Calculate stats
   /* Each status card IS its tab's filter — clicking it opens that tab — so its
@@ -1068,7 +1080,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   useEffect(() => {
     if (skipPageResetRef.current) { skipPageResetRef.current = false; return; }
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
+  }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, createdByFilter, workModeFilter, sortBy, sortOrder]);
 
   // Keep the current page in range when the list shrinks (e.g. after deleting the
   // jobs on the last page), so the view never gets stuck on an empty page past
@@ -1123,7 +1135,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             <div className="flex flex-col sm:items-end gap-2">
               {/* Quota limit warning */}
               {quotaInfo && quotaInfo.remaining <= 0 && (
-                <div className="flex items-start gap-2 px-3 py-1.5 bg-destructive-subtle border border-destructive-line rounded-lg text-destructive text-xs">
+                <div className="flex items-start gap-2 px-3 py-1.5 bg-destructive-subtle border border-destructive-line rounded-lg tf-error">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
@@ -1238,6 +1250,18 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     ariaLabel="Filter by industry"
                   />
                 )}
+                {uniqueCreators.length > 0 && (
+                  <SearchableSelect
+                    className="w-full sm:w-48"
+                    value={createdByFilter === 'all' ? '' : createdByFilter}
+                    onChange={(v) => search.setFilter('createdBy', v || 'all')}
+                    options={uniqueCreators.map((name) => ({ value: String(name), label: String(name) }))}
+                    allLabel="All Creators"
+                    placeholder="All Creators"
+                    searchPlaceholder="Search user..."
+                    ariaLabel="Filter by created by"
+                  />
+                )}
               </>
             }
             // Search flexes to fill the row; `controlsFollowSearch` gives the
@@ -1298,7 +1322,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           {/* More Filters Panel (collapsible) */}
           {showAdvancedFilters && (
             <div className="mb-3 pt-3 border-t border-brand-blue/10">
-              {/* All four filters on one row on desktop (grid-cols-4), falling
+              {/* All five filters on one row on desktop (grid-cols-5), falling
                   back to a 2×2 grid on small screens and a single column on
                   phones — so the row stays clean and never overflows.
                   [&>div]:min-w-0 — grid items default to min-width:auto, so a long
@@ -1308,6 +1332,20 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="tf-grid-4 [&>div]:min-w-0">
                 {/* Location and Industry now live inline with Search (see the
                     toolbar's leadingActions above). Department was removed. */}
+                {uniqueWorkModes.length > 0 && (
+                  <div>
+                    <label className="block tf-label mb-1.5">Work Mode</label>
+                    <SearchableSelect
+                      value={workModeFilter === 'all' ? '' : workModeFilter}
+                      onChange={(v) => search.setFilter('workMode', v || 'all')}
+                      options={uniqueWorkModes.map((mode) => ({ value: String(mode), label: formatEmploymentType(mode) }))}
+                      allLabel="All Modes"
+                      placeholder="All Modes"
+                      searchPlaceholder="Search mode..."
+                      ariaLabel="Filter by work mode"
+                    />
+                  </div>
+                )}
                 {uniqueEmploymentTypes.length > 0 && (
                   <div>
                     <label className="block tf-label mb-1.5">Job Type</label>

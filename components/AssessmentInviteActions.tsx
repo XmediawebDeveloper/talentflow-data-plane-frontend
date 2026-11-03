@@ -750,7 +750,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {nameError && <p className="mt-1 text-xs text-destructive">{nameError}</p>}
+            {nameError && <p className="mt-1 tf-error">{nameError}</p>}
           </div>
           <div>
             <label className="block tf-caption mb-1">Candidate email</label>
@@ -765,7 +765,7 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {emailError && <p className="mt-1 text-xs text-destructive">{emailError}</p>}
+            {emailError && <p className="mt-1 tf-error">{emailError}</p>}
           </div>
         </div>
         <div className="shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-2">

@@ -1,5 +1,6 @@
 'use client';
 
+import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
@@ -513,6 +514,10 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',
           phone: item.phone || '',
+          // Missing here left the Invite button enabled for an archived resume
+          // whenever this JD's history came from this grouped load instead of
+          // the global scored-resumes list (which already carries it).
+          isArchived: !!item.is_archived,
           overall_score: matchScore,  // Use overall_score as primary field
           matchScore: matchScore,
           matchStatus: matchStatus,
@@ -660,6 +665,11 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.candidate_email || '',
           email: item.candidate_email || '',
           phone: item.phone || '',
+          // Same gap as loadScoredHistory above — direct jd_id/score_id
+          // navigation (no opened_from) resolves the candidate from this
+          // JD-scoped load, which otherwise never told the detail page the
+          // resume was archived.
+          isArchived: !!item.is_archived,
           overall_score: matchScore,
           matchScore: matchScore,
           matchStatus: matchStatus,
@@ -760,7 +770,10 @@ export default function ResumeScoringRoute() {
                 jd.status === 'archived' ? 'Archived' : 'Draft',
         applicants: jd.applicants_count || 0,
         employmentType: jd.employment_type || 'Full-time',
-        experience: jd.experience_min ? `${jd.experience_min}+ years` : undefined,
+        // Years only (the level goes on experience_level): the old `min+` form
+        // dropped the max and treated 0 as no value.
+        experience: formatExperienceRange(jd.experience_min, jd.experience_max),
+        experience_level: jd.job_level || jd.experience_level || undefined,
         job_id: jd.job_id,
         current_version: jd.current_version,
         published_at: jd.published_at,

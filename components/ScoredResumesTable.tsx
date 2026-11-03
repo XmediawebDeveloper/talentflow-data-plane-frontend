@@ -29,6 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip, type MobileStatTone } from '@/components/ui/mobile-record-card';
 import FilterSelect from '@/components/ui/filter-select';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -313,6 +314,10 @@ interface ScoredResumesTableProps {
    *  (e.g. this page's own per-job "Scoring History" view). Unset on the
    *  global cross-job list, which has no single host job to check. */
   jobStatus?: string;
+  /** Status of any JD version by id ('Disabled', 'Archived', …) — for hosts
+   *  whose rows span several versions ("Show All Versions"), so each row's
+   *  invites follow its OWN version. Falls back to `jobStatus` for the host job. */
+  jobStatusOf?: (jdId: string) => string | undefined;
   availableUnits?: number;
   initialMatchStatus?: 'all' | 'Exact Match' | 'Partial Match' | 'No Match';
   /**
@@ -689,6 +694,7 @@ export default function ScoredResumesTable({
   jobCode,
   jobVersion: hostJobVersion,
   jobStatus,
+  jobStatusOf,
   availableUnits = 10,
   initialMatchStatus = 'all',
   hideMatchStatusFilter = false,
@@ -1218,6 +1224,12 @@ Best regards`);
   const allVisibleSelected = filteredResumes.length > 0 && effectiveSelectedRows.length === filteredResumes.length;
   const effectiveSelectedIds = useMemo(() => new Set(effectiveSelectedRows.map((r) => r.id)), [effectiveSelectedRows]);
 
+  /** A row's JD status: the host's lookup when it has one (rows spanning several
+   *  versions), else `jobStatus` — which only speaks for this table's own host
+   *  job, never for another JD a row in the global cross-job list points at. */
+  const statusOfRowJob = (rowJdId: string | undefined, id: string): string | undefined =>
+    jobStatusOf?.(id) ?? (rowJdId && rowJdId !== jobId ? undefined : jobStatus);
+
   /* The jobs the ticked rows belong to — a row's own JD, or this table's
      one job on a single-job host. */
   const selectionJobs = useMemo((): InviteTargetJob[] => {
@@ -1225,14 +1237,11 @@ Best regards`);
     for (const r of effectiveSelectedRows) {
       const id = r.jdId || (jobId && jobId !== 'global' ? jobId : '');
       if (!id || byId.has(id)) continue;
-      // A row's own `jdId` only appears in the global cross-job list, whose
-      // rows carry no job-status field; this table's one host job (when
-      // there is one) is the only case `jobStatus` can speak for.
-      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: r.jdId ? undefined : jobStatus });
+      byId.set(id, { jdId: id, jdCode: rowJobCode(r) || undefined, jdTitle: r.jobTitle || jobTitle, status: statusOfRowJob(r.jdId, id) });
     }
     return Array.from(byId.values());
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus]);
+  }, [effectiveSelectedRows, jobId, jobTitle, jobStatus, jobStatusOf]);
 
   /** A scored row as THE invite popup lists it. */
   const toInvitee = (r: ScoredResume): InviteCandidate => ({
@@ -1643,16 +1652,19 @@ Best regards`);
     if (col.id === 'candidateName') {
       return (
         <td key={col.id} className="tf-td whitespace-nowrap">
-          {onViewCandidate ? (
-            <button
-              onClick={() => onViewCandidate(resume)}
-              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-            >
-              {showName(resume.candidateName)}
-            </button>
-          ) : (
-            <div className="tf-body">{showName(resume.candidateName)}</div>
-          )}
+          <div className="flex items-center gap-2">
+            {onViewCandidate ? (
+              <button
+                onClick={() => onViewCandidate(resume)}
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+              >
+                {showName(resume.candidateName)}
+              </button>
+            ) : (
+              <div className="tf-body">{showName(resume.candidateName)}</div>
+            )}
+            {resume.isArchived && <ResumeArchivedBadge />}
+          </div>
           {/* "Candidate" is name WITH mail — the email rides under the name
               instead of taking a column of its own. */}
           {resume.email && (
@@ -1833,8 +1845,15 @@ Best regards`);
        "none configured" no longer greys it out. An archived resume is the
        one thing that overrides all of that — same rule every other resume
        action (Score, AI Talent Match, resume-view's Invite) follows. */
-    const rowCanInviteAssessment = !resume.isArchived && canCreateAssessments;
-    const rowCanInviteAIInterview = !resume.isArchived && mayInviteAIInterview;
+    /* A Disabled / Archived JD blocks the row's invites too — on hosts with no
+       JobActionLock around them (Resume Scoring's job drill-down) this is the
+       only thing that knows. */
+    const rowJobId = resume.jdId || (jobId && jobId !== 'global' ? jobId : '');
+    const rowJobLock = rowJobId
+      ? resolveSelectionJobLock([{ jdId: rowJobId, jdTitle: resume.jobTitle || jobTitle || '', status: statusOfRowJob(resume.jdId, rowJobId) }])
+      : null;
+    const rowCanInviteAssessment = !resume.isArchived && !rowJobLock && canCreateAssessments;
+    const rowCanInviteAIInterview = !resume.isArchived && !rowJobLock && mayInviteAIInterview;
     return {
       rowCanInviteAssessment,
       rowCanInviteAIInterview,
@@ -1843,6 +1862,8 @@ Best regards`);
       // reason, rather than disappearing outright.
       rowInviteDisabledTitle: resume.isArchived
         ? ARCHIVED_RESUME_MESSAGE
+        : rowJobLock
+        ? rowJobLock
         : jobLockReason
         ? jobLockReason
         : !(canCreateAssessments || mayInviteAIInterview)
@@ -2715,16 +2736,19 @@ Best regards`);
                         {/* pr-7 leaves room for the corner checkbox; pl-6 keeps the
                             top-left select seal (touch, hover, any selection) off the name. */}
                         <div className="min-w-0 pr-7 pl-6">
-                          {onViewCandidate ? (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
-                              className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
-                            >
-                              {showName(resume.candidateName) || 'Candidate'}
-                            </button>
-                          ) : (
-                            <p className="tf-row-name truncate">{showName(resume.candidateName) || 'Candidate'}</p>
-                          )}
+                          <div className="flex items-center gap-2 min-w-0">
+                            {onViewCandidate ? (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); onViewCandidate(resume); }}
+                                className="block max-w-full truncate text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors"
+                              >
+                                {showName(resume.candidateName) || 'Candidate'}
+                              </button>
+                            ) : (
+                              <p className="tf-row-name truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                            )}
+                            {resume.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           <p className="tf-meta truncate" title={resume.email || undefined}>{resume.email || '—'}</p>
                         </div>
 
@@ -2757,7 +2781,10 @@ Best regards`);
                       selection) off the name. */}
                   <div className="flex items-start gap-2.5 pl-6">
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>
+                        {resume.isArchived && <ResumeArchivedBadge />}
+                      </div>
                       <p className="tf-meta truncate">{resume.email || '—'}</p>
                     </div>
                   </div>
@@ -3041,17 +3068,20 @@ Best regards`);
                               );
                             })()}
                             <div className="min-w-0 w-full">
-                              {onViewCandidate ? (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
-                                  className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full [overflow-wrap:anywhere]"
-                                  title={primary.candidateName || undefined}
-                                >
-                                  {primary.candidateName || 'Candidate'}
-                                </button>
-                              ) : (
-                                <div className="tf-row-name [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
-                              )}
+                              <div className="flex items-center gap-2 min-w-0">
+                                {onViewCandidate ? (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
+                                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block max-w-full [overflow-wrap:anywhere]"
+                                    title={primary.candidateName || undefined}
+                                  >
+                                    {primary.candidateName || 'Candidate'}
+                                  </button>
+                                ) : (
+                                  <div className="tf-row-name [overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</div>
+                                )}
+                                {primary.isArchived && <ResumeArchivedBadge />}
+                              </div>
                               {primary.email && <div className="tf-meta [overflow-wrap:anywhere]" title={primary.email}>{primary.email}</div>}
                             </div>
                           </div>
@@ -3246,6 +3276,7 @@ Best regards`);
                   ) : (
                     <span className="[overflow-wrap:anywhere]">{primary.candidateName || 'Candidate'}</span>
                   )}
+                  badges={primary.isArchived ? <ResumeArchivedBadge /> : undefined}
                   meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: primary.email }]}
                   fields={[
                     {
@@ -3523,10 +3554,15 @@ Best regards`);
               ? <JobIdBadge className="min-w-0 truncate" title={cardJobCode}>{cardJobCode}</JobIdBadge>
               : undefined}
             title={<span className="[overflow-wrap:anywhere]">{showName(resume.candidateName)}</span>}
-            badges={!hiddenColumnIds?.includes('matchStatus') ? (
-              <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
-                {resume.matchStatus}
-              </span>
+            badges={(resume.isArchived || !hiddenColumnIds?.includes('matchStatus')) ? (
+              <>
+                {resume.isArchived && <ResumeArchivedBadge />}
+                {!hiddenColumnIds?.includes('matchStatus') && (
+                  <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${matchBadgeClass(resume.matchStatus)}`}>
+                    {resume.matchStatus}
+                  </span>
+                )}
+              </>
             ) : undefined}
             meta={[{ icon: <Mail className="w-3.5 h-3.5" />, label: resume.email }]}
             /* The table's columns as Label: value (phone, experience and

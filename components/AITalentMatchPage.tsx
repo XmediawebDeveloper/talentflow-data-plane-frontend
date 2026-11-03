@@ -63,6 +63,7 @@ import { assessmentService } from '@/lib/services';
 import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
@@ -180,6 +181,8 @@ interface MatchInviteRow {
   phone?: string;
   title?: string;
   resumeId?: string;
+  /** An archived resume can't be invited to anything until it's unarchived. */
+  isArchived?: boolean;
 }
 
 /* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
@@ -479,6 +482,7 @@ export default function AITalentMatchPage({
     "You do not have permission to invite to an assessment from AI Talent Match (needs 'Invite to Assessment' under AI Talent Match and 'Invite Candidates' under Assessment)";
   const AI_INTERVIEW_INVITE_DENIED =
     "You do not have permission to invite to an AI interview from AI Talent Match (needs 'Invite to AI Interview' under AI Talent Match and 'Invite Candidates' under AI Interview)";
+  const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 
 
   /* 'details' used to be its own viewMode (the "Match Details" page) — it and
@@ -1219,6 +1223,12 @@ export default function AITalentMatchPage({
   // scoring keys on), then runs the same single-candidate scoring flow every
   // other "Score Resume" action already uses.
   const scoreJobMatchCandidate = async (job: { historyId: string; jobId: string; resumeId?: string }) => {
+    // Safety net behind the greyed-out menu items: never score against a Disabled / Archived JD.
+    const lock = jobLockFor(job.jobId);
+    if (lock) {
+      toast.error(`${lock} — resumes can't be scored against it`);
+      return;
+    }
     const item = matchHistory.find(h => h.id === job.historyId);
     if (!item) {
       toast.error('Match session not found');
@@ -2332,10 +2342,29 @@ export default function AITalentMatchPage({
         ticks come back, the job is re-checked, and the invite opens for the
         same candidates. Nothing published → ticks back, no invite. */
   const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
+  /** A JD's status, capitalised ('Published', 'Disabled', 'Archived', …), from
+   *  whichever source has it. `jobs` starts from the user's OWN JDs (my-jds),
+   *  so in a tenant where someone else created the job it can be missing —
+   *  then the job's lineage, then the match session's own `jd_status` (sent
+   *  for every session, whoever created the JD). Undefined = unknown. */
+  const jdStatusOf = (jdId: string): string | undefined => {
+    const raw = jobs.find(j => j.id === jdId)?.status
+      || lineageByJob[historyKeyForJd(jdId)]?.find(v => v.id === jdId)?.status
+      || allMatchSessions.find(s => s.jd_id === jdId && s.jd_status)?.jd_status;
+    if (!raw) return undefined;
+    const lower = raw.toLowerCase();
+    if (lower === 'active') return 'Published';
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  };
   const inviteTargetJobOf = (jdId: string, title?: string): InviteTargetJob => {
     const job = jobs.find(j => j.id === jdId);
-    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status: job?.status };
+    // Capitalised, as resolveSelectionJobLock compares 'Archived' / 'Disabled'.
+    return { jdId, jdCode: job?.jobId || undefined, jdTitle: title || job?.title || 'Job', status: jdStatusOf(jdId) };
   };
+  /** 'JD is disabled' / 'JD is archived' when that JD can't be scored or
+   *  invited to; null otherwise. Gates every per-candidate Score / Create action. */
+  const jobLockFor = (jdId: string, title?: string): string | null =>
+    jdId ? resolveSelectionJobLock([inviteTargetJobOf(jdId, title)]) : null;
   /* Create / Send Assessment | AI Interview — Job Details' popup, for ONE job
      per opening (a selection spanning jobs stays greyed: "one job at a time").
      null = closed; rendered with aiInviteDialog in every view. */
@@ -2377,6 +2406,7 @@ export default function AITalentMatchPage({
     phone: c.phone,
     title: c.title,
     resumeId: c.resumeId,
+    isArchived: c.isArchived,
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
@@ -2401,6 +2431,9 @@ export default function AITalentMatchPage({
   /** A candidate's invite items for its ⋮ menu — greyed with "＋ Create …"
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
+    const rowJobLock = jobLockFor(row.jobId, jobTitle);
+    // An archived resume blocks every invite, same as the resume detail page.
+    const rowLock = row.isArchived ? ARCHIVED_ACTION_MESSAGE : rowJobLock;
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -2416,8 +2449,12 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAssessmentFromMatch,
           deniedReason: ASSESSMENT_INVITE_DENIED,
+          // A Disabled / Archived JD, or an archived resume: nothing can be
+          // created or sent for it.
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAssessmentFromMatch) {
+            if (!canInviteAssessmentFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
@@ -2431,8 +2468,10 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAIInterviewFromMatch,
           deniedReason: AI_INTERVIEW_INVITE_DENIED,
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAIInterviewFromMatch) {
+            if (!canInviteAIInterviewFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
@@ -3370,12 +3409,13 @@ export default function AITalentMatchPage({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={!job.resumeId}
+            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            // A Disabled / Archived JD can't be scored against.
+            disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
             aria-disabled={!canRunScoring || undefined}
-            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
             onSelect={(e) => {
-              if (!canRunScoring) {
+              if (!canRunScoring || jobLockFor(job.jobId)) {
                 e.preventDefault();
                 return;
               }
@@ -3397,6 +3437,7 @@ export default function AITalentMatchPage({
             phone: row.phone,
             title: row.title,
             resumeId: job.resumeId,
+            isArchived: row.best?.isArchived,
           },
           'candidates',
           job.jobTitle,
@@ -3416,6 +3457,7 @@ export default function AITalentMatchPage({
           phone: row.phone,
           title: row.title,
           resumeId: j.resumeId,
+          isArchived: row.best?.isArchived,
         }));
     /* Job Titles cell: the first two titles and a "+N more" chip; a click
        opens a small popup listing every title under "All (N)", each with how
@@ -3570,11 +3612,13 @@ export default function AITalentMatchPage({
                 </DropdownMenuItem>
               ) : (
               <DropdownMenuItem
-                className={`${actionsMenuItemClass} ${!canRunScoring ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                className={`${actionsMenuItemClass} ${!canRunScoring || selectionJobLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                 aria-disabled={!canRunScoring || undefined}
-                title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                // A Disabled / Archived JD can't be scored against.
+                disabled={canRunScoring && !!selectionJobLock}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionJobLock ?? undefined}
                 onSelect={(e) => {
-                  if (!canRunScoring) {
+                  if (!canRunScoring || selectionJobLock) {
                     e.preventDefault();
                     return;
                   }
@@ -3792,8 +3836,9 @@ export default function AITalentMatchPage({
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
         {/* Header — shared PageHeader (User Management uniform) */}
         <PageHeader
-          icon={<History className="h-5 w-5" />}
-          title="AI Talent Match - Matched Jobs"
+          // Same icon as the dashboard's AI Talent Match card.
+          icon={<Sparkles className="h-5 w-5 text-brand-orange-deep" />}
+          title="AI Talent Match"
           description="Review jobs with AI-matched candidates and their results"
           actions={
             <div className="flex items-center gap-2 flex-wrap sm:justify-end">
@@ -4275,12 +4320,15 @@ export default function AITalentMatchPage({
                                 <td className="tf-td align-top">
                                   <div className="flex items-start gap-3">
                                     <div className="min-w-0">
-                                      <button
-                                        onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
-                                      >
-                                        {row.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block"
+                                        >
+                                          {row.name || 'Candidate'}
+                                        </button>
+                                        {row.best?.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {row.email && <div className="tf-meta truncate">{row.email}</div>}
                                     </div>
                                   </div>
@@ -4562,6 +4610,7 @@ export default function AITalentMatchPage({
                               {row.name || 'Candidate'}
                             </button>
                             );
+                          const nameBadge = row.best?.isArchived ? <ResumeArchivedBadge /> : null;
                           const chevronBtn = (
                           <button
                             type="button"
@@ -4703,6 +4752,7 @@ export default function AITalentMatchPage({
                           selected={selectedCandKeys.has(row.key)}
                           select={selectBtn}
                           title={nameBtn}
+                          badges={nameBadge ?? undefined}
                           meta={[{ icon: <Mail />, label: row.email || null }]}
                           fields={[
                             {
@@ -4747,7 +4797,10 @@ export default function AITalentMatchPage({
                           <div className="min-w-0 flex-1">
                             {/* max-w-full: a button sizes to its text, so without it `truncate`
                                 never engaged and a long name ran past the card on a phone. */}
-                            {nameBtn}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {nameBtn}
+                              {nameBadge}
+                            </div>
                             {row.email && <div className="tf-meta truncate">{row.email}</div>}
                           </div>
                         </div>
@@ -5171,7 +5224,10 @@ export default function AITalentMatchPage({
                       <div className="flex items-start gap-2.5">
                         <NameAvatar name={row.name} fallback={row.email} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                            {row.best?.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
@@ -5316,6 +5372,7 @@ export default function AITalentMatchPage({
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
                             </div>
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
@@ -5442,12 +5499,13 @@ export default function AITalentMatchPage({
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!job.resumeId}
+                                  className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  // A Disabled / Archived JD can't be scored against.
+                                  disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
                                   aria-disabled={!canRunScoring || undefined}
-                                  title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                                  title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
                                   onSelect={(e) => {
-                                    if (!canRunScoring) {
+                                    if (!canRunScoring || jobLockFor(job.jobId)) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5459,21 +5517,33 @@ export default function AITalentMatchPage({
                                 </DropdownMenuItem>
                                 {/* Same two invites as View by Candidates' per-job menu. */}
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isArchived}
                                   aria-disabled={!canInviteAssessmentFromMatch || undefined}
-                                  title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAssessmentForJobMatch(row, job)}
+                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAssessmentForJobMatch(row, job);
+                                  }}
                                 >
                                   <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isArchived}
                                   aria-disabled={!canInviteAIInterviewFromMatch || undefined}
-                                  title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAIInterviewForJobMatch(row, job)}
+                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAIInterviewForJobMatch(row, job);
+                                  }}
                                 >
                                   <Video className="w-4 h-4 text-menu-icon-ai" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
@@ -5507,7 +5577,7 @@ export default function AITalentMatchPage({
                           className="flex-shrink-0"
                         />
                       }
-                      title={<span className="text-blue-600">{row.name}</span>}
+                      title={<span className="flex items-center gap-2 min-w-0"><span className="text-blue-600 truncate">{row.name}</span>{row.best?.isArchived && <ResumeArchivedBadge />}</span>}
                       meta={[
                         { icon: <Briefcase />, label: job.jobTitle || null },
                         { icon: <Mail />, label: row.email ? <span className="break-all">{row.email}</span> : null },
@@ -5885,6 +5955,35 @@ export default function AITalentMatchPage({
                 if (!isJobExpanded && !loaded) void loadHistoryCandidates(item);
                 toggleJobExpanded(jobKey);
               };
+              /* One ⋮ menu per job row — View Details and Match History (which
+                 used to sit beside the job title), as on Resume Scoring. */
+              const renderJobActionsMenu = (sizeClass: string) => (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`More actions for ${item.jobTitle}`}
+                      title="More actions"
+                      className={`${sizeClass} p-0`}
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenuItem className="group" onSelect={openResults}>
+                      <FileText className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="group" onSelect={() => openMatchHistoryModal(item, historyKey)}>
+                      <History className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Match History</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              );
 
               /* One candidate's state in this job's panel — shared by the
                  table rows and the Grid cards. */
@@ -5943,12 +6042,13 @@ export default function AITalentMatchPage({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
-                        className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        disabled={!c.resumeId}
+                        className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        // A Disabled / Archived JD can't be scored against.
+                        disabled={!c.resumeId || (canRunScoring && !!jobLockFor(item.jobId))}
                         aria-disabled={!canRunScoring || undefined}
-                        title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                        title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
                         onSelect={(e) => {
-                          if (!canRunScoring) {
+                          if (!canRunScoring || jobLockFor(item.jobId)) {
                             e.preventDefault();
                             return;
                           }
@@ -6045,17 +6145,20 @@ export default function AITalentMatchPage({
                                       {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
                                     </button>
                                     <div className="min-w-0 flex-1">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                        }}
-                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                                        title={c.name}
-                                      >
-                                        {c.name || 'Candidate'}
-                                      </button>
+                                      <div className="flex items-center gap-2 min-w-0">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                          }}
+                                          className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                                          title={c.name}
+                                        >
+                                          {c.name || 'Candidate'}
+                                        </button>
+                                        {c.isArchived && <ResumeArchivedBadge />}
+                                      </div>
                                       {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
                                     <span
@@ -6257,17 +6360,20 @@ export default function AITalentMatchPage({
                                     <td className="tf-td">
                                       <div className="flex items-center min-w-0">
                                         <div className="min-w-0">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
-                                            }}
-                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
-                                            title={c.name}
-                                          >
-                                            {c.name || 'Candidate'}
-                                          </button>
+                                          <div className="flex items-center gap-2 min-w-0">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                              }}
+                                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-[16rem]"
+                                              title={c.name}
+                                            >
+                                              {c.name || 'Candidate'}
+                                            </button>
+                                            {c.isArchived && <ResumeArchivedBadge />}
+                                          </div>
                                           {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
                                       </div>
@@ -6515,25 +6621,8 @@ export default function AITalentMatchPage({
                   }
                   actions={
                     <>
-                      {/* Match History — every run across this job's whole lineage. */}
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }}
-                        className="tf-icon-btn-outline"
-                        aria-label="Match History"
-                        title="Match History"
-                      >
-                        <History />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); openResults(); }}
-                        className="tf-icon-btn-outline"
-                        aria-label="View Details"
-                        title="View Details"
-                      >
-                        <FileText />
-                      </button>
+                      {/* View Details and Match History — the row's ⋮ menu, as on desktop. */}
+                      {renderJobActionsMenu('h-7 w-7')}
                       {hasMatches && (
                         <button
                           type="button"
@@ -6617,17 +6706,7 @@ export default function AITalentMatchPage({
                         {/* Status — only when it isn't the norm here
                             (Published / Republished), as on Resume Scoring. */}
                         {jobStatusPill}
-                        {/* Match History — every run across this job's whole
-                            lineage, with its Rating 10 / 9 – 7 / Below 7 roll-up. */}
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }}
-                          className="w-7 flex-shrink-0"
-                          aria-label="Match History" title="Match History"
-                        >
-                          <History className="w-3.5 h-3.5" />
-                        </Button>
+                        {/* Match History moved into the row's ⋮ menu. */}
                       </div>
 
                       {/* "By: name  Matched: date" — Resume Scoring's meta
@@ -6715,16 +6794,7 @@ export default function AITalentMatchPage({
                       )}
                       <div className="flex flex-col items-stretch gap-2">
                         <div className="flex items-center gap-1.5 self-end">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); openResults(); }}
-                            aria-label="View Details"
-                            title="View Details"
-                            className="h-9 w-9"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </Button>
+                          {renderJobActionsMenu('h-9 w-9')}
                         </div>
                         {hasMatches && (
                           <button
@@ -6797,9 +6867,10 @@ export default function AITalentMatchPage({
                             <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />v{jobData.currentVersion}
                           </span>
                         )}
-                        {jobData && (() => {
-                          const raw = jobData.status || 'published';
-                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData.publishCount);
+                        {(() => {
+                          // jdStatusOf: also covers jobs missing from `jobs` (created by someone else).
+                          const raw = jdStatusOf(item.jobId) || 'published';
+                          const label = getDisplayStatus(raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(), jobData?.publishCount);
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
                           return (
@@ -6808,9 +6879,7 @@ export default function AITalentMatchPage({
                             </span>
                           );
                         })()}
-                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }} className="w-6 flex-shrink-0" aria-label="Match History" title="Match History">
-                          <History className="w-3.5 h-3.5" />
-                        </Button>
+                        {/* Match History moved into the row's ⋮ menu. */}
                       </div>
                     </td>
                     <td className="tf-td">
@@ -6824,44 +6893,47 @@ export default function AITalentMatchPage({
                     <td className="tf-td">
                       <span className="tf-row-title tabular-nums">{item.totalMatches}</span>
                     </td>
-                    <td className="tf-td">
-                      {!hasMatches ? (
+                    {/* Rating: one column per band (10 / 9–7 / Below 7), as Resume
+                        Scoring's Exact / Partial / No Match columns. */}
+                    {!hasMatches ? (
+                      <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
-                      ) : !loaded ? (
+                      </td>
+                    ) : !loaded ? (
+                      <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
-                      ) : (
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          {([
-                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
-                            { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
-                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
-                          ]).map(({ id, label, count, Icon, cls }) => {
-                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
-                            return (
-                              <span key={id} className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
-                                <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </td>
+                      </td>
+                    ) : (
+                      ([
+                        { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                        { id: 'partial' as const, label: 'Rating 9–7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                        { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                      ]).map(({ id, label, count, Icon, cls }) => {
+                        const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                        return (
+                          <td key={id} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls}`} title={label}>
+                              <Icon className="w-3.5 h-3.5" /><span className="tabular-nums">{count}</span>
+                            </span>
+                          </td>
+                        );
+                      })
+                    )}
                     <td className="tf-td tf-sticky-col">
+                      {/* Expand first, then the ⋮ menu — same order as Resume Scoring. */}
                       <div className="flex items-center justify-center gap-1">
-                        <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); openResults(); }} aria-label="View Details" title="View Details" className="h-8 w-8">
-                          <FileText className="w-4 h-4" />
-                        </Button>
                         {hasMatches && (
                           <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8">
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
                         )}
+                        {renderJobActionsMenu('h-8 w-8')}
                       </div>
                     </td>
                   </tr>
                   {hasMatches && isJobExpanded && (
                     <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                      <td colSpan={8} className="tf-td pb-4 pt-0">{inlineCandidatesPanel}</td>
+                      <td colSpan={10} className="tf-td pb-4 pt-0">{inlineCandidatesPanel}</td>
                     </tr>
                   )}
                 </Fragment>
@@ -6885,13 +6957,15 @@ export default function AITalentMatchPage({
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
                         <th className="tf-th-cell w-10" aria-hidden="true" />
-                        <th className="tf-th-cell text-left tf-th">Job</th>
-                        <th className="tf-th-cell text-left tf-th">Job Title</th>
-                        <th className="tf-th-cell text-left tf-th">Matched By</th>
-                        <th className="tf-th-cell text-left tf-th">Matched</th>
-                        <th className="tf-th-cell text-left tf-th">Matches</th>
-                        <th className="tf-th-cell text-left tf-th">Rating</th>
-                        <th className="tf-th-cell text-center tf-th tf-sticky-col">Actions</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Job ID</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Job Title</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Matched By</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Date &amp; Time</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Matched</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Rating 10</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Rating 9–7</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th whitespace-nowrap">Below 7</th>
+                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -7582,7 +7656,7 @@ export default function AITalentMatchPage({
       || '';
     const resultsJobCode = selectedJobData?.jobId || resultsLineageEntry?.job_id;
     const resultsVersionNumber = resultsLineageEntry?.version_number ?? selectedJobData?.currentVersion;
-    const resultsJobStatus = (resultsLineageEntry?.status || selectedJobData?.status || '').toLowerCase();
+    const resultsJobStatus = (resultsLineageEntry?.status || selectedJobData?.status || jdStatusOf(selectedJob) || '').toLowerCase();
     const canRunAgainHere = resultsJobStatus !== 'disabled' && resultsJobStatus !== 'archived';
 
     const matchedVersionOptions: { jdId: string; number: number; matchedAt?: Date; session?: AIMatchSessionVersion['session'] }[] = (historyVersionsByJob[resultsHistoryKey] ?? [])
@@ -7823,6 +7897,17 @@ export default function AITalentMatchPage({
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
                     <h1 className="tf-page-title min-w-0 [overflow-wrap:anywhere] sm:truncate">{resultsJobTitle}</h1>
+                    {/* Disabled / Archived — same badge as the job list row. */}
+                    {!canRunAgainHere && (() => {
+                      const label = resultsJobStatus === 'archived' ? 'Archived' : 'Disabled';
+                      const tone = getStatusConfig(label);
+                      return (
+                        <span className={`inline-flex h-6 items-center gap-1.5 px-2 rounded-full text-xs font-medium border ${tone.bg} ${tone.text} ${tone.border} flex-shrink-0`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`} />
+                          {label}
+                        </span>
+                      );
+                    })()}
                     {/* JD version — a dropdown once the job has more than one
                         version to pick from, else the same pill as the
                         table's Job Version column. */}
@@ -7920,6 +8005,15 @@ export default function AITalentMatchPage({
                       AI Talent Match • 0 units consumed
                     </span>
                   </div>
+                  {!canRunAgainHere && (
+                    <div role="status" className="mt-2 flex items-start gap-2 rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-strong ring-1 ring-warning-line">
+                      <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        This job is <strong>{resultsJobStatus}</strong>. Its matches can still be viewed and exported,
+                        but running the match again, scoring and sending assessments or AI interviews are turned off.
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -8117,12 +8211,13 @@ export default function AITalentMatchPage({
                         </div>
                         {/* Score — the shared Score Resume dialog for the ticked candidates. */}
                         <DropdownMenuItem
-                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                          className={`${actionsMenuItemClass} ${(!canRunScoring || unitsShort || jobLock) ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                           aria-disabled={!canRunScoring || undefined}
-                          disabled={canRunScoring && unitsShort}
-                          title={!canRunScoring ? 'You do not have permission to score resumes' : unitsShort ? 'Insufficient units for this selection' : undefined}
+                          // A Disabled / Archived JD can't be scored against — same as Resume Scoring.
+                          disabled={canRunScoring && (unitsShort || !!jobLock)}
+                          title={!canRunScoring ? 'You do not have permission to score resumes' : jobLock ? jobLock : unitsShort ? 'Insufficient units for this selection' : undefined}
                           onSelect={(e) => {
-                            if (!canRunScoring) { e.preventDefault(); return; }
+                            if (!canRunScoring || jobLock) { e.preventDefault(); return; }
                             void handleSubmitToScoring();
                           }}
                         >
@@ -8532,12 +8627,13 @@ export default function AITalentMatchPage({
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            disabled={!candidate.resumeId}
+                            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            // A Disabled / Archived JD can't be scored against.
+                            disabled={!candidate.resumeId || (canRunScoring && !!jobLockFor(selectedJob))}
                             aria-disabled={!canRunScoring || undefined}
-                            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
                             onSelect={(e) => {
-                              if (!canRunScoring) {
+                              if (!canRunScoring || jobLockFor(selectedJob)) {
                                 e.preventDefault();
                                 return;
                               }

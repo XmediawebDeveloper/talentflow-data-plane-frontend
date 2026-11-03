@@ -1078,7 +1078,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                           </p>
                         )}
                         {remaining.isExpired && (
-                          <p className="mt-1.5 flex items-center gap-1 text-xs text-destructive lg:justify-end">
+                          <p className="mt-1.5 flex items-center gap-1 tf-error lg:justify-end">
                             <AlertTriangle className="h-3.5 w-3.5" />
                             Plan Expired
                           </p>
@@ -1822,7 +1822,7 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
                       <p className="text-sm font-semibold text-destructive-strong">
                         {paymentCaptured ? 'Activation Failed — Payment Was Captured' : 'Purchase Failed'}
                       </p>
-                      <p className="mt-0.5 text-xs text-destructive">{addonPurchaseError}</p>
+                      <p className="mt-0.5 tf-error">{addonPurchaseError}</p>
                       {paymentCaptured && (
                         <p className="mt-1 text-xs font-medium text-destructive">
                           Your payment was received. Please check Billing History to retry activation — you will not be charged again.

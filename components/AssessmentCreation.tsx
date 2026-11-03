@@ -1,5 +1,6 @@
 'use client';
 
+import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw } from 'lucide-react';
@@ -1960,7 +1961,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               description: jd.description || '',
               department: jd.department || 'General',
               location: jd.location || '',
-              experience: jd.job_level || 'Mid-Level',
+              // The JD's own years; the level goes on experience_level. This used to
+              // be `job_level || 'Mid-Level'` - a level the JD may never have had.
+              experience: formatExperienceRange(jd.experience_min, jd.experience_max) || '',
+              experience_level: jd.job_level || jd.experience_level || undefined,
               skills: jd.must_have_skills || [],
               /* Both groups as the JD states them, so a JD reached by id shows
                  the same skills as one that came through the list mapping. */

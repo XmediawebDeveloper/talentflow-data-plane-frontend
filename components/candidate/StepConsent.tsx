@@ -51,6 +51,8 @@ interface StepConsentProps {
    *  process before interview starts where they will be requiring their
    *  mobile to complete proxy verification process"). */
   environmentVerificationEnabled?: boolean;
+  /** RECORDING_STORAGE_DAYS from the backend .env. */
+  recordingStorageDays?: number;
 }
 
 interface ConsentState {
@@ -116,6 +118,7 @@ export default function StepConsent({
   interviewMode,
   totalQuestions,
   environmentVerificationEnabled,
+  recordingStorageDays = 30,
   candidateName,
   candidateEmail,
 }: StepConsentProps) {
@@ -611,7 +614,7 @@ export default function StepConsent({
                               <>
                                 <p className="flex items-start gap-2">
                                   <Clock className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                                  <span>Retained for <strong className="text-gray-900">90 days</strong>, then automatically deleted.</span>
+                                  <span>Retained for <strong className="text-gray-900">{recordingStorageDays} days</strong>, then automatically deleted.</span>
                                 </p>
                                 <p className="flex items-start gap-2">
                                   <Trash2 className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />

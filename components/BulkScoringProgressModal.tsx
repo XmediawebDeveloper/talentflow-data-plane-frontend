@@ -986,7 +986,7 @@ export default function BulkScoringProgressModal({
                               {item.status}
                             </span>
                             {item.status === 'Failed' && (
-                              <div className="flex items-start gap-1 text-xs text-destructive mt-1 max-w-[280px] whitespace-normal break-words">
+                              <div className="flex items-start gap-1 tf-error mt-1 max-w-[280px] whitespace-normal break-words">
                                 <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                 <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                               </div>
@@ -1140,7 +1140,7 @@ export default function BulkScoringProgressModal({
                       </div>
                     </div>
                     {item.status === 'Failed' && (
-                      <div className="flex items-start gap-1 text-xs text-destructive mb-2">
+                      <div className="flex items-start gap-1 tf-error mb-2">
                         <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                         <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                       </div>

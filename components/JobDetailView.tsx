@@ -13,6 +13,7 @@ import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, 
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
@@ -72,7 +73,7 @@ import ApplyToJobModal from '@/components/ApplyToJobModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
 import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
-import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
+import { formatJobExperienceBadge, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -1642,10 +1643,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     setLoadingScoredResumes(true);
     try {
       console.log('[JobDetailView] Fetching scored resumes for JD:', job.id);
-      const response = await jdService.getScoredResumes(job.id, {
-        page_size: 100,
+      // Every page, not just the first 100: the tab badge, the stats and the
+      // list all read the real total. Page 1 says how many pages follow; the
+      // rest load in parallel.
+      const PAGE_SIZE = 100;
+      const first = await jdService.getScoredResumes(job.id, {
+        page_size: PAGE_SIZE,
+        page: 1,
         sort_by: 'latest'  // Always get latest scores first
       });
+      const pageCount = Math.ceil((first?.total ?? 0) / PAGE_SIZE);
+      const rest = pageCount > 1
+        ? await Promise.all(Array.from({ length: pageCount - 1 }, (_, i) =>
+            jdService.getScoredResumes(job.id, { page_size: PAGE_SIZE, page: i + 2, sort_by: 'latest' })))
+        : [];
+      const response = {
+        ...first,
+        items: [...(first?.items || []), ...rest.flatMap((r: any) => r?.items || [])],
+      };
       console.log('[JobDetailView] Scored resumes response:', response);
 
       // Convert API response to ScoredResume format
@@ -1726,13 +1741,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // with the frontend's match_status bucketing. When a backend count was 0
       // (falsy) it fell through to the filter, letting one resume be counted in
       // two buckets at once — e.g. Total 1 but Partial Match 1 AND No Match 1.
-      // `total` also reads the converted list now, not `response.total` — the
-      // backend total counts every scored resume for this JD, while the tab
-      // itself (ScoredResumesTable) only ever renders this one `page_size:
-      // 100` page, via its own `resumes.length` count badge. For a JD with
-      // more than 100 scored resumes those two disagreed, so the tab-strip
-      // badge showed the true (higher) total and then visibly dropped to 100
-      // the moment the tab opened.
+      // `total` reads the converted list too: every page is loaded above, so
+      // it is the backend's real total and the same number the tab's own
+      // table (ScoredResumesTable's `resumes.length` badge) and the invite
+      // popup's Scored Resumes tab show.
       const stats = {
         total: convertedResumes.length,
         exactMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
@@ -3080,7 +3092,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                             Loading versions...
                           </div>
                         ) : versionMenuError ? (
-                          <div className="px-3 py-3 text-xs text-destructive">
+                          <div className="px-3 py-3 tf-error">
                             {versionMenuError}
                           </div>
                         ) : sortedLineageVersions.length === 0 ? (
@@ -3677,6 +3689,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               mustHaveComments={mustHaveComments}
               niceToHaveComments={niceToHaveComments}
               experience={job.experience}
+              experienceLevelOnly={job.experience ? null : formatExperienceLevelName(job.experience_level)}
               experienceNote={requirementLabel(job.experienceMandatory)}
               industry={job.industry_type ? prettifyCode(job.industry_type) : null}
               industryNote={job.industry_type ? criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true }) : undefined}
@@ -6023,7 +6036,10 @@ function AIMatchTabContent({
                       <div className="flex items-start gap-2.5 pl-6">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{formatCandidateFirstName(candidate.name)}</p>
+                            {candidate.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           {candidate.title && (
                             <p className="tf-meta truncate">{candidate.title}</p>
                           )}
@@ -6184,12 +6200,15 @@ function AIMatchTabContent({
                       </td>
                       <td className="tf-td">
                         <div className="min-w-0">
-                          <p
-                            className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]"
-                            title={[formatCandidateFirstName(candidate.name), candidate.title].filter(Boolean).join(' · ')}
-                          >
-                            {formatCandidateFirstName(candidate.name)}
-                          </p>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p
+                              className="text-sm font-medium text-blue-600 dark:text-blue-400 truncate max-w-[16rem]"
+                              title={[formatCandidateFirstName(candidate.name), candidate.title].filter(Boolean).join(' · ')}
+                            >
+                              {formatCandidateFirstName(candidate.name)}
+                            </p>
+                            {candidate.isArchived && <ResumeArchivedBadge />}
+                          </div>
                           {candidate.email && <p className="tf-meta truncate max-w-[16rem]" title={candidate.email}>{candidate.email}</p>}
                         </div>
                       </td>
@@ -6429,6 +6448,7 @@ function AIMatchTabContent({
                     <span className="flex min-w-0 items-center gap-2">
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                       <span className="min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>
+                      {candidate.isArchived && <ResumeArchivedBadge />}
                     </span>
                   }
                   badges={

@@ -410,7 +410,7 @@ function DashboardSkeleton() {
               <div className="h-6 w-36 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse hidden sm:block" />
             </div>
             <div className="px-3 pb-4 sm:px-4 sm:pb-5 md:px-8 md:pb-6">
-              <div className="tf-grid-stats-5">
+              <div className="tf-grid-tiles">
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 rounded-[14px] border border-slate-200/80 dark:border-slate-700 p-3">
                     <div className="h-9 w-9 shrink-0 rounded-[10px] bg-slate-200 dark:bg-slate-800 animate-pulse" />

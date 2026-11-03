@@ -897,7 +897,7 @@ export const assessmentService = {
    * Get detailed results for a specific candidate
    */
   /** Presigned stream/download URL for the candidate (webcam) recording; null url when none. */
-  async getRecordingUrl(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<{ url: string | null; download_url: string | null; size: number | null } | null> {
+  async getRecordingUrl(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<{ url: string | null; download_url: string | null; size: number | null; expired?: boolean; view_days?: number; view_until?: string | null } | null> {
     try {
       const path = kind === 'screen' ? 'screen-recording-url' : 'recording-url';
       const response = await api.get(`/assessments/${assessmentId}/results/${resultId}/${path}`);

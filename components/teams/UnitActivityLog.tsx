@@ -141,7 +141,7 @@ export default function UnitActivityLog({
           <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading unit activity…
         </div>
       ) : error && items.length === 0 ? (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2 text-xs text-destructive">
+        <div className="flex items-center justify-between gap-2 rounded-lg border border-destructive-line bg-destructive-subtle px-3 py-2 tf-error">
           {error}
           <button type="button" onClick={() => setReloadKey(k => k + 1)} className="inline-flex items-center gap-1 font-medium hover:underline">
             <RefreshCw className="h-3 w-3" /> Retry

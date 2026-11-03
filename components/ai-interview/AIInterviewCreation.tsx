@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import { ArrowLeft, Briefcase, Clock, Plus, X, Sparkles, CheckCircle2, Loader2, Users, Brain, Shield, TrendingUp, MessageSquare, Lightbulb, Trash2, Save, Globe, Video, Upload, MessageCircle } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
@@ -450,13 +451,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 tf-body-muted">
                           {jd.department && <span>{jd.department}</span>}
-                          {jd.job_level && <span className="capitalize">{jd.job_level}</span>}
                           {jd.location && <span>{jd.location}</span>}
-                          {jd.experience_min != null && (
-                            <span>
-                              {jd.experience_min}{jd.experience_max ? `-${jd.experience_max}` : '+'} yrs
-                            </span>
-                          )}
+                          {(() => {
+                            const exp = formatJdExperience(
+                              { jobLevel: jd.job_level, experienceMin: jd.experience_min, experienceMax: jd.experience_max },
+                              { includeLevel: true },
+                            );
+                            return exp ? <span>{exp}</span> : null;
+                          })()}
                         </div>
                         {jd.must_have_skills.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -884,7 +886,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   </div>
 
                   {!percentageValid && (
-                    <div className="bg-destructive-subtle border border-destructive-line rounded-md p-2 text-xs text-destructive">
+                    <div className="bg-destructive-subtle border border-destructive-line rounded-md p-2 tf-error">
                       Enabled round percentages must total 100%. Currently: {totalPercentage}%
                     </div>
                   )}

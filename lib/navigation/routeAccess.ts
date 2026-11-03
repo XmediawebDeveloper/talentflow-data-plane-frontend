@@ -93,6 +93,8 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: '/subscription/usage-quotas', permissions: ['canViewUsage'] },
   { prefix: '/subscription/payment-methods', permissions: ['canViewPaymentMethods'] },
   { prefix: '/subscription/billing-history', permissions: ['canViewBillingHistory'] },
+  // An invoice's own page — same access as the Billing History list it opens from.
+  { prefix: '/subscription/invoices', permissions: ['canViewBillingHistory'] },
   { prefix: '/subscription/refund-history', permissions: ['canViewRefundHistory'] },
   { prefix: '/subscription/dispute-history', permissions: ['canViewDisputeHistory'] },
   { prefix: '/subscription/unit-disputes', permissions: ['canViewUsage'] },

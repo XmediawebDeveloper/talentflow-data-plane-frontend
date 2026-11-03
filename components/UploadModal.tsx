@@ -12,7 +12,7 @@ import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { FOLDER_NAME_MAX_LENGTH } from './FolderTree';
+import { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from './FolderTree';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import DuplicateResumeDetectedModal from './DuplicateResumeDetectedModal';
 import ErrorModal from './ErrorModal';
@@ -108,6 +108,12 @@ interface UploadModalProps {
   onScoreResumes?: (resumes: { id: string; candidateName: string }[]) => void; // Bulk counterpart of onScoreResume
   onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
+  /** The duplicate dialog's main button (with `onScoreResume`); defaults to "Proceed with Scoring". */
+  duplicateProceedLabel?: string;
+  /** Opened from a folder's "Upload to Folder": the Select Folder dropdown
+   *  lists only that folder and its subfolders (no System Folders, no other
+   *  folders). Omitted: every folder. */
+  scopeFolderId?: string;
 }
 
 /**
@@ -130,7 +136,7 @@ export default function UploadModal(props: UploadModalProps) {
   return <UploadModalBody {...props} />;
 }
 
-function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder }: UploadModalProps) {
+function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder: requestedTargetFolder, duplicateProceedLabel, scopeFolderId }: UploadModalProps) {
   /* Never a destination: the root "Archived Resumes" folder. A resume filed
      there is archived (the flag follows the folder), so a fresh upload would
      land archived — unscorable and hidden from every list. My Resumes already
@@ -172,6 +178,21 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
 
   // Initialize with targetFolder, or root folder if available
   const [selectedFolder, setSelectedFolder] = useState<string>(targetFolder || '');
+
+  /* A folder created from here is selected once the host's list holds it: the
+     host creates it and reloads its folders, so the new id is only known then.
+     Matched by name among the folders that were not there before. */
+  const [pendingNewFolder, setPendingNewFolder] = useState<{ name: string; knownIds: string[] } | null>(null);
+  if (pendingNewFolder) {
+    const flat = (list: Folder[]): Folder[] => list.flatMap((f) => [f, ...flat(f.children ?? [])]);
+    const created = flat(hostFolders).find((f) =>
+      !pendingNewFolder.knownIds.includes(f.id)
+      && f.name.trim().toLowerCase() === pendingNewFolder.name.toLowerCase());
+    if (created) {
+      setPendingNewFolder(null);
+      setSelectedFolder(created.id);
+    }
+  }
 
   // Auto-select root folder when folders are loaded
   useEffect(() => {
@@ -311,10 +332,24 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
      BulkActionsBar — Root pinned above a "My Folders" heading. Archived
      Resumes is not an upload destination (see `folders` above). */
   const isSystemPickerFolder = (f: Folder) => !f.parentId && f.name.toLowerCase() === 'root';
-  const systemPickerFolders = folders
+  /* "Upload to Folder" on one folder: that folder (with its subfolders under
+     it) is the whole list. Found anywhere in the tree. */
+  const scopeFolder = useMemo(() => {
+    if (!scopeFolderId) return null;
+    const find = (list: Folder[] | undefined): Folder | null => {
+      for (const f of list ?? []) {
+        if (f.id === scopeFolderId) return f;
+        const hit = find(f.children);
+        if (hit) return hit;
+      }
+      return null;
+    };
+    return find(folders);
+  }, [scopeFolderId, folders]);
+  const systemPickerFolders = scopeFolder ? [] : folders
     .filter(isSystemPickerFolder)
     .sort((a, b) => (a.name.toLowerCase() === 'root' ? 0 : 1) - (b.name.toLowerCase() === 'root' ? 0 : 1));
-  const myPickerFolders = folders.filter(f => f.id !== 'all' && !isSystemPickerFolder(f));
+  const myPickerFolders = scopeFolder ? [scopeFolder] : folders.filter(f => f.id !== 'all' && !isSystemPickerFolder(f));
 
   const renderFolderPickerRow = (folder: Folder, depth: number, ancestors: { folder: Folder; anchor: DOMRect }[]): React.ReactNode => {
     const hasChildren = !!folder.children && folder.children.length > 0;
@@ -513,11 +548,22 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
     return units.toLocaleString() + ' units';
   };
 
+  /* Opened on one folder ("Upload to Folder"): a new folder goes INSIDE the
+     folder the dropdown is on (that folder, or a subfolder of it picked
+     there) — up to MAX_FOLDER_DEPTH levels, as on the page. Otherwise a new
+     folder is a top-level one, as before. */
+  const newFolderParent = scopeFolder
+    ? allFolders.find((entry) => entry.folder.id === (selectedFolder || scopeFolder.id)) ?? null
+    : null;
+  const newFolderTooDeep = !!newFolderParent && newFolderParent.depth >= MAX_FOLDER_DEPTH - 1;
+
   const handleCreateFolder = () => {
+    if (newFolderTooDeep) return;
     if (newFolderName.trim() && onCreateFolder) {
-      const newFolderId = `folder-${Date.now()}`;
-      onCreateFolder(newFolderName.trim());
-      setSelectedFolder(newFolderId); // Auto-select the newly created folder
+      const flat = (list: Folder[]): Folder[] => list.flatMap((f) => [f, ...flat(f.children ?? [])]);
+      // Auto-selected as soon as it appears in the host's folders (see pendingNewFolder).
+      setPendingNewFolder({ name: newFolderName.trim(), knownIds: flat(hostFolders).map((f) => f.id) });
+      onCreateFolder(newFolderName.trim(), newFolderParent?.folder.id);
       setNewFolderName('');
       setShowCreateFolder(false);
     }
@@ -1290,7 +1336,8 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                         />
                         <button
                           onClick={handleCreateFolder}
-                          disabled={!newFolderName.trim()}
+                          disabled={!newFolderName.trim() || newFolderTooDeep}
+                          title={newFolderTooDeep ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
                           className="tf-btn tf-btn-primary px-3 sm:px-4 py-2.5 bg-brand-blue rounded-xl hover:bg-brand-blue-2 transition-colors text-sm shadow-none gap-0"
                         >
                           Create
@@ -1306,6 +1353,13 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                         </button>
                       </div>
                     </div>
+                    {newFolderParent && (
+                      <p className={`mt-2 sm:pl-[3.25rem] text-xs ${newFolderTooDeep ? 'text-warning-strong' : 'text-gray-500 dark:text-slate-400'}`}>
+                        {newFolderTooDeep
+                          ? `“${newFolderParent.path}” is already ${MAX_FOLDER_DEPTH} levels deep — pick a higher folder above to create one inside it.`
+                          : <>Created inside <b className="font-semibold text-gray-700 dark:text-slate-300">{newFolderParent.path}</b>, and selected for this upload.</>}
+                      </p>
+                    )}
                   </div>
 
                 </div>
@@ -1406,6 +1460,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
             setDuplicateInfo(null);
             onClose();
           }}
+          proceedLabel={duplicateProceedLabel}
           onProceedWithScoring={(resumeId) => {
             if (onScoreResume && duplicateInfo.existingResume) {
               onScoreResume(resumeId, duplicateInfo.existingResume.candidate_name);

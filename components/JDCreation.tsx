@@ -30,7 +30,7 @@ import type { IndustryValidationResponse } from '@/lib/services/jdService';
 import type { JDCreate, JDMergeTrailEntry, JDResponse } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
-import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/lib/utils/jdMarkdown';
+import { normalizeManualJDToMarkdown, stripEmptyCertificationSections, stripExperienceDurationLine } from '@/lib/utils/jdMarkdown';
 import { convertSalaryAmount, formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
 import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
 import { getExchangeRate } from '@/lib/services/exchangeRateService';
@@ -91,9 +91,10 @@ const jdMarkdownComponents: Components = {
   ),
 };
 
-const getDisplayJDMarkdown = (text: string, mode: CreationMode): string => {
+const getDisplayJDMarkdown = (text: string, mode: CreationMode, hideExperienceLine = false): string => {
   const normalized = mode === 'manual' ? normalizeManualJDToMarkdown(text) : text;
-  return stripEmptyCertificationSections(normalized);
+  const withoutEmptyCerts = stripEmptyCertificationSections(normalized);
+  return hideExperienceLine ? stripExperienceDurationLine(withoutEmptyCerts) : withoutEmptyCerts;
 };
 
 // Detects SOURCE CODE pasted into a JD field.
@@ -4383,6 +4384,72 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return Number.isFinite(years) && years > 0;
   })();
 
+  /* Is this a fresher / entry-level JD? Only then may it be saved with no years, or
+     with 0-0 years. Any one signal is enough:
+       - the backend says the JD text invites freshers (jdWelcomesFreshers),
+       - the level the JD's words settled, or the level currently selected, is an
+         entry / fresher grade,
+       - the title or JD text uses a fresher / entry-level phrase.
+     Reported 2026-11-02 (JD-458 "Senior Test Engineer"): the JD said only "Senior
+     level with significant experience", the 7-10 band in the boxes was a prefill that
+     is deliberately not saved, and the JD was published with experience_min/max both
+     NULL - so the header read "Senior Level (7-10 Years)" and the summary "Not
+     specified". A non-fresher JD must now carry real years. */
+  const FRESHER_LEVEL_CODE_PATTERN = /(?:^|_)(?:entry|fresher|freshers|fresh|intern|internship|trainee|apprentice|graduate|no_?experience)(?:_|$)/;
+  const FRESHER_TITLE_PATTERN = /\b(?:fresher|freshers|fresh\s+graduates?|entry[\s-]?level|intern|internship|trainee|apprentice(?:ship)?|graduate)\b/i;
+  const FRESHER_TEXT_PATTERN = /\b(?:fresher|freshers|fresh\s+graduates?|entry[\s-]?level|graduate\s+trainees?|no\s+(?:prior\s+)?(?:work\s+)?experience\s+(?:is\s+)?(?:required|needed|necessary))\b/i;
+  const isFresherLevelCode = (code?: string | null): boolean => {
+    const normalized = (code || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+    if (!normalized) return false;
+    if (FRESHER_LEVEL_CODE_PATTERN.test(normalized)) return true;
+    // A tenant level like "Fresher (0-0 Years)" under some other code.
+    const level = getExperienceLevelByCode(normalized);
+    return Boolean(level && FRESHER_TITLE_PATTERN.test(level.label || ''));
+  };
+  const jdIsFresherOrEntryLevel = (() => {
+    if (jdWelcomesFreshers) return true;
+    if (isFresherLevelCode(experienceLevelWord)) return true;
+    if (isFresherLevelCode(extractedData.experience)) return true;
+    if (FRESHER_TITLE_PATTERN.test(jobTitle || '')) return true;
+    const jdText = (mode === 'ai' ? generatedJD : manualJD) || effectiveEditingJD?.description || '';
+    return FRESHER_TEXT_PATTERN.test(jdText);
+  })();
+
+  /* The years shown in the From/To boxes, as numbers (null = box empty). */
+  const experienceYearsInBoxes = (() => {
+    const { from, to } = parseExperienceYearsString(extractedData.experience);
+    const toNum = (v: string) => {
+      const cleaned = (v ?? '').replace(/[^0-9.]/g, '');
+      if (cleaned === '') return null;
+      const n = Number(cleaned);
+      return Number.isFinite(n) ? n : null;
+    };
+    return { from: toNum(from), to: toNum(to) };
+  })();
+
+  /* Non-fresher JD: experience_min/experience_max must not end up both empty or
+     both zero. Years that are only a level-band prefill count as empty, because
+     they are not persisted (resolvePersistedExperiencePayload). */
+  const experienceYearsMissingForExperiencedRole = (() => {
+    if (jdIsFresherOrEntryLevel) return false;
+    const { from, to } = experienceYearsInBoxes;
+    if (!experienceYearsExplicit) return true;
+    return Math.max(from ?? 0, to ?? 0) <= 0;
+  })();
+
+  /* The prefilled band, if any, that the recruiter can accept with one click. */
+  const experiencePrefillBandToConfirm = (() => {
+    if (!experienceYearsMissingForExperiencedRole || experienceYearsExplicit) return null;
+    const { from, to } = experienceYearsInBoxes;
+    if (Math.max(from ?? 0, to ?? 0) <= 0) return null;
+    return { from, to };
+  })();
+
+  const EXPERIENCE_YEARS_REQUIRED_MESSAGE =
+    'Years of experience are required for this role. This JD is not a Fresher / Entry-level role, '
+    + 'so the From / To years cannot be left empty or 0 - enter the minimum (and maximum) years '
+    + 'of experience a candidate must have.';
+
   // RS20: Job Hopping auto-default, kept in sync with the backend's
   // app/utils/job_hopping.py (same >= 3 years rule, same numeric-only
   // comparison - no string/regex parsing, so it can't hit the decimal-parsing
@@ -7433,8 +7500,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Experience is required - check for empty string, null, undefined, or whitespace only
     if (!extractedData.experience || extractedData.experience.trim() === '') {
-      missingFields.push('Experience');
-      errors.experience = STEP2_REQUIRED_MESSAGES.experience;
+      missingFields.push(jdIsFresherOrEntryLevel
+        ? 'Experience'
+        : 'Experience (years) - required because this is not a Fresher / Entry-level role');
+      errors.experience = jdIsFresherOrEntryLevel
+        ? STEP2_REQUIRED_MESSAGES.experience
+        : EXPERIENCE_YEARS_REQUIRED_MESSAGE;
+    }
+    // Not a fresher / entry-level JD: the years themselves are required, and
+    // 0-0 is not an answer (see experienceYearsMissingForExperiencedRole).
+    else if (experienceYearsMissingForExperiencedRole) {
+      missingFields.push('Experience (years) - required because this is not a Fresher / Entry-level role');
+      errors.experience = EXPERIENCE_YEARS_REQUIRED_MESSAGE;
     }
 
     // Industry Type is required - check for empty string, null, undefined, or whitespace only
@@ -7941,6 +8018,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const experienceValue = extractedData.experience?.trim() || '';
     if (!experienceValue) {
       missingFields.push('Experience');
+    } else if (experienceYearsMissingForExperiencedRole) {
+      missingFields.push('Experience (years) - required because this is not a Fresher / Entry-level role');
     }
 
     // Industry Type is required - check for empty string, null, undefined, or whitespace only
@@ -9436,7 +9515,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0" />
                         <div className="flex-1">
                           <p className="text-sm font-medium text-destructive-strong">Job Quota Exceeded</p>
-                          <p className="text-xs text-destructive">
+                          <p className="tf-error">
                             You have reached your maximum job posting limit.{' '}
                             <a href="/subscription" className="underline font-medium">Upgrade your plan</a> to create more jobs.
                           </p>
@@ -9720,7 +9799,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             } ${isJDInUse ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''}`}
                           />
                           {generatedJD.length > 0 && !isEnglishOnly(generatedJD) && (
-                            <p className="mt-1 text-xs text-destructive">
+                            <p className="mt-1 tf-error">
                               AI-generated JD must remain in English only before moving to the next step.
                             </p>
                           )}
@@ -9949,7 +10028,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         role="alert"
                         className="flex items-center justify-center p-2.5 rounded-lg border border-destructive-line bg-destructive-subtle"
                       >
-                        <span className="flex items-center justify-center gap-1.5 min-h-7 text-sm text-destructive text-center">
+                        <span className="flex items-center justify-center gap-1.5 min-h-7 tf-error text-center">
                           <AlertCircle className="w-4 h-4 flex-shrink-0" />
                           {validationErrors.mustHaveSkills}
                         </span>
@@ -10150,7 +10229,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </button>
                     )}
                     {validationErrors.mustHaveComments && (
-                      <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                      <p className="tf-error mt-2 flex items-center gap-1">
                         <AlertCircle className="w-4 h-4" />
                         {validationErrors.mustHaveComments}
                       </p>
@@ -10549,11 +10628,53 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </div>
                     );
                   })()}
-                  {validationErrors.experience && (
-                    <p className="text-destructive text-sm mb-2 flex items-center gap-1">
+                  {validationErrors.experience && validationErrors.experience !== EXPERIENCE_YEARS_REQUIRED_MESSAGE && (
+                    <p className="tf-error mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
                       {validationErrors.experience}
                     </p>
+                  )}
+                  {/* Not a fresher / entry-level JD, and the years are empty, 0-0, or only
+                      a level-band prefill that will not be saved. Said live, not only on
+                      Next, so the recruiter sees why before trying to continue. */}
+                  {experienceYearsMissingForExperiencedRole && (extractedData.experience?.trim() || validationErrors.experience === EXPERIENCE_YEARS_REQUIRED_MESSAGE) && (
+                    <div
+                      role="alert"
+                      className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3 py-2"
+                    >
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+                      <div className="min-w-0 text-xs leading-relaxed text-red-900 dark:text-red-200">
+                        <p>
+                          <strong>Experience is a must for this role.</strong> This JD is not a
+                          {' '}<strong>Fresher / Entry-level</strong> role, so the years of experience
+                          cannot be left empty or <strong>0</strong>. Enter the From / To years a
+                          candidate must have.
+                        </p>
+                        {experiencePrefillBandToConfirm && (
+                          <>
+                            <p className="mt-1">
+                              The {experiencePrefillBandToConfirm.from ?? 0}
+                              {experiencePrefillBandToConfirm.to != null ? `-${experiencePrefillBandToConfirm.to}` : '+'} years
+                              shown above are only the default band for the level - the JD itself does
+                              not state any years, so they will not be saved unless you confirm them.
+                            </p>
+                            <button
+                              type="button"
+                              disabled={isRegenerating}
+                              onClick={() => {
+                                setExperienceYearsExplicit(true);
+                                setValidationErrors(prev => ({ ...prev, experience: undefined }));
+                                markExtractedDataModified();
+                              }}
+                              className="mt-2 inline-flex items-center rounded-md border border-red-300 dark:border-red-800 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-red-800 dark:text-red-200 hover:bg-red-100 dark:hover:bg-red-950/50 disabled:opacity-60"
+                            >
+                              Use {experiencePrefillBandToConfirm.from ?? 0}
+                              {experiencePrefillBandToConfirm.to != null ? `-${experiencePrefillBandToConfirm.to}` : '+'} years
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   )}
                   {/* RS20: Job Hopping toggle. Defaults from Experience (>= 3 years ->
                       on) and re-defaults every time Experience changes; the recruiter
@@ -10628,7 +10749,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     ]}
                   />
                   {validationErrors.industryType && (
-                    <p className="text-destructive text-sm mb-2 flex items-center gap-1">
+                    <p className="tf-error mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
                       {validationErrors.industryType}
                     </p>
@@ -10875,13 +10996,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     />
                   </div>
                   {validationErrors.salaryRange && (
-                    <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                    <p className="tf-error mt-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       {validationErrors.salaryRange}
                     </p>
                   )}
                   {exchangeRateError && (
-                    <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                    <p className="tf-error mt-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4 shrink-0" />
                       {exchangeRateError}
                     </p>
@@ -10960,7 +11081,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                 </div>
                 {validationErrors.allowOverqualified && (
-                  <p className="text-destructive text-sm mt-2 flex items-center gap-1">
+                  <p className="tf-error mt-2 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {validationErrors.allowOverqualified}
                   </p>
@@ -11089,7 +11210,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 </div>
                 )}
                 {validationErrors.locations && (
-                  <p className="text-destructive text-sm -mt-2 mb-3 flex items-center gap-1">
+                  <p className="tf-error -mt-2 mb-3 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     {validationErrors.locations}
                   </p>
@@ -11594,7 +11715,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       remarkPlugins={[remarkGfm, remarkBreaks]}
                       components={jdMarkdownComponents}
                     >
-                      {getDisplayJDMarkdown(mode === 'ai' ? generatedJD : manualJD, mode)}
+                      {getDisplayJDMarkdown(mode === 'ai' ? generatedJD : manualJD, mode, Boolean(extractedData.experience))}
                     </ReactMarkdown>
                   </div>
                 </div>
@@ -11979,7 +12100,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 headline, the one-line card naming what was published (the
                 shared PublishedSummaryCard — JD ID badge, job name, job
                 version), then the compact row of ways on from here. */}
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight mb-4 sm:mb-5">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
+            <h2 className="tf-page-title mb-4 sm:mb-5">{publishedVersion && publishedVersion > 1 ? 'Job Description Republished!' : 'Job Description Published!'}</h2>
 
             <PublishedSummaryCard
               /* Capped at 48rem AND the column: `sm:max-w-3xl` alone let a long

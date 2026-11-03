@@ -43,7 +43,7 @@ import { toISODateIST } from '@/lib/utils/dateUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useIsMobile } from '@/components/ui/use-mobile';
-import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, type Measure } from './reportControls';
+import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, ReportScopeBadge, type Measure } from './reportControls';
 import { UNIT_KEYS, UNIT_LABELS, UNIT_CHART_COLOR, UNIT_TEXT_CLASS, UNIT_ICON, TOTAL_UNITS_ICON, type UnitKey } from '@/lib/constants/unitColors';
 
 interface TeamAnalyticsDashboardProps {
@@ -886,6 +886,14 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
 
   return (
     <div className="space-y-4 sm:space-y-6">
+      {/* Whose usage this is: every team (tenant admin) or only the viewer's teams. */}
+      {!error && (
+        <ReportScopeBadge
+          isTenantAdmin={isTenantAdmin}
+          teamNames={(teamsUsage?.teams ?? []).map((t) => t.team_name || 'Unknown')}
+          loading={isLoading}
+        />
+      )}
       {cards}
 
       {/* Controls — always shown, so the range stays editable while loading or after an
@@ -929,6 +937,7 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
             </Button>
           )}
           <ExportFormatModal
+            tone="plain"
             open={showExportModal}
             onClose={() => setShowExportModal(false)}
             title="Export Team Analytics"

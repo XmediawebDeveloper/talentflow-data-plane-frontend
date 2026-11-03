@@ -102,6 +102,9 @@ interface AIInterviewTrackInvitesModalProps {
    *  dialog (e.g. Share) adds invitations while this tracker stays mounted
    *  underneath, so they appear without waiting for the 15s poll. */
   refreshSignal?: number;
+  /** Opens pre-filtered to one candidate (their email) — the bulk-send
+   *  popup's per-row "Track status". */
+  initialSearch?: string;
 }
 
 const PAGE_SIZE = 10;
@@ -133,6 +136,7 @@ export default function AIInterviewTrackInvitesModal({
   inviteMoreDeniedReason,
   onChanged,
   refreshSignal,
+  initialSearch,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -199,7 +203,9 @@ export default function AIInterviewTrackInvitesModal({
   /* Same filter contract the AI Interviews page's tracker uses. The endpoint
      already accepted search/status/date — this tracker just never passed them,
      so it always showed the unfiltered first page. */
-  const [filters, setFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  const [filters, setFilters] = useState<InviteFilterState>(() => (
+    initialSearch ? { ...EMPTY_INVITE_FILTERS, search: initialSearch } : EMPTY_INVITE_FILTERS
+  ));
   /* Job Version and Interview Version filters. Everything in a tracker
      belongs to one interview, so each offers that interview's single value
      and every row matches it — they mirror the table's columns rather than
@@ -923,7 +929,7 @@ export default function AIInterviewTrackInvitesModal({
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {editNameError && <p className="mt-1 text-xs text-destructive">{editNameError}</p>}
+            {editNameError && <p className="mt-1 tf-error">{editNameError}</p>}
           </div>
           <div>
             <label className="block tf-caption mb-1">Candidate email</label>
@@ -938,7 +944,7 @@ export default function AIInterviewTrackInvitesModal({
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
               }`}
             />
-            {editEmailError && <p className="mt-1 text-xs text-destructive">{editEmailError}</p>}
+            {editEmailError && <p className="mt-1 tf-error">{editEmailError}</p>}
           </div>
         </div>
         <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">

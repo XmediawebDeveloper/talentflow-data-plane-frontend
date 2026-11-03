@@ -92,6 +92,7 @@ import AllInterviewsTable, { VersionPill, AIInterviewJobStatusBadge, type BulkAc
 import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
@@ -555,7 +556,8 @@ export default function AIInterview() {
     max_violations: 5,
     violation_low_threshold: 3,
     violation_medium_threshold: 8,
-    retention_days: 90,
+    retention_days: 30,
+    view_days: 7,
   });
   const [proctoringLoading, setProctoringLoading] = useState(false);
 
@@ -764,6 +766,17 @@ export default function AIInterview() {
       }
     }
   }, [loadAllConfigs, loadArchivedConfigs, remembered]);
+
+  /* The job badge reads each config's `jd_status`, which only arrives with the
+     config list — so a job disabled / archived / re-enabled anywhere (this
+     tab, another tab, focus back on the window, or every 30s for another
+     user's change) quietly re-reads the list. The All Interviews table owns
+     its rows and keeps them live itself. */
+  useJobStatusRefresh(() => {
+    if (!hasLoadedRef.current) return;
+    loadData();
+    loadArchivedConfigs();
+  }, { pollMs: 30_000 });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -1231,7 +1244,9 @@ export default function AIInterview() {
         max_violations: settings.max_violations_before_flag ?? 5,
         violation_low_threshold: settings.violation_low_threshold ?? 3,
         violation_medium_threshold: settings.violation_medium_threshold ?? 8,
-        retention_days: settings.recording_retention_days ?? 90,
+        // Platform policy from the backend .env (read-only here).
+        retention_days: settings.recording_retention_days ?? 30,
+        view_days: settings.recording_view_days ?? 7,
       });
     } catch (error) {
       console.error('Failed to load proctoring settings:', error);
@@ -1779,7 +1794,6 @@ export default function AIInterview() {
         max_violations_before_flag: proctoringSettings.max_violations,
         violation_low_threshold: proctoringSettings.violation_low_threshold,
         violation_medium_threshold: proctoringSettings.violation_medium_threshold,
-        recording_retention_days: proctoringSettings.retention_days,
       });
       toast.success('Proctoring settings saved!');
     } catch (error) {
@@ -4867,15 +4881,11 @@ export default function AIInterview() {
                                 />
                               </div>
                               <div>
-                                <label className="block tf-meta mb-1">Retention (days)</label>
-                                <input
-                                  type="number"
-                                  value={proctoringSettings.retention_days}
-                                  onChange={(e) => setProctoringSettings(prev => ({ ...prev, retention_days: parseInt(e.target.value) || 90 }))}
-                                  className="tf-input"
-                                  min={7}
-                                  max={365}
-                                />
+                                <label className="block tf-meta mb-1">Recording retention</label>
+                                <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg tf-body bg-gray-50 dark:bg-slate-800">
+                                  Viewable {proctoringSettings.view_days} days · Deleted after {proctoringSettings.retention_days} days
+                                </div>
+                                <p className="text-2xs text-gray-500 dark:text-slate-500 mt-1">Set by the platform; applies to all recordings.</p>
                               </div>
                             </div>
 
@@ -5637,7 +5647,7 @@ export default function AIInterview() {
                   }`}
                 />
                 {editInviteNameError && (
-                  <p className="mt-1 text-xs text-destructive">{editInviteNameError}</p>
+                  <p className="mt-1 tf-error">{editInviteNameError}</p>
                 )}
               </div>
               <div>
@@ -5654,7 +5664,7 @@ export default function AIInterview() {
                   }`}
                 />
                 {editInviteEmailError && (
-                  <p className="mt-1 text-xs text-destructive">{editInviteEmailError}</p>
+                  <p className="mt-1 tf-error">{editInviteEmailError}</p>
                 )}
               </div>
             </div>

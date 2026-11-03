@@ -251,7 +251,7 @@ export default function AdminDashboard({
           <div className="relative flex items-center justify-between">
             <div>
               <p
-                className="text-sm text-gray-600 cursor-pointer hover:text-brand-cyan transition-colors"
+                className="tf-card-desc cursor-pointer hover:text-brand-cyan transition-colors"
                 onClick={() => router.push('/recruitment/job-openings')}
               >
                 Job Descriptions

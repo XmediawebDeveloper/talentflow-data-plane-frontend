@@ -9,6 +9,9 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { isResultRestoreArrival } from '@/lib/utils/resultReturnContext';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import { Button } from '@/components/ui/button';
+import { UserPlus } from 'lucide-react';
 
 export default function AssessmentResultsPage() {
   const params = useParams();
@@ -124,6 +127,34 @@ export default function AssessmentResultsPage() {
       ? allAssessmentIds[currentIndex + 1]
       : null;
 
+  /* Invite — THE invite popup on this job (its Assessment step lists the
+     job's versions), as Job Details' Assessment Result tab offers. Gated on
+     the permission the server checks for sending; greyed with the reason. */
+  const { open: openInvite } = useInviteDialog();
+  const canInvite = isTenantAdmin || hasPermissionCode('assessments:invite');
+  const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
+    : !jdId ? 'This assessment is not linked to a job' : null;
+  const inviteAction = (
+    <Button
+      variant="primary"
+      size="sm"
+      onClick={() => {
+        if (inviteBlocked) return;
+        openInvite({
+          kind: 'assessment',
+          job: { jdId, jdTitle: jdTitle || assessmentTitle, jdCode: jdShortId || undefined, versionNumber: jdVersion ?? undefined },
+          preselect: false,
+        });
+      }}
+      aria-disabled={!!inviteBlocked || undefined}
+      title={inviteBlocked ?? "Invite candidates to this job's assessment"}
+      className={`whitespace-nowrap !h-9 !text-sm ${inviteBlocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+      icon={<UserPlus className="w-4 h-4" />}
+    >
+      Invite
+    </Button>
+  );
+
   const handleBack = () => {
     if (fromSource === 'jd' && fromJdId) {
       router.push(`/recruitment/job-details?id=${fromJdId}`);
@@ -181,6 +212,7 @@ export default function AssessmentResultsPage() {
         nextId={nextId}
         currentIndex={currentIndex}
         totalCount={allAssessmentIds.length}
+        toolbarActions={inviteAction}
       />
     </FeatureGate>
   );

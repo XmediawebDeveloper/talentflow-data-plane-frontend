@@ -7,7 +7,8 @@ import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
-import { isJdDisabled, JD_DISABLED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { jdActionLockReason } from '@/lib/services/aiInterviewService';
+import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { ROUND_LABELS, ROUND_SHORT_LABELS, type AIInterviewPickerSelection } from './AIInterviewPicker';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
@@ -49,8 +50,8 @@ function listedJobInterviewConfigs(configs: AIInterviewResponse[], jobId: string
 /** The version the cards tag "Latest": the newest listed Active interview —
  *  what a host pre-selects (and, with a single version, the only choice). */
 export function latestActiveInterviewConfig(configs: AIInterviewResponse[], jobId: string): AIInterviewResponse | undefined {
-  // A disabled job's interview is listed but never pre-selected.
-  return listedJobInterviewConfigs(configs, jobId).find((c) => !isJdDisabled(c.jd_status));
+  // A disabled / archived job's interview is listed but never pre-selected.
+  return listedJobInterviewConfigs(configs, jobId).find((c) => !jdActionLockReason(c.jd_status));
 }
 
 /**
@@ -141,8 +142,11 @@ export default function JobInterviewVersionPicker({
           {versions.map((c) => {
             const status = normalizeStatus(c.status);
             const pill = STATUS_PILL[status] ?? { label: status, className: STATUS_PILL.cancelled.className };
-            const jdDisabled = isJdDisabled(c.jd_status);
-            const selectable = status === 'published' && !jdDisabled;
+            /* A Disabled or Archived job version takes no invites: the card is
+               listed, greyed, with the job's badge and lock message. */
+            const jdLock = jdActionLockReason(c.jd_status);
+            const jdBadgeKind = jobStatusBadgeKind(c.jd_status);
+            const selectable = status === 'published' && !jdLock;
             const isSelected = multiple ? (selectedIds ?? []).includes(c.id) : selection?.interviewId === c.id;
             const ivNum = interviewVersionOrdinal(c, configs);
             const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
@@ -162,7 +166,7 @@ export default function JobInterviewVersionPicker({
                 role={multiple ? 'checkbox' : 'radio'}
                 aria-checked={isSelected}
                 aria-disabled={!selectable}
-                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : undefined}
+                title={jdLock ?? undefined}
                 tabIndex={selectable ? 0 : -1}
                 onClick={pick}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } }}
@@ -212,6 +216,7 @@ export default function JobInterviewVersionPicker({
                     {spansJobVersions && c.jd_version ? <VersionPill kind="job" version={c.jd_version} /> : null}
                     {/* The cyan version pill the assessment cards use. */}
                     <VersionPill kind="assessment" version={ivNum} />
+                    {jdBadgeKind && <JobStatusBadge kind={jdBadgeKind} title={jdLock ?? undefined} />}
                     {c.id === latestActiveId && (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue">
                         <Star className="w-3 h-3 fill-current" /> Latest

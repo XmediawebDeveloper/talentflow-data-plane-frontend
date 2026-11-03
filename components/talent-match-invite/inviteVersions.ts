@@ -17,7 +17,7 @@
  * of it (the clone keeps the AI-xxx ID and takes the next V-number).
  */
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, jdActionLockReason, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { listAllAssessments, MAX_ASSESSMENT_VERSIONS } from '@/lib/utils/jobAssessmentHierarchy';
 import { getLocallyRevokedAssessmentIds, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { loadJobVersionLineages } from '@/lib/utils/assessmentJobLock';
@@ -225,7 +225,7 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
         config: c,
         mapped: !!live && c.id === live.id,
         jdId: c.jd_id as string,
-        sendable: status === 'active' && !isJdDisabled(c.jd_status),
+        sendable: status === 'active' && !jdActionLockReason(c.jd_status),
       };
     })
     .sort(byVersionDesc);
@@ -375,7 +375,7 @@ export function publishAction(v: InviteVersion, perms: VersionPermissions): Vers
   return {
     action: 'publish',
     label: 'Publish',
-    disabledReason: v.kind === 'interview' && isJdDisabled(v.config?.jd_status) ? JD_DISABLED_ACTION_MESSAGE : undefined,
+    disabledReason: v.kind === 'interview' ? jdActionLockReason(v.config?.jd_status) ?? undefined : undefined,
     confirm: {
       title: `Publish v${v.version}?`,
       message: `${v.name} v${v.version} becomes Active and can be sent to candidates.`,
@@ -406,8 +406,9 @@ export function versionActions(v: InviteVersion, versions: InviteVersion[], perm
   const items = baseVersionActions(v, versions, perms);
   /* A disabled job's interviews stay viewable; every other action waits
      until the job is enabled again. */
-  if (v.kind !== 'interview' || !isJdDisabled(v.config?.jd_status)) return items;
-  return items.map((item) => (item.action === 'view' ? item : { ...item, disabledReason: JD_DISABLED_ACTION_MESSAGE }));
+  const jdLock = v.kind === 'interview' ? jdActionLockReason(v.config?.jd_status) : null;
+  if (!jdLock) return items;
+  return items.map((item) => (item.action === 'view' ? item : { ...item, disabledReason: jdLock }));
 }
 
 function baseVersionActions(v: InviteVersion, versions: InviteVersion[], perms: VersionPermissions): VersionActionItem[] {
@@ -560,7 +561,7 @@ export type InviteCandidateSource =
 /** The candidate list's group headings, in the order groups are listed. */
 export const CANDIDATE_SOURCE_LABEL: Record<InviteCandidateSource, string> = {
   'talent-match': 'AI Talent Match Candidates',
-  'score-resume': 'Score Resume Candidates',
+  'score-resume': 'Scored Resumes',
   'assessment-result': 'Assessment Result Candidates',
   'interview-result': 'AI Interview Result Candidates',
 };

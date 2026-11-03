@@ -78,6 +78,9 @@ interface TrackInvitesModalProps {
   /** Called after a revoke / edit changed invitations, once this popup's own
    *  rows are reloaded - so the host's counts refresh at once. */
   onChanged?: () => void | Promise<void>;
+  /** Opens pre-filtered to one candidate (their email) — the bulk-send
+   *  popup's per-row "Track status". */
+  initialSearch?: string;
 }
 
 
@@ -104,7 +107,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged, initialSearch }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -143,7 +146,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
      aggregates every assessment attached to the JD, and the stat cards are
      computed from that whole set — filtering server-side would silently
      narrow the totals too. */
-  const [filters, setFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  const [filters, setFilters] = useState<InviteFilterState>(() => (
+    initialSearch ? { ...EMPTY_INVITE_FILTERS, search: initialSearch } : EMPTY_INVITE_FILTERS
+  ));
   const [page, setPage] = useState(1);
   const [resendingId, setResendingId] = useState<string | null>(null);
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);

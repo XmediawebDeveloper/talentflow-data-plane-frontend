@@ -654,7 +654,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="tf-body truncate">{item.fileName}</div>
                           {item.errorMessage && (
-                            <div className="text-xs text-destructive mt-1">{item.errorMessage}</div>
+                            <div className="tf-error mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>

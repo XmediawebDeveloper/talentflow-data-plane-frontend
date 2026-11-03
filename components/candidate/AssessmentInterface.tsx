@@ -1924,7 +1924,7 @@ export function AssessmentInterface({
                   {autoSaveStatus === 'error' && (
                     <>
                       <AlertCircle className="w-3.5 h-3.5 text-destructive" />
-                      <span className="text-xs text-destructive">Save failed</span>
+                      <span className="tf-error">Save failed</span>
                     </>
                   )}
                 </div>

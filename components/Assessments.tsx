@@ -120,6 +120,7 @@ import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
@@ -498,6 +499,11 @@ type CandidateResultRow = AssessmentAttemptResponse & {
 /** Session key holding the Total Jobs page a job's Results was opened from. */
 const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 
+/** Distinct candidates in a set of results: one per email (trimmed, lowercased);
+ *  rows with no email are left out. */
+const countCandidateEmails = (rows: { candidate_email?: string | null }[]): number =>
+  new Set(rows.map((r) => (r.candidate_email || '').trim().toLowerCase()).filter(Boolean)).size;
+
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab, initialFocusAssessmentId }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
@@ -834,6 +840,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiAssessments]);
+  /* Keep those statuses live: a job disabled / archived (or re-enabled) on
+     Job Openings — this tab, another tab, or another user — re-reads every
+     linked job at once, so the badge and the locks follow without a reload. */
+  useJobStatusRefresh(() => {
+    const ids = Array.from(new Set(apiAssessments.map((a: any) => a?.jd_id).filter(Boolean))) as string[];
+    if (ids.length === 0) return;
+    loadJobVersionLineages(ids, { fresh: true })
+      .then((lineages) => {
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+        setJobLineageById((prev) => ({ ...prev, ...lineages }));
+      })
+      .catch(() => { /* keep what is shown; the next trigger tries again */ });
+  });
   /** Why Duplicate / Share / Revoke / Archive is off for this assessment's
    *  job version, or null. */
   const jobLockReason = (assessment: { jd_id?: string } | null | undefined): string | null =>
@@ -1497,6 +1516,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   /* Both cross-assessment tabs start from the last set this page loaded, so a
      return from a details page (or reopening the tab) shows rows at once; their
      loads below still run and replace them. */
+  /* Candidates assessed, one per email, counted from the completed results
+     when the stats endpoint does not send `total_unique_candidates`. */
+  const [uniqueEmailsAssessed, setUniqueEmailsAssessed] = useState<number | undefined>(undefined);
   const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>(() => readListSnapshot<CandidateResultRow[]>('assessments-results:rows') ?? []);
   const completedCandidatesRef = useRef(completedCandidates);
   completedCandidatesRef.current = completedCandidates;
@@ -1673,6 +1695,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        (`candidatesAssessed`), which is why the Total Assessed card is not
        stuck on 0 the way reading the optional field alone left it. */
     total_candidates_tested: 0,
+    /* People behind those attempts — one per candidate email — when the
+       stats endpoint sends it (`total_unique_candidates`). */
+    total_unique_candidates: undefined as number | undefined,
     total_invitations: 0,
     total_candidates_completed: 0,
     average_pass_rate: null as number | null,
@@ -3614,6 +3639,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             draft_assessments: response.draft_assessments || 0,
             archived_assessments: response.archived_assessments || 0,
             total_candidates_tested: response.total_candidates_tested || 0,
+            total_unique_candidates: response.total_unique_candidates,
             total_invitations: response.total_invitations || 0,
             total_candidates_completed: response.total_candidates_completed || 0,
             average_pass_rate: response.average_pass_rate,
@@ -3622,6 +3648,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           };
           setStats(freshStats);
           writeListSnapshot('assessments:stats', freshStats);
+          /* No people count from the server: count them here, one per
+             candidate email across every completed result (one request). */
+          if (response.total_unique_candidates == null) {
+            assessmentService.getAllResults()
+              .then((rows) => setUniqueEmailsAssessed(countCandidateEmails(rows)))
+              .catch(() => setUniqueEmailsAssessed(undefined));
+          }
           console.log('[TalentFlow] Loaded assessment stats from API');
         } else {
           console.log(
@@ -3898,12 +3931,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         draft_assessments: statsResponse.draft_assessments || 0,
         archived_assessments: statsResponse.archived_assessments || 0,
         total_candidates_tested: statsResponse.total_candidates_tested || 0,
+        total_unique_candidates: statsResponse.total_unique_candidates,
         total_invitations: statsResponse.total_invitations || 0,
         total_candidates_completed: statsResponse.total_candidates_completed || 0,
         average_pass_rate: statsResponse.average_pass_rate,
         average_score: statsResponse.average_score,
         units_consumed: statsResponse.units_consumed || 0,
       });
+      // As on the first load: no people count from the server, count emails here.
+      if (statsResponse.total_unique_candidates == null) {
+        assessmentService.getAllResults()
+          .then((rows) => setUniqueEmailsAssessed(countCandidateEmails(rows)))
+          .catch(() => setUniqueEmailsAssessed(undefined));
+      }
     } catch (error) {
       console.log('[TalentFlow] Failed to reload stats:', error);
     }
@@ -5899,7 +5939,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      many assessments they took. Undefined while an older backend doesn't send
      the unique figure, and the pill is then hidden. */
   const uniqueCandidatesAssessed =
-    (stats as { total_unique_candidates?: number }).total_unique_candidates;
+    stats.total_unique_candidates
+    ?? (completedCandidates.length > 0 ? countCandidateEmails(completedCandidates) : uniqueEmailsAssessed);
 
   const visibleAssessments = collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
@@ -9811,7 +9852,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <div className="flex items-start gap-1.5 sm:gap-2 p-2 sm:p-3 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
                             <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0 mt-0.5" />
                             <p className="tf-meta">
-                              <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings stored for {proctoringSettings.recording_retention_days} days.
+                              <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings viewable for {proctoringSettings.recording_view_days ?? 7} days and deleted after {proctoringSettings.recording_retention_days} days.
                             </p>
                           </div>
                         )}
@@ -9926,16 +9967,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           />
                         </div>
                         <div>
-                          <label className="block tf-meta mb-1.5">Recording Retention (Days)</label>
-                          <input
-                            type="number"
-                            value={proctoringSettings.recording_retention_days}
-                            onChange={(e) => updateProctoringSettings({ recording_retention_days: parseInt(e.target.value) || 90 })}
-                            disabled={savingProctoringKeys.has('recording_retention_days') || !proctoringSettings.proctoring_enabled}
-                            className="tf-input disabled:bg-slate-100"
-                            min="7"
-                            max="365"
-                          />
+                          <label className="block tf-meta mb-1.5">Recording Retention</label>
+                          {/* Platform policy from the backend .env; not editable per tenant. */}
+                          <div className="w-full min-w-0 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg tf-body bg-slate-100 dark:bg-slate-800">
+                            Viewable {proctoringSettings.recording_view_days ?? 7} days · Deleted after {proctoringSettings.recording_retention_days} days
+                          </div>
                         </div>
                       </div>
                     </div>

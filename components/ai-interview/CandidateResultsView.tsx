@@ -216,9 +216,12 @@ function VideoPane({
   seekTo,
   seekKey,
   markers,
+  unavailableText,
 }: {
   label: string;
   hasFile: boolean;
+  /** Replaces "{label} not available", e.g. when the viewing window expired. */
+  unavailableText?: string | null;
   blobUrl: string | null;
   loading: boolean;
   error: boolean;
@@ -234,7 +237,7 @@ function VideoPane({
         <div className="w-12 h-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
           <VideoOff className="w-6 h-6 text-brand-blue/40" />
         </div>
-        <p className="tf-body-muted">{label} not available</p>
+        <p className="tf-body-muted">{unavailableText || `${label} not available`}</p>
       </div>
     );
   }
@@ -383,7 +386,11 @@ function RecordingTabContent({
   const interviewDate = interview.started_at || interview.scheduled_at || interview.created_at;
   const statusLabel = interview.recording_file_path || interview.screen_recording_file_path
     ? 'Transcribed'
-    : 'Unavailable';
+    : interview.recording_view_expired ? 'Expired' : 'Unavailable';
+  const expiredText = interview.recording_view_expired
+    ? `Recordings can be viewed for ${interview.recording_view_days ?? 7} days after the interview.`
+      + (interview.recording_view_until ? ` This one expired on ${formatISTDate(interview.recording_view_until)}.` : '')
+    : null;
 
   return (
     <div className="space-y-4">
@@ -423,6 +430,7 @@ function RecordingTabContent({
           {isCandidate ? (
             <VideoPane
               label="Candidate recording"
+              unavailableText={expiredText}
               hasFile={!!interview.recording_file_path}
               blobUrl={videoBlobUrl}
               loading={videoLoading}
@@ -436,6 +444,7 @@ function RecordingTabContent({
           ) : (
             <VideoPane
               label="Screen recording"
+              unavailableText={expiredText}
               hasFile={!!interview.screen_recording_file_path}
               blobUrl={screenBlobUrl}
               loading={screenLoading}
@@ -1840,7 +1849,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
           Retry so a non-terminated interview never spins forever: it re-runs
           the same transcript evaluation and refreshes. */}
       {evalTriggerError && (
-        <p className="mt-4 text-xs text-destructive text-center max-w-sm">
+        <p className="mt-4 tf-error text-center max-w-sm">
           Evaluation request failed: {evalTriggerError}
         </p>
       )}

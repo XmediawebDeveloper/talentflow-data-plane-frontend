@@ -799,9 +799,6 @@ function CurrentPlanContent() {
   const [selectedQueuedUpgrade, setSelectedQueuedUpgrade] = useState<QueuedUpgrade | null>(null);
   const [tcAccepted, setTcAccepted] = useState(false);
   const [isApplyingUpgrade, setIsApplyingUpgrade] = useState(false);
-  const [isCancellingUpgrade, setIsCancellingUpgrade] = useState(false);
-  const [showCancelModal, setShowCancelModal] = useState(false);
-  const [cancelReason, setCancelReason] = useState('');
   const [expandedFeaturesPlan, setExpandedFeaturesPlan] = useState<string | null>(null);
   const [showAllModalFeatures, setShowAllModalFeatures] = useState(false);
   const paymentModalRef = useRef<HTMLDivElement>(null);
@@ -917,7 +914,8 @@ function CurrentPlanContent() {
           console.log('[CurrentPlan] Plan has expired by date:', quotaData.plan_expiry_date);
           isExpiredByDate = true;
         }
-      } else if (quotaData?.billing_period?.end) {
+      } else if (!isTrial && quotaData?.billing_period?.end) {
+        // billing_period is the monthly usage cycle, never the trial window
         const billingEndDate = new Date(quotaData.billing_period.end);
         if (billingEndDate < now) {
           console.log('[CurrentPlan] Billing period has expired by date:', quotaData.billing_period.end);
@@ -1021,9 +1019,11 @@ function CurrentPlanContent() {
         const quotas = quotaData.quotas || {};
 
         // For FREE TRIAL: Get dates from root level (backend returns trial_start_date/trial_end_date at root)
-        // Use billing_period as fallback when trial_info is missing
-        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || quotaData.billing_period?.start || null;
-        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || quotaData.billing_period?.end || null;
+        // or trial_info. Never fall back to billing_period: that is the monthly usage cycle
+        // (e.g. 1 Nov - 30 Nov), not the trial, and showed a 14-day trial as ~30 days.
+        // Without trial dates from the API, the tenant's own company_settings dates (prev) stay.
+        const trialStartDate = quotaData.trial_start_date || quotaData.trial_info?.trial_start_date || null;
+        const trialEndDate = quotaData.trial_end_date || quotaData.trial_info?.trial_end_date || null;
 
         // For PAID PLAN: Get dates from root level (plan_start_date, plan_expiry_date) or billing_period
         const planStartDate = quotaData.plan_start_date || quotaData.billing_period?.start || null;
@@ -1419,61 +1419,6 @@ function CurrentPlanContent() {
   };
 
   // Cancel queued upgrade (called from Cancel Modal)
-  const handleCancelUpgrade = async () => {
-    if (!selectedQueuedUpgrade) return;
-
-    try {
-      setIsCancellingUpgrade(true);
-      setError(null);
-
-      const token = localStorage.getItem('accessToken');
-      const reasonParam = encodeURIComponent(cancelReason.trim() || 'Cancelled by user');
-      const userIdParam = user?.id ? `&user_id=${encodeURIComponent(user.id)}` : '';
-      const userEmailParam = user?.email ? `&user_email=${encodeURIComponent(user.email)}` : '';
-      const response = await fetch(`${API_URL}/subscription/queued-upgrades/${selectedQueuedUpgrade.id}?reason=${reasonParam}${userIdParam}${userEmailParam}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      // Handle 401 - logout and redirect
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-
-      const data = await response.json();
-
-      if (response.ok && data.status === 'success') {
-        const cancelledPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
-        const isCancellingDowngrade = comparePlanTiers(
-          currentPlan?.tier, cancelledPlan?.tier,
-          currentPlanBillingPeriod,
-          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
-        ) === -1;
-        setSuccessMessage(`Queued ${isCancellingDowngrade ? 'downgrade' : 'upgrade'} to ${selectedQueuedUpgrade.new_plan_name} has been cancelled.`);
-        setShowCancelModal(false);
-        setSelectedQueuedUpgrade(null);
-        setCancelReason('');
-        await fetchQueuedUpgrades();
-      } else {
-        // Handle both string and object error formats
-        const errorDetail = data.detail;
-        const errorMsg = typeof errorDetail === 'string'
-          ? errorDetail
-          : errorDetail?.message || 'Failed to cancel upgrade';
-        setError(errorMsg);
-      }
-    } catch (err) {
-      console.error('[CurrentPlan] Error cancelling upgrade:', err);
-      setError(err instanceof Error ? err.message : 'Failed to cancel upgrade');
-    } finally {
-      setIsCancellingUpgrade(false);
-    }
-  };
-
   useEffect(() => {
     // Wait for shared quota data to be loaded before fetching other data
     if (quotaLoading) return;
@@ -1844,8 +1789,10 @@ function CurrentPlanContent() {
       console.log('Calling API:', apiUrl);
       console.log('Request body:', requestBody);
 
+      // Above the backend's 120s Control Plane apply timeout (the trial->paid
+      // migration runs inside this call), so the browser never gives up first.
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 120000);
+      const timeoutId = setTimeout(() => controller.abort(), 180000);
 
       let response;
       let data;
@@ -2803,7 +2750,7 @@ function CurrentPlanContent() {
               <div className="min-w-0">
                 <h3 className="text-sm sm:text-base font-semibold text-warning-strong">Pending Plan Changes</h3>
                 <p className="mt-0.5 text-sm text-warning">
-                  You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
+                  Your purchased plan is queued. It activates automatically when your current plan ends, or you can apply it now. You can buy a different plan only after it is active.
                 </p>
               </div>
             </div>
@@ -2885,20 +2832,6 @@ function CurrentPlanContent() {
                         <Zap className="h-4 w-4" />
                         Apply Now
                       </button>
-                      {upgrade.can_cancel !== false && (
-                        <button
-                          onClick={() => {
-                            setSelectedQueuedUpgrade(upgrade);
-                            setCancelReason('');
-                            setShowCancelModal(true);
-                          }}
-                          disabled={isCancellingUpgrade}
-                          className="flex items-center gap-1.5 rounded-lg border border-destructive-line bg-destructive-subtle px-4 py-2 text-sm font-medium text-destructive transition-colors hover:bg-destructive-subtle disabled:opacity-50"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          Cancel
-                        </button>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -2906,8 +2839,8 @@ function CurrentPlanContent() {
             </div>
 
             <p className="text-xs text-warning mt-4">
-              Queued plan changes will automatically apply when your current plan expires.
-              Click "Apply Now" to apply immediately (remaining credits will be forfeited).
+              A purchased plan cannot be cancelled. It applies automatically when your current plan expires,
+              or click "Apply Now" to switch immediately (remaining credits on your current plan will be forfeited).
             </p>
           </div>
         )}
@@ -2925,9 +2858,7 @@ function CurrentPlanContent() {
                 </p>
                 {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
                   <p className="mt-1.5 text-sm text-warning">
-                    You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
-                      ? 'Cancel it above or apply it now to select a different plan.'
-                      : 'Apply it now to select a different plan.'}
+                    You have a purchased plan queued. Apply it now, or wait until it activates, before choosing a different plan.
                   </p>
                 )}
               </div>
@@ -3968,136 +3899,6 @@ function CurrentPlanContent() {
                     </>
                   )}
                 </button>
-              </div>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
-
-      {/* Cancel Queued Upgrade Modal */}
-      {showCancelModal && selectedQueuedUpgrade && (() => {
-        const cancelQueuedPlan = plans.find(p => p.name === selectedQueuedUpgrade.new_plan_name);
-        const isCancelDowngrade = comparePlanTiers(
-          currentPlan?.tier,
-          cancelQueuedPlan?.tier,
-          currentPlanBillingPeriod,
-          selectedQueuedUpgrade.billing_interval || (isYearly ? 'ANNUAL' : 'MONTHLY'),
-        ) === -1;
-        const changeLabel = isCancelDowngrade ? 'Downgrade' : 'Upgrade';
-        return (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-            {/* Modal Header */}
-            <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-destructive-subtle rounded-full flex items-center justify-center">
-                    <XCircle className="w-6 h-6 text-destructive" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Cancel {changeLabel}</h2>
-                    <p className="tf-body-secondary">Cancel queued plan {changeLabel.toLowerCase()}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setSelectedQueuedUpgrade(null);
-                    setCancelReason('');
-                  }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                 aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
-              {/* Warning */}
-              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0 mt-0.5" />
-                  <div>
-                    <h4 className="font-semibold text-destructive-strong mb-1">Are you sure?</h4>
-                    <p className="text-sm text-destructive">
-                      You are about to cancel the queued {changeLabel.toLowerCase()} to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
-                      If you paid for this {changeLabel.toLowerCase()}, you may need to request a refund separately.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Plan Change Details */}
-              <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
-                <h4 className="tf-row-name">{changeLabel} Details</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">New Plan:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">{selectedQueuedUpgrade.new_plan_name}</span>
-                  </div>
-                  {(selectedQueuedUpgrade.payment_amount !== undefined || selectedQueuedUpgrade.breakdown) && (
-                    <QueuedAmountBreakdown upgrade={selectedQueuedUpgrade} />
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">Scheduled for:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">
-                      {selectedQueuedUpgrade.auto_apply_date ? formatISTDate(selectedQueuedUpgrade.auto_apply_date) : 'On plan expiry'}
-                    </span>
-                  </div>
-                  {selectedQueuedUpgrade.days_until_activation !== undefined && (
-                    <div className="flex justify-between">
-                      <span className="text-gray-500 dark:text-slate-500">Days until activation:</span>
-                      <span className="font-medium text-gray-900 dark:text-slate-50">
-                        {selectedQueuedUpgrade.days_until_activation} day{selectedQueuedUpgrade.days_until_activation !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                  )}
-                  <div className="flex justify-between">
-                    <span className="text-gray-500 dark:text-slate-500">Queued on:</span>
-                    <span className="font-medium text-gray-900 dark:text-slate-50">
-                      {selectedQueuedUpgrade.created_at ? formatISTDate(selectedQueuedUpgrade.created_at) : '-'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Cancellation Reason */}
-              <div>
-                <label className="block tf-label mb-2">
-                  Reason for cancellation (optional)
-                </label>
-                <textarea
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  placeholder="Please let us know why you're cancelling..."
-                  rows={3}
-                  className="tf-textarea px-4 py-3 focus:ring-destructive-line focus:border-destructive-line resize-none"
-                />
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => {
-                    setShowCancelModal(false);
-                    setSelectedQueuedUpgrade(null);
-                    setCancelReason('');
-                  }}
-                >
-                  Keep {changeLabel}
-                </Button>
-                <Button
-                  variant="destructive"
-                  className="flex-1"
-                  onClick={handleCancelUpgrade}
-                  disabled={isCancellingUpgrade}
-                  icon={isCancellingUpgrade ? <Loader2 className="w-5 h-5 animate-spin" /> : <XCircle className="w-5 h-5" />}
-                >
-                  {isCancellingUpgrade ? 'Cancelling...' : `Cancel ${changeLabel}`}
-                </Button>
               </div>
             </div>
           </div>

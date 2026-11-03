@@ -26,6 +26,7 @@ import {
 import { aiInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import { formatJdExperience } from '@/lib/utils/jobExperience';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -1620,37 +1621,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   the next version. */}
               {config.status === 'published' && config.jd_id && (
                 <>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
-                    disabled={!!editBlockedReason && canUpdateAIInterviews}
-                    aria-disabled={!!editBlockedReason}
-                    aria-label="Edit AI interview"
-                    title={editBlockedReason || 'Edit this version'}
-                    className={`h-8 w-8 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    <Pencil className="w-4 h-4 text-menu-icon-edit" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
-                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
-                    aria-disabled={!!duplicateBlockedReason}
-                    aria-label="Duplicate as a new version"
-                    title={duplicateBlockedReason || 'Duplicate as a new version'}
-                    className={`${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                    icon={<Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-menu-icon-download" />}
-                  >
-                    Duplicate
-                  </Button>
                   {/* Archive, icon-only — the Assessment Details header's own
-                      Archive button (same glyph, same shape), offered here for
-                      the first time: archiving a live AI interview used to be
-                      reachable only from the list page's row menu. */}
+                      Archive button (same glyph, same shape, same place in
+                      the row), offered here for the first time: archiving a
+                      live AI interview used to be reachable only from the
+                      list page's row menu. */}
                   <Button
                     type="button"
                     variant="secondary"
@@ -1660,9 +1635,37 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     aria-disabled={!canArchiveAIInterviews}
                     aria-label="Archive AI interview"
                     title={canArchiveAIInterviews ? 'Archive this AI interview' : 'You do not have permission to archive AI interviews'}
-                    className={`h-8 w-8 flex-shrink-0 ${canArchiveAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${canArchiveAIInterviews ? '' : 'opacity-50 cursor-not-allowed'}`}
                   >
                     <Archive className="w-4 h-4 text-menu-icon-archive" />
+                  </Button>
+                  {/* Duplicate, icon-only — no label, same icon-only shape as
+                      Archive and Edit either side of it. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={duplicateBlockedReason ? undefined : handleDuplicate}
+                    disabled={(!!duplicateBlockedReason && canCreateAIInterviews) || actionLoading}
+                    aria-disabled={!!duplicateBlockedReason}
+                    aria-label="Duplicate as a new version"
+                    title={duplicateBlockedReason || 'Duplicate as a new version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Copy className="w-4 h-4 text-menu-icon-download" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={editBlockedReason ? undefined : () => router.push(withOrigin(aiInterviewConfigureHref(config.id, config.jd_id || '')))}
+                    disabled={!!editBlockedReason && canUpdateAIInterviews}
+                    aria-disabled={!!editBlockedReason}
+                    aria-label="Edit AI interview"
+                    title={editBlockedReason || 'Edit this version'}
+                    className={`h-8 w-8 px-0 flex-shrink-0 ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <Pencil className="w-4 h-4 text-menu-icon-edit" />
                   </Button>
                 </>
               )}
@@ -1945,7 +1948,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                           </div>
                           {config.jd_experience_level ? (
                             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(config.jd_experience_level)}`}>
-                              {expLabel(config.jd_experience_level) || config.jd_experience_level}
+                              {formatJdExperience(
+                                {
+                                  jobLevel: jdFullData?.job_level || jdFullData?.experience_level || config.jd_experience_level,
+                                  experienceMin: jdFullData?.experience_min,
+                                  experienceMax: jdFullData?.experience_max,
+                                },
+                                { includeLevel: true },
+                              ) || expLabel(config.jd_experience_level) || config.jd_experience_level}
                             </span>
                           ) : (
                             <span className="tf-body-muted">Not available</span>

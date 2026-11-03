@@ -10,12 +10,14 @@ import AssessmentVersionHistoryPanel, {
   type VersionHistoryVocabulary,
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { GROUPED_TABLE_TONE } from '@/components/assessments/AssessmentPicker';
+import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { SEGMENT_TOGGLE, segmentBtn } from '@/components/ui/filter-pills';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { isJdDisabled } from '@/lib/services/aiInterviewService';
+import { jdActionLockReason } from '@/lib/services/aiInterviewService';
+import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
@@ -112,6 +114,10 @@ const INTERVIEW_VOCABULARY: VersionHistoryVocabulary = {
   statusLabel: (status?: string) => getStatusLabel(String(status ?? '')),
 };
 
+/* Rows (Ungrouped) or job cards (Grouped) a page — the assessment picker's
+   five, so a page fits the invite popup without a scrollbar. */
+const PAGE_SIZE = 5;
+
 /* Header cell — the AI Talent Match results table's, class for class (its
    background and rule come from the <thead>), as in the assessment picker. */
 const PICKER_TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle';
@@ -132,7 +138,8 @@ export default function AIInterviewPicker({
   const [viewMode, setViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  /* Five a page, fixed, as in the assessment picker. */
+  const pageSize = PAGE_SIZE;
   const [configurePreviewId, setConfigurePreviewId] = useState<string | null>(null);
   const jdLineage = useJobVersionLineage();
 
@@ -208,13 +215,21 @@ export default function AIInterviewPicker({
     }));
   };
 
-  /* Active interview versions, newest first, searchable by job title, Job ID
-     or interview ID. */
+  /* Active interview versions, newest first, searchable by interview ID,
+     name, JD ID or JD name. A disabled or archived job's interviews stay
+     listed — greyed and not pickable, with the reason, as the assessment
+     picker shows its locked jobs — until the job is enabled / unarchived. */
   const q = search.trim().toLowerCase();
-  // A disabled job's interviews can't take invites until it is enabled again.
   const activeConfigs = configs
-    .filter((c) => normalizeConfigStatus(c.status) === 'published' && !isJdDisabled(c.jd_status))
+    .filter((c) => normalizeConfigStatus(c.status) === 'published')
     .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
+  const lockReasonOf = (c: AIInterviewResponse): string | null => jdActionLockReason(c.jd_status);
+  /* The linked job version's Disabled / Archived / Draft badge beside the job
+     name — the AI Interview list's badge, so the picker reads the same. */
+  const jobBadge = (c: AIInterviewResponse) => {
+    const kind = jobStatusBadgeKind(c.jd_status);
+    return kind ? <JobStatusBadge kind={kind} title={jdActionLockReason(c.jd_status) ?? undefined} /> : null;
+  };
   const pickerRows = activeConfigs.filter((c) =>
     !q ||
     `${c.jd_title || ''} ${c.position || ''} ${c.display_id || ''} ${c.jd_short_id || ''}`
@@ -271,6 +286,7 @@ export default function AIInterviewPicker({
     configs.filter((c) => pickedIds.includes(c.id)).map(lineageKeyOf),
   );
   const toggle = (c: AIInterviewResponse) => {
+    if (lockReasonOf(c) && !isPicked(c.id)) return;
     if (multiple) {
       onSelectedIdsChange?.(isPicked(c.id) ? pickedIds.filter((id) => id !== c.id) : [...pickedIds, c.id]);
     } else {
@@ -284,7 +300,7 @@ export default function AIInterviewPicker({
   const listedPickedCount = pickerRows.filter((c) => isPicked(c.id)).length;
   const allListedPicked = pickerRows.length > 0 && listedPickedCount === pickerRows.length;
   const addToPick = (rows: AIInterviewResponse[]) =>
-    onSelectedIdsChange?.([...pickedIds, ...rows.filter((c) => !isPicked(c.id)).map((c) => c.id)]);
+    onSelectedIdsChange?.([...pickedIds, ...rows.filter((c) => !isPicked(c.id) && !lockReasonOf(c)).map((c) => c.id)]);
   const clearListed = () => {
     const listedIds = new Set(pickerRows.map((c) => c.id));
     onSelectedIdsChange?.(pickedIds.filter((id) => !listedIds.has(id)));
@@ -374,7 +390,7 @@ export default function AIInterviewPicker({
               aria-label={searchLabel}
               value={search}
               onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              placeholder="Search by job title, Job ID or interview ID..."
+              placeholder="Search by interview ID, name, JD ID or JD name..."
               className="tf-input pl-10 pr-4"
             />
           </div>
@@ -433,6 +449,7 @@ export default function AIInterviewPicker({
                     <th className={PICKER_TH}>Interview Version</th>
                     <th className={PICKER_TH}>Status</th>
                     <th className={PICKER_TH}>Rounds</th>
+                    <th className={PICKER_TH}>Duration</th>
                     <th className={PICKER_TH}>Invitations Sent</th>
                     <th className={PICKER_TH}>Created On</th>
                     <th className={`${PICKER_TH} pr-6`}>Created By</th>
@@ -443,43 +460,52 @@ export default function AIInterviewPicker({
                   {pagedRows.map((config) => {
                     const isSelected = isPicked(config.id);
                     const pick = () => toggle(config);
+                    const lockReason = lockReasonOf(config);
                     return (
                       <tr
                         key={config.id}
                         onClick={pick}
                         aria-selected={isSelected}
+                        aria-disabled={lockReason ? true : undefined}
+                        title={lockReason ?? undefined}
                         data-row-selected={isSelected ? 'true' : undefined}
-                        className={`hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer ${
-                          isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''
-                        }`}
+                        className={`transition-colors ${
+                          lockReason
+                            ? 'cursor-not-allowed [&>td:not(.tf-sticky-col)]:opacity-50'
+                            : 'hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer'
+                        } ${isSelected ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}
                       >
                         <td className="tf-td tf-sticky-col-left">
+                          {/* A radio for the single pick, checkboxes when several
+                              can be picked — the assessment picker's rule. */}
                           <input
-                            type="checkbox"
+                            type={multiple ? 'checkbox' : 'radio'}
+                            name="ai-interview-invite-picker-selection"
                             checked={isSelected}
+                            disabled={!!lockReason}
                             onChange={pick}
                             onClick={(e) => e.stopPropagation()}
                             aria-label={`Select ${config.jd_title || config.position || 'interview'}`}
-                            className="rounded border-gray-300 cursor-pointer"
+                            className={`${multiple ? 'rounded ' : ''}border-gray-300 cursor-pointer`}
                           />
                         </td>
                         <td className="tf-td whitespace-nowrap">
                           {config.jd_short_id ? <JobIdBadge>{config.jd_short_id}</JobIdBadge> : <span className="tf-hint">—</span>}
                         </td>
                         <td className="tf-td max-w-[16rem]">
-                          <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
-                            {config.jd_title || config.position || 'Untitled'}
-                          </span>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="block truncate min-w-0 font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
+                              {config.jd_title || config.position || 'Untitled'}
+                            </span>
+                            {jobBadge(config)}
+                          </div>
                         </td>
                         <td className="tf-td whitespace-nowrap">
-                          <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-blue bg-brand-blue/10 ring-brand-blue/20">
-                            V{config.jd_version ?? 1}
-                          </span>
+                          <VersionPill kind="job" version={config.jd_version ?? 1} />
                         </td>
                         <td className="tf-td whitespace-nowrap">
-                          <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">
-                            V{interviewVersionOf(config)}
-                          </span>
+                          {/* The second-version pill (cyan): the assessment picker's Assessment Version. */}
+                          <VersionPill kind="assessment" version={interviewVersionOf(config)} />
                         </td>
                         <td className="tf-td whitespace-nowrap">
                           <span className="tf-badge gap-1.5 ring-1 bg-success-subtle text-success ring-success-line">
@@ -488,6 +514,14 @@ export default function AIInterviewPicker({
                           </span>
                         </td>
                         <td className="tf-td whitespace-nowrap">{roundChips(config)}</td>
+                        <td className="tf-td whitespace-nowrap">
+                          {config.duration_minutes ? (
+                            <>
+                              <span className="tabular-nums text-gray-600 dark:text-slate-400">{config.duration_minutes}</span>
+                              <span className="text-xs text-gray-400 ml-1">min</span>
+                            </>
+                          ) : <span className="text-xs text-gray-400">—</span>}
+                        </td>
                         <td className="tf-td whitespace-nowrap">
                           <span className="tabular-nums text-gray-600 dark:text-slate-400">{(config.invitations_count ?? 0).toLocaleString()}</span>
                           <span className="tf-hint ml-1">sent</span>
@@ -594,8 +628,9 @@ export default function AIInterviewPicker({
           <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Create an AI interview against a job first.'}</p>
         </div>
       ) : (
-        /* Grouped — the assessment picker's job cards, class for class. */
-        <div className="space-y-3">
+        /* Grouped — the assessment picker's job cards, class for class
+           (gap 2, p-3, so a page of five fits the popup). */
+        <div className="space-y-2">
           {pagedJobRows.map((config) => {
             const jobKey = lineageKeyOf(config);
             const jdId = config.jd_id;
@@ -603,7 +638,10 @@ export default function AIInterviewPicker({
             /* Other jobs fade only in single-select, where a pick elsewhere
                would replace this one; multi-select can hold picks in many. */
             const dimmed = !multiple && pickedIds.length > 0 && !ownsSelection;
-            const expanded = expandedKey === jobKey;
+            /* A Disabled / Archived job: greyed, and its versions stay shut so
+               nothing under it can be picked. */
+            const lockReason = lockReasonOf(config);
+            const expanded = expandedKey === jobKey && !lockReason;
             const totals = jobTotals.get(jobKey) ?? { interviews: 0, invitations: 0, completed: 0, maxJobVersion: 1 };
             const rowMetrics = [
               { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: jobVersionCountOf(config), label: 'Job Versions' },
@@ -612,7 +650,7 @@ export default function AIInterviewPicker({
               { key: 'completed', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.completed, label: 'Completed' },
             ];
             const toggleExpanded = () => {
-              if (!jdId) return;
+              if (!jdId || lockReason) return;
               const opening = !expanded;
               setExpandedKey(opening ? jobKey : null);
               if (opening) jdLineage.ensureLoaded(jdId, jdId);
@@ -622,10 +660,14 @@ export default function AIInterviewPicker({
                 key={jobKey}
                 /* Clicking the card opens its versions. */
                 onClick={toggleExpanded}
-                className={`@container/ai-row relative p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
-                  jdId ? 'cursor-pointer' : 'cursor-default'
+                aria-disabled={lockReason ? true : undefined}
+                title={lockReason ?? undefined}
+                className={`@container/ai-row relative p-3 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                  lockReason ? 'cursor-not-allowed' : jdId ? 'cursor-pointer' : 'cursor-default'
                 } ${
-                  ownsSelection
+                  lockReason
+                    ? 'border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 opacity-50'
+                    : ownsSelection
                     ? 'border-brand-blue/50 bg-brand-blue/[0.03] shadow-md shadow-brand-blue/10'
                     : `border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 ${dimmed ? 'opacity-60' : ''}`
                 }`}
@@ -640,6 +682,7 @@ export default function AIInterviewPicker({
                     <h3 className="tf-row-name truncate min-w-0" title={config.jd_title || config.position || 'Untitled'}>
                       {config.jd_title || config.position || 'Untitled'}
                     </h3>
+                    {jobBadge(config)}
                   </div>
 
                   {/* Status */}
@@ -672,7 +715,8 @@ export default function AIInterviewPicker({
                       <button
                         type="button"
                         onClick={toggleExpanded}
-                        title={expanded ? 'Hide version history' : 'View version history'}
+                        disabled={!!lockReason}
+                        title={lockReason ?? (expanded ? 'Hide version history' : 'View version history')}
                         aria-expanded={expanded}
                         className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                           expanded
@@ -688,6 +732,7 @@ export default function AIInterviewPicker({
                       <button
                         type="button"
                         onClick={() => toggle(config)}
+                        disabled={!!lockReason}
                         className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                           ownsSelection
                             ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
@@ -718,10 +763,13 @@ export default function AIInterviewPicker({
                       selectionGroupName="ai-interview-invite-picker-selection"
                       expandedJobVersions={expandedJobVersionsOf(jdId)}
                       onToggleJobVersion={(jobVersion) => toggleJobVersionOf(jdId, jobVersion)}
-                      selectedAssessmentIds={pickedIds}
+                      selectedAssessmentId={!multiple && ownsSelection ? (selection?.interviewId ?? null) : undefined}
+                      selectedAssessmentIds={multiple ? pickedIds : undefined}
                       onSelectAssessment={(interviewId) => {
                         const picked = configOf(interviewId);
-                        if (picked) toggle(picked);
+                        if (!picked) return;
+                        if (multiple) toggle(picked);
+                        else onSelectionChange({ jobKey: picked.id, jdId: picked.jd_id, interviewId: picked.id });
                       }}
                       /* Mode and Rounds — the Active tab's two columns. */
                       renderChildDetail={(child) => {
@@ -746,18 +794,25 @@ export default function AIInterviewPicker({
         </div>
       )}
 
+      {/* Pinned to the foot of the dialog body (the host wraps this picker in a
+          full-height column), as in the assessment picker — the two views'
+          lists differ in height, so a bar that followed the list jumped. */}
       {total > 0 && (
+        <div className="mt-auto pt-3 -mb-2">
         <ListPagination
           currentPage={safePage}
           itemsPerPage={pageSize}
           totalItems={total}
           onPageChange={setPage}
-          onItemsPerPageChange={(size) => { setPageSize(size); setPage(1); }}
+          onItemsPerPageChange={() => setPage(1)}
+          pageSizeOptions={[PAGE_SIZE]}
+          minimalOnMobile
           itemLabel={viewMode === 'ungrouped' ? 'interviews' : 'jobs'}
           scrollContainerRef={scrollContainerRef}
           compact
           alwaysShow
         />
+        </div>
       )}
 
       {configurePreviewId && (

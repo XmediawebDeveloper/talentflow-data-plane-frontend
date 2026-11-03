@@ -98,6 +98,28 @@ const ALIGN_OUTER_X1 = 0.96;
 const ALIGN_OUTER_Y0 = 0.06;
 const ALIGN_OUTER_Y1 = 0.94;
 const ALIGN_OUTER_MIN_DENSITY = 0.45;
+// Fallback: if the heuristic above still hasn't passed this long after the
+// aligning phase began, show the Record button anyway. The heuristic is a
+// best-effort UX gate, not a security control — the backend's own
+// deterministic RGB check + vision analysis still validates the actual
+// footage. Without this, a false-negative (confirmed live 2026-11-02,
+// session ai-9080c1f4: a fully-visible WHITE challenge screen never passed
+// alignment) leaves the candidate stuck until the 3-min link expires and a
+// timed_out proctor event gets logged against them.
+const ALIGN_FALLBACK_MS = 15000;
+
+// Back camera at HD. Without width/height the browser picked 640x480
+// (confirmed 2026-11-02 on a real upload), where a floating extension
+// button on the laptop screen was only ~12px and the vision model missed
+// it. `ideal` (not `exact`) so phones that can't do 1080p fall back to
+// their best mode instead of failing getUserMedia.
+const CAMERA_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+};
+// Per-check debug log cadence (in alignment ticks; 3 × 300ms ≈ 1s).
+const ALIGN_DEBUG_LOG_EVERY_TICKS = 3;
 
 // ── Voice activity detection (VAD) — runs only while actually recording ──
 // Web Audio API only (no new library) on the SAME getUserMedia stream
@@ -223,6 +245,23 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   const alignFailStreakRef = useRef(0);
   const lastLoggedAlignRef = useRef<boolean | null>(null);
   const lastLoggedButtonShownRef = useRef<boolean | null>(null);
+  const alignFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const alignTickCountRef = useRef(0);
+  // True once ALIGN_FALLBACK_MS elapsed without alignment passing — keeps
+  // the Record button visible regardless of the heuristic from then on.
+  const [alignFallback, setAlignFallback] = useState(false);
+
+  // Bring Submit into view the moment recording finishes — the page can be
+  // left scrolled from the taller recording layout, and on short landscape
+  // viewports the button would otherwise sit below the fold.
+  const submitRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (phase !== 'ready_to_submit') return;
+    const id = requestAnimationFrame(() => {
+      submitRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [phase]);
 
   // ── Manual Record click gate — startVerificationFlow awaits this instead
   // of any timer/countdown (req #10: "NEVER automatically start recording
@@ -350,13 +389,25 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       clearInterval(alignIntervalRef.current);
       alignIntervalRef.current = null;
     }
+    if (alignFallbackTimerRef.current) {
+      clearTimeout(alignFallbackTimerRef.current);
+      alignFallbackTimerRef.current = null;
+    }
   };
 
   const startAlignmentLoop = () => {
     alignPassStreakRef.current = 0;
     alignFailStreakRef.current = 0;
+    alignTickCountRef.current = 0;
     lastLoggedAlignRef.current = null;
     lastLoggedButtonShownRef.current = null;
+    setAlignFallback(false);
+    if (alignFallbackTimerRef.current) clearTimeout(alignFallbackTimerRef.current);
+    alignFallbackTimerRef.current = setTimeout(() => {
+      alignFallbackTimerRef.current = null;
+      setAlignFallback(true);
+      console.warn(`[ENV-VERIFY] Alignment not confirmed after ${ALIGN_FALLBACK_MS / 1000}s — showing Record button via fallback`);
+    }, ALIGN_FALLBACK_MS);
     if (!alignCanvasRef.current) {
       alignCanvasRef.current = document.createElement('canvas');
     }
@@ -399,6 +450,8 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       ctx.drawImage(video, sx, sy, sw, sh, 0, 0, w, h);
 
       let pass = false;
+      // Per-check metrics for the debug log below — filled in as each check runs.
+      const dbg: Record<string, string | number | boolean> = {};
       try {
         const { data } = ctx.getImageData(0, 0, w, h);
         // Guide-rect bounds in canvas pixels — same fixed box drawn as the
@@ -449,6 +502,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           const saturation = maxC === 0 ? 0 : (maxC - minC) / maxC;
           const brightness = (domR + domG + domB) / 3;
           const colorPlausible = saturation >= ALIGN_MIN_SATURATION || brightness >= ALIGN_MIN_WHITE_BRIGHTNESS;
+          dbg.seed = `rgb(${Math.round(domR)},${Math.round(domG)},${Math.round(domB)})`;
+          dbg.sat = Number(saturation.toFixed(2));
+          dbg.bright = Math.round(brightness);
+          dbg.colorOK = colorPlausible;
 
           // 2) Bezel contrast on EACH of the four sides — ADAPTIVE, not a
           //    fixed offset. A fixed-distance sample just past the guide
@@ -485,11 +542,17 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           };
           const midX = (gx0 + gx1) / 2;
           const midY = (gy0 + gy1) / 2;
+          const marginTop = findEdgeMargin(midX, gy0, 0, -1);
+          const marginBottom = findEdgeMargin(midX, gy1, 0, 1);
+          const marginLeft = findEdgeMargin(gx0, midY, -1, 0);
+          const marginRight = findEdgeMargin(gx1, midY, 1, 0);
           const bezelContrasts =
-            findEdgeMargin(midX, gy0, 0, -1) >= ALIGN_MIN_EDGE_MARGIN_PX && // top
-            findEdgeMargin(midX, gy1, 0, 1) >= ALIGN_MIN_EDGE_MARGIN_PX && // bottom
-            findEdgeMargin(gx0, midY, -1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX && // left
-            findEdgeMargin(gx1, midY, 1, 0) >= ALIGN_MIN_EDGE_MARGIN_PX; // right
+            marginTop >= ALIGN_MIN_EDGE_MARGIN_PX &&
+            marginBottom >= ALIGN_MIN_EDGE_MARGIN_PX &&
+            marginLeft >= ALIGN_MIN_EDGE_MARGIN_PX &&
+            marginRight >= ALIGN_MIN_EDGE_MARGIN_PX;
+          dbg.bezelTBLR = `${Math.round(marginTop)}/${Math.round(marginBottom)}/${Math.round(marginLeft)}/${Math.round(marginRight)}`;
+          dbg.bezelOK = bezelContrasts;
 
           // 3) Uniform-color density — is the guide rectangle itself mostly
           //    filled with that one color (candidate actually fit the
@@ -536,7 +599,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           }
           const outerDensity = outerArea > 0 ? outerMatched / outerArea : 0;
 
+          dbg.density = Number(density.toFixed(2));
+          dbg.densityOK = density >= ALIGN_GUIDE_MIN_DENSITY;
+          dbg.outer = Number(outerDensity.toFixed(2));
+          dbg.outerOK = outerDensity >= ALIGN_OUTER_MIN_DENSITY;
+
           pass = colorPlausible && bezelContrasts && density >= ALIGN_GUIDE_MIN_DENSITY && outerDensity >= ALIGN_OUTER_MIN_DENSITY;
+        } else {
+          dbg.seed = 'none';
         }
       } catch (e) {
         // getImageData can throw on a tainted canvas in rare cross-origin
@@ -551,6 +621,17 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       } else {
         alignFailStreakRef.current += 1;
         alignPassStreakRef.current = 0;
+      }
+
+      // Per-check debug log, ~1/s, plus every PASS/FAIL flip. Format:
+      // seed=rgb(..) sat bright colorOK | bezelTBLR (px margin, need ≥4)
+      // bezelOK | density (need ≥0.62) | outer (need ≥0.45) → PASS/FAIL
+      alignTickCountRef.current += 1;
+      if (alignTickCountRef.current % ALIGN_DEBUG_LOG_EVERY_TICKS === 0 || lastLoggedAlignRef.current !== pass) {
+        console.info(
+          `[ENV-VERIFY] align-debug ${Object.entries(dbg).map(([k, v]) => `${k}=${v}`).join(' ')} ` +
+          `video=${video.videoWidth}x${video.videoHeight} → ${pass ? 'PASS' : 'FAIL'}`,
+        );
       }
 
       if (lastLoggedAlignRef.current !== pass) {
@@ -577,7 +658,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
   // resolves the promise startVerificationFlow is awaiting — no timer, no
   // delay; MediaRecorder.start() is the very next statement that runs.
   const handleRecordClick = () => {
-    if (recordClickedRef.current || !canRecord) return;
+    if (recordClickedRef.current || !(canRecord || alignFallback)) return;
+    if (!canRecord && alignFallback) {
+      console.warn('[ENV-VERIFY] Record tapped via alignment fallback (heuristic never passed)');
+    }
     recordClickedRef.current = true;
     setRecordClicked(true);
     recordClickResolveRef.current?.();
@@ -690,13 +774,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     // these specific constraints, rather than failing permission entirely.
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: 'environment' } },
+        video: CAMERA_VIDEO_CONSTRAINTS,
         audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
       });
     } catch {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
+          video: CAMERA_VIDEO_CONSTRAINTS,
           audio: true,
         });
       } catch {
@@ -885,7 +969,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       // commit both succeeded (spec #15/#6).
       if (!res?.data?.video_uploaded) {
         console.warn('[ENV-VERIFY] Upload: FAILED (response did not confirm persistence)');
-        setErrorMessage('Upload could not be confirmed.');
+        setErrorMessage('Your video could not be confirmed as received. Please check your internet connection and tap Retry.');
         setCanRetryUpload(true); // blob is still in memory — no need to rescan
         setPhase('error');
         return;
@@ -894,7 +978,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       setPhase('done');
     } catch (err) {
       console.warn('[ENV-VERIFY] Upload: FAILED', err);
-      setErrorMessage('Upload failed.');
+      setErrorMessage('We couldn’t upload your video. Please check your internet connection and tap Retry — you don’t need to record again.');
       setCanRetryUpload(true); // blob is still in memory — no need to rescan
       setPhase('error');
     }
@@ -958,7 +1042,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
 
       {(phase === 'expired' || phase === 'error') && (
         <div className="max-w-sm space-y-4">
-          <h1 className="text-lg font-semibold">Unable to verify</h1>
+          <h1 className="text-lg font-semibold">{canRetryUpload ? 'Upload failed' : 'Unable to verify'}</h1>
           <p className="text-sm text-[var(--raw-94a3b8)]">{errorMessage}</p>
           {canRetryUpload && (
             <Button
@@ -1046,7 +1130,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           otherwise the stream has nowhere to attach to and the preview
           stays black even though recording is happening. Hidden outside
           the aligning/recording phases via `hidden` rather than unmounted. */}
-      <div className={`w-full max-w-2xl landscape:max-w-none landscape:w-[98vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5 ${(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan') ? '' : 'hidden'}`}>
+      {/* NOTE: when hidden, emit ONLY `hidden` — never alongside
+          `landscape:flex`. The landscape variant is a later media-query rule
+          that overrides `hidden` (display:none), so in landscape the stale
+          black preview + "Recording · 1s" + pan text stayed on screen above
+          the Submit / success cards (reported 2026-11-02, Android landscape). */}
+      <div className={(phase === 'aligning' || phase === 'recording_screen' || phase === 'pan_instructions' || phase === 'recording_pan')
+        ? 'w-full max-w-2xl landscape:max-w-none landscape:w-[98vw] landscape:flex landscape:flex-col landscape:items-center space-y-4 landscape:space-y-1.5'
+        : 'hidden'}>
         <div className="relative landscape:inline-block">
           <video
             ref={videoRef}
@@ -1055,7 +1146,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             playsInline
             className="w-full max-w-full landscape:w-auto landscape:h-[88dvh] aspect-video rounded-xl bg-black object-cover"
           />
-          {phase === 'aligning' && !canRecord && (
+          {phase === 'aligning' && !canRecord && !alignFallback && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
               <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
               <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
@@ -1087,7 +1178,16 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           {/* Overlaid ON the camera preview (not stacked below it) so it's
               always visible within the bounded video frame — no scrolling
               needed to find and tap it, regardless of page height/orientation. */}
-          {phase === 'aligning' && canRecord && (
+          {phase === 'pan_instructions' && (
+            <button
+              type="button"
+              onClick={handlePanNext}
+              className="absolute bottom-4 right-4 z-10 px-6 py-3 rounded-xl bg-brand-blue text-white font-medium text-sm shadow-lg shadow-black/40 hover:opacity-90 transition-opacity"
+            >
+              Next →
+            </button>
+          )}
+          {phase === 'aligning' && (canRecord || alignFallback) && (
             <button
               type="button"
               onClick={handleRecordClick}
@@ -1104,6 +1204,10 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="w-2 h-2 rounded-full bg-green-400" />
               Screen aligned
             </div>
+          ) : alignFallback ? (
+            <p className="text-sm leading-relaxed text-[var(--raw-94a3b8)] landscape:max-w-sm">
+              Make sure your whole laptop screen is visible in the camera, then tap Record.
+            </p>
           ) : (
             <p className="text-sm leading-relaxed text-[var(--raw-94a3b8)] landscape:max-w-sm">
               Waiting for your laptop screen to be clearly visible and centered in the camera…
@@ -1115,14 +1219,9 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               Recording paused
             </div>
-            <Button
-              variant="primary"
-              type="button"
-              onClick={handlePanNext}
-              className="w-full"
-            >
-              Next
-            </Button>
+            {/* Next button lives ON the preview (see pan_instructions overlay
+                above) — down here it fell below the fold in landscape, where
+                the preview takes ~88dvh (reported 2026-11-02). */}
           </>
         ) : (
           <>
@@ -1140,33 +1239,58 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         )}
       </div>
 
+      {/* Landscape phones only have ~300-350px of visible height (and the
+          link timer reserves pt-20 above this), so the stacked portrait card
+          pushed Submit below the fold (reported 2026-11-02). In landscape the
+          card goes side-by-side (text left, Submit right) with the big ✓
+          badge hidden, and submitRef scrolls Submit into view on entry. */}
       {phase === 'ready_to_submit' && (
-        <div className="max-w-sm space-y-4">
-          <div className="w-14 h-14 mx-auto rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center">
+        <div className="max-w-sm space-y-4 landscape:max-w-2xl landscape:w-full landscape:space-y-0 landscape:flex landscape:items-center landscape:gap-6 landscape:text-left">
+          <div className="w-14 h-14 mx-auto rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center landscape:hidden">
             <span className="text-2xl">✓</span>
           </div>
-          <h1 className="text-lg font-semibold">Recording complete</h1>
-          <p className="text-sm text-[var(--raw-94a3b8)]">
-            Your 10-second verification video is ready. Tap Submit to send it and resume your interview.
-          </p>
-          <Button
-            variant="primary"
-            type="button"
-            onClick={handleSubmit}
-            className="w-full"
-          >
-            Submit
-          </Button>
+          <div className="space-y-4 landscape:space-y-1 landscape:flex-1">
+            <h1 className="text-lg font-semibold">
+              <span className="hidden landscape:inline text-green-400 mr-2">✓</span>
+              Recording complete
+            </h1>
+            <p className="text-sm text-[var(--raw-94a3b8)]">
+              Your 10-second verification video is ready. Tap Submit to send it and resume your interview.
+            </p>
+          </div>
+          <div ref={submitRef} className="landscape:shrink-0 landscape:w-48">
+            <Button
+              variant="primary"
+              type="button"
+              onClick={handleSubmit}
+              className="w-full"
+            >
+              Submit
+            </Button>
+          </div>
         </div>
       )}
 
-      {phase === 'uploading' && <p className="text-[var(--raw-94a3b8)]">Uploading…</p>}
-
-      {phase === 'done' && (
-        <div className="max-w-sm space-y-2">
-          <h1 className="text-lg font-semibold">Recordings uploaded successfully.</h1>
+      {phase === 'uploading' && (
+        <div className="max-w-sm space-y-3 flex flex-col items-center">
+          <span className="w-8 h-8 rounded-full border-2 border-white/20 border-t-brand-blue animate-spin" />
+          <h1 className="text-lg font-semibold">Uploading your video…</h1>
           <p className="text-sm text-[var(--raw-94a3b8)]">
-            You can put your phone down — your interview is resuming on your laptop.
+            Please keep this page open until the upload finishes.
+          </p>
+        </div>
+      )}
+
+      {/* Only reached after the backend confirmed video_uploaded=true
+          (storage + DB commit both succeeded) — see handleSubmit. */}
+      {phase === 'done' && (
+        <div className="max-w-sm space-y-3">
+          <div className="w-14 h-14 mx-auto rounded-full bg-green-500/15 border border-green-500/30 flex items-center justify-center landscape:w-10 landscape:h-10">
+            <span className="text-2xl text-green-400 landscape:text-xl">✓</span>
+          </div>
+          <h1 className="text-lg font-semibold">Verification video uploaded successfully</h1>
+          <p className="text-sm text-[var(--raw-94a3b8)]">
+            Your interview is now resuming on your laptop. You can put your phone down and close this page.
           </p>
         </div>
       )}

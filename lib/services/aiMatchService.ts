@@ -51,6 +51,7 @@ export interface AIMatchResultItem {
   resume_created_at?: string | null;
   resume_version?: number | null;
   version_count?: number | null;
+  is_archived?: boolean;
 }
 
 /** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
@@ -149,6 +150,9 @@ export interface MatchedCandidate {
   /** The resume record's own current version number (distinct from the JD's
    *  version) — same field ScoredResumesTable's "Resume Version" column reads. */
   resumeVersion?: number;
+  /** True once the underlying resume has been archived from Resume Database —
+   *  same flag ScoredResumesTable reads to show its "Resume Archived" badge. */
+  isArchived?: boolean;
 }
 
 // Vector-based matching interfaces for client-side similarity computation
@@ -204,6 +208,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     concerns: result.concerns,
     attachmentCount: 1,
     rank: result.rank,  // Rating (1-10 scale) from backend
+    isArchived: !!result.is_archived,
   };
 }
 
@@ -262,6 +267,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             uploadDate: resume.created_at || candidate.uploadDate,
             attachmentCount: resume.version_count || 1,
             resumeVersion: resume.version || 1,
+            isArchived: !!resume.is_archived,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);

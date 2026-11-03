@@ -611,7 +611,7 @@ function JobProgressItem({
           </div>
 
           {isComplete && job.failed > 0 && friendlyFailureReason && (
-            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded text-xs text-destructive">
+            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded tf-error">
               {friendlyFailureReason}
             </div>
           )}

@@ -917,7 +917,7 @@ export default function ResumeScoringStatusPanel({
                                 })}
                               </div>
                               {attempt.errorReason && (
-                                <div className="flex items-start gap-1 text-xs text-destructive mt-2">
+                                <div className="flex items-start gap-1 tf-error mt-2">
                                   <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                   <span>{attempt.errorReason}</span>
                                 </div>

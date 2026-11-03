@@ -153,25 +153,25 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm font-semibold ${
+          className={`tf-wrap text-sm font-semibold ${
             disabled ? 'text-slate-400 dark:text-slate-500' : `text-slate-900 dark:text-slate-50 ${tone.hoverText}`
           }`}
         >
           {item.label}
         </p>
         {disabled ? (
-          <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <p className="tf-wrap mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
             {DISABLED_SHORT_REASON[item.disabledReason ?? 'permission']}
           </p>
         ) : (
-          subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+          subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
         )}
       </div>
       {disabled ? (
-        <Lock aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+        <Lock aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500 sm:block" />
       ) : (
         <ArrowUpRight
-          className={`h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
+          className={`hidden h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all sm:block group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
         />
       )}
     </>
@@ -187,8 +187,8 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
       >
         <span className="h-10 w-10 shrink-0 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700 sm:h-11 sm:w-11" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
-          {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
+          <p className="tf-wrap text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
+          {subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
         </div>
       </div>
     );
@@ -307,7 +307,7 @@ export default function DashboardQuickAccess() {
       <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         {/* Flattened first so the colour run counts tiles as they appear on
             screen, not as they are grouped by section. */}
-        <ul className="tf-grid-stats-5">
+        <ul className="tf-grid-tiles">
           {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneForTool(item.id, index)} />

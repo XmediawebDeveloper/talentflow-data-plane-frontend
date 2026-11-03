@@ -1,5 +1,6 @@
 'use client';
 
+import { formatJdExperience, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, ClipboardList, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -450,11 +451,11 @@ export default function JDListPage() {
       department: jd.department || '-',
       employment_type: jd.employment_type ? formatEmploymentType(jd.employment_type) : '-',
       remote_type: jd.remote_type ? formatEmploymentType(jd.remote_type) : '-',
-      experience: jd.experience_min != null && jd.experience_max != null
-        ? `${jd.experience_min}-${jd.experience_max} years`
-        : jd.experience_min != null
-        ? `${jd.experience_min}+ years`
-        : '-',
+      experience: formatJdExperience({
+        jobLevel: jd.job_level || jd.experience_level,
+        experienceMin: jd.experience_min,
+        experienceMax: jd.experience_max,
+      }) || '-',
       salary: jd.salary_min || jd.salary_max
         ? formatSalaryRange({
             min: jd.salary_min,
@@ -463,7 +464,7 @@ export default function JDListPage() {
           })
         : '-',
       location: jd.location || '-',
-      job_level: jd.job_level || '-',
+      job_level: formatExperienceLevelName(jd.job_level || jd.experience_level) || jd.job_level || '-',
       published_at: jd.published_at ? formatISTDate(jd.published_at) : '-',
       created_at: formatISTDate(jd.created_at),
       updated_at: formatISTDate(jd.updated_at),

@@ -3693,7 +3693,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <div>
                 <p className="text-sm font-medium text-destructive">{shareBarError}</p>
                 {shareBarAttempts >= 2 && (
-                  <p className="text-xs text-destructive mt-1">Still stuck? Make sure you clicked <b>Hide</b> (not Stop sharing), then try again.</p>
+                  <p className="tf-error mt-1">Still stuck? Make sure you clicked <b>Hide</b> (not Stop sharing), then try again.</p>
                 )}
               </div>
             </div>
@@ -4064,6 +4064,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           interviewMode={interview.interview_mode}
           totalQuestions={interview.total_questions}
           environmentVerificationEnabled={Boolean((interview as { environment_verification_enabled?: boolean }).environment_verification_enabled)}
+          recordingStorageDays={(interview as { recording_storage_days?: number }).recording_storage_days}
         />
       </PreInterviewLayout>
     );
@@ -4105,7 +4106,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           }}
           onVerifyFace={faceVerification.baselineReady ? faceVerification.verifyCurrentFace : undefined}
           onEnrollVoice={async (stream, onPhase) => {
-            // Primary enrollment: capture ~12 s of the candidate reading the
+            // Primary enrollment: capture ~15 s of the candidate reading the
             // prompt and send raw 16 kHz PCM to the server, which computes an
             // ECAPA-TDNN voiceprint (accurate speaker verification). This is the
             // baseline every interview turn is later checked against server-side.
@@ -4113,7 +4114,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             // If server voice-ID is disabled (feature flag off), fall back to
             // the local MFCC baseline so behavior is unchanged in that case.
             try {
-              const cap = await recordPcm16(stream, 12000);
+              const cap = await recordPcm16(stream, 15000);
               if (!cap) return false; // nothing recorded at all
               // Capture is over — the upload + server voiceprint check that
               // follows can take seconds; tell the panel so it stops saying

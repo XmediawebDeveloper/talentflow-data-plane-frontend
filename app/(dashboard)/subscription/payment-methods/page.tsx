@@ -535,7 +535,7 @@ export default function PaymentMethodsPage() {
                     }`}
                   />
                   {formErrors.cardholderName && (
-                    <p className="mt-1 text-xs text-destructive">{formErrors.cardholderName}</p>
+                    <p className="mt-1 tf-error">{formErrors.cardholderName}</p>
                   )}
                 </label>
 
@@ -558,7 +558,7 @@ export default function PaymentMethodsPage() {
                     />
                   </div>
                   {formErrors.cardNumber && (
-                    <p className="mt-1 text-xs text-destructive">{formErrors.cardNumber}</p>
+                    <p className="mt-1 tf-error">{formErrors.cardNumber}</p>
                   )}
                 </label>
 
@@ -579,7 +579,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.expiryMonth && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryMonth}</p>
+                      <p className="mt-1 tf-error">{formErrors.expiryMonth}</p>
                     )}
                   </label>
                   <label className="block">
@@ -597,7 +597,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.expiryYear && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryYear}</p>
+                      <p className="mt-1 tf-error">{formErrors.expiryYear}</p>
                     )}
                   </label>
                   <label className="block">
@@ -615,7 +615,7 @@ export default function PaymentMethodsPage() {
                       }`}
                     />
                     {formErrors.cvv && (
-                      <p className="mt-1 text-xs text-destructive">{formErrors.cvv}</p>
+                      <p className="mt-1 tf-error">{formErrors.cvv}</p>
                     )}
                   </label>
                 </div>

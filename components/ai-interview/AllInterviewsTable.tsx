@@ -30,6 +30,7 @@ import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { toast } from 'sonner';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import JobStatusBadge, { jobLockBadgeFor, jobStatusBadgeKind, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
@@ -512,6 +513,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
      reason), and "All Interviews" means every version regardless of status. */
   const fetchAll = loadInterviewRows;
 
+  /* Set by the job-status refresh below: that re-read is quiet. */
+  const quietReloadRef = useRef(false);
   useEffect(() => {
     let alive = true;
     // A load after the first follows a change (reload, Retry): drop what other
@@ -539,16 +542,29 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       .catch((err) => {
         if (!alive) return;
         console.error('[TalentFlow] Failed to load interviews:', err);
+        // A quiet background re-read that fails keeps the rows on screen.
+        if (quietReloadRef.current) return;
         setError(err instanceof Error ? err.message : 'Failed to load interviews');
         setRows([]);
       })
       .finally(() => {
+        quietReloadRef.current = false;
         if (alive) setIsLoading(false);
       });
     return () => {
       alive = false;
     };
   }, [fetchAll, reloadToken, fixedStatus]);
+
+  /* Each row's job badge comes from its config's `jd_status`, which only
+     arrives with the rows — so a job disabled / archived / re-enabled anywhere
+     (this tab, another tab, window focus, or every 30s for another user's
+     change) re-reads them quietly: no skeleton, rows kept on a failure. */
+  useJobStatusRefresh(() => {
+    if (!hasLoadedOnce.current) return;
+    quietReloadRef.current = true;
+    setReloadToken((t) => t + 1);
+  }, { pollMs: 30_000 });
 
   const retry = () => {
     setIsLoading(true);
