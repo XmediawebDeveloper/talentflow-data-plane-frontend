@@ -514,6 +514,10 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.email || item.candidate_email || '',
           email: item.email || item.candidate_email || '',
           phone: item.phone || '',
+          // Missing here left the Invite button enabled for an archived resume
+          // whenever this JD's history came from this grouped load instead of
+          // the global scored-resumes list (which already carries it).
+          isArchived: !!item.is_archived,
           overall_score: matchScore,  // Use overall_score as primary field
           matchScore: matchScore,
           matchStatus: matchStatus,
@@ -661,6 +665,11 @@ export default function ResumeScoringRoute() {
           candidateEmail: item.candidate_email || '',
           email: item.candidate_email || '',
           phone: item.phone || '',
+          // Same gap as loadScoredHistory above — direct jd_id/score_id
+          // navigation (no opened_from) resolves the candidate from this
+          // JD-scoped load, which otherwise never told the detail page the
+          // resume was archived.
+          isArchived: !!item.is_archived,
           overall_score: matchScore,
           matchScore: matchScore,
           matchStatus: matchStatus,
