@@ -85,7 +85,7 @@ const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => 
   const status = (m?: string): ServerMatchStatus =>
     m === 'exact_match' || m === 'excellent' ? 'exact_match' : m === 'partial_match' || m === 'partial' ? 'partial_match' : 'no_match';
   /* A scored resume as `/jd/{id}/scored-resumes` returns it (the fields read here). */
-  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number };
+  type ScoredItem = { resume_id?: string; candidate_name?: string; candidate_email?: string; phone?: string; overall_score?: number; match_status?: string; created_at?: string; resume_version?: number; is_archived?: boolean };
   return [first, ...rest].flatMap((r: { items?: ScoredItem[] }) => r?.items ?? [])
     .filter((it) => it?.resume_id)
     .map((it) => ({
@@ -99,6 +99,9 @@ const loadJobScored = async (jdId: string): Promise<ServerInviteCandidate[]> => 
       score: { percent: Number(Number(it.overall_score || 0).toFixed(1)), match_status: status(it.match_status), scored_at: it.created_at ?? null },
       // Not known from this list; the Review step checks it and skips them.
       already_invited: false,
+      // This list — unlike the job's other sources — still lists a resume
+      // after it's archived, so it's the only place that needs to say so.
+      archived: !!it.is_archived,
       version: it.resume_version ?? null,
     }));
 };
@@ -509,7 +512,7 @@ export default function ServerCandidatePicker({
   /* Could be ticked, units aside; and can be ticked (or unticked) now. */
   const addedDirectly = (r: ServerInviteCandidate) => !!r.email && !!addedEmails?.has(r.email.trim().toLowerCase());
   const canTickBase = (r: ServerInviteCandidate) =>
-    !pickingDisabled && !!r.email && !r.already_invited && (selection.mode === 'ids' || selection.source === source)
+    !pickingDisabled && !!r.email && !r.already_invited && !r.archived && (selection.mode === 'ids' || selection.source === source)
     && (isOn(r) || !addedDirectly(r));
   const canTick = (r: ServerInviteCandidate) => canTickBase(r) && (isOn(r) || canAdd);
   const toggle = (r: ServerInviteCandidate) => {
@@ -544,7 +547,7 @@ export default function ServerCandidatePicker({
       const { items: all } = await loadScoredTab(jdId, params);
       const picked: Record<string, PickedCandidate> = {};
       for (const r of all) {
-        if (!r.email || r.already_invited || addedDirectly(r)) continue;
+        if (!r.email || r.already_invited || r.archived || addedDirectly(r)) continue;
         picked[r.resume_id] = { resumeId: r.resume_id, name: r.name, email: r.email, source: 'score-resume' };
       }
       onSelectionChange({ mode: 'ids', picked });
@@ -582,7 +585,8 @@ export default function ServerCandidatePicker({
 
   /** Why this row cannot be ticked now, or null when it can. */
   const tickBlockReason = (r: ServerInviteCandidate): string | null =>
-    !r.email ? 'No email' : r.already_invited ? 'Already invited to this version'
+    !r.email ? 'No email' : r.archived ? 'Archived — unarchive this resume (Resume Database) to invite them'
+      : r.already_invited ? 'Already invited to this version'
       : pickingDisabled ? 'Pick a version first'
       : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
       : !isOn(r) && addedDirectly(r) ? 'Already added in Manual / Upload Excel'
@@ -1423,20 +1427,20 @@ export default function ServerCandidatePicker({
             <span className="shrink-0 tabular-nums">{fmt(rows.length)} of {fmt(total)}</span>
           </li>
           {rows.map((r) => {
-            const on = isOn(r) && !!r.email && !r.already_invited;
+            const on = isOn(r) && !!r.email && !r.already_invited && !r.archived;
             const tickable = canTick(r);
             const picked = pickedOf(r);
             const why = tickBlockReason(r) ?? undefined;
             const shownName = kind === 'interview' ? formatCandidateFirstName(r.name) : r.name;
             return (
               <li key={r.resume_id}>
-                <label title={why} className={`flex items-center gap-2.5 px-3 py-2 ${tickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : 'cursor-not-allowed'} ${on ? 'bg-blue-50 dark:bg-slate-800/50' : ''}`}>
+                <label title={why} className={`flex items-center gap-2.5 px-3 py-2 ${tickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : 'cursor-not-allowed'} ${on ? 'bg-blue-50 dark:bg-slate-800/50' : ''} ${r.archived ? 'opacity-60' : ''}`}>
                   <input
                     type="checkbox"
                     checked={on}
                     disabled={!tickable}
                     onChange={() => toggle(r)}
-                    aria-label={`Invite ${r.name}`}
+                    aria-label={r.archived ? `${r.name} is archived and cannot be selected for invite` : `Invite ${r.name}`}
                     className="m-0 shrink-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
                   />
                   <span aria-hidden="true" className="max-sm:hidden shrink-0 flex h-8 w-8 items-center justify-center rounded-full bg-brand-blue/10 text-2xs font-semibold text-brand-blue">
@@ -1463,6 +1467,11 @@ export default function ServerCandidatePicker({
                   </span>
                   {r.already_invited && (
                     <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
+                  )}
+                  {r.archived && (
+                    <span title="Archived — unarchive it (Resume Database) to invite this candidate" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                      <Archive className="w-3 h-3" aria-hidden="true" />Archived
+                    </span>
                   )}
                   {on && picked && picked.source !== source && (
                     <span title="Ticked once; it counts for every tab it appears in" className="max-md:hidden shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border border-brand-blue/20 bg-brand-blue/5 text-brand-blue">

@@ -43,6 +43,10 @@ export interface ServerInviteCandidate {
   /** The latest resume score for this job, or null when never scored. */
   score: { percent: number; match_status: ServerMatchStatus; scored_at: string | null } | null;
   already_invited: boolean;
+  /** Scored Resumes only: the resume has since been archived — the server's
+   *  other sources never list an archived resume in the first place, so this
+   *  stays undefined (falsy) there. */
+  archived?: boolean;
   /** This resume's version and how many the candidate has, when the server sends them. */
   version?: number | null;
   version_count?: number | null;

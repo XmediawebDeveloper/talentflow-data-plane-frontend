@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, UserX } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -150,11 +150,16 @@ interface DraggableResumeRowProps {
   draggable?: boolean;
   /** Given, the row accepts a dropped row and reports where it landed. */
   onReorder?: (item: DragItem, targetId: string) => void;
+  /** True for a resume locked out of every action (e.g. its email matches an
+   *  existing team member) — drag-to-move is an action too, so it is pulled
+   *  out of the drag source entirely rather than just losing its handle. */
+  dragDisabled?: boolean;
 }
 
-function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails, draggable = true, onReorder }: DraggableResumeRowProps) {
+function DraggableResumeRow({ resume, selectedResumes, children, className, onViewDetails, draggable = true, onReorder, dragDisabled = false }: DraggableResumeRowProps) {
   const [{ isDragging }, drag, preview] = useDrag<DragItem, void, { isDragging: boolean }>({
     type: RESUME_DRAG_TYPE,
+    canDrag: !dragDisabled,
     item: () => ({
       id: resume.id,
       // If current resume is selected, drag all selected resumes; otherwise just this one
@@ -281,6 +286,19 @@ interface ResumeTableProps {
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
 }
+
+/** Shown on a resume whose candidate_email matches an existing team member's
+ *  login — uploads are blocked at the source now, but rows stored before that
+ *  restriction existed still need to flag themselves as locked out. */
+const TeamMemberEmailBadge = () => (
+  <span
+    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-red-50 text-red-700 ring-1 ring-red-200 flex-shrink-0"
+    title="This email belongs to an existing team member. It cannot be selected or used for any action."
+  >
+    <UserX className="w-3 h-3" />
+    Existing Team Member
+  </span>
+);
 
 // Helper function to highlight matching text
 const highlightText = (text: string, query: string): React.ReactNode => {
@@ -583,11 +601,23 @@ export default function ResumeTable({
   // When pagination is disabled (server-side pagination), render all passed items
   const paginatedItems = disablePagination ? orderedResumes : paginatedItemsFromHook;
 
+  // A resume whose candidate_email matches an existing team member's login
+  // (stored before the upload-time restriction existed) is shown greyed out
+  // and locked out of selection and every row action. Gated on
+  // showTeamMemberBadge so only the callers that opted in (Resume Database's
+  // My Resumes / Internal DB views) apply it.
+  const isBlockedResume = (r: Resume): boolean =>
+    showTeamMemberBadge && !!(r.is_tenant_user_email ?? r.isTenantUserEmail);
+
   // Header checkbox state must reflect the VISIBLE rows only — selections in
   // other folders/pages should not flip the header to "indeterminate" or
-  // change its onSelectAll behaviour.
-  const allSelected = resumes.length > 0 && resumes.every(r => selectedResumes.includes(r.id));
-  const someSelected = !allSelected && resumes.some(r => selectedResumes.includes(r.id));
+  // change its onSelectAll behaviour. Blocked rows are never selectable, so
+  // they are excluded from both the "every" and "some" counts — otherwise a
+  // single blocked row on the page would make "select all" permanently
+  // un-checkable.
+  const selectableResumes = resumes.filter(r => !isBlockedResume(r));
+  const allSelected = selectableResumes.length > 0 && selectableResumes.every(r => selectedResumes.includes(r.id));
+  const someSelected = !allSelected && selectableResumes.some(r => selectedResumes.includes(r.id));
 
 
   // Handle showing version history - fetch versions from backend
@@ -739,18 +769,23 @@ export default function ResumeTable({
             edge open against the shell's reserved height. The last-child rule
             closes the table off. */}
         <tbody className="bg-white divide-y divide-gray-200 [&>tr:last-child>td]:border-b [&>tr:last-child>td]:border-gray-200">
-          {paginatedItems.map((resume) => (
+          {paginatedItems.map((resume) => {
+            const isBlocked = isBlockedResume(resume);
+            return (
             <DraggableResumeRow
               key={resume.id}
               resume={resume}
               selectedResumes={selectedResumes}
               draggable={draggable}
               onReorder={rowOrderEnabled ? handleRowReorder : undefined}
+              dragDisabled={isBlocked}
               /* `group` so the pinned cells can follow the row's hover. */
-              className={`group hover:bg-brand-blue/5 transition-colors ${
-                selectedResumes.includes(resume.id) ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20' : ''
+              className={`group transition-colors ${
+                isBlocked
+                  ? 'opacity-60 bg-gray-50 grayscale-[0.4]'
+                  : `hover:bg-brand-blue/5 ${selectedResumes.includes(resume.id) ? 'bg-brand-blue/10 ring-1 ring-inset ring-brand-blue/20' : ''}`
               }`}
-              onViewDetails={onViewDetails}
+              onViewDetails={isBlocked ? undefined : onViewDetails}
             >
               {!hideCheckboxes && (
                 /* Pinned, so it needs a solid background of its own: the row's
@@ -767,9 +802,11 @@ export default function ResumeTable({
                 >
                   <input
                     type="checkbox"
-                    checked={selectedResumes.includes(resume.id)}
+                    checked={!isBlocked && selectedResumes.includes(resume.id)}
+                    disabled={isBlocked}
                     onChange={() => onSelectResume(resume.id)}
-                    className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                    title={isBlocked ? 'This email belongs to an existing team member — it cannot be selected.' : undefined}
+                    className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 disabled:cursor-not-allowed disabled:opacity-50"
                   />
                 </td>
               )}
@@ -777,7 +814,7 @@ export default function ResumeTable({
                 <div className="flex items-center">
                   <div>
                     <div className="flex items-center gap-2">
-                      {onViewDetails ? (
+                      {onViewDetails && !isBlocked ? (
                         <button
                           onClick={(e) => { e.stopPropagation(); onViewDetails(resume); }}
                           className="text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline text-left transition-colors"
@@ -792,6 +829,7 @@ export default function ResumeTable({
                       {resume.isArchived && !isArchivedFolder && (
                         <ResumeArchivedBadge label="Archived" />
                       )}
+                      {isBlocked && <TeamMemberEmailBadge />}
                     </div>
                   </div>
                 </div>
@@ -923,7 +961,14 @@ export default function ResumeTable({
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-center justify-end gap-1">
-                  {selectionMode ? (
+                  {isBlocked ? (
+                    <span
+                      className="h-7 w-7 flex items-center justify-center text-gray-300 cursor-not-allowed"
+                      title="This email belongs to an existing team member — no actions are available."
+                    >
+                      <MoreVertical className="w-3.5 h-3.5" />
+                    </span>
+                  ) : selectionMode ? (
                     <Button
                       variant="primary"
                       size="sm"
@@ -1118,18 +1163,23 @@ export default function ResumeTable({
                 </div>
               </td>
             </DraggableResumeRow>
-          ))}
+            );
+          })}
         </tbody>
         </table>
       </div>
 
       {/* FIX-008: Mobile Card View - visible only on mobile */}
       <div className={`md:hidden space-y-3 ${flushCards ? 'py-3' : 'px-2'}`}>
-        {paginatedItems.map((resume) => (
+        {paginatedItems.map((resume) => {
+          const isBlocked = isBlockedResume(resume);
+          return (
           <div
             key={resume.id}
-            className={`bg-white border rounded-xl p-4 ring-1 transition-all ${
-              selectedResumes.includes(resume.id) ? 'border-brand-blue/40 bg-brand-blue/5 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-100 ring-black/[0.02] shadow-sm shadow-brand-blue/5'
+            className={`border rounded-xl p-4 ring-1 transition-all ${
+              isBlocked
+                ? 'bg-gray-50 border-gray-200 opacity-60 grayscale-[0.4]'
+                : `bg-white ${selectedResumes.includes(resume.id) ? 'border-brand-blue/40 bg-brand-blue/5 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-100 ring-black/[0.02] shadow-sm shadow-brand-blue/5'}`
             }`}
           >
             {/* Card Header */}
@@ -1137,9 +1187,11 @@ export default function ResumeTable({
               {!hideCheckboxes && (
                 <input
                   type="checkbox"
-                  checked={selectedResumes.includes(resume.id)}
+                  checked={!isBlocked && selectedResumes.includes(resume.id)}
+                  disabled={isBlocked}
                   onChange={() => onSelectResume(resume.id)}
-                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1"
+                  title={isBlocked ? 'This email belongs to an existing team member — it cannot be selected.' : undefined}
+                  className="rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 mt-1 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               )}
               <div className="flex-1 min-w-0">
@@ -1148,6 +1200,7 @@ export default function ResumeTable({
                   {resume.isArchived && !isArchivedFolder && (
                     <ResumeArchivedBadge iconOnly />
                   )}
+                  {isBlocked && <TeamMemberEmailBadge />}
                 </div>
                 <div className="tf-body-muted truncate">{resume.title}</div>
               </div>
@@ -1183,20 +1236,30 @@ export default function ResumeTable({
 
             {/* Card Actions */}
             <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => onQuickView(resume)}
-                icon={<Eye className="w-4 h-4" />}
-                className="flex-1"
-              >
-                View
-              </Button>
+              {isBlocked ? (
+                <span
+                  className="flex-1 text-center text-xs text-gray-400 py-1.5"
+                  title="This email belongs to an existing team member — no actions are available."
+                >
+                  No actions available
+                </span>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => onQuickView(resume)}
+                  icon={<Eye className="w-4 h-4" />}
+                  className="flex-1"
+                >
+                  View
+                </Button>
+              )}
               {/* Apply to Job was dropped here too, to match the desktop ⋮
                   menu — the action lives in the bulk actions bar. */}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {!disablePagination && totalPages > 1 && (

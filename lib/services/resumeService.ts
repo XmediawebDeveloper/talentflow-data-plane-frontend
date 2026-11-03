@@ -169,6 +169,10 @@ export interface Resume {
   is_duplicate?: boolean;
   is_archived?: boolean;  // Whether resume is archived
   archived_at?: string;  // When resume was archived
+  // True when candidate_email matches an existing tenant team member's login
+  // email. Uploads are blocked at the source now; this flags resumes stored
+  // before that restriction existed so the UI can grey them out.
+  is_tenant_user_email?: boolean;
   // Team assignment (recruiter id) — surfaced on internal-DB and my-resumes lists
   assigned_to?: string;
   created_at?: string;
@@ -228,6 +232,8 @@ export interface Resume {
   isArchived?: boolean;
   /** @deprecated use archived_at */
   archivedAt?: string;
+  /** @deprecated use is_tenant_user_email */
+  isTenantUserEmail?: boolean;
   /** @deprecated use professional_summary */
   professionalSummary?: string;
   /** @deprecated use technical_skills */
