@@ -2146,6 +2146,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   }, [searchParams, getFolderById, navigateToFolder, router]);
 
   const handleSelectResume = (id: string) => {
+    // A resume whose email matches an existing team member is locked out of
+    // selection entirely — ResumeTable disables its checkbox, but this guards
+    // any other path (e.g. a stale click) from slipping it into the selection.
+    const target = resumes.find(r => r.id === id);
+    if (target && (target.is_tenant_user_email || target.isTenantUserEmail)) return;
     setSelectedResumes(prev =>
       prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
     );
@@ -2176,7 +2181,10 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   // selections (e.g. picking 5 in folder A then opening folder B and clicking
   // Select All used to drop the original 5).
   const handleSelectAll = (selected: boolean) => {
-    const visibleIds = filteredResumes.map(r => r.id);
+    // Resumes locked out for a team-member email never enter a "select all".
+    const visibleIds = filteredResumes
+      .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+      .map(r => r.id);
     setSelectedResumes(prev => {
       if (selected) {
         const merged = new Set(prev);
@@ -2676,6 +2684,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an assessment.`);
+      return;
+    }
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
@@ -2700,6 +2715,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an AI interview.`);
+      return;
+    }
     openInvite({
       kind: 'interview',
       candidates: selectedInviteCandidates(),
@@ -2721,6 +2743,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       .filter(r => isResumeArchived(r)).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
+      return;
+    }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be used with AI Talent Match.`);
       return;
     }
     /* The dialog loads the job list itself now, so this no longer gates the
@@ -2772,6 +2801,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     return false;
   };
 
+  // Helper: a resume whose email matches an existing team member — locked out
+  // of every action the same way an archived resume is. The checkbox already
+  // blocks selecting one; these checks catch any other path into these handlers.
+  const isTenantUserEmailResume = (resume: Resume): boolean =>
+    !!(resume.is_tenant_user_email ?? resume.isTenantUserEmail);
+
   // Handle apply to job. One ticked candidate or fifty, the same dialog opens:
   // the Candidates Selected panel lists them on their latest version, and the
   // eye beside a row is where another version is read and picked. A separate
@@ -2789,6 +2824,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       return;
     }
 
+    const tenantUserCount = selectedResumeObjects.filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be applied to any job.`);
+      return;
+    }
+
     // Every ticked candidate goes in on its latest version; the dialog is where
     // a different one is chosen.
     void fetchPublishedJobs();
@@ -2802,6 +2843,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     // Check if resume is archived (by flag OR by folder)
     if (isResumeArchived(resume)) {
       toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
+    if (isTenantUserEmailResume(resume)) {
+      toast.error('This resume belongs to an existing team member and cannot be applied to any job.');
       return;
     }
 
@@ -4310,6 +4356,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 )}
                 <ResumeTable
                   flushCards
+                  showTeamMemberBadge
                   resumes={filteredResumes}
                   selectedResumes={selectedResumes}
                   onSelectResume={handleSelectResume}
@@ -4849,15 +4896,21 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <div className="bg-white md:border md:border-gray-200 md:ring-1 md:ring-black/[0.02] md:shadow-sm md:shadow-brand-blue/5 md:rounded-xl md:overflow-hidden">
                           <ResumeTable
                             flushCards
+                            showTeamMemberBadge
                             resumes={visibleFolderResumes}
                             selectedResumes={selectedResumes}
                             onSelectResume={handleSelectResume}
                             onSelectAll={(selected) => {
                               // Scoped to this folder's rows, not the whole list.
+                              // Resumes locked out for a team-member email never
+                              // enter a "select all".
+                              const selectableFolderIds = visibleFolderResumes
+                                .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+                                .map(r => r.id);
                               if (selected) {
-                                setSelectedResumes(prev => [...new Set([...prev, ...visibleFolderResumes.map(r => r.id)])]);
+                                setSelectedResumes(prev => [...new Set([...prev, ...selectableFolderIds])]);
                               } else {
-                                setSelectedResumes(prev => prev.filter(id => !visibleFolderResumes.some(r => r.id === id)));
+                                setSelectedResumes(prev => prev.filter(id => !selectableFolderIds.includes(id)));
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
