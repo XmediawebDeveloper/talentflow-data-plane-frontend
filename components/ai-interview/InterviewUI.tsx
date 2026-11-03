@@ -335,6 +335,16 @@ const LONG_TASK_LOG_MS = 200;
 // reads as tightly in sync instead of laggy. Kept small so text never finishes
 // noticeably before the audio.
 const REVEAL_LEAD_MS = 550;
+// Shared speech clock (speechSync.ts): a word is shown this long before the
+// candidate HEARS it start. The clock is the audible sample itself, so this is
+// the whole lead — the typewriter (TYPE_TRAIL_MS) finishes the word inside it.
+// REVEAL_LEAD_MS / DEFAULT_REVEAL_CPS / PHASE_A_* only pace the legacy path
+// (a cached worklet without the clock).
+const CAPTION_LEAD_MS = 150;
+// Caption tick. Cheap: the bubble only re-renders when the revealed text
+// changes (a few times a second), and word-level targets need finer than the
+// old 200 ms quantisation to land on the word they belong to.
+const REVEAL_TICK_MS = 50;
 // Phase A reveal rate (chars/sec) used until `audio_end` tells us the TRUE total
 // audio duration. Prior only — replaced by the previous turn's MEASURED rate
 // (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
@@ -568,7 +578,7 @@ interface LiveAIBubbleProps {
 // trailing it by about one tick; after a stall it types the backlog fast but
 // visibly instead of popping it in. Text is written straight to the DOM node,
 // so no React render per letter.
-const TYPE_TRAIL_MS = 220;          // normal lag behind the reveal target
+const TYPE_TRAIL_MS = 110;          // normal lag behind the reveal target (word-level targets: a word types in ~0.1 s, inside CAPTION_LEAD_MS)
 const TYPE_MAX_CPS = 45;            // backlog catch-up: ~2.5x Bina's pace, reads as quick typing, not a fast-forward
 const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
 
@@ -3941,6 +3951,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // DEFAULT_REVEAL_CPS from the second turn on, so pacing self-calibrates to the
   // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
   const measuredRevealCpsRef = useRef<number | null>(null);
+  // Caption ticks served by the shared speech clock vs the legacy pacing —
+  // logged per turn with the sync stats (saveAiMessage).
+  const captionClockTicksRef = useRef(0);
+  const captionLegacyTicksRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
   // kept playing, caption froze for seconds then jumped). Reset at the first
@@ -5031,6 +5045,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
     }
+    {
+      // Speech-sync summary: which clock paced lips + caption, and how many of
+      // Bina's pauses became word anchors. anchors≈0 with pauses>0 means the
+      // text and the audio disagree (worth a look); clock=legacy means the
+      // browser ran an old cached playback worklet.
+      const sync = talkingHeadRef.current?.getSyncStats();
+      if (text && sync) {
+        console.log('[TalkingHead] speech-sync turn summary', {
+          question: questionNumberRef.current,
+          ...sync,
+          captionClockTicks: captionClockTicksRef.current,
+          captionLegacyTicks: captionLegacyTicksRef.current,
+        });
+      }
+      captionClockTicksRef.current = 0;
+      captionLegacyTicksRef.current = 0;
+    }
     // Learn Bina's real speaking rate from this completed turn so the NEXT
     // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
     // here because this is the one place where both the final text length and
@@ -5139,101 +5170,115 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (!binaAudibleRef.current) return;
       const firstPcmAt = firstPcmAtMsRef.current;
       let target = revealedCharsRef.current;
-
-      // Reveal progress. Primary clock: AudioContext's scheduled timeline.
-      // Fallback: wall-clock (used when the tracker context is suspended,
-      // which happens post-fullscreen-exit / cold start — the exact failure
-      // mode where "text appears only after Bina finishes speaking").
-      const pbCtx = playbackTrackerCtxRef.current;
-      // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
-      // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
-      // speakers start `delay` later, so the real voice occupies
-      // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
-      // original bug) leaves the span short by the whole delay, which made the
-      // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
-      // them with different values would reintroduce it — hence one `delaySec`.
-      const delaySec = getAudibleDelayMs() / 1000;
-      const rawStart = firstChunkStartCtxSecRef.current;
-      let ctxStart = rawStart === null ? null : rawStart + delaySec;
-      let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
-      // The voice became audible LATER than the estimate (cold worklet on the
-      // intro): slide the whole span to the real onset — start and end by the
-      // SAME amount, so its length stays the audio's duration.
-      const audibleAt = audibleAtCtxSecRef.current;
-      if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
-        const slip = audibleAt - ctxStart;
-        ctxStart += slip;
-        ctxEnd += slip;
-      }
-      const ctxAvailable =
-        !!pbCtx &&
-        pbCtx.state === "running" &&
-        ctxStart !== null &&
-        Number.isFinite(ctxEnd) &&
-        ctxEnd > ctxStart;
-
-      let progress: number | null = null;
       // Seconds of Bina's voice actually heard so far (negative before she is
-      // audible). Phase A paces off this directly — no division, no inflation.
+      // audible). Legacy Phase A paces off this directly — no division, no inflation.
       let playedSec = 0;
 
-      if (ctxAvailable) {
-        const now = pbCtx!.currentTime;
-        // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
-        // first words are already on screen as Bina starts speaking (fixes
-        // "voice comes before text").
-        if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
-          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
-          return;  // inside buffer delay
+      // Shared speech clock (TalkingHeadAvatar + speechSync.ts): every word
+      // whose start is within CAPTION_LEAD_MS of the sample the candidate is
+      // HEARING. Same clock as the lips; it stops when the voice stops
+      // (network starvation, frozen turn), and word starts come from the
+      // pauses in Bina's own audio — no rate guess, no audio_end phase switch.
+      const clockReveal = talkingHeadRef.current?.getCaptionReveal(fullText, CAPTION_LEAD_MS) ?? null;
+      if (clockReveal === "hold") return;
+      if (typeof clockReveal === "number") {
+        captionClockTicksRef.current += 1;
+        target = Math.max(target, clockReveal);
+      } else {
+        captionLegacyTicksRef.current += 1;
+
+        // Reveal progress. Primary clock: AudioContext's scheduled timeline.
+        // Fallback: wall-clock (used when the tracker context is suspended,
+        // which happens post-fullscreen-exit / cold start — the exact failure
+        // mode where "text appears only after Bina finishes speaking").
+        const pbCtx = playbackTrackerCtxRef.current;
+        // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
+        // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
+        // speakers start `delay` later, so the real voice occupies
+        // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
+        // original bug) leaves the span short by the whole delay, which made the
+        // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
+        // them with different values would reintroduce it — hence one `delaySec`.
+        const delaySec = getAudibleDelayMs() / 1000;
+        const rawStart = firstChunkStartCtxSecRef.current;
+        let ctxStart = rawStart === null ? null : rawStart + delaySec;
+        let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
+        // The voice became audible LATER than the estimate (cold worklet on the
+        // intro): slide the whole span to the real onset — start and end by the
+        // SAME amount, so its length stays the audio's duration.
+        const audibleAt = audibleAtCtxSecRef.current;
+        if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
+          const slip = audibleAt - ctxStart;
+          ctxStart += slip;
+          ctxEnd += slip;
         }
-        playedSec = now - ctxStart!;
-        progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
-        // On a slow connection chunks arrive slower than real time and the voice
-        // has gaps; `now - start` counts those gaps as speech, so the caption ran
-        // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
-        // actually HEARD: everything received minus what is still scheduled.
-        const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
-        playedSec = Math.min(playedSec, heardSec);
-        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
-      } else if (firstPcmAt !== null) {
-        // Fallback: wall-clock math so streaming reveal works even when the
-        // tracker AudioContext is stalled. `audibleStartMs` waits out the active
-        // path's audible delay (0 on TalkingHead's Web Audio fallback); in
-        // Phase B the denominator is the accumulated — and by then total —
-        // audio duration.
-        const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
-        const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
-        if (elapsedMs < 0) {
-          if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+        const ctxAvailable =
+          !!pbCtx &&
+          pbCtx.state === "running" &&
+          ctxStart !== null &&
+          Number.isFinite(ctxEnd) &&
+          ctxEnd > ctxStart;
+
+        let progress: number | null = null;
+
+        if (ctxAvailable) {
+          const now = pbCtx!.currentTime;
+          // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
+          // first words are already on screen as Bina starts speaking (fixes
+          // "voice comes before text").
+          if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
+            return;  // inside buffer delay
+          }
+          playedSec = now - ctxStart!;
+          progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+          // On a slow connection chunks arrive slower than real time and the voice
+          // has gaps; `now - start` counts those gaps as speech, so the caption ran
+          // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
+          // actually HEARD: everything received minus what is still scheduled.
+          const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
+          playedSec = Math.min(playedSec, heardSec);
+          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
+        } else if (firstPcmAt !== null) {
+          // Fallback: wall-clock math so streaming reveal works even when the
+          // tracker AudioContext is stalled. `audibleStartMs` waits out the active
+          // path's audible delay (0 on TalkingHead's Web Audio fallback); in
+          // Phase B the denominator is the accumulated — and by then total —
+          // audio duration.
+          const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
+          const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
+          if (elapsedMs < 0) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+            return;
+          }
+          playedSec = (Date.now() - audibleStartMs) / 1000;
+          const receivedMs = currentTurnAudioMsRef.current;
+          if (receivedMs <= 0) return;
+          progress = elapsedMs / receivedMs;
+          if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
+        } else {
+          if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
           return;
         }
-        playedSec = (Date.now() - audibleStartMs) / 1000;
-        const receivedMs = currentTurnAudioMsRef.current;
-        if (receivedMs <= 0) return;
-        progress = elapsedMs / receivedMs;
-        if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
-      } else {
-        if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
-        return;
-      }
 
-      if (progress === null) return;
-      if (audioEndReceivedRef.current) {
-        // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
-        // on the audible timeline the span equals the real audio duration, so
-        // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
-        // beyond the natural 1.0.
-        progress = Math.max(0, Math.min(1, progress));
-        target = Math.floor(progress * fullText.length);
-      } else {
-        // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
-        // PARTIAL total and would inflate (see the header note), so it is only
-        // logged, never used to position the text.
-        const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
-        const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
-        // Ceiling is a backstop against a bad CPS prior, not the pacer.
-        target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
-        if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+        if (progress === null) return;
+        if (audioEndReceivedRef.current) {
+          // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
+          // on the audible timeline the span equals the real audio duration, so
+          // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
+          // beyond the natural 1.0.
+          progress = Math.max(0, Math.min(1, progress));
+          target = Math.floor(progress * fullText.length);
+        } else {
+          // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
+          // PARTIAL total and would inflate (see the header note), so it is only
+          // logged, never used to position the text.
+          const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
+          const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
+          // Ceiling is a backstop against a bad CPS prior, not the pacer.
+          target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
+          if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+        }
       }
       if (target > revealedCharsRef.current) {
         revealedCharsRef.current = target;
@@ -5268,7 +5313,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // drops the LiveAIBubble re-render rate from 12.5 Hz → 5 Hz, which
       // matters for low-end candidates running heavy MediaPipe proctoring
       // alongside Bina's speech.
-    }, 200);
+      // 2026-11-03: REVEAL_TICK_MS (50 ms). The clock path reveals whole words
+      // on the audible timeline; 200 ms quantisation put a word up to 0.2 s
+      // late. The bubble still re-renders only when the text changes.
+    }, REVEAL_TICK_MS);
   }, []);
 
   const stopRevealingTokens = useCallback(() => {
@@ -10078,6 +10126,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // Fresh stream for this utterance — a stale early-end flag from the
           // previous one would re-arm (restart) the worklet on the next chunk.
           talkingHeadEndedEarlyRef.current = false;
+          // New utterance → fresh speech clock + pause analysis (the re-arm
+          // branch below is the SAME utterance and must keep its clock).
+          talkingHeadRef.current?.beginSpeech();
           talkingHeadRef.current?.streamStart(24000, cb);
         } else if (talkingHeadEndedEarlyRef.current) {
           // Recovery path: TalkingHead's worklet ended early (buffer drained

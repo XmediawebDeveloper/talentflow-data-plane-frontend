@@ -20,6 +20,13 @@ import React, {
   useState,
 } from "react";
 import { Loader2 } from 'lucide-react';
+import {
+  SpeechSync,
+  PlaybackClock,
+  FallbackClock,
+  audibleContextTime,
+  type SpeechSyncStats,
+} from "./speechSync";
 
 export interface TalkingHeadHandle {
   streamStart(sampleRate: number, onAudioEnd: () => void): void;
@@ -42,6 +49,18 @@ export interface TalkingHeadHandle {
    * anchor by the outage duration re-aligns them.
    */
   shiftSpeechClock?(ms: number): void;
+  /** A new utterance starts (first PCM chunk of a turn). Resets the speech
+   *  clock and pause analysis; the text set via setText is kept. */
+  beginSpeech(): void;
+  /**
+   * Characters of `text` to show now, from the shared speech clock (every word
+   * whose start is within `leadMs` of what the candidate is hearing).
+   * 'hold' = clock not running yet for this utterance (show nothing new);
+   * null = no clock on this path (caller uses its legacy pacing).
+   */
+  getCaptionReveal(text: string, leadMs: number): number | "hold" | null;
+  /** Per-utterance sync diagnostics for the turn summary log. */
+  getSyncStats(): (SpeechSyncStats & { clock: string }) | null;
 }
 
 interface Props {
@@ -245,6 +264,74 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
     const currentMorphsRef     = useRef<Record<string, number>>({});
     const smoothAmpRef         = useRef(0);
     const ampDataRef           = useRef<Uint8Array | null>(null);
+    // ── Shared speech clock (lips + caption follow the audible sample) ──
+    // See speechSync.ts. `syncRef` maps audible position → word from the PCM's
+    // own pauses; `clockRef` / `fbClockRef` give the audible position on the
+    // worklet / Web Audio fallback path. Reset per utterance by beginSpeech,
+    // NOT by streamStart (which also re-arms the worklet mid-turn).
+    const syncRef              = useRef(new SpeechSync(24000));
+    const clockRef             = useRef(new PlaybackClock());
+    const fbClockRef           = useRef(new FallbackClock());
+    const clockPathRef         = useRef<"worklet" | "fallback" | null>(null);
+    const speechBegunAtRef     = useRef<number | null>(null);
+    const clockMarkPendingRef  = useRef(false);
+    const clockNodeRef         = useRef<AudioWorkletNode | null>(null);
+    const visemeCacheRef       = useRef<{ version: number; byIndex: Map<number, { visemes: string[]; ends: number[] } | null> }>({ version: -1, byIndex: new Map() });
+
+    /** Audible position (ms into the current utterance) from the shared clock.
+     *  'hold' while the clock is still starting; null when unavailable (an old
+     *  cached worklet that never answers, or no utterance) → legacy pacing. */
+    const speechPosMs = (): number | "hold" | null => {
+      const begun = speechBegunAtRef.current;
+      if (begun === null) return null;
+      if (clockPathRef.current === "fallback") {
+        const ctx = fbCtxRef.current;
+        if (!ctx || !fbClockRef.current.active) return "hold";
+        return fbClockRef.current.positionMs(audibleContextTime(ctx));
+      }
+      const clock = clockRef.current;
+      if (clock.supported === false) return null;
+      const ctx = headRef.current?.audioCtx as AudioContext | undefined;
+      if (!ctx) return null;
+      const pos = clockMarkPendingRef.current ? null : clock.positionMs(audibleContextTime(ctx), ctx.sampleRate);
+      if (pos !== null) return pos;
+      if (clockMarkPendingRef.current) {
+        // Worklet still starting (chunks queued, mark not posted yet). A very
+        // slow start uses legacy pacing for THIS turn only.
+        return performance.now() - begun > 6000 ? null : "hold";
+      }
+      // Marked, no answer yet. A worklet without clock support (old cached
+      // file) never answers — then this node stays on legacy pacing.
+      if (clock.supported !== true && clock.msSinceMark() > 800) {
+        clock.supported = false;
+        console.warn("[TalkingHead] speech clock unavailable (worklet did not answer) — legacy lip/caption pacing");
+        return null;
+      }
+      return "hold";
+    };
+
+    /** Visemes of word `index` (lipsync-en, numbers expanded), with cumulative end fractions. */
+    const wordVisemes = (lm: any, index: number): { visemes: string[]; ends: number[] } | null => {
+      if (!lm) return null;
+      const sync = syncRef.current;
+      const cache = visemeCacheRef.current;
+      if (cache.version !== sync.textVersion) { cache.version = sync.textVersion; cache.byIndex.clear(); }
+      const hit = cache.byIndex.get(index);
+      if (hit !== undefined) return hit;
+      let v: { visemes: string[]; ends: number[] } | null = null;
+      try {
+        const word = sync.tokenText(index) ?? "";
+        const spoken = String(lm.preProcessText(word.replace(/[^\p{L}\p{N}'\s.-]/gu, " "))).trim();
+        const o = spoken ? lm.wordsToVisemes(spoken) : null;
+        if (o?.visemes?.length) {
+          const total = o.durations.reduce((a: number, b: number) => a + (b || 1), 0) || 1;
+          let acc = 0;
+          v = { visemes: o.visemes as string[], ends: o.durations.map((d: number) => (acc += (d || 1)) / total) };
+        }
+      } catch { /* no visemes for this word — the loudness-only shape covers it */ }
+      cache.byIndex.set(index, v);
+      return v;
+    };
 
     useEffect(() => {
       if (!containerRef.current) return;
@@ -674,7 +761,53 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
               // audio goes through audioStreamGainNode → reverb, bypassing audioAnalyzerNode.
               // speechStartRef.current is set in sendAudioChunk() and reset to null by
               // streamStart() / streamStop() when the session ends.
-              if (mt) {
+              const clockPos = mt ? speechPosMs() : null;
+              if (mt && typeof clockPos === "number") {
+                // ── Clock-driven lips: the word under the AUDIBLE sample, its
+                // viseme by position in the word, opened by the real loudness
+                // of the voice there — so the mouth rests in every pause and
+                // cannot run ahead of a voice the network is starving.
+                const sync = syncRef.current;
+                const gain = sync.voiceGainAt(clockPos);
+                let targetShape: Record<string, number> = NO_SHAPE;
+                if (gain > 0.04) {
+                  const w = sync.wordAt(clockPos);
+                  const v = w ? wordVisemes(h.lipsync?.["en"], w.index) : null;
+                  let base: Record<string, number> = LIP_SHAPES["aa"];
+                  if (v && w) {
+                    let vi = 0;
+                    while (vi < v.ends.length - 1 && w.frac >= v.ends[vi]) vi++;
+                    base = LIP_SHAPES[v.visemes[vi]] || NO_SHAPE;
+                  }
+                  const k = 0.55 + 0.45 * gain;
+                  const scaled: Record<string, number> = {};
+                  for (const m in base) scaled[m] = base[m] * k;
+                  targetShape = scaled;
+                }
+                for (const morph of LIP_MORPHS) {
+                  const target = targetShape[morph] || 0;
+                  const cur = currentMorphsRef.current[morph] || 0;
+                  const tau = target > cur ? LIP_ATTACK_MS : LIP_RELEASE_MS;
+                  const next = cur + (target - cur) * (1 - Math.exp(-lipDt / tau));
+                  currentMorphsRef.current[morph] = Math.abs(next - target) < 0.002 ? target : next;
+                  if (mt[morph]) {
+                    mt[morph].realtime = currentMorphsRef.current[morph];
+                    mt[morph].needsUpdate = true;
+                  }
+                }
+              } else if (mt && clockPos === "hold") {
+                // Utterance announced, clock not running yet: nothing audible — rest.
+                const k = 1 - Math.exp(-lipDt / LIP_CLOSE_MS);
+                for (const morph of LIP_MORPHS) {
+                  const cur = currentMorphsRef.current[morph];
+                  if (cur) {
+                    const next = cur < 0.01 ? 0 : cur * (1 - k);
+                    currentMorphsRef.current[morph] = next;
+                    if (mt[morph]) { mt[morph].realtime = next; mt[morph].needsUpdate = true; }
+                  }
+                }
+              } else if (mt) {
+                // Legacy pacing (no speech clock on this worklet).
                 const isSpeaking = speechStartRef.current !== null;
 
                 if (isSpeaking) {
@@ -929,6 +1062,20 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       if (speechStartRef.current === null) {
         speechStartRef.current = performance.now();
       }
+      // Speech clock: listen to this worklet node, and mark the utterance start
+      // on its port BEFORE this chunk's audio (same port → same order).
+      const node = head.streamWorkletNode as AudioWorkletNode | undefined;
+      if (node && node !== clockNodeRef.current) {
+        clockNodeRef.current = node;
+        clockRef.current.supported = null;
+        node.port.addEventListener("message", (ev: MessageEvent) => {
+          if (clockNodeRef.current === node) clockRef.current.onMessage(ev.data);
+        });
+      }
+      if (clockMarkPendingRef.current && node) {
+        clockMarkPendingRef.current = false;
+        clockRef.current.mark(node.port);
+      }
 
       // The TalkingHead worklet passes Int16 samples through at the AudioContext's
       // native rate. Most browsers run at 48kHz even when 24kHz is requested.
@@ -974,6 +1121,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
       const now = ctx.currentTime;
       const startAt = Math.max(now, fbNextTimeRef.current);
       src.start(startAt);
+      fbClockRef.current.add(startAt, buf.duration);
       fbNextTimeRef.current = startAt + buf.duration;
       fbPendingRef.current++;
       fbSourcesRef.current.add(src);
@@ -1012,6 +1160,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         firstChunkAtRef.current = null;
         onsetMeasuredRef.current = false;
 
+        clockPathRef.current = head ? "worklet" : "fallback";
         if (!head) {
           // ── Fallback: play audio directly via Web Audio API ──
           console.warn("[TalkingHead] head not ready — using Web Audio API fallback");
@@ -1148,6 +1297,8 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         if (firstChunkAtRef.current === null) {
           firstChunkAtRef.current = performance.now();
         }
+        // Pause analysis reads the PCM now — streamAudio transfers it away.
+        syncRef.current.push(pcmData);
         if (fbActiveRef.current) {
           // Fallback mode: play directly
           if (!streamReadyRef.current) {
@@ -1168,6 +1319,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       notifyEnd() {
         audioCompleteRef.current = true;
+        syncRef.current.finish();
         if (fbActiveRef.current) {
           fbNoMoreDataRef.current = true;
           // If all buffers already finished, fire immediately
@@ -1193,6 +1345,30 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
 
       setText(text: string) {
         fullTextRef.current = text;
+        syncRef.current.setText(text);
+      },
+
+      beginSpeech() {
+        syncRef.current.begin();
+        clockRef.current.reset();
+        fbClockRef.current.reset();
+        clockMarkPendingRef.current = true;
+        speechBegunAtRef.current = performance.now();
+      },
+
+      getCaptionReveal(text: string, leadMs: number) {
+        const pos = speechPosMs();
+        if (pos === null || pos === "hold") return pos;
+        return syncRef.current.revealChars(text, pos, leadMs);
+      },
+
+      getSyncStats() {
+        const stats = syncRef.current.stats();
+        if (!stats.receivedMs) return null;
+        const clock = clockPathRef.current === "fallback"
+          ? "fallback"
+          : clockRef.current.supported === false ? "legacy" : clockRef.current.supported ? "worklet" : "pending";
+        return { ...stats, clock };
       },
 
       shiftSpeechClock(ms: number) {
@@ -1221,6 +1397,11 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         currentMorphsRef.current = {};
         totalAudioMsRef.current = 0;
         audioCompleteRef.current = false;
+        // The utterance is cut off — the clock must not keep a mouth moving.
+        clockRef.current.reset();
+        fbClockRef.current.reset();
+        clockMarkPendingRef.current = false;
+        speechBegunAtRef.current = null;
         // Fallback mode: close context to stop playback immediately
         if (fbActiveRef.current) {
           fbActiveRef.current = false;
