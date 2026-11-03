@@ -1460,7 +1460,7 @@ Best regards`);
                           {isArchived && (
                             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
                               <Archive className="w-3 h-3" />
-                              Archived
+                              Resume Archived
                             </span>
                           )}
                         </div>
