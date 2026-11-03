@@ -989,6 +989,24 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [uploadStartedThisSession, setUploadStartedThisSession] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
+  // When the last in-flight batch finishes while the user is watching the
+  // Currently Processing tab, move them to Completed instead of leaving them
+  // on the "No uploads in progress" empty state.
+  const activeUploadCount = useMemo(
+    () => uploadHistory.filter(
+      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
+    ).length,
+    [uploadHistory]
+  );
+  const prevActiveUploadCountRef = useRef(activeUploadCount);
+  useEffect(() => {
+    const prev = prevActiveUploadCountRef.current;
+    prevActiveUploadCountRef.current = activeUploadCount;
+    if (prev > 0 && activeUploadCount === 0 && isUploadHistoryModalOpen && uploadHistoryTab === 'current') {
+      setUploadHistoryTab('completed');
+      setUploadHistoryFilter(null);
+    }
+  }, [activeUploadCount, isUploadHistoryModalOpen, uploadHistoryTab]);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
   const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());

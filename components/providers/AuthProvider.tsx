@@ -95,6 +95,8 @@ interface AuthContextType {
   tenant: Tenant | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** True once the user's permissions come from the server, not the localStorage cache. */
+  permissionsVerified: boolean;
   login: (user: User, tenantName?: string) => void;
   logout: () => void;
   updateUser: (user: User) => void;
@@ -299,6 +301,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  // False while the user restored from localStorage still carries cached
+  // (possibly stale) permissions; true once /auth/me has answered or a fresh
+  // login supplied them. See the restoreSession effect below.
+  const [permissionsVerified, setPermissionsVerified] = useState(false);
 
   const isAuthenticated = !!user;
 
@@ -635,7 +641,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     };
 
-    restoreSession();
+    // permissionsVerified flips once the session restore is over — i.e. the
+    // cached user's permissions have been re-validated against /auth/me (or
+    // that attempt failed and the cache is all we'll get). Until then the
+    // permissions on screen may be a stale localStorage copy.
+    restoreSession().finally(() => setPermissionsVerified(true));
   }, []);
 
   // ✅ PERMISSION CACHE FIX: Listen for permission updates from API interceptor
@@ -766,6 +776,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = (userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
+    // A fresh login hands us server-issued permissions — nothing stale to wait on.
+    setPermissionsVerified(true);
 
     // Track last login time client-side:
     // Read the PREVIOUS login timestamp and set it as lastLogin (so user sees "Last login: X ago")
@@ -944,6 +956,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         tenant,
         isAuthenticated,
         isLoading,
+        permissionsVerified,
         login,
         logout,
         updateUser,
