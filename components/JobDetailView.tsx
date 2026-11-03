@@ -1,6 +1,7 @@
 'use client'
 
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
@@ -953,6 +954,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     preselect?: boolean;
     bulk?: boolean;
     versionId?: string;
+    /** Opened from the AI Talent Match tab: its ticked candidates are ticked
+     *  in the popup's AI Talent Match tab, which opens first. */
+    openOn?: 'talent-match';
     onSent?: (kind: InviteKind, sent: number) => void;
   } | null>(null);
   /** Bumped by a send from a tracker's Invite More, so the tracker left open
@@ -961,7 +965,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   /** Opens the popup with a tab's ticked candidates, each tagged with that tab
    *  as its source (the popup's group headings). */
   const openInviteDialog = (kind: InviteKind, candidates: InviteCandidate[], source: InviteCandidateSource) =>
-    setInviteDialog({ kind, candidates: candidates.map((c) => ({ ...c, source })) });
+    setInviteDialog({
+      kind,
+      candidates: candidates.map((c) => ({ ...c, source })),
+      openOn: source === 'talent-match' ? 'talent-match' : undefined,
+    });
   // AI Interview Version History dialog (history icon on the AI Interview heading).
   const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
   // Assessment Version History dialog (history icon on the Assessment heading).
@@ -2681,6 +2689,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           preselect={inviteDialog.preselect}
           bulk={inviteDialog.bulk}
           versionId={inviteDialog.versionId}
+          /* From the AI Talent Match tab: step 2 opens on its tab, the
+             ticked candidates ticked there. Every other opening: Manual. */
+          openOn={inviteDialog.openOn}
           /* Create / Send AI Interview: no Duplicate in the version ⋯ menu. */
           hideDuplicate={inviteDialog.kind === 'interview'}
           disabledReason={
@@ -5837,7 +5848,7 @@ function AIMatchTabContent({
            Below sm both buttons split the row edge to edge, like the
            stacked toolbar lines above them. */
         const bulkActionsRow = selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -5987,7 +5998,7 @@ function AIMatchTabContent({
               <X className="w-4 h-4" />
               Clear
             </button>
-          </div>
+          </StickyBulkBar>
         ) : null;
         return toolbarPortal
           ? createPortal(<>{toolbar}{bulkActionsRow}</>, toolbarPortal)
