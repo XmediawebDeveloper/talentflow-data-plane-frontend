@@ -356,7 +356,10 @@ const REVEAL_TICK_MS = 50;
 // visible burst on "…for the <role> role. In this position" every interview.
 // Kept a little under the measurement: a slight lag catches up gently, running
 // ahead would freeze the caption until the voice catches up.
-const DEFAULT_REVEAL_CPS = 16;
+// 2026-11-03: that measurement was taken with 0.85 configured but NOT applied
+// (gpt-4o-mini-tts ignores `speed`); the backend now really stretches to 0.85,
+// so 16.9 × 0.85 ≈ 14.4 cps.
+const DEFAULT_REVEAL_CPS = 14;
 // Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
