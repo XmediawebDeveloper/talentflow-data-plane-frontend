@@ -10,6 +10,7 @@ import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCenteredMenuOnPhone } from '@/lib/hooks/useCenteredMenuOnPhone';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -453,6 +454,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [scoredResumeId, setScoredResumeId] = useState<string | null>(null);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const versionMenuRef = useRef<HTMLDivElement>(null);
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
+  /* Phones only: the version menu opens centred on the screen, not hard against one edge. */
+  useCenteredMenuOnPhone(showVersionMenu, versionMenuRef, versionDropdownRef);
   // Version comparison, mirroring resume-view: tick two versions, diff them
   // old-vs-new. Holds ids in click order; a third tick evicts the oldest so the
   // pair keeps moving rather than making the user untick something first.
@@ -1014,6 +1018,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (below < needed && a.top > below) setInviteMenuUp(true);
     else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [showInviteMenu]);
+  /* Phones only: the Invite menu opens centred on the screen, not hard against one edge. */
+  useCenteredMenuOnPhone(showInviteMenu, inviteMenuRef, inviteDropdownRef);
 
   // The resume this score belongs to — the API returns the score id as `id`
   // and the resume id separately, so prefer the explicit resume id.
@@ -1553,6 +1559,7 @@ Best regards`);
 
                     {showVersionMenu && (
                       <div
+                        ref={versionDropdownRef}
                         role="menu"
                         aria-label="Resume versions"
                         className="absolute left-0 top-full mt-2 w-52 sm:w-64 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"

@@ -39,6 +39,44 @@ import { cn } from './utils';
 /** Wrapper class for the desktop table: hidden on phones and tablets, shown from 1024px. */
 export const DESKTOP_TABLE_ONLY = 'hidden lg:block';
 
+/**
+ * Card layout for every MobileRecordCard below this provider.
+ *
+ * - `default`: the app-wide record card (checkbox column, wrapping head line,
+ *   buttons bottom-right).
+ * - `jd`: the Job Openings card, used only inside the Job Openings module
+ *   (Job Openings, its Config page, Job Details and their popups):
+ *     1. checkbox · ID badge · pills
+ *     2. name on one line ("…") · title addon · icon actions on the right
+ *     3. icon + text details, flowing
+ *     4. "Label: value" pairs, flowing
+ *     5. divider, then the count chips as tiles
+ *   Text buttons (e.g. "Invite for Assessment") would crush the name, so when
+ *   the actions hold any, they drop to their own row at the bottom instead.
+ */
+export type MobileRecordCardVariant = 'default' | 'jd';
+const MobileRecordCardVariantContext = React.createContext<MobileRecordCardVariant>('default');
+
+/** The card layout in effect here — for screens with their own hand-built card that should
+ *  switch to MobileRecordCard only inside the Job Openings module. */
+export function useMobileRecordCardVariant(): MobileRecordCardVariant {
+  return React.useContext(MobileRecordCardVariantContext);
+}
+
+export function MobileRecordCardVariantProvider({
+  variant,
+  children,
+}: {
+  variant: MobileRecordCardVariant;
+  children: React.ReactNode;
+}) {
+  return (
+    <MobileRecordCardVariantContext.Provider value={variant}>
+      {children}
+    </MobileRecordCardVariantContext.Provider>
+  );
+}
+
 export function MobileRecordList({
   children,
   className,
@@ -122,6 +160,31 @@ export function MobileRecordCard({
   const shownMeta = (meta ?? []).filter((m) => m.label !== null && m.label !== undefined && m.label !== '' && m.label !== false);
   const shownFields = (fields ?? []).filter((f) => f.value !== null && f.value !== undefined && f.value !== '' && f.value !== false);
   const hasHead = idBadge || title || titleAddon || badges;
+  const variant = React.useContext(MobileRecordCardVariantContext);
+  if (variant === 'jd') {
+    return (
+      <JdRecordCard
+        {...rest}
+        select={select}
+        idBadge={idBadge}
+        badges={badges}
+        title={title}
+        titleAddon={titleAddon}
+        actions={actions}
+        shownMeta={shownMeta}
+        shownFields={shownFields}
+        footer={footer}
+        expanded={expanded}
+        tooltip={tooltip}
+        selected={selected}
+        wrapTitle={wrapTitle}
+        onClick={onClick}
+        className={className}
+      >
+        {children}
+      </JdRecordCard>
+    );
+  }
   return (
     <div
       {...rest}
@@ -198,6 +261,168 @@ export function MobileRecordCard({
           {actions}
         </div>
       )}
+
+      {expanded && (
+        <div className="mt-3" onClick={stop}>
+          {expanded}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * True when the actions hold a button / link with a real text label (more than a short count).
+ * Also tags each such control `data-jdv-text`: CSS `:has(> svg:only-child)` ignores
+ * text nodes, so an "icon + label" button would otherwise be styled as an icon square.
+ */
+function hasTextAction(root: HTMLElement): boolean {
+  let found = false;
+  root.querySelectorAll<HTMLElement>('button, a, [role="button"]').forEach((el) => {
+    const text = (el.textContent || '').trim();
+    if (text.length > 0) {
+      // A short count ("📎 2") still fits the name row; a real label moves the actions down.
+      if (text.length > 3) found = true;
+      el.setAttribute('data-jdv-text', '');
+    } else {
+      el.removeAttribute('data-jdv-text');
+    }
+  });
+  return found;
+}
+
+/** The Job Openings card layout — see MobileRecordCardVariant. */
+function JdRecordCard({
+  select,
+  idBadge,
+  badges,
+  title,
+  titleAddon,
+  actions,
+  shownMeta,
+  shownFields,
+  footer,
+  children,
+  expanded,
+  tooltip,
+  selected,
+  wrapTitle,
+  onClick,
+  className,
+  ...rest
+}: {
+  select?: React.ReactNode;
+  idBadge?: React.ReactNode;
+  badges?: React.ReactNode;
+  title?: React.ReactNode;
+  titleAddon?: React.ReactNode;
+  actions?: React.ReactNode;
+  shownMeta: MobileRecordMetaItem[];
+  shownFields: MobileRecordField[];
+  footer?: React.ReactNode;
+  children?: React.ReactNode;
+  expanded?: React.ReactNode;
+  tooltip?: string;
+  selected: boolean;
+  wrapTitle: boolean;
+  onClick?: (e: React.MouseEvent<HTMLDivElement>) => void;
+  className?: string;
+} & Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick' | 'title'>) {
+  // Icon-only actions sit on the name row; any text button moves them all to the bottom row.
+  const actionsRef = React.useRef<HTMLDivElement>(null);
+  const [actionsBelow, setActionsBelow] = React.useState(false);
+  React.useLayoutEffect(() => {
+    if (actionsRef.current) {
+      const below = hasTextAction(actionsRef.current);
+      setActionsBelow((prev) => (prev === below ? prev : below));
+    }
+  });
+
+  const hasTop = !!(idBadge || badges);
+  const actionsEl = actions ? (
+    <div
+      ref={actionsRef}
+      className={cn('tf-record-actions tf-jdv-actions', actionsBelow && 'tf-jdv-actions-below')}
+      onClick={stop}
+    >
+      {actions}
+    </div>
+  ) : null;
+
+  return (
+    <div
+      {...rest}
+      onClick={onClick}
+      role={onClick ? 'button' : rest.role}
+      tabIndex={onClick ? 0 : rest.tabIndex}
+      title={tooltip}
+      onKeyDown={onClick ? (e) => {
+        rest.onKeyDown?.(e);
+        if (e.defaultPrevented || e.target !== e.currentTarget) return;
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onClick(e as unknown as React.MouseEvent<HTMLDivElement>);
+        }
+      } : rest.onKeyDown}
+      className={cn(
+        'tf-record-card tf-jdv-card',
+        onClick && 'tf-record-card-clickable',
+        selected && 'tf-record-card-selected',
+        className,
+      )}
+    >
+      {hasTop && (
+        <div className="tf-jdv-top">
+          {select && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
+          {idBadge}
+          {badges}
+        </div>
+      )}
+
+      {(title || titleAddon || (!hasTop && select) || (actionsEl && !actionsBelow)) && (
+        <div className={cn('tf-jd-card-head', !hasTop && 'mt-0')}>
+          <div className="tf-jd-card-name">
+            {!hasTop && select && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
+            {title && <div className={wrapTitle ? 'tf-jdv-title-wrap' : 'tf-jdv-title'}>{title}</div>}
+            {titleAddon && <span className="inline-flex shrink-0" onClick={stop}>{titleAddon}</span>}
+          </div>
+          {!actionsBelow && actionsEl}
+        </div>
+      )}
+
+      {shownMeta.length > 0 && (
+        <div className="tf-jd-card-meta">
+          <div className="tf-jd-card-info">
+            {shownMeta.map((m, i) => (
+              <span key={i} className="tf-jdv-meta-item">
+                {m.icon}
+                <span className="min-w-0 break-words">{m.label}</span>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {shownFields.length > 0 && (
+        <dl className="tf-jdv-fields">
+          {shownFields.map((f, i) => (
+            <div key={i} className="tf-jdv-field">
+              <dt className="tf-jd-card-date-label">{f.label}:</dt>
+              <dd className="tf-jdv-field-value">{f.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {children}
+
+      {footer && (
+        <div className="tf-jdv-footer" onClick={stop}>
+          {footer}
+        </div>
+      )}
+
+      {actionsBelow && actionsEl}
 
       {expanded && (
         <div className="mt-3" onClick={stop}>

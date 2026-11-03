@@ -1198,7 +1198,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             of line; h-9 matches the toolbar band. Holds Customize Columns and
             Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
         {portaled && selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button

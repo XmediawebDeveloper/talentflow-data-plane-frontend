@@ -1439,11 +1439,13 @@ Best regards`);
 
             return (
               <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-4 sm:p-6 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/10">
-                {/* Identity row */}
-                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4">
+                {/* Identity row. Phones: a two-column grid — the avatar beside the
+                    name / title / chips — with the details panel spanning both
+                    columns below (the inner wrapper becomes `contents`). */}
+                <div className="flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)] max-sm:items-start max-sm:gap-x-3 max-sm:gap-y-0">
                   <NameAvatar name={asText(resume.name)} fallback={email} size="xl" />
 
-                  <div className="min-w-0 flex-1">
+                  <div className="min-w-0 flex-1 max-sm:contents">
                     {/* Below sm the Source / View chips drop under the name so the
                         name keeps the full row width instead of collapsing to a
                         sliver on a phone; sm+ keeps them beside the name. */}
@@ -1489,12 +1491,13 @@ Best regards`);
                       </div>
                     </div>
 
+                    {/* Phones: one white panel, a row per detail, thin dividers. */}
                     {(facts.length > 0 || contacts.length > 0) && (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3 max-sm:col-span-2 max-sm:mt-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-0 max-sm:rounded-xl max-sm:bg-white/80 max-sm:ring-1 max-sm:ring-brand-blue/10 max-sm:divide-y max-sm:divide-brand-blue/10 max-sm:overflow-hidden">
                         {facts.map(({ icon: Icon, text }, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-full bg-white/70 tf-meta ring-1 ring-brand-blue/10"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg sm:rounded-full bg-white/70 tf-meta ring-1 ring-brand-blue/10 max-sm:rounded-none max-sm:ring-0 max-sm:bg-transparent max-sm:px-3 max-sm:py-2.5 max-sm:gap-2.5 max-sm:items-start max-sm:[&>svg]:mt-0.5 max-sm:[&>svg]:shrink-0"
                           >
                             <Icon className="w-3.5 h-3.5 text-brand-blue" />
                             {text}
@@ -1505,10 +1508,10 @@ Best regards`);
                             key={label}
                             href={href}
                             title={label}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10 hover:text-brand-blue hover:ring-brand-blue/30 transition-colors min-w-0 max-w-full"
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs text-gray-700 ring-1 ring-brand-blue/10 hover:text-brand-blue hover:ring-brand-blue/30 transition-colors min-w-0 max-w-full max-sm:rounded-none max-sm:ring-0 max-sm:bg-transparent max-sm:px-3 max-sm:py-2.5 max-sm:gap-2.5"
                           >
                             <Icon className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-                            <span className="truncate [overflow-wrap:anywhere]">{value}</span>
+                            <span className="truncate [overflow-wrap:anywhere] max-sm:whitespace-normal">{value}</span>
                           </a>
                         ))}
                       </div>
@@ -1521,8 +1524,10 @@ Best regards`);
                     Scored Resumes / View Score Table) on the right; they wrap
                     on narrow screens. Same buttons, handlers and conditions
                     the action bar above the card had. */}
-                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                {/* Phones: every action is one full-width, equal-height, centred
+                    button, stacked — the primary last — instead of mixed widths. */}
+                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11">
+                  <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
                     {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
                         onClick={() => { if (!canShareResume) return; handleShare(); }}

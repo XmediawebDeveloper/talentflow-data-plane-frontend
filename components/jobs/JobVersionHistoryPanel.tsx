@@ -15,7 +15,6 @@ import {
   getStatusConfig,
   resolveVersionHistoryRows,
 } from '@/lib/utils/jobOpeningDisplay';
-import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 
 /**
  * The columns every surface shows. Select is prepended and Action appended per
@@ -412,121 +411,125 @@ export default function JobVersionHistoryPanel({
            away. The brand-tinted border marks this as the ACTIVE version table
            — it only exists while View Versions is open. */
         <>
-        {/* Phones: one card per version instead of the 640–960px table, which
-            at phone width showed a sliver of itself and had to be scrolled
-            sideways to read a row. Same values (rowModels), same radio, same
-            actions; from sm up the table below is unchanged. */}
+        {/* Phones + tablets: one compact card per version instead of the
+            640-960px table. Header line (select, vN, Latest, status, actions),
+            the title, then every value under its own small label in an aligned
+            grid: 2 columns on phones, 3 from sm, 4 from md. Same values
+            (rowModels), same radio / checkbox / actions as the table. */}
         <div
-          className={`lg:hidden tf-record-list p-2 rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 ${
-            jobVersions.length > 3 ? 'overflow-y-auto max-h-[360px] overscroll-contain' : ''
+          className={`lg:hidden tf-ver-list ${
+            jobVersions.length > 3 ? 'overflow-y-auto max-h-[420px] overscroll-contain' : ''
           }`}
         >
           {rowModels.map(({ isChecked, version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
             const scoredInfo = versionScoredBy ? versionScoredBy[version.id] : undefined;
             const scoredLoaded = !!versionScoredBy && Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
-            /* Every value under a NAME — "Experience 2-4 years", not a bare
-               "2-4 years" — so a card reads without the table's headings. A
-               missing value says "Not specified" rather than dropping the row,
-               so every card has the same rows in the same order. */
-            const notSet = <span className="text-gray-400 dark:text-slate-500 italic">Not specified</span>;
+            const dash = <span className="text-gray-400 dark:text-slate-500">—</span>;
             const jobType = [detail?.employment_type, detail?.remote_type]
               .filter(Boolean)
               .map((t) => formatEmploymentType(t as string))
               .join(' · ');
-            const details: [string, ReactNode][] = [
+            /* [label, value, full row?] */
+            const details: [string, ReactNode, boolean?][] = [
               ...(hideJdDetails ? [] : [
-                ['Experience', experienceText || notSet],
-                ['Industry', detail?.industry_type ? formatIndustryType(detail.industry_type) : notSet],
-                ['Location', locationText || notSet],
-                ['Job type', jobType || notSet],
-                ['Posted on', postedOn ? formatISTDate(postedOn) : notSet],
-                ['Posted by', detail?.created_by_name || notSet],
-                ['Last updated', lastUpdated ? formatISTDate(lastUpdated) : notSet],
+                ['Experience', experienceText || dash],
+                ['Industry', detail?.industry_type ? formatIndustryType(detail.industry_type) : dash],
+                ['Location', locationText || dash],
+                ['Job type', jobType || dash],
+                ['Posted on', postedOn ? formatISTDate(postedOn) : dash],
+                ['Posted by', detail?.created_by_name || dash],
+                ['Last updated', lastUpdated ? formatISTDate(lastUpdated) : dash],
               ] as [string, ReactNode][]),
-              ...(versionScoredBy ? [[
-                'Scored by',
-                scoredInfo
-                  ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
-                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
-              ] as [string, ReactNode]] : []),
               [applicantsLabel, (
                 <span className="inline-flex items-center gap-1">
                   <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                   {versionApplicants[version.id] ?? '—'}
                 </span>
               )],
+              ...(versionScoredBy ? [[
+                'Scored by',
+                scoredInfo
+                  ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
+                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
+                true,
+              ] as [string, ReactNode, boolean]] : []),
               ...extraColumns.map(({ label, render }) => [label, render(versionJob)] as [string, ReactNode]),
             ];
+            const titleText = version.title || detail?.title || '—';
             return (
-              <MobileRecordCard
+              <div
                 key={version.id}
-                selected={isSelected}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
                 onClick={onRowClick ? () => onRowClick(version.id) : undefined}
-                select={(onSelectVersion || onToggleVersionChecked) ? (
-                  <span className="flex items-center gap-2">
-                    {onSelectVersion && (
-                      <label
-                        className={`flex items-center flex-shrink-0 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
-                        title={selectable ? selectHint(versionJob) : notSelectableReason}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          type="radio"
-                          name={`${radioGroupName}-m`}
-                          checked={isSelected}
-                          disabled={!selectable}
-                          onChange={() => selectable && onSelectVersion(versionJob)}
-                          onClick={() => isSelected && onSelectVersion(versionJob)}
-                          className="tf-radio-tinted focus:ring-brand-blue/40 flex-shrink-0"
-                        />
-                        <span className="sr-only">Select version v{version.version_number ?? 1}</span>
-                      </label>
-                    )}
-                    {renderVersionCheckbox(versionJob, isChecked)}
-                  </span>
-                ) : undefined}
-                idBadge={
+                onKeyDown={onRowClick ? (e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(version.id); }
+                } : undefined}
+                className={`tf-ver-card ${isSelected ? 'tf-ver-card-selected' : isLatest ? 'tf-ver-card-latest' : ''} ${onRowClick ? 'cursor-pointer' : ''}`}
+              >
+                <div className="tf-ver-card-top">
+                  {onSelectVersion && (
+                    <label
+                      className={`flex items-center flex-shrink-0 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
+                      title={selectable ? selectHint(versionJob) : notSelectableReason}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <input
+                        type="radio"
+                        name={`${radioGroupName}-m`}
+                        checked={isSelected}
+                        disabled={!selectable}
+                        onChange={() => selectable && onSelectVersion(versionJob)}
+                        onClick={() => isSelected && onSelectVersion(versionJob)}
+                        className="tf-radio-tinted focus:ring-brand-blue/40 flex-shrink-0"
+                      />
+                      <span className="sr-only">Select version v{version.version_number ?? 1}</span>
+                    </label>
+                  )}
+                  {renderVersionCheckbox(versionJob, isChecked)}
                   <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                     v{version.version_number ?? 1}
                   </span>
-                }
-                title={plainTitle ? (
-                  <span className="[overflow-wrap:anywhere]" title={version.title || detail?.title || ''}>
-                    {version.title || detail?.title || '—'}
-                  </span>
-                ) : (
-                  <Link
-                    href={versionHref(version.id)}
-                    target={openInNewTab ? '_blank' : undefined}
-                    rel={openInNewTab ? 'noopener noreferrer' : undefined}
-                    onClick={(e) => e.stopPropagation()}
-                    className="[overflow-wrap:anywhere] hover:text-brand-blue hover:underline"
-                  >
-                    {version.title || detail?.title || '—'}
-                  </Link>
-                )}
-                badges={
-                  <>
-                    {isLatest && (
-                      <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
-                        Latest
-                      </span>
-                    )}
-                    {!hideJdDetails && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
-                        {versionStatus}
-                      </span>
-                    )}
-                  </>
-                }
-                fields={details.map(([label, value]) => ({ label, value }))}
-                actions={renderAction ? (
-                  <div className="flex items-center gap-1">
-                    {renderAction(versionJob)}
-                  </div>
-                ) : undefined}
-              />
+                  {isLatest && (
+                    <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                      Latest
+                    </span>
+                  )}
+                  {!hideJdDetails && (
+                    <span className={`inline-flex min-w-0 items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
+                      <span className={`tf-ver-dot w-1.5 h-1.5 flex-shrink-0 rounded-full ${versionStatusConfig.dot}`} />
+                      <span className="truncate">{versionStatus}</span>
+                    </span>
+                  )}
+                  {renderAction && (
+                    <div className="tf-ver-card-actions" onClick={(e) => e.stopPropagation()}>
+                      {renderAction(versionJob)}
+                    </div>
+                  )}
+                </div>
+                <div className="tf-ver-card-title" title={titleText}>
+                  {plainTitle ? titleText : (
+                    <Link
+                      href={versionHref(version.id)}
+                      target={openInNewTab ? '_blank' : undefined}
+                      rel={openInNewTab ? 'noopener noreferrer' : undefined}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-brand-blue hover:underline"
+                    >
+                      {titleText}
+                    </Link>
+                  )}
+                </div>
+                <dl className="tf-ver-card-grid">
+                  {details.map(([label, value, wide]) => (
+                    <div key={label} className={`tf-ver-card-field ${wide ? 'tf-ver-card-field-wide' : ''}`}>
+                      <dt className="tf-ver-card-label">{label}</dt>
+                      <dd className="tf-ver-card-value">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
             );
           })}
         </div>

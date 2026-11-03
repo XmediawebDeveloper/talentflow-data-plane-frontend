@@ -15,6 +15,12 @@ interface SkillsListProps {
   highlight?: (text: string) => ReactNode;
   /** Rendered when there are no skills. Defaults to nothing. */
   emptyFallback?: ReactNode;
+  /**
+   * "+N more" expands the remaining chips in place (with "Show less") instead of
+   * opening a floating popover. For phone / tablet cards, where a popover would
+   * hang over the card's edge and the cards below it.
+   */
+  expandInline?: boolean;
 }
 
 const DEFAULT_CHIP =
@@ -37,7 +43,9 @@ export default function SkillsList({
   moreClassName = DEFAULT_MORE,
   highlight,
   emptyFallback = null,
+  expandInline = false,
 }: SkillsListProps) {
+  const [expanded, setExpanded] = useState(false);
   const [popover, setPopover] = useState<{ top: number; left: number; openUp: boolean } | null>(null);
   const list = skills ?? [];
 
@@ -46,6 +54,32 @@ export default function SkillsList({
   const visible = list.slice(0, max);
   const extra = list.length - max;
   const render = (s: string) => (highlight ? highlight(s) : s);
+
+  if (expandInline) {
+    const shown = expanded ? list : visible;
+    return (
+      <>
+        {shown.map((skill, i) => (
+          <span key={i} className={chipClassName}>
+            {render(skill)}
+          </span>
+        ))}
+        {extra > 0 && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={(e) => {
+              e.stopPropagation();
+              setExpanded((v) => !v);
+            }}
+            className={moreClassName}
+          >
+            {expanded ? 'Show less' : `+${extra} more`}
+          </button>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -66,7 +100,8 @@ export default function SkillsList({
             }
             const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
             const openUp = window.innerHeight - rect.bottom < 260;
-            const left = Math.max(8, Math.min(rect.left, window.innerWidth - POPOVER_WIDTH - 8));
+            const width = Math.min(POPOVER_WIDTH, window.innerWidth - 16);
+            const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
             setPopover({ top: openUp ? rect.top : rect.bottom + 6, left, openUp });
           }}
           className={moreClassName}
@@ -86,7 +121,7 @@ export default function SkillsList({
             }}
           />
           <div
-            className="fixed w-72 max-h-[260px] overflow-y-auto bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] p-3 z-[101]"
+            className="fixed w-[min(18rem,calc(100vw-1rem))] max-h-[260px] overflow-y-auto bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] p-3 z-[101]"
             style={
               popover.openUp
                 ? { bottom: window.innerHeight - popover.top + 6, left: popover.left }

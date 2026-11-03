@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X, Mail } from 'lucide-react';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -19,6 +19,7 @@ import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
+import { MobileRecordCard, MobileStatChip, useMobileRecordCardVariant } from '@/components/ui/mobile-record-card';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -1566,6 +1567,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* The row ⋮ (View Result, Create / Send, Download PDF Report) — one
      renderer for the list table, the grid cards and the phone / tablet list
      cards, so all three offer the same actions. */
+  /* Inside the Job Openings module the phone list uses the shared JD-style record card. */
+  const recordCardVariant = useMobileRecordCardVariant();
+
   const renderRowMenu = (candidate: CandidateResult) => (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -2361,7 +2365,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               of line; h-9 matches the toolbar band. Holds Customize Columns
               and Export plus the selection-bound Download PDF Reports. */}
           {portaled && selectedRows.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2678,6 +2682,50 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech', value: candidate.tech_score }] : []),
                   ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding', value: candidate.coding_score }] : []),
                 ];
+                if (recordCardVariant === 'jd') {
+                  const shownRounds = rounds.filter(({ value }) => value !== undefined);
+                  return (
+                    <MobileRecordCard
+                      key={candidate.id}
+                      selected={isSelected}
+                      onClick={() => viewCandidateDetails(candidate)}
+                      select={
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
+                          className="tf-checkbox focus:ring-brand-blue/40"
+                        />
+                      }
+                      badges={
+                        <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
+                          {statusLabel(candidate.status)}
+                        </Badge>
+                      }
+                      title={showName(candidate.name) || 'Unknown'}
+                      actions={renderRowMenu(candidate)}
+                      meta={[{ icon: <Mail />, label: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null }]}
+                      fields={[
+                        { label: 'Submitted', value: candidate.completedDate && candidate.completedDate !== '-' ? candidate.completedDate : null },
+                        { label: 'Duration', value: candidate.duration && candidate.duration !== '-' ? candidate.duration : null },
+                      ]}
+                      footer={shownRounds.length > 0 ? (
+                        <>
+                          {shownRounds.map(({ label, value }) => (
+                            <MobileStatChip
+                              key={label}
+                              tone={typeof value !== 'number' ? 'neutral' : value >= passingThreshold ? 'success' : 'danger'}
+                            >
+                              {label} {typeof value === 'number' ? `${value}%` : '—'}
+                            </MobileStatChip>
+                          ))}
+                        </>
+                      ) : undefined}
+                    />
+                  );
+                }
                 return (
                   <div
                     key={candidate.id}

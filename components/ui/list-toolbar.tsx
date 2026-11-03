@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { Search, SlidersHorizontal, XCircle } from 'lucide-react';
 import { cn } from './utils';
+import { useMobileRecordCardVariant } from './mobile-record-card';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
 /**
@@ -229,6 +230,10 @@ export default function ListToolbar({
   overflowVisible = false,
   className,
 }: ListToolbarProps) {
+  /* Job Openings module: phones get the module's toolbar layout (globals.css,
+     `.tf-jdv-toolbar`): Select all + view switch, then search · filter icon ·
+     primary action on one line, then Sort by. Elsewhere nothing changes. */
+  const moduleLayout = useMobileRecordCardVariant() === 'jd';
   const container = containerBreakpoint === '4xl'
     ? {
         row: 'flex flex-col @4xl/toolbar:flex-row @4xl/toolbar:items-center gap-3 mb-3',
@@ -310,11 +315,15 @@ export default function ListToolbar({
           : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
         // The group's own gap, so search → first control matches control → control.
         controlsFollowSearch && 'lg:gap-2',
+        'tf-tb-row',
+        // Only the tab-card toolbars (they carry the list / grid switch); a
+        // master list's own filter row keeps its layout.
+        moduleLayout && stacked && 'tf-jdv-toolbar',
         filterPanel ? undefined : className
       )}
     >
-      {beforeSearch && <div className="flex flex-wrap items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
-      <div className={cn(singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', stacked && (hasLead ? stacked.searchUnderLead : stacked.searchBesideTrailing), searchClassName)}>
+      {beforeSearch && <div className="tf-tb-lead flex flex-wrap items-center gap-2 flex-shrink-0">{beforeSearch}</div>}
+      <div className={cn('tf-tb-search', singleLine ? 'relative flex-1 min-w-[12rem]' : fitToContainer ? container.search : 'flex-1 relative', stacked && (hasLead ? stacked.searchUnderLead : stacked.searchBesideTrailing), searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -335,6 +344,7 @@ export default function ListToolbar({
           a fixed width; with the default flex-1 box it has no effect. */}
       <div
         className={cn(
+          'tf-tb-controls',
           singleLine
             ? 'flex flex-nowrap items-center gap-2 flex-shrink-0 whitespace-nowrap [&>*]:flex-shrink-0'
             : 'flex flex-wrap items-center gap-2',
@@ -350,6 +360,8 @@ export default function ListToolbar({
           <button
             type="button"
             onClick={onToggleFilters}
+            data-tb-filters=""
+            aria-label="More Filters"
             className={cn(
               'rounded-lg font-medium transition-all flex items-center justify-center gap-2 text-sm',
               buttonSize,
@@ -406,7 +418,7 @@ export default function ListToolbar({
       {/* Pinned right — see `trailing`. ml-auto takes the row's spare width. */}
       {trailing && (
         <div className={cn(
-          'flex items-center flex-shrink-0',
+          'tf-tb-trailing flex items-center flex-shrink-0',
           stacked ? stacked.trailing : 'self-end sm:self-auto sm:ml-auto',
         )}>
           {trailing}

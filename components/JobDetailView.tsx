@@ -2142,8 +2142,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     if (opening && versionMenuRef.current) {
       const menuWidth = Math.min(224, window.innerWidth - 24); // w-56, capped like max-w below
       const left = versionMenuRef.current.getBoundingClientRect().left;
-      // 20px: clear of the job card's edge, which clips (it sits ~16px in).
-      setVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));
+      if (window.innerWidth < 640) {
+        // Phones: centred on the screen, like every other menu in this module.
+        setVersionMenuShift(Math.round((document.documentElement.clientWidth - menuWidth) / 2 - left));
+      } else {
+        // 20px: clear of the job card's edge, which clips (it sits ~16px in).
+        setVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));
+      }
     }
     setShowVersionMenu(opening);
     if (!opening || versionMenuLoaded || versionMenuLoading) return;
@@ -3375,8 +3380,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         /* pb-2 only on Overview: that tab has no toolbar row below the tabs, so
            without it the underline track would sit flush against the card's
            bottom border (reading as a doubled border at the rounded corners).
-           Result tabs already get this breathing room from the toolbar slot. */
-        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2' : ''}`}
+           Result tabs already get this breathing room from the toolbar slot.
+           Phones / tablets (below lg): on Overview this card and the job
+           description card below join into ONE card — the tab track becomes the
+           divider — the way the result tabs' toolbar sits inside this card. */
+        className={`mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5${activeTab === 'overview' ? ' pb-2 max-lg:mb-0 max-lg:pb-0 max-lg:rounded-b-none max-lg:border-b-0 max-lg:shadow-none' : ''}`}
       >
         {/* Underline tabs. The border-b "track" is on this NON-scrolling outer
             div; the inner div is the horizontal scroll container (scrollbar-hide,
@@ -3511,7 +3519,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                panel ~16px from the card's side borders (matching the Job
                Openings master's p-4), so the filter inputs no longer sit flush
                against the card edge. */
-            className="px-3 sm:px-4 pt-3 overflow-visible empty:hidden"
+            className="tf-tab-toolbar relative px-3 sm:px-4 pt-3 overflow-visible empty:hidden"
           />
         )}
       </div>
@@ -3522,8 +3530,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         {/* Left Column - Job Details. tf-justify-mobile (globals.css):
             every Overview section's text is justified on phones. */}
         <div className="lg:col-span-8 space-y-5 tf-justify-mobile">
-          {/* Complete Job Description */}
-          <div className="tf-card overflow-hidden">
+          {/* Complete Job Description. Below lg it continues the tab card above
+              (square top corners, no top border) so the two read as one card. */}
+          <div className="tf-card overflow-hidden max-lg:rounded-t-none max-lg:border-t-0">
             {/* JD Header - COMMENTED OUT
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100 px-8 py-6">
               <div className="flex items-start justify-between mb-2">
@@ -5830,7 +5839,7 @@ function AIMatchTabContent({
            Below sm both buttons split the row edge to edge, like the
            stacked toolbar lines above them. */
         const bulkActionsRow = selectedIds.size > 0 ? (
-          <div className="flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="tf-tb-bulk flex flex-wrap items-center gap-2 mb-3 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -6448,11 +6457,13 @@ function AIMatchTabContent({
                     <span className="flex min-w-0 items-center gap-2">
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                       <span className="min-w-0 truncate">{formatCandidateFirstName(candidate.name)}</span>
-                      {candidate.isArchived && <ResumeArchivedBadge />}
                     </span>
                   }
-                  badges={
-                    isScored ? (
+                  /* Resume Archived sits with the status on the top row, never on
+                     the name line, where it squeezed the name to a letter. */
+                  badges={<>
+                    {candidate.isArchived && <ResumeArchivedBadge />}
+                    {isScored ? (
                       <span className="tf-badge bg-success-subtle text-success">
                         <CheckCircle className="w-3 h-3" />Scored
                       </span>
@@ -6460,8 +6471,8 @@ function AIMatchTabContent({
                       <span className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500">
                         <XCircle className="w-3 h-3" />Not Scored
                       </span>
-                    )
-                  }
+                    )}
+                  </>}
                   meta={[
                     { icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: candidate.title },
                     { label: candidate.email || '—' },
@@ -6487,7 +6498,8 @@ function AIMatchTabContent({
                     <div className="mt-2 flex flex-wrap items-center gap-1">
                       <SkillsList
                         skills={candidate.skills}
-                        chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 whitespace-nowrap"
+                        expandInline
+                        chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
                         moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
                       />
                     </div>

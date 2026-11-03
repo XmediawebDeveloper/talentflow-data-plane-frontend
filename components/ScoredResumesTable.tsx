@@ -2441,7 +2441,7 @@ Best regards`);
             shrink-wrapped box with Select All and wrapped out of line; h-9
             matches the Job Details toolbar band. */}
         {embedded && selectionActions && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <div className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
           </div>
         )}

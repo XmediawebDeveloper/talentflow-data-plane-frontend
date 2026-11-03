@@ -1523,7 +1523,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
   return (
     <div
       ref={setListRef}
-      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      className={`relative space-y-2 min-h-12 sm:min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
@@ -1712,7 +1712,7 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
   return (
     <div
       ref={setListRef}
-      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      className={`relative space-y-2 min-h-12 sm:min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
@@ -10151,8 +10151,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </div>
 
-                {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below) */}
-                <div className="space-y-6">
+                {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below).
+                    Tablets (2-column grid): spans both columns with the two lists side
+                    by side under the two skills columns, instead of wrapping under
+                    column 1 and leaving the right half empty. */}
+                <div className="grid gap-x-4 gap-y-6 sm:col-span-2 sm:grid-cols-2 lg:col-span-1 lg:grid-cols-1">
                   {/* Must-Have Comments */}
                   <div>
                     <div className="section-header-row">
