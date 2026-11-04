@@ -3870,7 +3870,6 @@ export default function AITalentMatchPage({
                 aria-disabled={!canRunAiMatch}
                 title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
                 className={`${(!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                icon={<Sparkles className="w-4 h-4" />}
               >
                 Run AI Match
               </Button>
@@ -6991,7 +6990,7 @@ export default function AITalentMatchPage({
         })() : matchHistory.length === 0 ? (
           <div className="tf-card">
             <EmptyState
-              icon={History}
+              icon={Sparkles}
               title="No Matching History Yet"
               description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
               action={{

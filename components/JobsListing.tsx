@@ -275,6 +275,23 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     workMode: workModeFilter,
   } = search.filters;
 
+  // All / AI Generated / Manual: one white chip that slides to the active
+  // option (measured from the buttons) instead of jumping between them.
+  const [methodTrack, setMethodTrack] = useState<HTMLDivElement | null>(null);
+  const [methodChip, setMethodChip] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const track = methodTrack;
+    if (!track) return;
+    const measure = () => {
+      const active = track.querySelector<HTMLElement>('[data-active="true"]');
+      if (active) setMethodChip({ left: active.offsetLeft, width: active.offsetWidth });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [methodTrack, creationMethodFilter]);
+
   // Sync status filter with URL parameter changes
   useEffect(() => {
     if (initialStatusFilter) {
@@ -1663,17 +1680,26 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
             <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
-              <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
+              <div ref={setMethodTrack} className={`${SEGMENT_TOGGLE} relative w-full sm:w-auto`}>
+                {methodChip && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1 bottom-1 rounded-md bg-white shadow-sm shadow-brand-blue/10 transition-[left,width] duration-300 ease-out"
+                    style={{ left: methodChip.left, width: methodChip.width }}
+                  />
+                )}
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
-                  className={`${segmentBtn(creationMethodFilter === null)} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === null}
+                  className={`${segmentBtn(creationMethodFilter === null)} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   All
                   {pillCountBadge(false, methodPillCount(null))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
-                  className={`${segmentBtn(creationMethodFilter === 'ai')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'ai'}
+                  className={`${segmentBtn(creationMethodFilter === 'ai')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Sparkles className="hidden sm:block w-3.5 h-3.5" />
                   <span className="hidden sm:inline">AI Generated</span>
@@ -1682,7 +1708,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
-                  className={`${segmentBtn(creationMethodFilter === 'manual')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'manual'}
+                  className={`${segmentBtn(creationMethodFilter === 'manual')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Edit className="hidden sm:block w-3.5 h-3.5" />
                   Manual
@@ -2478,7 +2505,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 </Button>
               ) : (
                 <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
-                  Create Job
+                  Create New Job
                 </Button>
               )}
             </div>

@@ -2,7 +2,7 @@
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
@@ -6833,7 +6833,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               disabled={asUnitsExhausted}
               aria-disabled={!canCreateAssessment}
               title={!canCreateAssessment ? 'You do not have permission to create assessments' : (asUnitsExhausted ? 'No assessment units available' : '')}
-              icon={<Sparkles className="w-4 h-4" />}
+              icon={<Plus className="w-4 h-4" />}
               className={`${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Create AI Assessment</span>
@@ -10106,7 +10106,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       aria-disabled={!canCreateAssessment}
                       className={`${(!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
-                      icon={<Sparkles className="w-4 h-4" />}
+                      icon={<Plus className="w-4 h-4" />}
                     >
                       Create AI Assessment
                     </Button>

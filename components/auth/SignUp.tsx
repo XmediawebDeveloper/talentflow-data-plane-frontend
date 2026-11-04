@@ -8,7 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
-  Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check, Sparkles,
+  Building2, User, CheckCircle, Loader2, Phone, CreditCard, Check, Sparkles,
   FileText, Shield, X
 } from 'lucide-react';
 import { decodePlanId } from '@/lib/utils/planEncoder';
@@ -800,17 +800,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
     }
   };
 
-  // Handle continue to login (skip payment - stay on trial)
-  const handleSkipPayment = () => {
-    toast.info('Starting with free trial', { description: 'You can upgrade anytime from your dashboard.' });
-    const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
-    if (createdSubdomain) {
-      window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
-    } else {
-      router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
-    }
-  };
-
   // Check if email is valid for OTP
   const isEmailValidForOtp = () => {
     if (!form.adminEmail.trim()) return false;
@@ -1221,14 +1210,9 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   // 0 = paying now, 1..3 = finished.
   const nextDoneCount = checkoutDone ? nextSteps.length : 0;
 
-  // Cancel leaves signup. Before the account exists it returns to pricing
-  // (confirming first if anything was typed); once the account exists
-  // (payment step) it skips payment and goes to sign in, so nothing is lost.
+  // Cancel leaves signup and returns to pricing (confirming first if
+  // anything was typed).
   const handleCancel = () => {
-    if (step === 'payment') {
-      handleSkipPayment();
-      return;
-    }
     const typed = Object.values(form).some((v) => typeof v === 'string' && v.trim() !== '');
     if (typed && !window.confirm('Leave signup? The details you entered will be lost.')) return;
     router.push('/pricing');
@@ -1238,7 +1222,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const cancelButton = (
     <button type="button" onClick={handleCancel} disabled={cancelBusy} className="tf-su-cancel">
       <X style={{ width: 16, height: 16 }} />
-      {step === 'payment' ? 'Cancel and pay later' : 'Cancel'}
+      Cancel
     </button>
   );
 
@@ -1387,7 +1371,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
       {!checkoutDone && (
         <div className="tf-co-pay">
           <div className="tf-su-btnrow">
-          {cancelButton}
           <button
             onClick={handlePaymentSubmit}
             disabled={paymentProcessing || razorpayProcessing || !selectedPlanDetails}
@@ -1406,10 +1389,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
             )}
           </button>
           </div>
-          <p className="tf-co-secure">
-            <ShieldCheck style={{ width: 15, height: 15 }} />
-            Secure payment · GST included
-          </p>
         </div>
       )}
     </div>
@@ -2482,7 +2461,6 @@ const SIGNUP_FLOW_CSS = `
 .tf-co-next strong { font-size: 13px; color: var(--tf-ink); }
 .tf-co-next span { font-size: 12px; line-height: 1.45; color: var(--tf-ink-subtle); }
 .tf-co-pay { display: flex; flex-direction: column; gap: 10px; }
-.tf-co-secure { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; font-size: 12.5px; color: var(--tf-ink-subtle); }
 .tf-co-actions { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
 .tf-co-redirect { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; font-size: 13px; color: var(--tf-ink-subtle); }
 .tf-co-redirect strong { color: var(--tf-ink); font-variant-numeric: tabular-nums; }
