@@ -296,6 +296,19 @@ export default function VersionInviteDialog({
   /* A send still going: Minimize closes the popup and the floating card
      follows it (closing hands a running send over; see setInPopup). */
   const sendRunning = !!bulkJob && isBulkInviteActive(bulkJob);
+  /* Minimize shrinks the popup into the bottom-right corner, where the
+     floating progress card then slides in, instead of the popup just
+     vanishing — closing on the spot read as a glitch, not a hand-over. */
+  const [minimizing, setMinimizing] = useState(false);
+  const minimize = () => {
+    if (minimizing) return;
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onClose();
+      return;
+    }
+    setMinimizing(true);
+    window.setTimeout(onClose, 260);
+  };
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -969,7 +982,12 @@ export default function VersionInviteDialog({
       // Mark it as on screen first, so the floating card never flashes up
       // while this popup is showing the run.
       bulkTracker?.setInPopup(started.job_id, true);
-      bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
+      bulkTracker?.track(started, {
+        jdTitle: job.jdTitle,
+        jdCode: job.jdCode,
+        jobVersion: selected.jobVersion ?? job.jobVersionNumber,
+        versionNumber: selected.version,
+      });
       bodyRef.current?.scrollTo({ top: 0 });
       const queued = started.queued ?? 0;
       if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
@@ -1136,16 +1154,16 @@ export default function VersionInviteDialog({
   return (
     <>
       <div
-        className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-        onClick={requestClose}
+        className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 ${minimizing ? 'opacity-0 transition-opacity duration-200' : 'animate-in fade-in duration-200'}`}
+        onClick={minimizing ? undefined : requestClose}
       />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 ${minimizing ? 'pointer-events-none' : ''}`}>
         <div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="version-invite-title"
-          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}
+          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col ${minimizing ? 'origin-bottom-right translate-x-[30vw] translate-y-[35vh] scale-[0.12] opacity-0 transition-[translate,scale,opacity] duration-[260ms] ease-in' : 'animate-in zoom-in-95 duration-200'}`}
         >
           {/* Header: what this is, and the units it spends. No X — the
               footer's Cancel closes (the popup standard). While a send runs,
@@ -1156,7 +1174,7 @@ export default function VersionInviteDialog({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={onClose}
+                onClick={minimize}
                 className="w-8 !px-0 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
                 aria-label="Minimize to background"
                 title="Run in background"

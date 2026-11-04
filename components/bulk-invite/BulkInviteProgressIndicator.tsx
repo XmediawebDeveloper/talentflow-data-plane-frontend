@@ -67,7 +67,7 @@ export default function BulkInviteProgressIndicator() {
           </span>
         </button>
       ) : (
-        <div className={`fixed bottom-4 sm:bottom-6 ${onLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6'} z-40 w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden`} role="status" aria-live="polite">
+        <div className={`fixed bottom-4 sm:bottom-6 ${onLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6'} z-40 w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300`} role="status" aria-live="polite">
           {/* Header — the scoring widget's: dark while running, green when done. */}
           <div className={`flex items-center justify-between px-4 py-3 text-white ${
             running > 0 ? 'bg-gray-800' : anyFailed ? 'bg-warning' : 'bg-success'

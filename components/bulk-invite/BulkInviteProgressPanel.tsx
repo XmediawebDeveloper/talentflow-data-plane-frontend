@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertCircle, Check, CheckCircle2, Copy, ListChecks, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Copy, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,8 +12,6 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
-import TrackInvitesModal from '@/components/TrackInvitesModal';
-import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
 
 const POLL_MS = 2000;
 const PAGE_SIZE = 50;
@@ -83,9 +80,6 @@ export default function BulkInviteProgressPanel({
   const [loadingRows, setLoadingRows] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  /* "Track status" on a sent row: the tracker for this send's interview /
-     assessment, opened over this popup, filtered to that candidate. */
-  const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
   const active = !!job && isBulkInviteActive(job);
 
   /* A run that no worker has picked up for two minutes: say so, rather
@@ -254,22 +248,22 @@ export default function BulkInviteProgressPanel({
     if (r.status === 'processing') return 'Sending now…';
     return 'Waiting in the queue.';
   };
-  const GRID = 'sm:grid-cols-[2rem_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_minmax(0,2fr)_8.5rem]';
+  const GRID = 'sm:grid-cols-[2rem_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_minmax(0,2fr)_4rem]';
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
       {/* Banner */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gradient-to-r from-brand-blue/5 to-transparent px-4 py-3">
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gradient-to-r from-brand-blue/5 to-transparent px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className={`h-10 w-10 shrink-0 rounded-full inline-flex items-center justify-center ${
+            <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center ${
               active ? 'bg-brand-blue/10 text-brand-blue'
                 : finished ? 'bg-success text-white'
                 : 'bg-warning-subtle text-warning-strong'}`}>
-              {active ? <Loader2 className="w-5 h-5 animate-spin" /> : finished ? <Check className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+              {active ? <Loader2 className="w-4 h-4 animate-spin" /> : finished ? <Check className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             </span>
             <div className="min-w-0" aria-live="polite">
-              <p className="text-base font-semibold text-gray-900 dark:text-slate-50">{heading}</p>
+              <p className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-50">{heading}</p>
               <p className="tf-meta">{subline}</p>
             </div>
           </div>
@@ -320,16 +314,16 @@ export default function BulkInviteProgressPanel({
       </div>
 
       {/* Segmented progress */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-2.5 flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-1.5 flex flex-col lg:flex-row lg:items-center gap-1.5 lg:gap-4">
         <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 shrink-0">Invitation progress</span>
         <div
-          className="flex h-5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
+          className="flex h-3.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
           role="progressbar" aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={Math.round(share(job.processed))}
           aria-label={`${job.processed} of ${job.total} processed`}
         >
           {segments.map((seg) => (
-            <div key={seg.key} className={`${seg.bar} h-full flex items-center justify-center text-2xs font-semibold ${seg.key === 'remaining' ? 'text-gray-700 dark:text-slate-200' : 'text-white'} transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }}>
+            <div key={seg.key} className={`${seg.bar} h-full flex items-center justify-center text-[9px] leading-none font-semibold ${seg.key === 'remaining' ? 'text-gray-700 dark:text-slate-200' : 'text-white'} transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }}>
               {share(seg.n) >= 12 ? pctLabel(seg.n) : ''}
             </div>
           ))}
@@ -422,19 +416,9 @@ export default function BulkInviteProgressPanel({
                 </span>
               </span>
               <p className={`text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</p>
-              {/* Action — only a sent invite has a status to track */}
+              {/* Action — a sent invite's link to copy */}
               <div className="flex items-center gap-1.5 sm:justify-end">
-                {isSent ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setTrackRow(r)}
-                      aria-label={`Track status for ${r.name || r.email}`}
-                      className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10"
-                    >
-                      <ListChecks className="w-3.5 h-3.5" /> Track status
-                    </button>
-                    {r.link && (
+                {isSent && r.link ? (
                       <button
                         type="button"
                         onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
@@ -444,8 +428,6 @@ export default function BulkInviteProgressPanel({
                       >
                         {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
-                    )}
-                  </>
                 ) : (
                   <span className="hidden sm:inline tf-meta">—</span>
                 )}
@@ -468,31 +450,6 @@ export default function BulkInviteProgressPanel({
         )}
       </ul>
 
-      {trackRow && typeof document !== 'undefined' && createPortal(
-        /* Portaled above the invite popup (its open animation's transform
-           would otherwise trap a fixed child) and above the results dialog. */
-        <div className="relative z-[80]">
-          {job.kind === 'interview' ? (
-            <AIInterviewTrackInvitesModal
-              isOpen
-              onClose={() => setTrackRow(null)}
-              configId={job.version_id}
-              jdTitle={job.version_label || 'AI Interview'}
-              hideJobVersionFilter
-              initialSearch={trackRow.email || trackRow.name || undefined}
-            />
-          ) : (
-            <TrackInvitesModal
-              isOpen
-              onClose={() => setTrackRow(null)}
-              jdId={job.jd_id}
-              jdTitle={job.version_label || 'Assessment'}
-              initialSearch={trackRow.email || trackRow.name || undefined}
-            />
-          )}
-        </div>,
-        document.body,
-      )}
     </div>
   );
 }

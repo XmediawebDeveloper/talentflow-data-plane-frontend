@@ -2,6 +2,7 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { bulkInviteService, isBulkInviteActive, type BulkInviteJob } from '@/lib/services/bulkInviteService';
+import { getTokens } from '@/lib/services/api';
 
 /**
  * The Create / Send bulk runs this browser started (or picked up), polled
@@ -17,17 +18,24 @@ export interface TrackedBulkInvite extends BulkInviteJob {
   /** Where it was started from — the popup's job, for the widget's title. */
   jdTitle?: string;
   jdCode?: string;
+  /** The job version and the assessment / interview version sent, for the
+   *  results popup's header ("JD-343 Senior AI Engineer V1 - Assessment V1"). */
+  jobVersion?: number;
+  versionNumber?: number;
   /** When this browser first saw it; the widget drops finished runs after a day. */
   trackedAt: string;
   /** Finished and acknowledged in the widget. */
   dismissed?: boolean;
 }
 
+/** What the starting popup knows about the send that the job record does not. */
+type TrackMeta = Pick<TrackedBulkInvite, 'jdTitle' | 'jdCode' | 'jobVersion' | 'versionNumber'>;
+
 interface BulkInviteProgressContextType {
   jobs: TrackedBulkInvite[];
   activeJobs: TrackedBulkInvite[];
   /** Start following a run (right after POST /bulk-invites returns). */
-  track: (job: BulkInviteJob, meta?: { jdTitle?: string; jdCode?: string }) => void;
+  track: (job: BulkInviteJob, meta?: TrackMeta) => void;
   /** Apply a fresher snapshot (a panel that polls on its own hands them in). */
   sync: (job: BulkInviteJob) => void;
   dismiss: (jobId: string) => void;
@@ -106,7 +114,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     return () => window.removeEventListener('storage', onStorage);
   }, []);
 
-  const upsert = useCallback((job: BulkInviteJob, meta?: { jdTitle?: string; jdCode?: string }) => {
+  const upsert = useCallback((job: BulkInviteJob, meta?: TrackMeta) => {
     setJobs((prev) => {
       const idx = prev.findIndex((j) => j.job_id === job.job_id);
       if (idx === -1) {
@@ -118,7 +126,7 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     });
   }, []);
 
-  const track = useCallback((job: BulkInviteJob, meta?: { jdTitle?: string; jdCode?: string }) => upsert(job, meta), [upsert]);
+  const track = useCallback((job: BulkInviteJob, meta?: TrackMeta) => upsert(job, meta), [upsert]);
   const sync = useCallback((job: BulkInviteJob) => upsert(job), [upsert]);
   const dismiss = useCallback((jobId: string) => {
     setJobs((prev) => prev.map((j) => (j.job_id === jobId ? { ...j, dismissed: true } : j)));
@@ -161,6 +169,10 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     let cancelled = false;
     const tick = async () => {
       if (polling.current || document.visibilityState === 'hidden') return;
+      /* Mounted app-wide, the login page included. Signed out, a poll only
+         401s and raises "Session Expired" — and "Log In Again" reloads the
+         login page into the same poll: the popup came back forever. */
+      if (!getTokens().accessToken) return;
       polling.current = true;
       try {
         await Promise.all(activeIds.split(',').map(async (id) => {
