@@ -486,7 +486,8 @@ export default function DashboardPage() {
 
   // ───── Identity (from useAuth — already in context, no API call) ─────
   const firstName = extractFirstName(user?.name || user?.email);
-  const displayName = user?.name || firstName;
+  // First letter of every word in caps ("arunraj s" → "Arunraj S"); the rest is kept as typed.
+  const displayName = (user?.name || firstName || '').replace(/(^|\s)(\S)/g, (_m, sp: string, ch: string) => sp + ch.toUpperCase());
   const initials = userInitials(user?.name, user?.email);
   const roleLabel = ROLE_LABELS[user?.role || ''] || 'Member';
   const tenantName = tenant?.name || user?.tenantName || null;
@@ -737,47 +738,52 @@ export default function DashboardPage() {
         <div className="space-y-4 md:space-y-6">
         {/* ── PROFILE BANNER ── useAuth only ──────────────────────────── */}
         <section className="relative overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_8px_24px_-12px_rgba(15,23,42,0.10)] md:px-8 md:py-6">
-          {/* Identity row: stacked (avatar → text → CTA) on phones AND
-              tablets; only lg+ goes side-by-side with the CTA on the right. */}
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            {/* Phones and tablets stack one by one — avatar, then text, then
-                (via the outer column) the CTA button; lg+ returns to avatar
-                beside text. */}
-            <div className="flex flex-col lg:flex-row items-start gap-3 sm:gap-4">
-              {/* Avatar — solid rounded square, one size down on phones */}
-              <div className="grid h-11 w-11 sm:h-14 sm:w-14 shrink-0 place-items-center overflow-hidden rounded-xl sm:rounded-2xl bg-brand-blue text-sm sm:text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
-                {user?.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-                ) : (
-                  initials
-                )}
-              </div>
+          {/* Soft brand accent in the corner (decoration only). */}
+          <div aria-hidden="true" className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-brand-blue/[0.06] dark:bg-brand-blue/15" />
+          <div aria-hidden="true" className="pointer-events-none absolute -right-4 top-10 h-16 w-16 rounded-full bg-brand-blue/[0.04] dark:bg-brand-blue/10" />
 
-              <div className="min-w-0 w-full lg:w-auto">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                  {timeOfDayGreeting()},
-                </p>
-                <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="tf-page-title min-w-0 max-w-full truncate">
-                    {displayName}
-                  </h1>
-                  {/* Every role gets a badge; the Owner keeps the brand-blue check. */}
-                  {isTenantAdmin ? (
-                    <span className="tf-badge shrink-0 bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15">
-                      <BadgeCheck className="h-3 w-3" />
-                      Owner
-                    </span>
+          {/* Identity block above the CTA on phones and tablets; lg+ puts the CTA on the right. */}
+          <div className="relative flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0 flex-1">
+              {/* Avatar beside greeting + name at every width. */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                {/* Avatar — solid rounded square, one size down on phones */}
+                <div className="grid h-11 w-11 sm:h-14 sm:w-14 shrink-0 place-items-center overflow-hidden rounded-xl sm:rounded-2xl bg-brand-blue text-sm sm:text-base font-semibold text-white shadow-md shadow-brand-blue/20 ring-1 ring-white/20">
+                  {user?.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
                   ) : (
-                    <span className="tf-badge shrink-0 bg-slate-100 text-2xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
-                      {roleLabel}
-                    </span>
+                    initials
                   )}
                 </div>
-                <p className="mt-1 sm:mt-1.5 text-sm text-slate-500 dark:text-slate-400">
-                  Streamline your entire recruitment journey with AI-powered talent solutions.
-                </p>
+
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                    {timeOfDayGreeting()},
+                  </p>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h1 className="tf-page-title min-w-0 max-w-full truncate">
+                      {displayName}
+                    </h1>
+                    {/* Every role gets a badge; the Owner keeps the brand-blue check. */}
+                    {isTenantAdmin ? (
+                      <span className="tf-badge shrink-0 bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15">
+                        <BadgeCheck className="h-3 w-3" />
+                        Owner
+                      </span>
+                    ) : (
+                      <span className="tf-badge shrink-0 bg-slate-100 text-2xs text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+                        {roleLabel}
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
+
+              {/* Tagline: full card width under the identity row on phones/tablets; lines up with the name on lg+. */}
+              <p className="mt-3 border-t border-slate-100 pt-3 text-sm text-slate-500 dark:border-slate-800 dark:text-slate-400 lg:mt-1.5 lg:border-t-0 lg:pt-0 lg:pl-18">
+                Streamline your entire recruitment journey with AI-powered talent solutions.
+              </p>
             </div>
 
             {/* CTAs — full-width stacked on phones, inline from sm: up */}

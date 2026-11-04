@@ -1471,7 +1471,19 @@ const DraggableSkill = ({
                 aria-label={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
                 title={isMustHave ? 'Move to Nice-to-Have' : 'Convert to Must-Have'}
               >
-                {isMustHave ? <ArrowRight className="h-3.5 w-3.5" /> : <ArrowLeft className="h-3.5 w-3.5" />}
+                {/* Phones: the lists stack (Must-Have above Nice-to-Have), so the arrow points down / up;
+                    from sm they sit side by side, so right / left. */}
+                {isMustHave ? (
+                  <>
+                    <ArrowDown className="h-3.5 w-3.5 sm:hidden" />
+                    <ArrowRight className="h-3.5 w-3.5 max-sm:hidden" />
+                  </>
+                ) : (
+                  <>
+                    <ArrowUp className="h-3.5 w-3.5 sm:hidden" />
+                    <ArrowLeft className="h-3.5 w-3.5 max-sm:hidden" />
+                  </>
+                )}
               </button>
               <button
                 onClick={() => onRemove(category, index)}
