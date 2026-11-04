@@ -11,7 +11,7 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { formatJobVersionLabel, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -598,11 +598,11 @@ function JobDetailsContent() {
       // The job already had an open draft version: that one is reopened, not a new copy.
       if (newJd.reused_existing_draft) {
         toast.success('Opened the existing draft version', {
-          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} is already in draft. Continue editing it.`,
         });
       } else {
         toast.success('New version created', {
-          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} was created as a new draft. Edit and publish it independently.`,
         });
       }
       // `new_version=1`: the editor names this "New Version" (reopening the

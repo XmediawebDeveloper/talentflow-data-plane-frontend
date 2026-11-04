@@ -557,7 +557,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
-          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+          gridClassName="tf-tracker-stats"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });

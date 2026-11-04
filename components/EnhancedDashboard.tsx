@@ -41,6 +41,7 @@ import {
   Cell,
 } from 'recharts';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/services/api';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { dashboardService, RecentActivity } from '@/lib/services/dashboardService';
@@ -313,21 +314,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           return;
         }
 
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-        const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
+        // Shared api client (was a raw fetch): shares an identical in-flight /
+        // just-finished quota-status GET. The 15s abort timer still drops a late
+        // answer; validateStatus keeps non-2xx on the branches below.
+        const quotaStatusResponse = await api.get('/usage/quota-status', {
+          timeout: 15000,
+          validateStatus: () => true,
         });
 
         if (controller.signal.aborted) return;
 
-        if (quotaStatusResponse.ok) {
-          const responseData = await quotaStatusResponse.json();
+        if (quotaStatusResponse.status >= 200 && quotaStatusResponse.status < 300) {
+          const responseData = quotaStatusResponse.data;
           console.log('[EnhancedDashboard] Quota status from API:', responseData);
 
           const data = responseData.data || responseData;

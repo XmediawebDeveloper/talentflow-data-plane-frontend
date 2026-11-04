@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { jdService } from '@/lib/services/jdService';
 import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
 
 /**
@@ -135,6 +136,49 @@ export function useJobCandidateCounts(enabled = true): JobCandidateCounts | null
     prefetchJobCandidateCounts().then((fresh) => { if (!cancelled) setCounts(fresh); });
     return () => { cancelled = true; };
   }, [enabled]);
+
+  return enabled ? counts : null;
+}
+
+/* Per-id counts already fetched by useJobCandidateCountsFor, so paging back to
+   a page seen this visit paints its chips at once (then refreshes). */
+const countsById: JobCandidateCounts = {};
+
+/**
+ * "N assessed" / "N interviewed" for just these JD ids (the rows on screen),
+ * from GET /jd/candidate-counts — one request per set of ids, instead of
+ * paging every assessment and every AI interview config tenant-wide.
+ *
+ * `null` until the first answer for this set lands (cards show nothing rather
+ * than a misleading 0); ids answered before show their last numbers at once.
+ * A failed request keeps whatever was known.
+ */
+export function useJobCandidateCountsFor(jdIds: string[], enabled = true): JobCandidateCounts | null {
+  const key = enabled ? Array.from(new Set(jdIds.filter(Boolean))).sort().join(',') : '';
+  const known = () => {
+    if (!key) return null;
+    const ids = key.split(',');
+    if (!ids.every((id) => countsById[id])) return null;
+    const out: JobCandidateCounts = {};
+    ids.forEach((id) => { out[id] = countsById[id]; });
+    return out;
+  };
+  const [counts, setCounts] = useState<JobCandidateCounts | null>(known);
+
+  useEffect(() => {
+    if (!key) return;
+    let cancelled = false;
+    setCounts(known());
+    jdService
+      .getCandidateCounts(key.split(','))
+      .then((fresh) => {
+        Object.assign(countsById, fresh);
+        if (!cancelled) setCounts({ ...fresh });
+      })
+      .catch(() => { /* keep what is known */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
 
   return enabled ? counts : null;
 }

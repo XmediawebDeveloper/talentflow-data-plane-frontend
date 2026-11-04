@@ -52,7 +52,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import NameAvatar from '@/components/ui/name-avatar';
 import ListPagination from './ListPagination';
-import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
+import { aiMatchService, MatchedCandidate, AIMatchSessionResponse, type AIMatchJobItem, type AIMatchStats, type AIMatchCandidateItem } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -85,6 +85,9 @@ import { DateField } from '@/components/ui/date-field';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -392,6 +395,80 @@ interface CandidateMatchRow {
   jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string; candidateId?: string }>;
 }
 
+/** A session this visit has seen: a matched-jobs row, or a candidate's job entry. */
+type KnownSession = AIMatchSessionResponse & { job_title?: string; fromJobPage?: boolean };
+
+/** A session (job row) as the history item every handler here works with. */
+function toHistoryItem(
+  s: Pick<KnownSession, 'id' | 'jd_id' | 'job_title' | 'jd_title' | 'search_query' | 'created_at' | 'total_matches' | 'run_by_name'>,
+): MatchHistory {
+  return {
+    id: s.id,
+    jobId: s.jd_id || '',
+    jobTitle: s.job_title || s.jd_title || s.search_query || 'Unknown Job',
+    matchedAt: new Date(s.created_at),
+    totalMatches: s.total_matches || 0,
+    matchedCandidates: [],
+    matchedByName: s.run_by_name || undefined,
+  };
+}
+
+/** A JD record (GET /jd shape, attached to each matched-jobs row) as this page's Job —
+ *  the same mapping the route uses for its own JD list. */
+function jdRecordToJob(jd: Record<string, any>): Job {
+  const mapped = mapJDToJob(jd as any);
+  return {
+    id: mapped.id,
+    title: mapped.title,
+    department: mapped.department,
+    location: mapped.location || '',
+    status: mapped.status,
+    applicants: mapped.applicants ?? 0,
+    employmentType: mapped.employmentType,
+    experience: mapped.experience,
+    jobId: mapped.job_id,
+    currentVersion: mapped.versionNumber ?? mapped.currentVersion,
+    publishCount: mapped.currentVersion,
+    industryType: mapped.industry_type,
+    remoteType: mapped.workMode,
+    postedBy: mapped.postedBy,
+    postedDate: mapped.postedDate,
+    creationMethod: mapped.creation_method,
+    salaryMin: mapped.salary_min,
+    salaryMax: mapped.salary_max,
+    salaryCurrency: mapped.salary_currency,
+    compensationType: mapped.compensation_type,
+  };
+}
+
+/** A server roll-up row (GET /ai-match/candidates) as the table's row. */
+function toCandidateRow(item: AIMatchCandidateItem): CandidateMatchRow {
+  const best = aiMatchService.toMatchedCandidate(item.best || ({} as any)) as MatchedCandidateWithVersions;
+  return {
+    key: item.key,
+    name: item.name || best.name,
+    title: item.title || best.title,
+    email: item.email || best.email,
+    phone: item.phone || best.phone,
+    location: item.location || best.location,
+    experience: best.experience,
+    resumeId: item.resume_id || best.resumeId,
+    bestScore: item.best_score,
+    best,
+    jobs: item.jobs.map(j => ({
+      historyId: j.history_id,
+      jobId: j.jd_id || '',
+      jobTitle: j.job_title,
+      score: j.score,
+      matchedAt: new Date(j.matched_at || 0),
+      matchedByName: j.matched_by_name || undefined,
+      resumeVersion: j.resume_version ?? undefined,
+      resumeId: j.resume_id || undefined,
+      candidateId: j.candidate_id,
+    })),
+  };
+}
+
 /** True only for the first call in a document that was loaded by a browser
  *  refresh — see the view restore in `useListStatePersistence` below. */
 let reloadChecked = false;
@@ -430,6 +507,10 @@ interface AITalentMatchPageProps {
    *  Versions" can paint instantly from data already in memory instead of
    *  re-fetching per version. See `getOptimisticAIMatchVersions`. */
   allMatchSessions?: AIMatchSessionResponse[];
+  /** False until the route's lazy JD list (Run AI Match picker) has loaded. */
+  jobsLoaded?: boolean;
+  /** Ask the route to load that JD list — only the Run / deep-link paths need it. */
+  onRequestJobs?: () => void;
   onSaveMatch?: (data: MatchHistory) => void;
   /** Background reconciliation after a match completes — see the route's own
    *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
@@ -439,12 +520,9 @@ interface AITalentMatchPageProps {
 }
 
 export default function AITalentMatchPage({
-  jobs,
-  matchHistory = [],
-  matchSessionCounts = {},
-  ratingBandCounts = null,
-  totalMatchedCandidatesCount = null,
-  allMatchSessions = [],
+  jobs: jobsProp,
+  jobsLoaded = true,
+  onRequestJobs,
   onSaveMatch,
   onMatchComplete,
   onSubmitToScoring,
@@ -691,163 +769,11 @@ export default function AITalentMatchPage({
     await buildCandidateRows();
   };
 
-  // The roll-up itself, split out from the click handler so a restored
-  // 'candidates' view can rebuild its rows once match history has loaded —
-  // otherwise returning from a resume landed on an empty candidates table.
-  const buildCandidateRows = async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (matchHistory.length === 0) {
-      setCandidateRows([]);
-      return;
-    }
-
-    setLoadingCandidateRows(true);
-    // Scored status spans every JD, so the per-JD `scoredResumeIds` set can't
-    // answer it — pull the tenant-wide scored list. Started alongside the
-    // session fetches (it used to run only after them, one page at a time),
-    // so the roll-up waits on the slower of the two rather than their sum.
-    const scoredIdsRequest = loadAllScoredResumeIds();
-    try {
-      // Every uncached session in ONE batch request (chunks of 200) — one
-      // GET /sessions/{id} per session was ~100 parallel requests that queued
-      // behind the browser's connection limit and stalled the whole page.
-      const uncached = matchHistory.filter(item => !historyCandidatesById[item.id] && item.totalMatches > 0);
-      const batched = new Map<string, MatchedCandidateWithVersions[]>();
-      if (uncached.length > 0) {
-        try {
-          const ids = uncached.map(item => item.id);
-          const chunks: string[][] = [];
-          for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
-          const maps = await Promise.all(chunks.map(chunk => aiMatchService.getSessionsBatch(chunk)));
-          for (const map of maps) {
-            for (const [id, { candidates }] of map) batched.set(id, candidates as MatchedCandidateWithVersions[]);
-          }
-          if (batched.size > 0) {
-            setHistoryCandidatesById(prev => ({ ...prev, ...Object.fromEntries(batched) }));
-          }
-        } catch (error) {
-          // Older backend without the batch route: fall back to per-session below.
-          console.warn('[AITalentMatch] Session batch failed, falling back to per-session fetch:', error);
-        }
-      }
-      const perJob = await Promise.all(
-        matchHistory.map(async (item) => ({
-          item,
-          candidates: batched.get(item.id) ?? await loadHistoryCandidates(item, { silent }),
-        }))
-      );
-
-      const byKey = new Map<string, CandidateMatchRow>();
-      for (const { item, candidates } of perJob) {
-        for (const candidate of candidates || []) {
-          // Same key Resume Scoring's "View by Candidates" groups by — email
-          // first, so the same person collapses into one row even when a
-          // different job's match run scored a re-uploaded resume with a new
-          // resumeId. Keying on resumeId first (as this used to) meant two
-          // matches for the same person rarely shared a key, so this roll-up
-          // never actually collapsed anything and looked identical to the
-          // flat "All Resumes" list.
-          const key = (candidate.email || candidate.name || candidate.resumeId || '').trim().toLowerCase();
-          if (!key) continue;
-          const jobEntry = {
-            historyId: item.id,
-            jobId: item.jobId,
-            jobTitle: item.jobTitle,
-            score: candidate.matchScore ?? 0,
-            matchedAt: item.matchedAt,
-            // Who ran THAT match (the session's `run_by_name`), so the
-            // expanded per-job rows name a person instead of "System".
-            matchedByName: item.matchedByName,
-            // Same field ScoredResumesTable's own "Resume Version" column
-            // reads — this candidate's resume as of THIS match, not
-            // necessarily the resume's current version if it was re-uploaded
-            // since.
-            resumeVersion: candidate.resumeVersion,
-            resumeId: candidate.resumeId,
-            // The match record's own id — keys this row for an invite.
-            candidateId: candidate.id,
-          };
-          const existing = byKey.get(key);
-          if (existing) {
-            existing.jobs.push(jobEntry);
-            // The strongest match owns the row's detail columns — including
-            // resumeId, now that a row can span more than one resumeId (the
-            // same person re-uploaded/re-scored under different job runs).
-            if (jobEntry.score > existing.bestScore) {
-              existing.bestScore = jobEntry.score;
-              existing.best = candidate;
-              existing.resumeId = candidate.resumeId;
-            }
-          } else {
-            byKey.set(key, {
-              key,
-              name: candidate.name,
-              title: candidate.title,
-              email: candidate.email,
-              phone: candidate.phone,
-              location: candidate.location,
-              experience: candidate.experience,
-              resumeId: candidate.resumeId,
-              bestScore: jobEntry.score,
-              best: candidate,
-              jobs: [jobEntry],
-            });
-          }
-        }
-      }
-
-      // Most-matched first, then strongest match.
-      setCandidateRows(
-        [...byKey.values()].sort((a, b) => b.jobs.length - a.jobs.length || b.bestScore - a.bestScore)
-      );
-
-      const scored = await scoredIdsRequest;
-      setAllScoredResumeIds(scored.ids);
-      setScoredResumeIdsByJd(scored.byJd);
-    } finally {
-      setLoadingCandidateRows(false);
-    }
-  };
-
-  /** Every scored resume id in the tenant. Page 1 gives the total; the
-   *  remaining pages are fetched in parallel. Never rejects — an empty set just
-   *  shows every row as "Not Scored". */
-  const loadAllScoredResumeIds = async (): Promise<{ ids: Set<string>; byJd: Map<string, Map<string, string>> }> => {
-    const PAGE_SIZE = 100;
-    const ids = new Set<string>();
-    // Also per JD (version) id: resume id → its latest score id. "Scored for
-    // THIS job" — the View by Job rows' "N of M scored" chip, Scored Status
-    // column and View Scorecard read it.
-    const byJd = new Map<string, Map<string, string>>();
-    const latestAt = new Map<string, number>();
-    const collect = (items: Array<{ id?: string; resume_id?: string; jd_id?: string; created_at?: string }> = []) =>
-      items.forEach(item => {
-        if (!item.resume_id) return;
-        ids.add(item.resume_id);
-        if (item.jd_id && item.id) {
-          const at = new Date(item.created_at || 0).getTime() || 0;
-          const k = `${item.jd_id}::${item.resume_id}`;
-          if (latestAt.has(k) && (latestAt.get(k) ?? 0) >= at) return;
-          latestAt.set(k, at);
-          const map = byJd.get(item.jd_id) ?? new Map<string, string>();
-          map.set(item.resume_id, item.id);
-          byJd.set(item.jd_id, map);
-        }
-      });
-    try {
-      const first = await scoringService.getAllScoredResumes({ page: 1, page_size: PAGE_SIZE });
-      collect(first.items);
-      const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
-      const rest = await Promise.all(
-        Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
-          scoringService.getAllScoredResumes({ page: i + 2, page_size: PAGE_SIZE }))
-      );
-      rest.forEach(response => collect(response.items));
-    } catch (error) {
-      console.error('[AITalentMatch] Failed to load scored resumes for candidate roll-up:', error);
-      return { ids: new Set(), byJd: new Map() };
-    }
-    return { ids, byJd };
-  };
+  // The roll-up is server-paged (GET /ai-match/candidates via usePagedList
+  // below), and that query runs by itself whenever the view is open — so the
+  // old "build" step is a no-op kept for its call sites.
+  const candListRefreshRef = useRef<(() => void) | null>(null);
+  const buildCandidateRows = async (_opts: { silent?: boolean } = {}) => { /* see candList */ };
 
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }, options?: { replace?: boolean }) => {
@@ -917,37 +843,10 @@ export default function AITalentMatchPage({
   // View by Job's List / Grid switch (Resume Scoring's).
   const [jobListDisplayMode, setJobListDisplayMode] = useState<ListDisplayMode>('list');
   const [historySortOrder, setHistorySortOrder] = useState<'asc' | 'desc'>('desc');
-  // Phone / location / experience filter the candidates inside each match, so
-  // they only work once those candidates are loaded (see the effect below).
-  const hasCandidateLevelFilters =
-    historyFilterPhone !== '' ||
-    historyFilterLocation !== '' ||
-    historyFilterExpMin !== '' ||
-    historyFilterExpMax !== '';
-  const [resolvingHistoryCandidates, setResolvingHistoryCandidates] = useState(false);
-
-  // Candidate-level filters need every session's candidates, which load lazily
-  // per session. Pull them in when such a filter is switched on, so the filter
-  // applies to the whole list instead of only the sessions already opened.
-  useEffect(() => {
-    if (!hasCandidateLevelFilters || matchHistory.length === 0) return;
-    let cancelled = false;
-
-    const resolveAll = async () => {
-      const pending = matchHistory.filter(item => !historyCandidatesById[item.id]);
-      if (pending.length === 0) return;
-      setResolvingHistoryCandidates(true);
-      try {
-        await Promise.all(pending.map(item => loadHistoryCandidates(item)));
-      } finally {
-        if (!cancelled) setResolvingHistoryCandidates(false);
-      }
-    };
-
-    resolveAll();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCandidateLevelFilters, matchHistory]);
+  // Phone / location / experience filter the candidates inside each match —
+  // applied server-side (GET /ai-match/jobs: a job stays when ANY of its
+  // candidates matches), so nothing has to be loaded first.
+  const resolvingHistoryCandidates = false;
 
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
@@ -1076,8 +975,7 @@ export default function AITalentMatchPage({
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
-  const [candidateRows, setCandidateRows] = useState<CandidateMatchRow[]>([]);
-  const [loadingCandidateRows, setLoadingCandidateRows] = useState(false);
+  // candidateRows / loadingCandidateRows: derived from the paged candidates query below.
 
   // Rows whose job chips are expanded past the single-line "+N more" cutoff.
   const [expandedJobChips, setExpandedJobChips] = useState<Set<string>>(new Set());
@@ -1171,8 +1069,283 @@ export default function AITalentMatchPage({
     setResumeCurrentPage(1);
   }, [candidateSortBy, candidateSortOrder]);
 
+  /* ==== Server-paged landing ===============================================
+     Two calls on landing, in parallel (usePagedList):
+       GET /ai-match/stats?<job filters>          -> the cards + pill counts
+       GET /ai-match/jobs?page&page_size&sort...  -> ONE page of matched jobs
+     The server builds both from one filter function, so the Matched Jobs card
+     equals the list's total. The candidates view is its own paged query
+     (GET /ai-match/candidates) and only runs while that view is open.
+     Nothing downloads every session, every session's candidates or the
+     tenant's whole /scoring/all list any more. */
+  const debouncedHistoryPhone = useDebounce(historyFilterPhone, 300);
+  const debouncedHistoryLocation = useDebounce(historyFilterLocation, 300);
+  const jobsQuery = useMemo(() => ({
+    page: historyCurrentPage,
+    page_size: historyItemsPerPage,
+    sort_by: historySortBy as string,
+    sort_dir: historySortOrder,
+    search: historySearchQuery.trim() || undefined,
+    date_from: historyDateFrom || undefined,
+    date_to: historyDateTo || undefined,
+    min_matches: historyFilterMinMatches === '' ? undefined : historyFilterMinMatches,
+    job_location: historyJobLocation || undefined,
+    industry: historyIndustry || undefined,
+    matched_by: historyMatchedBy || undefined,
+    work_mode: historyWorkMode || undefined,
+    job_type: historyJobType || undefined,
+    cand_phone: debouncedHistoryPhone.trim() || undefined,
+    cand_location: debouncedHistoryLocation.trim() || undefined,
+    exp_min: historyFilterExpMin === '' ? undefined : historyFilterExpMin,
+    exp_max: historyFilterExpMax === '' ? undefined : historyFilterExpMax,
+    band: candidateRatingBand ?? undefined,
+  }), [
+    historyCurrentPage, historyItemsPerPage, historySortBy, historySortOrder, historySearchQuery,
+    historyDateFrom, historyDateTo, historyFilterMinMatches, historyJobLocation, historyIndustry,
+    historyMatchedBy, historyWorkMode, historyJobType, debouncedHistoryPhone, debouncedHistoryLocation,
+    historyFilterExpMin, historyFilterExpMax, candidateRatingBand,
+  ]);
+  const jobsList = usePagedList<AIMatchJobItem, AIMatchStats, typeof jobsQuery>({
+    name: 'ai-match-jobs',
+    query: jobsQuery,
+    fetchPage: (q) => aiMatchService.listMatchedJobs(q),
+    // The band is what the rating cards select — it never narrows the cards.
+    fetchStats: ({ band: _band, ...filters }) => aiMatchService.getStats(filters),
+  });
+  const matchStats = jobsList.stats;
+  const facets = matchStats?.facets;
+
+  /** This page of matched jobs (latest session per job), as the rows render them. */
+  const matchHistory: MatchHistory[] = useMemo(() => jobsList.items.map(toHistoryItem), [jobsList.items]);
+  const jobItemById = useMemo(() => new Map(jobsList.items.map(i => [i.id, i])), [jobsList.items]);
+
+  /* Every session this visit has seen (job pages, candidate rows, select-all),
+     so a click on a job that is not on the current page still resolves. */
+  const [knownSessions, setKnownSessions] = useState<Record<string, KnownSession>>({});
+  const rememberSessions = (list: KnownSession[]) => {
+    if (list.length === 0) return;
+    setKnownSessions(prev => {
+      const next = { ...prev };
+      // A job-page row is the full record; a candidate's job entry only fills gaps.
+      for (const s of list) next[s.id] = prev[s.id] && !s.fromJobPage ? { ...s, ...prev[s.id] } : { ...prev[s.id], ...s };
+      return next;
+    });
+  };
+  const allMatchSessions: AIMatchSessionResponse[] = useMemo(() => Object.values(knownSessions), [knownSessions]);
+  const findHistory = (historyId: string): MatchHistory | undefined =>
+    matchHistory.find(h => h.id === historyId)
+    ?? (knownSessions[historyId] ? toHistoryItem(knownSessions[historyId]) : undefined);
+  /** The job's LATEST known session (a job's history row). */
+  const findHistoryByJd = (jdId: string): MatchHistory | undefined => {
+    const onPage = matchHistory.find(h => h.jobId === jdId);
+    if (onPage) return onPage;
+    const latest = Object.values(knownSessions)
+      .filter(s => s.jd_id === jdId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    return latest ? toHistoryItem(latest) : undefined;
+  };
+
+  /* JD records: the route's lazy JD list (Run AI Match picker) plus every JD
+     the server attached to a matched-jobs row — so title / code / location /
+     version always resolve for the rows on screen (never "Unknown Job"). */
+  const [knownJdRecords, setKnownJdRecords] = useState<Record<string, Job>>({});
+  const jobs: Job[] = useMemo(() => {
+    const byId = new Map<string, Job>((jobsProp || []).map(j => [j.id, j]));
+    for (const j of Object.values(knownJdRecords)) if (!byId.has(j.id)) byId.set(j.id, j);
+    return Array.from(byId.values());
+  }, [jobsProp, knownJdRecords]);
+
+  /** Keep what a matched-jobs response carries: sessions, JD records, scored maps. */
+  const rememberJobItems = (items: AIMatchJobItem[]) => {
+    if (items.length === 0) return;
+    rememberSessions(items.map(i => ({ ...i, results: [], fromJobPage: true })));
+    const records = items.filter(i => i.jd).map(i => jdRecordToJob(i.jd as Record<string, any>));
+    if (records.length) setKnownJdRecords(prev => ({ ...prev, ...Object.fromEntries(records.map(r => [r.id, r])) }));
+    // "Scored for THIS job" — each row carries its own scored candidates.
+    setScoredResumeIdsByJd(prev => {
+      const next = new Map(prev ?? []);
+      for (const i of items) {
+        if (!i.jd_id) continue;
+        const m = new Map(next.get(i.jd_id) ?? []);
+        Object.entries(i.scored || {}).forEach(([resumeId, scoreId]) => m.set(resumeId, scoreId));
+        next.set(i.jd_id, m);
+      }
+      return next;
+    });
+  };
+  useEffect(() => {
+    rememberJobItems(jobsList.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsList.items]);
+  /* A deep link (?jdId=…&view=results, or a JD page's "AI Talent Match
+     Results") may name a job that is not on the first page: look up just that
+     job's latest session. 'done' even on failure, so the view still opens. */
+  const [deepLinkLookups, setDeepLinkLookups] = useState<Record<string, 'pending' | 'done'>>({});
+  const lookUpJobByJd = (jdId: string) => {
+    if (deepLinkLookups[jdId]) return;
+    setDeepLinkLookups(prev => ({ ...prev, [jdId]: 'pending' }));
+    aiMatchService.listMatchedJobs({ jd_id: jdId, page: 1, page_size: 1 })
+      .then(res => rememberJobItems(res.items || []))
+      .catch(error => console.warn('[AITalentMatch] Deep-link job lookup failed:', error))
+      .finally(() => setDeepLinkLookups(prev => ({ ...prev, [jdId]: 'done' })));
+  };
+
+  /** Runs per job across its lineage (JD code), for "View Version History". */
+  const matchSessionCounts: Record<string, number> = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const i of jobsList.items) {
+      const key = (i.jd?.job_id as string | undefined) || i.jd_job_id || i.jd_id || i.search_query || 'unknown';
+      out[key] = i.lineage_session_count || 1;
+    }
+    return out;
+  }, [jobsList.items]);
+  const ratingBandCounts = matchStats ? { exact: matchStats.rating_exact, partial: matchStats.rating_partial } : null;
+  const totalMatchedCandidatesCount = matchStats ? matchStats.total_candidates : null;
+
+  /* View by Candidates — server-paged, only while that view is open. */
+  const debouncedCandidatePhone = useDebounce(candidateFilterPhone, 300);
+  const candidatesActive = viewMode === 'history' && (historyPageView === 'candidates' || historyPageView === 'resumes');
+  const candidatesQuery = useMemo(() => ({
+    page: candidateCurrentPage,
+    page_size: candidateItemsPerPage,
+    sort_by: candidateSortBy as string,
+    sort_dir: candidateSortOrder,
+    search: candidateSearchQuery.trim() || undefined,
+    location: candidateFilterLocation === 'all' ? undefined : candidateFilterLocation,
+    job: candidateFilterJob === 'all' ? undefined : candidateFilterJob,
+    min_score: candidateFilterMinScore ? candidateFilterMinScore : undefined,
+    multi_job: candidateFilterMultiJob || undefined,
+    phone: debouncedCandidatePhone.trim() || undefined,
+    exp_min: candidateFilterExpMin === '' ? undefined : candidateFilterExpMin,
+    exp_max: candidateFilterExpMax === '' ? undefined : candidateFilterExpMax,
+    date_from: candidateFilterDateFrom || undefined,
+    date_to: candidateFilterDateTo || undefined,
+    band: candidateRatingBand ?? undefined,
+  }), [
+    candidateCurrentPage, candidateItemsPerPage, candidateSortBy, candidateSortOrder, candidateSearchQuery,
+    candidateFilterLocation, candidateFilterJob, candidateFilterMinScore, candidateFilterMultiJob,
+    debouncedCandidatePhone, candidateFilterExpMin, candidateFilterExpMax, candidateFilterDateFrom,
+    candidateFilterDateTo, candidateRatingBand,
+  ]);
+  const candList = usePagedList<AIMatchCandidateItem, unknown, typeof candidatesQuery>({
+    name: 'ai-match-candidates',
+    query: candidatesQuery,
+    fetchPage: (q) => aiMatchService.listMatchedCandidates(q),
+    enabled: candidatesActive,
+  });
+  candListRefreshRef.current = candList.refresh;
+  const candidateRows: CandidateMatchRow[] = useMemo(() => candList.items.map(toCandidateRow), [candList.items]);
+  const loadingCandidateRows = candidatesActive && candList.loading;
+  /* Candidate rows seen this visit (pages + select-all), so a tick on a row
+     that is no longer on screen still feeds the bulk actions. */
+  const [candRowCache, setCandRowCache] = useState<Record<string, CandidateMatchRow>>({});
+  const rememberCandidateItems = (items: AIMatchCandidateItem[]) => {
+    if (items.length === 0) return;
+    const rows = items.map(toCandidateRow);
+    setCandRowCache(prev => ({ ...prev, ...Object.fromEntries(rows.map(r => [r.key, r])) }));
+    rememberSessions(items.flatMap(item => item.jobs.map((j): KnownSession => ({
+      id: j.history_id,
+      jd_id: j.jd_id || undefined,
+      job_title: j.job_title,
+      jd_title: j.job_title,
+      jd_job_id: j.jd_job_id || undefined,
+      jd_version_number: j.jd_version_number ?? undefined,
+      jd_status: j.jd_status || undefined,
+      total_matches: j.total_matches,
+      shortlisted: 0,
+      rejected: 0,
+      status: 'completed',
+      created_at: j.matched_at || new Date(0).toISOString(),
+      run_by_name: j.matched_by_name || undefined,
+      results: [],
+    }))));
+    setScoredResumeIdsByJd(prev => {
+      const next = new Map(prev ?? []);
+      for (const item of items) for (const j of item.jobs) {
+        if (!j.jd_id || !j.resume_id || !j.score_id) continue;
+        const m = new Map(next.get(j.jd_id) ?? []);
+        m.set(j.resume_id, j.score_id);
+        next.set(j.jd_id, m);
+      }
+      return next;
+    });
+    const scored = items.filter(i => i.is_scored && i.resume_id).map(i => i.resume_id as string);
+    if (scored.length) setAllScoredResumeIds(prev => new Set([...Array.from(prev), ...scored]));
+  };
+  useEffect(() => {
+    rememberCandidateItems(candList.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candList.items]);
+
+  /** Load (once) the candidates of these sessions, one batch request per 200,
+   *  for bulk actions / export over ticked jobs that were never expanded. */
+  const batchInFlightRef = useRef(new Set<string>());
+  const ensureSessionsLoaded = async (ids: string[]): Promise<Record<string, MatchedCandidateWithVersions[]>> => {
+    const have: Record<string, MatchedCandidateWithVersions[]> = {};
+    const missing: string[] = [];
+    for (const id of Array.from(new Set(ids))) {
+      if (historyCandidatesById[id]) have[id] = historyCandidatesById[id];
+      else if (!batchInFlightRef.current.has(id)) missing.push(id);
+    }
+    if (missing.length === 0) return have;
+    missing.forEach(id => batchInFlightRef.current.add(id));
+    const loaded: Record<string, MatchedCandidateWithVersions[]> = {};
+    let batchFailed = false;
+    try {
+      for (let i = 0; i < missing.length; i += 200) {
+        const map = await aiMatchService.getSessionsBatch(missing.slice(i, i + 200));
+        map.forEach(({ candidates }, id) => { loaded[id] = candidates as MatchedCandidateWithVersions[]; });
+      }
+    } catch (error) {
+      batchFailed = true;
+      console.warn('[AITalentMatch] Session batch failed:', error);
+    } finally {
+      missing.forEach(id => batchInFlightRef.current.delete(id));
+    }
+    // A session the server didn't return (deleted) has no candidates to load.
+    const failed = batchFailed ? [] : missing.filter(id => !loaded[id]);
+    if (Object.keys(loaded).length) setHistoryCandidatesById(prev => ({ ...prev, ...loaded }));
+    if (failed.length) setFailedHistorySessionIds(prev => new Set([...Array.from(prev), ...failed]));
+    return { ...have, ...loaded };
+  };
+  // Ticked jobs need their candidates for the bulk actions.
+  useEffect(() => {
+    const ids = [...Array.from(selectedJobKeys), ...Object.keys(partialJobRows)];
+    if (ids.length) void ensureSessionsLoaded(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJobKeys]);
+
+  /** "Select all" = every row matching the filters, not just this page. */
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatchingJobs = async () => {
+    setSelectingAll(true);
+    try {
+      const res = await aiMatchService.listMatchedJobs({ ...jobsQuery, page: 1, page_size: 5000 });
+      rememberJobItems(res.items);
+      setSelectedJobKeys(new Set(res.items.filter(i => (i.total_matches || 0) > 0).map(i => i.id)));
+      setPartialJobRows({});
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, "Couldn't select every job. Please try again."));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+  const selectAllMatchingCandidates = async () => {
+    setSelectingAll(true);
+    try {
+      const res = await aiMatchService.listMatchedCandidates({ ...candidatesQuery, page: 1, page_size: 5000 });
+      rememberCandidateItems(res.items);
+      setSelectedCandKeys(new Set(res.items.map(i => i.key)));
+      setPartialCandJobs({});
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, "Couldn't select every candidate. Please try again."));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
   const openCandidateMatch = (historyId: string) => {
-    const item = matchHistory.find(h => h.id === historyId);
+    const item = findHistory(historyId);
     if (!item) return;
     userChangedView.current = true;
     openMatchResults(item, item.jobId);
@@ -1230,7 +1403,7 @@ export default function AITalentMatchPage({
       toast.error(`${lock} — resumes can't be scored against it`);
       return;
     }
-    const item = matchHistory.find(h => h.id === job.historyId);
+    const item = findHistory(job.historyId);
     if (!item) {
       toast.error('Match session not found');
       return;
@@ -1282,7 +1455,7 @@ export default function AITalentMatchPage({
       toast.error('Candidate has no email on file');
       return;
     }
-    const item = matchHistory.find(h => h.id === job.historyId);
+    const item = findHistory(job.historyId);
     if (item) {
       setSelectedHistoryItem(item);
       setSelectedJob(item.jobId);
@@ -1597,7 +1770,7 @@ export default function AITalentMatchPage({
   const scorecardJd = searchParams.get(SCORECARD_JD_PARAM);
   const scorecardScoreId = searchParams.get(SCORECARD_SCORE_PARAM);
   const jobTitleOf = (jdId: string) =>
-    jobs.find(j => j.id === jdId)?.title || matchHistory.find(h => h.jobId === jdId)?.jobTitle || '';
+    jobs.find(j => j.id === jdId)?.title || findHistoryByJd(jdId)?.jobTitle || '';
   const scoreDetailView = scorecardJd && scorecardScoreId
     ? { jdId: scorecardJd, scoreId: scorecardScoreId, jobTitle: jobTitleOf(scorecardJd) }
     : null;
@@ -1817,77 +1990,9 @@ export default function AITalentMatchPage({
     },
   );
 
-  // Restored straight into the candidate roll-up: its rows are built on click,
-  // not fetched by the page load, so rebuild them once match history is in.
-  // Guarded on empty rows so it can't re-run over a roll-up that's already
-  // there, and it deliberately leaves the restored candidate search alone.
-  const rebuiltRestoredCandidatesRef = useRef(false);
-  useEffect(() => {
-    if (rebuiltRestoredCandidatesRef.current) return;
-    if (historyPageView !== 'candidates' && historyPageView !== 'resumes') return;
-    if (loadingCandidateRows || candidateRows.length > 0) return;
-    if (matchHistory.length === 0) return;
-    rebuiltRestoredCandidatesRef.current = true;
-    buildCandidateRows();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
-
-  /**
-   * Warm the "Match by Candidate" roll-up in the background, so switching to
-   * that tab shows rows instead of a spinner.
-   *
-   * Building it costs one request per match session, and none of them started
-   * until the tab was clicked — the slowest part of the page sat entirely on
-   * that click. Doing it while the user reads the Matched Jobs list moves the
-   * wait off the interaction. Per-session results land in
-   * `historyCandidatesById`, so opening a single job's results afterwards is
-   * served from the same cache.
-   *
-   * Silent: a failed session here must not toast, since the user never asked
-   * for this and one toast per session would bury the page.
-   *
-   * `prefetchedRef` caps it at one run — without it a failed build leaves the
-   * rows empty, the effect re-satisfies its own conditions, and it retries
-   * forever.
-   */
-  const prefetchedCandidateRowsRef = useRef(false);
-  useEffect(() => {
-    if (prefetchedCandidateRowsRef.current) return;
-    // Only from the history screen — the tab lives there, and elsewhere this
-    // would compete with whatever the user actually opened.
-    if (viewMode !== 'history') return;
-    // Already on one of the roll-up tabs: the effect above owns that case.
-    if (historyPageView === 'candidates' || historyPageView === 'resumes') return;
-    if (matchHistory.length === 0) return;
-    if (loadingCandidateRows || candidateRows.length > 0) return;
-
-    prefetchedCandidateRowsRef.current = true;
-    void buildCandidateRows({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
-
-  /**
-   * A finished match run adds a session, which makes a roll-up built before it
-   * stale. Now that the tab reuses its rows instead of rebuilding on every
-   * open, that staleness would stick for the rest of the session — so drop the
-   * rows and release both build guards, and whichever path runs next (prefetch
-   * if the user is elsewhere, the restore effect if they're on the tab) builds
-   * again from the fuller history.
-   *
-   * Keyed on the set of session ids, not the count: re-running a match on a
-   * job that already has one replaces its entry (same length, new session),
-   * and the later server refetch swaps the optimistic id for the real one —
-   * neither changes the length, so a count key never rebuilt for them.
-   */
-  const historySessionKey = matchHistory.map(item => item.id).sort().join('|');
-  const candidateRowsHistoryKeyRef = useRef(historySessionKey);
-  useEffect(() => {
-    if (candidateRowsHistoryKeyRef.current === historySessionKey) return;
-    candidateRowsHistoryKeyRef.current = historySessionKey;
-    setCandidateRows([]);
-    prefetchedCandidateRowsRef.current = false;
-    rebuiltRestoredCandidatesRef.current = false;
-  }, [historySessionKey]);
+  // The candidate roll-up is a server-paged query (candList above) that runs
+  // whenever that view is open — restored, prefetched or clicked alike — so
+  // the old build/prefetch/rebuild effects are gone.
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -1945,11 +2050,9 @@ export default function AITalentMatchPage({
     });
     if (settled.length === 0) return;
     settled.forEach(id => myScoringBatches.current.delete(id));
-    void (async () => {
-      const scored = await loadAllScoredResumeIds();
-      setAllScoredResumeIds(scored.ids);
-      setScoredResumeIdsByJd(scored.byJd);
-    })();
+    // The paged lists carry their own scored flags — re-read them.
+    jobsList.refresh();
+    candList.refresh();
     scoreDetailRequests.current.clear();
     setScoreDetailsByJd({});
     setScoredRefreshTick(t => t + 1);
@@ -1959,7 +2062,7 @@ export default function AITalentMatchPage({
   useEffect(() => {
     const hydrateSelectedHistory = async () => {
       if (viewMode === 'results' && selectedJob && matchedCandidates.length === 0) {
-        const historyItem = matchHistory.find(item => item.jobId === selectedJob);
+        const historyItem = findHistoryByJd(selectedJob);
         if (!historyItem || historyItem.totalMatches <= 0) return;
 
         const candidates = await loadHistoryCandidates(historyItem);
@@ -1972,7 +2075,7 @@ export default function AITalentMatchPage({
     };
 
     hydrateSelectedHistory();
-  }, [viewMode, selectedHistoryItem, selectedJob, matchedCandidates.length, matchHistory, historyCandidatesById]);
+  }, [viewMode, selectedHistoryItem, selectedJob, matchedCandidates.length, matchHistory, knownSessions, historyCandidatesById]);
 
   // Handle attachments click - fetch real versions
   const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
@@ -2048,8 +2151,17 @@ export default function AITalentMatchPage({
     const preselectedJobId = urlJdId || sessionJobId;
 
     if (!preselectedJobId) return;
-    // Wait for jobs to be loaded before processing
-    if (jobs.length === 0) return;
+    // Wait for the route's JD list (loaded on demand — the landing doesn't need it).
+    if (!jobsLoaded) {
+      onRequestJobs?.();
+      return;
+    }
+    // Results for a job that isn't on the loaded page: fetch that one job first.
+    const wantsResults = urlView === 'results' || urlView === 'details' || showResultsOnly;
+    if (wantsResults && !findHistoryByJd(preselectedJobId) && deepLinkLookups[preselectedJobId] !== 'done') {
+      lookUpJobByJd(preselectedJobId);
+      return;
+    }
 
     // Clear sessionStorage if we used it
     if (sessionJobId) {
@@ -2080,7 +2192,7 @@ export default function AITalentMatchPage({
       return;
     } else if (shouldShowResults) {
       // User clicked "AI Talent Match Results" - show existing results or empty state
-      const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+      const existingMatch = findHistoryByJd(preselectedJobId);
 
       if (existingMatch) {
         const existingCandidates = getResolvedHistoryCandidates(existingMatch);
@@ -2113,7 +2225,12 @@ export default function AITalentMatchPage({
         setShowMatchingPanel(true);
       }, 300);
     }
-  }, [jobs, matchHistory, searchParams]);
+  }, [jobs, jobsLoaded, matchHistory, knownSessions, deepLinkLookups, searchParams]);
+
+  // Run AI Match / results / matching need the JD picker list; the landing doesn't.
+  useEffect(() => {
+    if (viewMode !== 'history' && !jobsLoaded) onRequestJobs?.();
+  }, [viewMode, jobsLoaded, onRequestJobs]);
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -2478,7 +2595,7 @@ export default function AITalentMatchPage({
               return;
             }
             if (!guardEmail()) return;
-            const item = matchHistory.find(h => h.id === row.historyId);
+            const item = findHistory(row.historyId);
             if (item) {
               setSelectedHistoryItem(item);
               setSelectedJob(item.jobId);
@@ -2515,7 +2632,7 @@ export default function AITalentMatchPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (!handoffReturn || handoffCheckedRef.current || matchHistory.length === 0) return;
+    if (!handoffReturn || handoffCheckedRef.current || jobsList.loading) return;
     handoffCheckedRef.current = true;
     const h = handoffReturn;
     clearInviteHandoff();
@@ -2538,8 +2655,10 @@ export default function AITalentMatchPage({
       const keys = new Set(h.scoreIds);
       const sessionIds = Array.from(new Set(h.scoreIds.map(k => k.split('::')[0])));
       const perSession = await Promise.all(sessionIds.map(async (sid) => {
-        const item = matchHistory.find(m => m.id === sid);
-        if (!item) return [] as MatchInviteRow[];
+        // The session may not be on the loaded page — its id is all the load needs.
+        const item: MatchHistory = findHistory(sid) ?? {
+          id: sid, jobId: h.jdId, jobTitle: h.jdTitle || '', matchedAt: new Date(), totalMatches: 1, matchedCandidates: [],
+        };
         const candidates = await loadHistoryCandidates(item, { silent: true });
         return candidates.map(c => toInviteRow(item.id, item.jobId, c)).filter(r => keys.has(r.key));
       }));
@@ -2553,7 +2672,7 @@ export default function AITalentMatchPage({
       openInviteForRows(h.kind, h.jdId, rows);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handoffReturn, matchHistory.length]);
+  }, [handoffReturn, jobsList.loading]);
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
     const candidates: MatchedCandidateWithVersions[] = viewMode === 'results'
@@ -2680,80 +2799,10 @@ export default function AITalentMatchPage({
     return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
   };
 
-  const filteredHistory = matchHistory.filter(item => {
-    const query = historySearchQuery.trim().toLowerCase();
-    const jobCode = jobs.find(j => j.id === item.jobId)?.jobId || '';
-    const matchesSearch = query === '' ||
-      item.jobTitle.toLowerCase().includes(query) ||
-      jobCode.toLowerCase().includes(query);
-
-    // Compare calendar days, not instants: `new Date('2026-08-03')` is midnight
-    // UTC, so an instant-comparison drops everything matched later that day.
-    const matchedDay = toLocalDateKey(item.matchedAt);
-    const matchesDateFrom = !historyDateFrom || matchedDay >= historyDateFrom;
-    const matchesDateTo = !historyDateTo || matchedDay <= historyDateTo;
-
-    const matchesMinMatches = historyFilterMinMatches === '' ||
-      (item.totalMatches || 0) >= historyFilterMinMatches;
-
-    // Candidate-level filters: keep the job if ANY of its candidates matches.
-    // Candidates load per session on demand, so a session whose list has not
-    // arrived yet stays visible while the loader below fetches it — otherwise
-    // the filter would silently pass every job (the old `length === 0` check).
-    const resolvedCandidates = historyCandidatesById[item.id] ?? item.matchedCandidates;
-    const matchesCandidateFilters = !hasCandidateLevelFilters || !resolvedCandidates
-      ? true
-      : resolvedCandidates.some(candidate => {
-          const matchesPhone = historyFilterPhone === '' ||
-            (!!candidate.phone && (
-              candidate.phone.toLowerCase().includes(historyFilterPhone.toLowerCase()) ||
-              candidate.phone.replace(/[^0-9]/g, '').includes(historyFilterPhone.replace(/[^0-9]/g, ''))
-            ));
-          const matchesLocation = historyFilterLocation === '' ||
-            (!!candidate.location && candidate.location.toLowerCase().includes(historyFilterLocation.toLowerCase()));
-          // "5-7 years" / "5+ yrs" / "Fresher" — take the first number, and treat
-          // "no number" as unknown so a range filter excludes it rather than
-          // counting it as zero years.
-          const years = parseExperienceYears(candidate.experience);
-          const matchesExpMin = historyFilterExpMin === '' || (years !== null && years >= historyFilterExpMin);
-          const matchesExpMax = historyFilterExpMax === '' || (years !== null && years <= historyFilterExpMax);
-          return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
-        });
-
-    // Job-level filters, read off the job's own record.
-    const jd = jobs.find(j => j.id === item.jobId);
-    const matchesJobLocation = !historyJobLocation || jd?.location === historyJobLocation;
-    const matchesIndustry = !historyIndustry || jd?.industryType === historyIndustry;
-    const matchesMatchedBy = !historyMatchedBy || (item.matchedByName || 'System') === historyMatchedBy;
-    const matchesWorkMode = !historyWorkMode || jd?.remoteType === historyWorkMode;
-    const matchesJobType = !historyJobType || jd?.employmentType === historyJobType;
-
-    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters &&
-      matchesJobLocation && matchesIndustry && matchesMatchedBy && matchesWorkMode && matchesJobType;
-  });
-
-  const sortedHistory = [...filteredHistory].sort((a, b) => {
-    const direction = historySortOrder === 'asc' ? 1 : -1;
-    // How many of a job's candidates fall in one rating band.
-    const bandCount = (item: MatchHistory, band: RatingBand) =>
-      (historyCandidatesById[item.id] ?? []).filter(c => matchBandForRating(toMatchRating(c.matchScore ?? 0)) === band).length;
-    switch (historySortBy) {
-      case 'matches':
-        return ((a.totalMatches || 0) - (b.totalMatches || 0)) * direction;
-      case 'title':
-        return a.jobTitle.localeCompare(b.jobTitle) * direction;
-      case 'jdId': {
-        const code = (item: MatchHistory) => jobs.find(j => j.id === item.jobId)?.jobId || '';
-        return code(a).localeCompare(code(b), undefined, { numeric: true, sensitivity: 'base' }) * direction;
-      }
-      case 'exact':
-      case 'partial':
-      case 'no_match':
-        return (bandCount(a, historySortBy) - bandCount(b, historySortBy)) * direction;
-      default:
-        return (new Date(a.matchedAt).getTime() - new Date(b.matchedAt).getTime()) * direction;
-    }
-  });
+  // Search, filters, the rating pill, sort and paging all run server-side
+  // (GET /ai-match/jobs, see jobsQuery): `matchHistory` is already the page.
+  const filteredHistory = matchHistory;
+  const sortedHistory = matchHistory;
 
   // Search sits outside the panel, so — like job-openings — it is not counted.
   const activeFiltersCount = historySearch.activeFilterCount;
@@ -2949,84 +2998,16 @@ export default function AITalentMatchPage({
     // client-side tally stays as a fallback for when that prop isn't
     // available, and is still what powers the roll-up table itself once
     // the tab is opened.
-    const totalMatchedCandidatesReady = totalMatchedCandidatesCount !== null || (!loadingCandidateRows &&
-      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0)));
-    const totalMatchedCandidates = totalMatchedCandidatesCount ?? candidateRows.length;
+    // Every count comes from GET /ai-match/stats (same filters as the jobs list).
+    const totalMatchedCandidatesReady = totalMatchedCandidatesCount !== null;
+    const totalMatchedCandidates = totalMatchedCandidatesCount ?? 0;
+    const topStatsReady = matchStats !== null;
 
-    // Every session's candidates load in individually (in the background — see
-    // the prefetch effect above), so the rating-band counts below fill in one
-    // job at a time rather than all at once. Rendering the count as each one
-    // lands made "Top Match Rating (10)"/"Top Match Rating (9-7)" visibly count
-    // up (1, 2, 3, ...) as sessions resolved. Holding the real number back
-    // until every session has resolved means the tiles show only their final,
-    // correct value.
-    const topStatsReady = matchHistory.every(
-      item => (item.totalMatches || 0) <= 0 ||
-        historyCandidatesById[item.id] !== undefined ||
-        failedHistorySessionIds.has(item.id)
-    );
-
-    // Candidate roll-up search matches the person or any job they matched.
+    // Candidate roll-up: search / filters / pill / sort / paging run server-side
+    // (GET /ai-match/candidates) — `candidateRows` is already the page.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
-    const filteredCandidateRows = candidateRows.filter(row => {
-      const matchesSearch = !candidateQuery ||
-        row.name?.toLowerCase().includes(candidateQuery) ||
-        row.email?.toLowerCase().includes(candidateQuery) ||
-        row.title?.toLowerCase().includes(candidateQuery) ||
-        row.jobs.some(job => job.jobTitle?.toLowerCase().includes(candidateQuery));
-
-      const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
-      const matchesJob = candidateFilterJob === 'all' || row.jobs.some(job => job.jobTitle === candidateFilterJob);
-      const matchesScore = toMatchRating(row.bestScore) >= candidateFilterMinScore;
-      const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
-
-      const matchesPhone = candidateFilterPhone === '' ||
-        (!!row.phone && (
-          row.phone.toLowerCase().includes(candidateFilterPhone.toLowerCase()) ||
-          row.phone.replace(/[^0-9]/g, '').includes(candidateFilterPhone.replace(/[^0-9]/g, ''))
-        ));
-
-      // Unknown experience is excluded by a range filter rather than read as 0.
-      const years = parseExperienceYears(row.experience);
-      const matchesExpMin = candidateFilterExpMin === '' || (years !== null && years >= candidateFilterExpMin);
-      const matchesExpMax = candidateFilterExpMax === '' || (years !== null && years <= candidateFilterExpMax);
-
-      // Compare calendar days against the candidate's most recent match.
-      const lastMatchedDay = row.jobs.reduce((latest, job) => {
-        const key = toLocalDateKey(job.matchedAt);
-        return key > latest ? key : latest;
-      }, '');
-      const matchesDateFrom = !candidateFilterDateFrom || lastMatchedDay >= candidateFilterDateFrom;
-      const matchesDateTo = !candidateFilterDateTo || lastMatchedDay <= candidateFilterDateTo;
-
-      // The rating pill: candidates with at least one match in that band.
-      const matchesBand = !candidateRatingBand ||
-        row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === candidateRatingBand);
-
-      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesMultiJob &&
-        matchesPhone && matchesExpMin && matchesExpMax && matchesDateFrom && matchesDateTo && matchesBand;
-    });
-
-    const sortedCandidateRows = [...filteredCandidateRows].sort((a, b) => {
-      const direction = candidateSortOrder === 'asc' ? 1 : -1;
-      if (candidateSortBy === 'score') return (a.bestScore - b.bestScore) * direction;
-      if (candidateSortBy === 'name') return (a.name || '').localeCompare(b.name || '') * direction;
-      if (candidateSortBy === 'date') {
-        const lastOf = (row: CandidateMatchRow) =>
-          row.jobs.reduce((latest, job) => Math.max(latest, new Date(job.matchedAt).getTime()), 0);
-        return (lastOf(a) - lastOf(b)) * direction;
-      }
-      if (candidateSortBy === 'scored') {
-        // Job versions scored in Resume Scoring; ties → more matched versions first.
-        const scoredOf = (row: CandidateMatchRow) => row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length;
-        return (scoredOf(a) - scoredOf(b)) * direction || b.jobs.length - a.jobs.length;
-      }
-      if (candidateSortBy === 'titles') {
-        const titlesOf = (row: CandidateMatchRow) => new Set(row.jobs.map(j => j.jobTitle).filter(Boolean)).size;
-        return (titlesOf(a) - titlesOf(b)) * direction || b.jobs.length - a.jobs.length;
-      }
-      return (a.jobs.length - b.jobs.length) * direction;
-    });
+    const filteredCandidateRows = candidateRows;
+    const sortedCandidateRows = candidateRows;
 
     /** A View by Candidates column header that sorts the table (click again to flip). */
     const candidateSortHeader = (key: CandidateSortKey, label: string, align: 'left' | 'center' = 'left') => {
@@ -3056,10 +3037,7 @@ export default function AITalentMatchPage({
       );
     };
 
-    const paginatedCandidateRows = sortedCandidateRows.slice(
-      (candidateCurrentPage - 1) * candidateItemsPerPage,
-      candidateCurrentPage * candidateItemsPerPage,
-    );
+    const paginatedCandidateRows = sortedCandidateRows;
 
     // "All Resumes": the same candidateRows, un-collapsed back into one row
     // per (candidate, job) match — the flat list the roll-up above dedupes
@@ -3081,7 +3059,7 @@ export default function AITalentMatchPage({
     const topRatingPartialCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'partial'
     ).length;
-    const statsReady = ratingBandCounts !== null || topStatsReady;
+    const statsReady = topStatsReady;
     const displayedExactCount = ratingBandCounts?.exact ?? topRatingExactCount;
     const displayedPartialCount = ratingBandCounts?.partial ?? topRatingPartialCount;
 
@@ -3131,12 +3109,9 @@ export default function AITalentMatchPage({
     );
 
     // Options come from the loaded rows, so only real values are offered.
-    const candidateLocations = Array.from(
-      new Set(candidateRows.map(row => row.location).filter(Boolean) as string[])
-    ).sort();
-    const candidateJobTitles = Array.from(
-      new Set(candidateRows.flatMap(row => row.jobs.map(job => job.jobTitle)).filter(Boolean))
-    ).sort();
+    // Options for every matched job / candidate, not just this page (stats facets).
+    const candidateLocations = facets?.candidate_locations ?? [];
+    const candidateJobTitles = facets?.job_titles ?? [];
 
     const candidateFiltersCount = candidateSearch.activeFilterCount;
     const candidateFiltersApplied = candidateSearch.isNarrowed;
@@ -3171,7 +3146,7 @@ export default function AITalentMatchPage({
         return;
       }
       const group = selectedAllResumeJobGroups[0];
-      const item = group && matchHistory.find(h => h.id === group.historyId);
+      const item = group && findHistory(group.historyId);
       if (!item) return;
       const candidates = await loadHistoryCandidates(item);
       const ids = group.entries
@@ -3210,7 +3185,7 @@ export default function AITalentMatchPage({
       const jobIds = Array.from(new Set(selectedAllResumeJobGroups.map(g => g.jobId)));
       const oneJobId = jobIds.length === 1 ? jobIds[0] : null;
       if (oneJobId) {
-        const item = matchHistory.find(h => h.id === selectedAllResumeJobGroups[0].historyId);
+        const item = findHistory(selectedAllResumeJobGroups[0].historyId);
         if (item) {
           setSelectedHistoryItem(item);
           setSelectedJob(item.jobId);
@@ -3291,11 +3266,23 @@ export default function AITalentMatchPage({
     const jobLoaded = (item: MatchHistory) =>
       (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined || failedHistorySessionIds.has(item.id);
     const jobCandidates = (item: MatchHistory): MatchedCandidateWithVersions[] => historyCandidatesById[item.id] ?? [];
-    const jobTally = (item: MatchHistory) =>
-      jobCandidates(item).reduce(
+    // A job's band tally: the server's counts for a row on this page, else
+    // counted from its loaded candidates.
+    const jobTally = (item: MatchHistory): Record<RatingBand, number> => {
+      const row = jobItemById.get(item.id);
+      if (row) return { exact: row.exact_count, partial: row.partial_count, no_match: row.no_match_count };
+      return jobCandidates(item).reduce(
         (acc, c) => { acc[bandOf(c)] += 1; return acc; },
         { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
       );
+    };
+    /** "N of M scored" for a job row: the server row's counts, else its loaded candidates. */
+    const scoredCountOf = (item: MatchHistory): { scored: number; total: number } => {
+      const row = jobItemById.get(item.id);
+      if (row) return { scored: row.scored_count, total: row.result_count };
+      const all = jobCandidates(item);
+      return { scored: all.filter(c => !!scoreIdFor(item.jobId, c.resumeId)).length, total: all.length };
+    };
     const jobCandidatesInBand = (item: MatchHistory) =>
       candidateRatingBand ? jobCandidates(item).filter(c => bandOf(c) === candidateRatingBand) : jobCandidates(item);
 
@@ -3304,31 +3291,27 @@ export default function AITalentMatchPage({
     // to show the server's band counts and the runs' totals first, but those
     // count differently (every match result vs. each job's latest session),
     // so the pills jumped from one number to another once the tally landed.
-    const loadedTally = matchHistory.reduce(
-      (acc, item) => {
-        const t = jobTally(item);
-        acc.exact += t.exact; acc.partial += t.partial; acc.no_match += t.no_match;
-        return acc;
-      },
-      { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
-    );
-    const pillCounts: Record<RatingBand | 'all', number | null> = topStatsReady
-      ? { all: loadedTally.exact + loadedTally.partial + loadedTally.no_match, ...loadedTally }
+    const pillCounts: Record<RatingBand | 'all', number | null> = matchStats
+      ? { all: matchStats.all_matches, exact: matchStats.rating_exact, partial: matchStats.rating_partial, no_match: matchStats.rating_no_match }
       : { all: null, exact: null, partial: null, no_match: null };
 
     /* View by Job under a rating pill: only jobs with such a match. A job
        whose candidates haven't loaded yet stays listed — an unloaded list
        would otherwise hide every job. */
-    const bandHistory = candidateRatingBand
-      ? sortedHistory.filter(item => !jobLoaded(item) || jobTally(item)[candidateRatingBand] > 0)
-      : sortedHistory;
-    const pageHistory = bandHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
+    // The server already applied the pill and paged: this is the page.
+    const bandHistory = sortedHistory;
+    const pageHistory = sortedHistory;
     // A run that matched nobody has nothing to tick.
-    const jobKeys = bandHistory.filter(item => (item.totalMatches || 0) > 0).map(item => item.id);
     const pageJobKeys = pageHistory.filter(item => (item.totalMatches || 0) > 0).map(item => item.id);
+    // Select all = every job matching the filters (selectAllMatchingJobs).
+    const jobKeys = Array.from(selectedJobKeys);
+    const jobsMatchingTotal = jobsList.total;
     const isJobPartlySelected = (k: string) => !selectedJobKeys.has(k) && (partialJobRows[k]?.length ?? 0) > 0;
-    const allJobsSelected = jobKeys.length > 0 && jobKeys.every(k => selectedJobKeys.has(k));
-    const tickedJobs = bandHistory.filter(item => selectedJobKeys.has(item.id) || isJobPartlySelected(item.id));
+    const allJobsSelected = jobsMatchingTotal > 0 && selectedJobKeys.size >= jobsMatchingTotal;
+    const tickedJobs = Array.from(new Set([...Array.from(selectedJobKeys), ...Object.keys(partialJobRows)]))
+      .filter(k => selectedJobKeys.has(k) || isJobPartlySelected(k))
+      .map(k => findHistory(k))
+      .filter((item): item is MatchHistory => !!item);
     const selectedJobCount = tickedJobs.length;
     // The candidates the Actions run on: every one of a ticked job (rating
     // pill applied), or just the ticked ones of a partly ticked job.
@@ -3355,9 +3338,12 @@ export default function AITalentMatchPage({
     ];
     /** Export `exportRows` — each row's match record, from its session. */
     const handleExportRows = async (format: 'csv' | 'xlsx', picked?: string[]) => {
+      // Every selected row's session, loaded (batched) before the file is written —
+      // a selection can span jobs that were never opened, or not on this page.
+      const loaded = await ensureSessionsLoaded((exportRows ?? []).map(r => r.historyId));
       const rows = (exportRows ?? []).flatMap(r => {
-        const item = matchHistory.find(h => h.id === r.historyId);
-        const c = (historyCandidatesById[r.historyId] ?? []).find(x => `${r.historyId}::${x.id}` === r.key);
+        const item = findHistory(r.historyId);
+        const c = (loaded[r.historyId] ?? historyCandidatesById[r.historyId] ?? []).find(x => `${r.historyId}::${x.id}` === r.key);
         if (!item || !c) return [];
         return [{
           jdCode: jobs.find(j => j.id === item.jobId)?.jobId || '-',
@@ -3523,11 +3509,17 @@ export default function AITalentMatchPage({
       );
     };
 
+    // "All" = every candidate matching the filters (candList.total), not the page.
     const candKeys = sortedCandidateRows.map(r => r.key);
+    const candMatchingTotal = candList.total;
     const pageCandKeys = paginatedCandidateRows.map(r => r.key);
     const isCandPartly = (k: string) => !selectedCandKeys.has(k) && (partialCandJobs[k]?.length ?? 0) > 0;
-    const allCandsSelected = candKeys.length > 0 && candKeys.every(k => selectedCandKeys.has(k));
-    const tickedCands = sortedCandidateRows.filter(r => selectedCandKeys.has(r.key) || isCandPartly(r.key));
+    const allCandsSelected = candMatchingTotal > 0 && selectedCandKeys.size >= candMatchingTotal;
+    // Ticked rows may sit on other pages: read them from the rows seen this visit.
+    const tickedCands = Array.from(new Set([...Array.from(selectedCandKeys), ...Object.keys(partialCandJobs)]))
+      .filter(k => selectedCandKeys.has(k) || isCandPartly(k))
+      .map(k => candidateRows.find(r => r.key === k) ?? candRowCache[k])
+      .filter((r): r is CandidateMatchRow => !!r);
     const candViewSelectedRows: MatchInviteRow[] = tickedCands.flatMap(r =>
       candRowsOf(r, selectedCandKeys.has(r.key) ? undefined : new Set(partialCandJobs[r.key] ?? [])));
 
@@ -3545,7 +3537,7 @@ export default function AITalentMatchPage({
       if (count === 0) return null;
       const itemFor = (jdId: string) => {
         const r = rows.find(x => x.jobId === jdId);
-        return r ? matchHistory.find(h => h.id === r.historyId) : undefined;
+        return r ? findHistory(r.historyId) : undefined;
       };
       const guard = (): boolean => {
         if (loading) { toast.info('Candidates are still loading — try again in a moment'); return false; }
@@ -3664,10 +3656,7 @@ export default function AITalentMatchPage({
                   if (guard()) {
                     // Candidates view rows come from every session — make
                     // sure each is loaded before the file is written.
-                    rows.forEach(r => {
-                      const item = matchHistory.find(h => h.id === r.historyId);
-                      if (item) void loadHistoryCandidates(item, { silent: true });
-                    });
+                    void ensureSessionsLoaded(rows.map(r => r.historyId));
                     setExportRows(rows);
                   }
                 }}
@@ -3909,9 +3898,8 @@ export default function AITalentMatchPage({
           );
           // Distinct candidates holding a match in the band — only once the
           // candidate roll-up is in, so the chip never shows a false 0.
-          const rowsLoaded = !loadingCandidateRows && candidateRows.length > 0;
-          const peopleInBand = (band: RatingBand) =>
-            candidateRows.filter(row => row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === band)).length;
+          const rowsLoaded = matchStats !== null;
+          const peopleInBand = (band: RatingBand) => matchStats?.candidates_by_band?.[band] ?? 0;
           return (
         <div className="mb-4 sm:mb-5">
         <StatsCardGrid className="mb-0">
@@ -3921,9 +3909,9 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchHistory.length.toLocaleString()}
+            value={matchStats ? matchStats.matched_jobs.toLocaleString() : statLoading}
             sparkline={false}
-            title={`${matchHistory.length.toLocaleString()} jobs have AI Talent Match results`
+            title={`${(matchStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
               + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
               + '. Click to view by job.'}
             onClick={() => openHistoryListView()}
@@ -4166,7 +4154,7 @@ export default function AITalentMatchPage({
                     <SelectAllMenu
                       selectedCount={tickedCands.length}
                       pageCount={pageCandKeys.length}
-                      totalCount={candKeys.length}
+                      totalCount={candMatchingTotal}
                       noun="candidates"
                       allSelected={allCandsSelected}
                       onSelectPage={() => {
@@ -4177,10 +4165,7 @@ export default function AITalentMatchPage({
                           return next;
                         });
                       }}
-                      onSelectAll={() => {
-                        setSelectedCandKeys(new Set(candKeys));
-                        setPartialCandJobs({});
-                      }}
+                      onSelectAll={() => { void selectAllMatchingCandidates(); }}
                       onClear={clearCandSelection}
                     />
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
@@ -4853,7 +4838,7 @@ export default function AITalentMatchPage({
                 <ListPagination
                   currentPage={candidateCurrentPage}
                   itemsPerPage={candidateItemsPerPage}
-                  totalItems={sortedCandidateRows.length}
+                  totalItems={candList.total}
                   onPageChange={setCandidateCurrentPage}
                   onItemsPerPageChange={setCandidateItemsPerPage}
                   itemLabel="candidates"
@@ -5633,9 +5618,9 @@ export default function AITalentMatchPage({
             filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
             leadingActions={(() => {
-              const records = matchHistory.map(i => jobs.find(j => j.id === i.jobId)).filter(Boolean) as Job[];
-              const locations = [...new Set(records.map(j => j.location).filter(Boolean))] as string[];
-              const industries = [...new Set(records.map(j => j.industryType).filter(Boolean))] as string[];
+              // Options from every matched job (stats facets), not just this page.
+              const locations = facets?.job_locations ?? [];
+              const industries = facets?.industries ?? [];
               return (
                 <>
                   <SearchableSelect
@@ -5682,10 +5667,9 @@ export default function AITalentMatchPage({
           {/* More Filters — Resume Scoring's boxed panel; Done rides the last
               row of fields. The controls commit as they change. */}
           {showHistoryFilters && (() => {
-            const records = matchHistory.map(i => jobs.find(j => j.id === i.jobId)).filter(Boolean) as Job[];
-            const workModes = [...new Set(records.map(j => j.remoteType).filter(Boolean))] as string[];
-            const jobTypes = [...new Set(records.map(j => j.employmentType).filter(Boolean))] as string[];
-            const matchedByNames = [...new Set(matchHistory.map(i => i.matchedByName || 'System'))].sort();
+            const workModes = facets?.work_modes ?? [];
+            const jobTypes = facets?.job_types ?? [];
+            const matchedByNames = facets?.matched_by ?? [];
             const selectCls = FIELD_SELECT_CLASS;
             const labelCls = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5';
             return (
@@ -5812,12 +5796,12 @@ export default function AITalentMatchPage({
               all (Actions and Clear get their own row once jobs are ticked)
               — Resume Scoring's View by Job. */}
           <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-            {jobKeys.length > 0 && (
+            {(pageJobKeys.length > 0 || jobKeys.length > 0) && (
               <>
                 <SelectAllMenu
                   selectedCount={selectedJobCount}
                   pageCount={pageJobKeys.length}
-                  totalCount={jobKeys.length}
+                  totalCount={jobsMatchingTotal}
                   noun="jobs"
                   allSelected={allJobsSelected}
                   onSelectPage={() => {
@@ -5828,10 +5812,7 @@ export default function AITalentMatchPage({
                       return next;
                     });
                   }}
-                  onSelectAll={() => {
-                    setSelectedJobKeys(new Set(jobKeys));
-                    setPartialJobRows({});
-                  }}
+                  onSelectAll={() => { void selectAllMatchingJobs(); }}
                   onClear={clearJobSelection}
                 />
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
@@ -5885,6 +5866,8 @@ export default function AITalentMatchPage({
               const jobKey = item.id;
               const hasMatches = (item.totalMatches || 0) > 0;
               const loaded = jobLoaded(item);
+              // Tallies / scored chip read the server row; only the opened panel needs the candidates.
+              const summaryReady = loaded || jobItemById.has(item.id);
               const isJobExpanded = expandedJobKeys.has(jobKey);
               const isSelected = selectedJobKeys.has(jobKey);
               const isPartlySelected = isJobPartlySelected(jobKey);
@@ -6593,8 +6576,8 @@ export default function AITalentMatchPage({
                        scored against this job in Resume Scoring. */
                     {
                       label: 'Scored',
-                      value: hasMatches && loaded && scoredResumeIdsByJd
-                        ? `${allCandidates.filter(c => !!scoreIdFor(item.jobId, c.resumeId)).length} of ${allCandidates.length}`
+                      value: hasMatches && summaryReady
+                        ? `${scoredCountOf(item).scored} of ${scoredCountOf(item).total}`
                         : null,
                     },
                   ]}
@@ -6602,7 +6585,7 @@ export default function AITalentMatchPage({
                     !hasMatches ? (
                       /* A run that found nobody still counts as a matched job — it just says so. */
                       <MobileStatChip tone="warning" icon={<AlertCircle />}>No candidates matched</MobileStatChip>
-                    ) : !loaded ? (
+                    ) : !summaryReady ? (
                       <MobileStatChip tone="info" icon={<FileText />}>{item.totalMatches} Matched</MobileStatChip>
                     ) : (
                       <>
@@ -6730,8 +6713,8 @@ export default function AITalentMatchPage({
                             scored against this job in Resume Scoring. (Not the
                             JD's "applicants", which counts every resume ever
                             scored for the JD, matched by this run or not.) */}
-                        {hasMatches && loaded && scoredResumeIdsByJd && (() => {
-                          const scoredCount = allCandidates.filter(c => !!scoreIdFor(item.jobId, c.resumeId)).length;
+                        {hasMatches && summaryReady && (() => {
+                          const { scored: scoredCount, total: scoredOf } = scoredCountOf(item);
                           return (
                             /* Same label / value look as "By:" and "Matched:" beside it. */
                             <span
@@ -6739,7 +6722,7 @@ export default function AITalentMatchPage({
                               title="Matched candidates already scored against this job in Resume Scoring"
                             >
                               <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>
-                              <span className="font-normal text-gray-500 dark:text-slate-400">{scoredCount} of {allCandidates.length}</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400">{scoredCount} of {scoredOf}</span>
                             </span>
                           );
                         })()}
@@ -6770,7 +6753,7 @@ export default function AITalentMatchPage({
                           candidates load, the run's own total. */}
                       {hasMatches && (
                         <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
-                          {!loaded ? (
+                          {!summaryReady ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                               <FileText className="w-4 h-4" />
                               {item.totalMatches} Matched
@@ -6902,7 +6885,7 @@ export default function AITalentMatchPage({
                       <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
                       </td>
-                    ) : !loaded ? (
+                    ) : !summaryReady ? (
                       <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
                       </td>
@@ -6981,14 +6964,16 @@ export default function AITalentMatchPage({
             <ListPagination
               currentPage={historyCurrentPage}
               itemsPerPage={historyItemsPerPage}
-              totalItems={bandHistory.length}
+              totalItems={jobsList.total}
               onPageChange={setHistoryCurrentPage}
               onItemsPerPageChange={setHistoryItemsPerPage}
               itemLabel="jobs"
             />
             </>
           );
-        })() : matchHistory.length === 0 ? (
+        })() : jobsList.loading ? (
+          <MatchTableSkeleton cols={['w-24', 'w-48', 'w-24', 'w-32', 'w-24']} rows={5} />
+        ) : (matchStats?.matched_jobs ?? 0) === 0 && !historySearch.isNarrowed && !candidateRatingBand ? (
           <div className="tf-card">
             <EmptyState
               icon={History}
@@ -7655,7 +7640,7 @@ export default function AITalentMatchPage({
     const resultsJobTitle = selectedJobData?.title
       || resultsLineageEntry?.title
       || selectedHistoryItem?.jobTitle
-      || matchHistory.find(item => item.jobId === selectedJob)?.jobTitle
+      || findHistoryByJd(selectedJob)?.jobTitle
       || '';
     const resultsJobCode = selectedJobData?.jobId || resultsLineageEntry?.job_id;
     const resultsVersionNumber = resultsLineageEntry?.version_number ?? selectedJobData?.currentVersion;
@@ -7814,7 +7799,7 @@ export default function AITalentMatchPage({
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
-    const historyItemForSelectedJob = matchHistory.find(item => item.jobId === selectedJob);
+    const historyItemForSelectedJob = findHistoryByJd(selectedJob);
     const isLoadingResultsFromHistory =
       loadingHistorySessionId !== null &&
       (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
@@ -8882,7 +8867,8 @@ export default function AITalentMatchPage({
 
       <AITalentMatchPageJobsList
         jobs={jobs}
-        matchHistory={matchHistory}
+        /* Jobs already matched that this visit has seen (pages, deep links). */
+        matchHistory={Object.values(knownSessions).filter(s => s.fromJobPage).map(toHistoryItem)}
         onSelectJob={(jobId) => {
           handleRunAIMatch(jobId);
         }}

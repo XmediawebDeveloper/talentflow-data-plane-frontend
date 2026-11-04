@@ -41,6 +41,14 @@ interface ScoredResumeData {
   jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
+  /** Server-counted Exact / Partial / No Match for this JD version (every
+   *  score event) — GET /scoring/jds. Lets the job rows show their counts
+   *  without the whole scored-resume table in the browser. */
+  verdictCounts?: { exact: number; partial: number; none: number };
+  /** Who ran this version's most recent scoring. */
+  latestScoredBy?: string;
+  /** True once `scoredResumes` holds this version's own scores (loadJdScores). */
+  scoresLoaded?: boolean;
 }
 
 interface Job {
@@ -69,7 +77,11 @@ export default function ResumeScoringRoute() {
   // set as soon as THAT resolves, well before the much slower follow-up
   // fetch of the entire scored-resume table `scoredHistory` waits on. See
   // ResumeScoringPage's `scoreCounts` prop.
-  const [scoreCounts, setScoreCounts] = useState<{ total: number; exact: number; partial: number; none: number } | null>(null);
+  const [scoreCounts, setScoreCounts] = useState<{
+    total: number; exact: number; partial: number; none: number;
+    /** Distinct candidates behind each card (the cards' "N candidates" chip). */
+    people?: { all: number; exact: number; partial: number; none: number };
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   // Set once the mount effect has read the URL params into state, so the page
   // never mounts with them still unset.
@@ -423,189 +435,88 @@ export default function ResumeScoringRoute() {
   const historySeqRef = useRef(0);
   const jdScoresSeqRef = useRef(new Map<string, number>());
 
+  /* JD ids whose full score list has been loaded this session (loadJdScores):
+     a history refresh re-reads exactly those, so an open job page never
+     drops back to an empty list. */
+  const loadedJdScoresRef = useRef(new Set<string>());
+
+  /**
+   * The landing: the four cards (GET /scoring/stats) and the scored-job index
+   * (GET /scoring/jds?group_by=version — one light row per scored JD version
+   * with its server-counted Exact / Partial / No Match), in parallel.
+   *
+   * This used to be a page_size:1 probe of /scoring/all for the cards plus the
+   * ENTIRE scored-resume table (every score, with resume details) just to
+   * group it by JD in the browser — and ResumeScoringPage fetched that table a
+   * second time in the background. The per-JD scores now load on demand
+   * (loadJdScores) and the cross-job candidate list only when it is opened.
+   */
   const loadScoredHistory = async () => {
     const seq = ++historySeqRef.current;
     const isStale = () => seq !== historySeqRef.current;
-    // Load scored history sidebar from the API - only page 1 (sorted by created_at DESC)
-    // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     setHistoryLoading(true);
     try {
-      // A cheap probe for the stat cards, and the full table in parallel.
-      // The probe alone already carries the four stat-card numbers (GET
-      // /scoring/all computes excellent_count/partial_count/no_match_count
-      // via three COUNT queries on every call, page_size:1 included) — set
-      // them the moment it lands instead of waiting on the full-table fetch
-      // below, which exists only to build the "View by Job"/"View by
-      // Candidates" list bodies, not to answer these counts.
-      // The full table is requested alongside the probe, not after it.
-      const fullRequest = fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page_size, page }));
-      fullRequest.catch(() => { /* surfaced by the await below */ });
-      const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
-      if (isStale()) return;
-      setScoreCounts({
-        total: probe.total || 0,
-        exact: probe.excellent_count || 0,
-        partial: probe.partial_count || 0,
-        none: probe.no_match_count || 0,
-      });
-      const firstPage = await fullRequest;
-      if (isStale()) return;
-      const allItems = firstPage.items || [];
-
-      // Group scores by JD
-      const scoresByJd = new Map<string, {
-        jdTitle: string; jdStatus: string; jdJobId?: string;
-        jdCreationMethod?: string; jdCurrentVersion?: number; jdVersionNumber?: number;
-        jdDepartment?: string; jdIndustryType?: string;
-        jdEmploymentType?: string; jdRemoteType?: string; jdLocation?: string;
-        jdPublishedAt?: string; jdCreatedByName?: string;
-        // The most recently scored resume's created_at for this JD. Captured
-        // from the FIRST item seen per jdId below, never re-derived from
-        // `scores` after that array gets re-sorted by score — `getAllScoredResumes`
-        // is documented to return newest-first, so the first item encountered
-        // for a jdId is its most recent score.
-        latestScoredAt?: string;
-        /** The raw `source` of the FIRST item seen per jdId — `getAllScoredResumes`
-         *  returns newest-first, so that's this JD's most-recently-scored resume's
-         *  actual origin, captured the same way as `latestScoredAt` above. Used for
-         *  the aggregate row's own `source` instead of a hardcoded value that read
-         *  the same regardless of where the resume was actually scored from. */
-        latestSource?: string;
-        scores: any[];
-      }>();
-
-      for (const item of allItems) {
-        const jdId = item.jd_id;
-        if (!scoresByJd.has(jdId)) {
-          scoresByJd.set(jdId, {
-            jdTitle: item.jd_title || 'Unknown Job',
-            jdStatus: item.jd_status || 'published',
-            jdJobId: item.jd_job_id,
-            jdCreationMethod: item.jd_creation_method,
-            jdCurrentVersion: item.jd_current_version,
-            jdVersionNumber: item.jd_version_number,
-            jdDepartment: item.jd_department,
-            jdIndustryType: item.jd_industry_type,
-            jdEmploymentType: item.jd_employment_type,
-            jdRemoteType: item.jd_remote_type,
-            jdLocation: item.jd_location,
-            jdPublishedAt: item.jd_published_at,
-            jdCreatedByName: item.jd_created_by_name,
-            latestScoredAt: item.created_at,
-            latestSource: item.source,
-            scores: [],
+      const statsRequest = scoringService.getScoringStats()
+        .then((stats) => {
+          if (isStale()) return;
+          setScoreCounts({
+            total: stats.total || 0,
+            exact: stats.exact_match || 0,
+            partial: stats.partial_match || 0,
+            none: stats.no_match || 0,
+            people: stats.candidates ? {
+              all: stats.candidates.all || 0,
+              exact: stats.candidates.exact_match || 0,
+              partial: stats.candidates.partial_match || 0,
+              none: stats.candidates.no_match || 0,
+            } : undefined,
           });
-        }
+        })
+        .catch((err) => console.warn('[ResumeScoringRoute] stats failed', err));
+      const index = await fetchAllRows((page_size, page) =>
+        scoringService.listScoredJds({ group_by: 'version', include_facets: false, page_size, page }),
+      );
+      await statsRequest;
+      if (isStale()) return;
 
-        // Convert score to display format - use backend match_status as source of truth
-        const matchScore = Math.round(item.overall_score || 0);
-        let matchStatus = 'No Match';
-        // Read once as a plain string: match_status is a snake_case union on the API type,
-        // but these branches also accept already-display-formatted values ('Exact Match').
-        // Comparing the union directly made those arms "unintentional" and narrowed the
-        // union further on each else-if. Kept as the author's defensive handling.
-        const rawMatchStatus = item.match_status as string;
-        if (rawMatchStatus === 'exact_match' || rawMatchStatus === 'Exact Match') {
-          matchStatus = 'Exact Match';
-        } else if (rawMatchStatus === 'partial_match' || rawMatchStatus === 'Partial Match') {
-          matchStatus = 'Partial Match';
-        } else if (rawMatchStatus === 'no_match' || rawMatchStatus === 'No Match') {
-          matchStatus = 'No Match';
-        } else if (matchScore >= 70) {
-          // Fallback: score-based only when backend doesn't provide match_status
-          matchStatus = 'Exact Match';
-        } else if (matchScore >= 50) {
-          matchStatus = 'Partial Match';
-        }
-
-        scoresByJd.get(jdId)!.scores.push({
-          id: item.id,
-          resumeId: item.resume_id || item.resumeId || '',  // CRITICAL: Resume ID for fetching details
-          candidateName: item.candidate_name || 'Unknown',
-          candidateEmail: item.email || item.candidate_email || '',
-          email: item.email || item.candidate_email || '',
-          phone: item.phone || '',
-          // Missing here left the Invite button enabled for an archived resume
-          // whenever this JD's history came from this grouped load instead of
-          // the global scored-resumes list (which already carries it).
-          isArchived: !!item.is_archived,
-          overall_score: matchScore,  // Use overall_score as primary field
-          matchScore: matchScore,
-          matchStatus: matchStatus,
-          scorePercentage: matchScore,
-          overallRating10: item.overall_rating_10,
-          scoredDate: item.created_at || new Date().toISOString(),
-          scoredBy: item.scored_by_name || item.scored_by || 'System',
-          // The scorer's own account identifier — for the Scoring History
-          // modal's per-scorer email line, shown only when it looks like one.
-          scoredByEmail: item.scored_by,
-          // Version info
-          version: item.resume_version || item.version || 1,
-          resumeVersion: item.resume_version || item.version || 1,
-          // Source, Status, Error Reason fields
-          source: item.source || 'database',
-          status: item.status || 'completed',
-          errorReason: item.error_message || item.error_reason || '',
-          experience: item.experience_years ? `${item.experience_years} years` : undefined,
-          education: item.education,
-          certifications: item.certifications || [],
-          aiSummary: item.ai_summary,
-          strengths: item.strengths || [],
-          gaps: item.gaps || [],
-          title: item.current_title,
-          currentCompany: item.current_company,
-          location: item.location,
-          skills: item.skills || [],
-          matchedSkills: item.matched_skills || item.matchedSkills || item.skills || [],
-          missingSkills: item.missing_skills || item.missingSkills || item.gaps || [],
-          scoreBreakdown: item.score_breakdown || [],
-          criteriaScores: item.criteria_scores || {},
-          technicalSkills: item.technical_skills || item.skills || [],
-          softSkills: item.soft_skills || [],
-          experienceDetails: item.experience_details || [],
-          educationDetails: item.education_details || [],
-          languages: item.languages || [],
-          professionalSummary: item.professional_summary || item.ai_summary || '',
-        });
-      }
-
-      // Convert to ScoredResumeData array
-      const validHistory: ScoredResumeData[] = [];
-      scoresByJd.forEach((data, jdId) => {
-        if (data.scores.length > 0) {
-          // Sort scored resumes by score descending for consistent ordering
-          data.scores.sort((a: any, b: any) => (b.overall_score || b.matchScore || 0) - (a.overall_score || a.matchScore || 0));
-          validHistory.push({
-            id: jdId,
-            jobId: jdId,
-            jobTitle: data.jdTitle,
-            // The most recent score's date, not data.scores[0] — that array is
-            // sorted by score descending just above, so its first entry is the
-            // highest-scoring resume, not necessarily the latest one scored.
-            scoredAt: parseIST(data.latestScoredAt || data.scores[0]?.scoredDate || new Date().toISOString()),
-            source: data.latestSource || 'database',
-            jdStatus: data.jdStatus,
-            jdJobId: data.jdJobId,
-            jdCreationMethod: data.jdCreationMethod,
-            jdCurrentVersion: data.jdCurrentVersion,
-            jdVersionNumber: data.jdVersionNumber,
-            jdDepartment: data.jdDepartment,
-            jdIndustryType: data.jdIndustryType,
-            jdEmploymentType: data.jdEmploymentType,
-            jdRemoteType: data.jdRemoteType,
-            jdLocation: data.jdLocation,
-            jdPublishedAt: data.jdPublishedAt,
-            jdCreatedByName: data.jdCreatedByName,
-            totalScored: data.scores.length,
-            scoredResumes: data.scores,
-          });
-        }
-      });
+      const validHistory: ScoredResumeData[] = (index.items || []).map((row) => ({
+        id: row.jd_id,
+        jobId: row.jd_id,
+        jobTitle: row.jd_title || 'Unknown Job',
+        scoredAt: parseIST(row.latest_scored_at || new Date().toISOString()),
+        source: 'database',
+        jdStatus: row.jd_status || 'published',
+        jdJobId: row.jd_job_id,
+        jdCreationMethod: row.jd_creation_method,
+        jdCurrentVersion: row.jd_current_version,
+        jdVersionNumber: row.jd_version_number,
+        jdDepartment: row.jd_department,
+        jdIndustryType: row.jd_industry_type,
+        jdEmploymentType: row.jd_employment_type,
+        jdRemoteType: row.jd_remote_type,
+        jdLocation: row.jd_location,
+        jdPublishedAt: row.jd_published_at || undefined,
+        jdCreatedByName: row.jd_created_by_name || undefined,
+        totalScored: row.scored_count || 0,
+        scoredResumes: [],
+        verdictCounts: { exact: row.exact_count || 0, partial: row.partial_count || 0, none: row.no_match_count || 0 },
+        latestScoredBy: row.latest_scored_by_name,
+      }));
 
       // Sort by scored date (most recent first)
       validHistory.sort((a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime());
 
-      setScoredHistory(validHistory);
+      // Keep the scores already loaded for an opened job on screen, then
+      // re-read them (they may have just changed — this runs after scoring).
+      setScoredHistory(prev => {
+        const loaded = new Map(prev.filter(h => h.scoresLoaded).map(h => [h.jobId, h]));
+        return validHistory.map(h => {
+          const old = loaded.get(h.jobId);
+          return old ? { ...h, scoredResumes: old.scoredResumes, scoresLoaded: true } : h;
+        });
+      });
+      const reload = Array.from(loadedJdScoresRef.current).filter(id => validHistory.some(h => h.jobId === id));
+      reload.forEach(id => { void loadJdScores(id); });
 
       // Clear old localStorage data to ensure consistency with API data
       try {
@@ -641,9 +552,10 @@ export default function ResumeScoringRoute() {
     const seq = (jdScoresSeqRef.current.get(jdId) ?? 0) + 1;
     jdScoresSeqRef.current.set(jdId, seq);
     const isStale = () => seq !== jdScoresSeqRef.current.get(jdId);
+    loadedJdScoresRef.current.add(jdId);
     try {
       // Probe for total then pull every score for this JD in one request
-      const firstPage = await fetchAllRows((page_size, page) => scoringService.getJDScoredResumes(jdId, { page_size, page }));
+      const firstPage = await fetchAllRows((page_size, page) => scoringService.getJDScoredResumes(jdId, { page_size, page, include_counts: false }));
       if (isStale()) return;
       const allItems = [...(firstPage.items || [])];
       // /scoring/jd/{id} returns newest-first — capture the most recent score's
@@ -734,6 +646,7 @@ export default function ResumeScoringRoute() {
           source: mostRecentSource || existing?.source || 'database',
           totalScored: firstPage.total || scores.length,
           scoredResumes: scores,
+          scoresLoaded: true,
         };
         if (existing) {
           return prev.map(h => h.jobId === jdId ? updatedEntry : h);

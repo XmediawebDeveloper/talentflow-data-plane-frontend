@@ -4,7 +4,11 @@ import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
 import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import BulkScoringProgressModal, { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
+import dynamic from 'next/dynamic';
+import type { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
+
+/* On demand: mounted from the dashboard layout, opened only while scoring runs. */
+const BulkScoringProgressModal = dynamic(() => import('@/components/BulkScoringProgressModal'), { ssr: false, loading: () => null });
 import { Button } from '@/components/ui/button';
 
 /** One candidate's scorecard: the job page's Scored Resumes tab, opened on that resume. */

@@ -416,9 +416,42 @@ export interface ResumeSearchParams {
   page_size?: number;
   sort_by?: string;
   include_archived?: boolean;
+  /** Multi-keyword search: 'all' keywords must match (server default) or 'any'. */
+  search_mode?: 'all' | 'any';
+}
+
+/** GET /resumes/stats — counts built from the same filters as GET /resumes. */
+export interface ResumeStatsParams extends Omit<ResumeSearchParams, 'folder_id' | 'page' | 'page_size' | 'sort_by'> {
+  /** false skips the per-folder GROUP BY (tab badges only). */
+  include_folders?: boolean;
+}
+
+export interface ResumeStats {
+  source: 'my-resumes' | 'internal-db' | null;
+  /** = GET /resumes?source=<source> total (no folder). Null when not readable. */
+  all_total: number | null;
+  /** Tab badges; a pool the user may not read is null. */
+  sources: { 'my-resumes': number | null; 'internal-db': number | null };
+  /** = GET /resumes?source=<source>&folder_id=uncategorized total. */
+  uncategorized: number | null;
+  /** folder_id -> GET /resumes?source=<source>&folder_id=<id> total (archived rows included). */
+  folders: Record<string, number>;
 }
 
 export const resumeService = {
+  /**
+   * Card / badge counts for the Resume Database in one call (replaces the
+   * per-tab and per-folder page_size=1 probes).
+   */
+  async stats(params?: ResumeStatsParams): Promise<ResumeStats> {
+    try {
+      const response = await api.get<ResumeStats>('/resumes/stats', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   /**
    * List resumes with filters
    */
