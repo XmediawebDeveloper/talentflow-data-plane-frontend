@@ -91,6 +91,20 @@ export async function getRoles(): Promise<{
   };
 }
 
+/**
+ * Permission codes for several roles in ONE request
+ * (`GET /rbac/roles/permission-codes?ids=`). Ids the caller can't see are
+ * absent from the result. Throws on an older backend without the route.
+ */
+export async function getRolesPermissionCodes(roleIds: number[]): Promise<Record<number, string[]>> {
+  const response = await api.get<{ roles: Record<string, string[]> }>(`${RBAC_BASE_URL}/roles/permission-codes`, {
+    params: { ids: roleIds.join(',') },
+  });
+  const out: Record<number, string[]> = {};
+  Object.entries(response.data?.roles || {}).forEach(([id, codes]) => { out[Number(id)] = codes || []; });
+  return out;
+}
+
 export async function getRoleById(roleId: number): Promise<Role> {
   const response = await api.get(`${RBAC_BASE_URL}/roles/${roleId}`);
 
@@ -248,6 +262,7 @@ const rbacService = {
   getPermissionModules,
   getRoles,
   getRoleById,
+  getRolesPermissionCodes,
   createRole,
   updateRole,
   deleteRole,

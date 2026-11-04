@@ -57,18 +57,10 @@ import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
 
-/** Every active user. The users API returns at most 100 per page (20 by
- *  default), so a single call left everyone past the first page out of the
- *  member picker and the Unassigned count. */
+/** Every active user — one /users/paged call (legacy 100-per-page walk only on
+ *  an older backend), for the member picker and the Unassigned view. */
 async function fetchAllActiveUsers(): Promise<ApiUser[]> {
-  const PAGE = 100;
-  const all: ApiUser[] = [];
-  for (let page = 1; page <= 50; page++) {
-    const batch = await userService.listUsers({ is_active: true, page, page_size: PAGE });
-    all.push(...batch);
-    if (batch.length < PAGE) break;
-  }
-  return all;
+  return userService.listAllActiveUsers();
 }
 
 /** Units per team over the last 30 days (all teams for admins, own teams otherwise). */
@@ -90,6 +82,10 @@ async function fetchTeamUnits30(isAdmin: boolean): Promise<Record<string, TeamUn
 /** Team id → creator's name, from the history's "Team Created" events. The team
  *  API has no created_by field; the history does (it's tenant-admin only). */
 async function fetchTeamCreators(): Promise<Record<string, string>> {
+  // One query on the server; the history walk below is the older-backend fallback.
+  try {
+    return await teamService.getTeamCreators();
+  } catch { /* fall back */ }
   const PAGE = 500;
   const out: Record<string, string> = {};
   for (let offset = 0; offset < PAGE * 5; offset += PAGE) {
@@ -350,6 +346,8 @@ export default function TeamManagementPage() {
     return [...result].sort((a, b) => sign * sorters[sortBy](a, b));
   }, [teams, searchQuery, filterTeamLead, attentionFilter, sortBy, sortDir, unitsByTeam]);
 
+  // The team list arrives with the stats, and the filters apply to it, so the
+  // counts stay derived from it (/teams/stats returns the same numbers).
   const attentionCounts = useMemo(() => ({
     noLead: teams.filter((t) => !t.team_lead).length,
     empty: teams.filter((t) => (t.member_count || 0) === 0).length,
@@ -901,7 +899,7 @@ export default function TeamManagementPage() {
               <>
                 <TeamStatsCards
                   stats={stats}
-                  unassignedUsers={allUsers ? unassignedUsers.length : null}
+                  unassignedUsers={allUsers ? unassignedUsers.length : (stats?.unassigned_users ?? null)}
                   noLeadTeams={attentionCounts.noLead}
                   units30={units30Total}
                   onCardClick={openListView}

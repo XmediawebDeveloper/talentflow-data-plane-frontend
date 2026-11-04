@@ -611,8 +611,16 @@ api.interceptors.response.use(
     }
 
     // ✅ Check if quota-status response has expired trial/plan dates
-    if (response.config.url?.includes('/usage/quota-status')) {
-      const quotaData = response.data?.data || response.data;
+    // The app-shell /bootstrap response carries the same quota-status body
+    // (parts.quota_status.data) — run the same expiry check on it.
+    const bootstrapQuotaPart = response.config.url?.includes('/bootstrap')
+      ? response.data?.parts?.quota_status
+      : undefined;
+    const bootstrapQuota = bootstrapQuotaPart?.status === 200 ? bootstrapQuotaPart.data : undefined;
+    if (response.config.url?.includes('/usage/quota-status') || bootstrapQuota) {
+      const quotaData = bootstrapQuota
+        ? (bootstrapQuota.data || bootstrapQuota)
+        : (response.data?.data || response.data);
       if (!quotaData) {
         return response; // No data to check
       }

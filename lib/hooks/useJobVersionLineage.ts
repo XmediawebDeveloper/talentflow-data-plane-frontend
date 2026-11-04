@@ -120,41 +120,51 @@ export function useJobVersionLineage(): JobVersionLineage {
 
   /* Deliberately not cached the way the JD record is: scoring a resume changes
      this number, so it is re-counted every time the panel is opened. A failure
-     leaves the entry unset, so the cell keeps its dash instead of showing a
-     zero that would read as "nobody applied". */
-  const refreshVersionApplicants = useCallback(async (versionId: string) => {
+     leaves the entries unset, so the cells keep their dash instead of showing a
+     zero that would read as "nobody applied".
+
+     ONE request for every version asked about (GET /scoring/jd/counts) — it
+     used to be one /scoring/jd/{id}?page_size=1 per version. `top` is the row
+     that call listed first, so "Scored By" reads exactly what it read before. */
+  const refreshVersionApplicantsBatch = useCallback(async (versionIds: string[]) => {
+    const ids = Array.from(new Set(versionIds.filter(Boolean)));
+    if (ids.length === 0) return;
     try {
-      const scored = await scoringService.getJDScoredResumes(versionId, { page_size: 1 });
-      setVersionApplicants(prev => ({ ...prev, [versionId]: scored?.total ?? 0 }));
-      /* /scoring/jd/{id} returns newest-first, same as /scoring/all — so the
-         single row this page_size:1 request already fetched is the most
-         recent score for this version. Reused here rather than a second
-         request just for the "Scored By" column. */
-      const latest = scored?.items?.[0];
-      setVersionScoredBy(prev => ({
-        ...prev,
-        [versionId]: latest
-          ? { name: latest.scored_by_name || latest.scored_by || 'Unknown', scoredAt: latest.created_at, source: latest.source }
-          : null,
-      }));
+      const counts = await scoringService.getJdScoredCounts(ids);
+      const answered = ids.filter((id) => counts[id]);
+      if (answered.length === 0) return;
+      setVersionApplicants(prev => {
+        const next = { ...prev };
+        answered.forEach((id) => { next[id] = counts[id].total ?? 0; });
+        return next;
+      });
+      setVersionScoredBy(prev => {
+        const next = { ...prev };
+        answered.forEach((id) => {
+          const top = counts[id].top;
+          next[id] = top ? { name: top.scored_by_name || 'Unknown', scoredAt: top.created_at ?? '' } : null;
+        });
+        return next;
+      });
     } catch {
-      /* keep whatever was there; the cell falls back to a dash */
+      /* keep whatever was there; the cells fall back to a dash */
     }
   }, []);
 
   const ensureVersionApplicants = useCallback(
     (versionIds: string[]) => {
-      versionIds.forEach((versionId) => {
-        if (!versionId) return;
-        if (Object.prototype.hasOwnProperty.call(versionApplicants, versionId)) return;
-        if (versionApplicantsInFlight.current.has(versionId)) return;
-        versionApplicantsInFlight.current.add(versionId);
-        void refreshVersionApplicants(versionId).finally(() => {
-          versionApplicantsInFlight.current.delete(versionId);
-        });
+      const wanted = Array.from(new Set(versionIds.filter(Boolean))).filter(
+        (versionId) =>
+          !Object.prototype.hasOwnProperty.call(versionApplicants, versionId) &&
+          !versionApplicantsInFlight.current.has(versionId),
+      );
+      if (wanted.length === 0) return;
+      wanted.forEach((id) => versionApplicantsInFlight.current.add(id));
+      void refreshVersionApplicantsBatch(wanted).finally(() => {
+        wanted.forEach((id) => versionApplicantsInFlight.current.delete(id));
       });
     },
-    [versionApplicants, refreshVersionApplicants],
+    [versionApplicants, refreshVersionApplicantsBatch],
   );
 
   const loadLineage = useCallback(
@@ -164,23 +174,32 @@ export function useJobVersionLineage(): JobVersionLineage {
       try {
         const lineage = await jdService.getLineageVersions(jobId);
         setLineages(prev => ({ ...prev, [key]: lineage || [] }));
-        // Enrich each version with its own JD record, in parallel; every result
-        // lands as it arrives so the table fills in progressively.
-        (lineage || []).forEach((version) => {
+        /* Each version's own JD record, for the columns the lineage rows lack —
+           ONE list request for the whole lineage (it used to be one GET
+           /jd/{id} per version). A version the answer lacks, or a failed
+           request, gets an empty record (not an absent one) so a panel waiting
+           on its detail stops showing its placeholder and shows dashes. */
+        const versionIds = (lineage || []).map((version) => version.id).filter(Boolean);
+        if (versionIds.length > 0) {
           jdService
-            .getById(version.id)
-            .then((full) => {
-              setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: full }));
+            .list({ ids: versionIds, page: 1, page_size: versionIds.length })
+            .then((res) => {
+              const byId = new Map((res?.items ?? []).map((jd) => [jd.id, jd]));
+              setVersionDetails(prev => {
+                const next = { ...prev };
+                versionIds.forEach((id) => { if (!next[id]) next[id] = byId.get(id) ?? ({} as JDResponse); });
+                return next;
+              });
             })
             .catch(() => {
-              /* Row falls back to the lineage fields + dashes. An empty record
-                 (not an absent one) marks the fetch as settled, so a panel
-                 waiting on this version's detail stops showing its placeholder. */
-              setVersionDetails(prev => (prev[version.id] ? prev : { ...prev, [version.id]: {} as JDResponse }));
+              setVersionDetails(prev => {
+                const next = { ...prev };
+                versionIds.forEach((id) => { if (!next[id]) next[id] = {} as JDResponse; });
+                return next;
+              });
             });
-
-          void refreshVersionApplicants(version.id);
-        });
+          void refreshVersionApplicantsBatch(versionIds);
+        }
       } catch {
         // Leave it uncached so the next expand retries rather than showing an
         // empty history as if the job genuinely had one version.
@@ -193,7 +212,7 @@ export function useJobVersionLineage(): JobVersionLineage {
         });
       }
     },
-    [refreshVersionApplicants],
+    [refreshVersionApplicantsBatch],
   );
 
   const ensureFilterLineages = useCallback(
@@ -304,10 +323,10 @@ export function useJobVersionLineage(): JobVersionLineage {
            applicant counts frozen at whatever they were the first time the panel
            was opened. Re-count the cached versions here so reopening picks up
            resumes scored in between. */
-        if (cached?.length) cached.forEach(v => void refreshVersionApplicants(v.id));
+        if (cached?.length) void refreshVersionApplicantsBatch(cached.map(v => v.id));
       }
     },
-    [expandedKeys, lineages, loadingKeys, loadLineage, refreshVersionApplicants],
+    [expandedKeys, lineages, loadingKeys, loadLineage, refreshVersionApplicantsBatch],
   );
 
   const ensureLoaded = useCallback(

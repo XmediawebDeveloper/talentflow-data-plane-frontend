@@ -6,6 +6,7 @@ import { Clock, X, ArrowRight, Info } from 'lucide-react';
 import { clearTokens, getTokens } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { toast } from 'sonner';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
@@ -73,7 +74,9 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
         const { accessToken } = getTokens();
         if (!accessToken) return;
 
-        const settings = await userSettingsApi.getSettings();
+        // First load: the app-shell /bootstrap response, if it carried this part.
+        const boot = await takeBootstrapPart<Awaited<ReturnType<typeof userSettingsApi.getSettings>>>('user_settings');
+        const settings = boot.hit ? boot.data : await userSettingsApi.getSettings();
         if (settings?.session_timeout_minutes) {
           setTimeoutMinutes(settings.session_timeout_minutes);
         }

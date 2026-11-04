@@ -35,9 +35,12 @@ import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIIntervie
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
 import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
-import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
+import dynamic from 'next/dynamic';
+/* Candidate results (with the evaluation report, recharts, jsPDF) open on a
+   click — loaded on demand, same as the Assessments screens. */
+const CandidateResultsView = dynamic(() => import('@/components/ai-interview/CandidateResultsView'), { ssr: false, loading: () => null });
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
-import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
+const AIInterviewCandidateResults = dynamic(() => import('@/components/ai-interview/AIInterviewCandidateResults'), { ssr: false, loading: () => null });
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
@@ -90,6 +93,9 @@ import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { cachedList, listCacheKey } from '@/lib/utils/listCache';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import type { AIConfigListQuery, AIConfigListFilters } from '@/lib/services/aiInterviewService';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
@@ -146,6 +152,7 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
+const SERVER_PAGED_TABS: string[] = ['all', 'all-interviews', 'published', 'draft', 'archived'];
 const CONFIG_PAGE_SIZE = 10;
 /* Trigger classes for the filter panels' Dropdown (ui/filter-select) triggers. */
 const AI_FILTER_FIELD_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100';
@@ -204,13 +211,19 @@ export default function AIInterview() {
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+  /* Tabs that page on the server — Total Jobs ('all', GET /configs?collapse=
+     lineage) and the flat All / Active / Draft / Archived tables — need no full
+     config list: their rows' jobs are read per page (loadConfigsForVisibleJobs).
+     Every other tab (Completed, Invitation Status, …) still reads the whole
+     list, once it is opened. */
+  const fullConfigListNeededRef = useRef(!SERVER_PAGED_TABS.includes(activeTab));
   // "AI Interview Published" success modal (was referenced in JSX but never
   // declared — pre-existing build error). Defaults hidden; no behavior change.
   const [showPublishedModal, setShowPublishedModal] = useState(false);
   const [publishedTitle, setPublishedTitle] = useState('');
-  // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
-  // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // Lands on the Total card with the list open — same as Job Openings and
+  // Assessments. 'cards' stays in the type only so an old persisted snapshot parses.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   /* ONE List/Card choice for every list tab (Total Jobs, All Interviews,
      Active/Draft/Archived, Candidate Results, Invitation Status, Activity
      Logs): switching on one tab switches them all, so the page reads the same
@@ -678,6 +691,7 @@ export default function AIInterview() {
   /* `fresh: false` only from the first loadData — it may share a recent read
      (lib/utils/listCache); tab clicks, Refresh and row actions ask the server. */
   const loadArchivedConfigs = useCallback(async ({ fresh = true }: { fresh?: boolean } = {}) => {
+    if (!fullConfigListNeededRef.current) return;
     const seq = ++archivedSeqRef.current;
     try {
       const items = await aiInterviewService.listAllConfigRows({ status: 'archived' }, fresh ? { fresh } : { reuseRecent: true });
@@ -713,6 +727,27 @@ export default function AIInterview() {
        Jobs / Total Interviews appear once with archived included instead of
        showing the live-only figure and then jumping when they land. */
     const archivedLoad = firstLoad ? loadArchivedConfigs({ fresh: false }) : null;
+    if (!fullConfigListNeededRef.current) {
+      /* Server-paged tab: the cards come from /configs/stats and the rows from
+         the paged list; nothing here downloads every config. A change re-reads
+         the jobs on screen (their versions feed the row menus). */
+      try {
+        const value = await aiInterviewService.getConfigStats();
+        if (isStale()) return;
+        setStats(value);
+        setInterviewedCount(typeof value.interview_sessions === 'number' ? value.interview_sessions : null);
+      } catch (error) {
+        console.error('Failed to load AI interview stats:', error);
+      } finally {
+        loadedConfigJobsRef.current.clear();
+        setVisibleJobsReloadTick((n) => n + 1);
+        if (!isStale()) {
+          hasLoadedRef.current = true;
+          setLoading(false);
+        }
+      }
+      return;
+    }
     try {
       // Remembered data already on screen: refresh quietly, no skeleton.
       if (firstLoad && remembered === null) setLoading(true);
@@ -720,11 +755,6 @@ export default function AIInterview() {
          so they are asked for NOW, beside it, instead of one after another
          behind it (three serial round trips before the page could settle). */
       const statsRequest = aiInterviewService.getConfigStats().then(
-        (value) => ({ ok: true as const, value }),
-        (error) => ({ ok: false as const, error }),
-      );
-      // Same query Candidate Results loads; only the total is needed, so one row will do.
-      const interviewedRequest = aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 }).then(
         (value) => ({ ok: true as const, value }),
         (error) => ({ ok: false as const, error }),
       );
@@ -748,14 +778,11 @@ export default function AIInterview() {
       if (statsRes.ok) setStats(statsRes.value);
       else console.error('Failed to load AI interview stats:', (statsRes as { error?: unknown }).error);
 
-      const interviewedRes = await interviewedRequest;
-      if (isStale()) return;
-      if (interviewedRes.ok) {
-        setInterviewedCount(typeof interviewedRes.value.total === 'number' ? interviewedRes.value.total : null);
-      } else {
-        console.error('Failed to load interviewed count:', (interviewedRes as { error?: unknown }).error);
-        setInterviewedCount(null);
-      }
+      /* Finished interviews (completed + terminated) come with the stats
+         (`interview_sessions`) — no separate list read for one total. */
+      setInterviewedCount(statsRes.ok && typeof statsRes.value.interview_sessions === 'number'
+        ? statsRes.value.interview_sessions
+        : null);
     } catch (error) {
       if (isStale()) return;
       // A failed refresh keeps the list already on screen; only a failed
@@ -843,24 +870,23 @@ export default function AIInterview() {
          directly keeps the numbers and the filtered table in step. */
       // A job-wide tracker sums the same four calls over each of its interviews.
       const ids = trackerScopeFor(configId)?.map((entry) => entry.config.id) ?? [configId];
-      const perConfig = await Promise.all(ids.map((id) => Promise.all([
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'invited' }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'expired' }),
-      ])));
+      /* ONE request for every interview in scope (GET /ai-interview/
+         invitation-overview) — it used to be four page_size=1 calls PER
+         config. Same buckets, counted by the server per status. */
+      const overview = await aiInterviewService.getInvitationOverview(ids);
       if (seq !== overviewSeqRef.current) return;
-      const sum = (pick: (calls: (typeof perConfig)[number]) => number | undefined) =>
-        perConfig.reduce((acc, calls) => acc + (pick(calls) || 0), 0);
+      const rows = ids.map((id) => overview[id]).filter(Boolean);
+      const sum = (pick: (o: (typeof rows)[number]) => number | undefined) =>
+        rows.reduce((acc, o) => acc + (pick(o) || 0), 0);
       setInvitationOverview({
-        total: sum(([result]) => result.total),
-        invited: sum(([, invitedOnly]) => invitedOnly.total),
-        completed: sum(([result]) => result.completed),
-        inProgress: sum(([result]) => result.in_progress),
-        terminated: sum(([result]) => result.terminated),
-        cancelled: sum(([result]) => result.cancelled),
-        revoked: sum(([, , revokedOnly]) => revokedOnly.total),
-        expired: sum(([, , , expiredOnly]) => expiredOnly.total),
+        total: sum((o) => o.total),
+        invited: sum((o) => o.invited),
+        completed: sum((o) => o.completed),
+        inProgress: sum((o) => o.in_progress),
+        terminated: sum((o) => o.terminated),
+        cancelled: sum((o) => o.cancelled),
+        revoked: sum((o) => o.revoked),
+        expired: sum((o) => o.expired),
       });
     } catch (error) {
       /* Keep the last good numbers (or the placeholder): zeroing every card
@@ -1299,7 +1325,7 @@ export default function AIInterview() {
       // follows to consume the skip, and it would swallow a real change.
       const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
       restoredListKeyRef.current = restoredKey !== currentKey ? restoredKey : null;
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.pageView === 'list') setPageView(s.pageView);
       if ((s.listDisplayMode === 'list' || s.listDisplayMode === 'grid') && !isPhoneWidth()) setListDisplayMode(s.listDisplayMode);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
@@ -2109,6 +2135,94 @@ export default function AIInterview() {
   // Shared with the details page's Prev / Next (lib/utils/aiInterviewJobOrder).
   const collapsedConfigs = collapseAIInterviewLineages(filteredConfigs);
 
+  /* ── Total Jobs on the server ────────────────────────────────────────────
+     The landing tab pages its jobs on the server: GET /ai-interview/configs?
+     collapse=lineage (one row per job, the collapseAIInterviewLineages rule)
+     with the same filters the browser applied, and GET /configs/stats for the
+     same filters. Same pattern as the Assessments landing. */
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const serverTotalJobs = activeTab === 'all';
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const totalJobsFilters: AIConfigListFilters = {
+    status: statusFilter === 'all' ? 'all' : statusFilter,
+    search: debouncedSearch.trim() || undefined,
+    search_scope: debouncedSearch.trim() ? 'list' : undefined,
+    mode: modeFilter === 'all' ? undefined : modeFilter === 'timed' ? 'timed' : 'flexible',
+    created_by: creatorFilter === 'all' ? undefined : creatorFilter,
+    created_from: dateWindow ? dayKey(dateWindow.from) : undefined,
+    // The window's end is exclusive (start of the next day); the API's is inclusive.
+    created_to: dateWindow ? dayKey(new Date(dateWindow.to.getTime() - 86_400_000)) : undefined,
+    invited_only: invitedOnly || undefined,
+  };
+  const totalJobsQuery: AIConfigListQuery = {
+    ...totalJobsFilters,
+    collapse: 'lineage',
+    sort_by: sortBy === 'oldest' ? 'oldest' : 'newest',
+    status_first: sortBy === 'active' ? 'published' : sortBy === 'draft' ? 'draft' : undefined,
+    page: configListPage,
+    page_size: configListItemsPerPage,
+  };
+  const totalJobsPaged = usePagedList<AIInterviewResponse, unknown, AIConfigListQuery>({
+    name: 'ai-configs:total-jobs',
+    query: totalJobsQuery,
+    fetchPage: (q) => aiInterviewService.listConfigsPage(q).then((res) => ({ items: res.items || [], total: res.total ?? 0 })),
+    enabled: serverTotalJobs,
+  });
+
+  /* Every version of the jobs on screen — one request per page of rows
+     (GET /configs?job=JD-1,JD-2,…&status=all) — merged into `configs` /
+     `archivedConfigs`. The row figures, version panels, Track target and the
+     row menus' gates (latest version, version cap, sibling draft) read those,
+     so they answer for the rows shown without the tenant's whole list. */
+  const loadedConfigJobsRef = useRef(new Set<string>());
+  const [visibleJobsReloadTick, setVisibleJobsReloadTick] = useState(0);
+  const mergeConfigRows = useCallback((incoming: AIInterviewResponse[], replaceJobs?: Set<string>) => {
+    if (incoming.length === 0 && !replaceJobs?.size) return;
+    const apply = (prev: AIInterviewResponse[], wantArchived: boolean) => {
+      const kept = replaceJobs?.size ? prev.filter((c) => !replaceJobs.has(c.jd_short_id || '')) : prev;
+      const byId = new Map(kept.map((c) => [c.id, c]));
+      for (const c of incoming) {
+        if ((c.status === 'archived') === wantArchived) byId.set(c.id, c);
+        else byId.delete(c.id);
+      }
+      return Array.from(byId.values());
+    };
+    setConfigs((prev) => apply(prev, false));
+    setArchivedConfigs((prev) => apply(prev, true));
+  }, []);
+  const loadConfigsForVisibleJobs = useCallback(async (rows: AIInterviewResponse[]) => {
+    if (fullConfigListNeededRef.current) return; // the full list is loaded already
+    mergeConfigRows(rows);
+    const jobs = Array.from(new Set(rows.map((r) => r.jd_short_id).filter((j): j is string => !!j)))
+      .filter((j) => !loadedConfigJobsRef.current.has(j));
+    if (jobs.length === 0) return;
+    jobs.forEach((j) => loadedConfigJobsRef.current.add(j));
+    try {
+      const res = await aiInterviewService.listConfigsPage({ status: 'all', job: jobs.join(','), page: 1, page_size: 500 });
+      mergeConfigRows(res.items || [], new Set(jobs));
+    } catch (error) {
+      jobs.forEach((j) => loadedConfigJobsRef.current.delete(j));
+      console.error('Failed to load interviews for the jobs on screen:', error);
+    }
+  }, [mergeConfigRows]);
+  useEffect(() => {
+    if (!serverTotalJobs || totalJobsPaged.items.length === 0) return;
+    void loadConfigsForVisibleJobs(totalJobsPaged.items);
+  }, [serverTotalJobs, totalJobsPaged.items, loadConfigsForVisibleJobs, visibleJobsReloadTick]);
+
+  /* Switching to a tab that still reads the whole list loads it then. */
+  useEffect(() => {
+    const need = !SERVER_PAGED_TABS.includes(activeTab);
+    const was = fullConfigListNeededRef.current;
+    fullConfigListNeededRef.current = need;
+    if (need && !was && hasLoadedRef.current) {
+      void loadData();
+      void loadArchivedConfigs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   /* Which list the details page's Prev / Next walk — the list on screen:
        Grouped (Total Jobs): its jobs, one stop per job, so the counter reads
          the job count shown here;
@@ -2274,11 +2388,15 @@ export default function AIInterview() {
     return best;
   };
 
-  const configTotalPages = Math.max(1, Math.ceil(collapsedConfigs.length / configListItemsPerPage));
-  const paginatedConfigs = collapsedConfigs.slice(
-    (configListPage - 1) * configListItemsPerPage,
-    configListPage * configListItemsPerPage,
-  );
+  /* Total Jobs: the server's page and total; other grouped tabs page here. */
+  const groupedListTotal = serverTotalJobs ? totalJobsPaged.total : collapsedConfigs.length;
+  const configTotalPages = Math.max(1, Math.ceil(groupedListTotal / configListItemsPerPage));
+  const paginatedConfigs = serverTotalJobs
+    ? totalJobsPaged.items
+    : collapsedConfigs.slice(
+      (configListPage - 1) * configListItemsPerPage,
+      configListPage * configListItemsPerPage,
+    );
 
   /* The job cards' Completed figure: completed-session counts for every
      interview in the lineage of each job ON THIS PAGE — fetched as the page
@@ -2788,7 +2906,9 @@ export default function AIInterview() {
   /* The grouped job list hands its jobs, in the order shown (sort, search and
      filters applied), to the details page's Prev / Next. */
   const groupedPagerList = isConfigListTab && !showUngroupedList ? GROUPED_PAGER_LIST[activeTab] : undefined;
-  const groupedPagerIds = collapsedConfigs.map((c) => c.id).join(',');
+  /* On the server-paged Total Jobs tab only the page on screen is known here,
+     so Prev / Next walks that page. */
+  const groupedPagerIds = (serverTotalJobs ? paginatedConfigs : collapsedConfigs).map((c) => c.id).join(',');
   useEffect(() => {
     if (!groupedPagerList || loading) return;
     rememberAIInterviewPagerOrder(groupedPagerList, groupedPagerIds ? groupedPagerIds.split(',') : []);
@@ -3035,21 +3155,26 @@ export default function AIInterview() {
           const totalJobs = new Set(
             allConfigs.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
           ).size;
+          /* From /configs/stats (the same WHERE the lists read), so a card
+             never depends on how much of the list is loaded. */
+          const statsJobs = stats?.total_jobs;
+          const statsConfigs = stats?.total_configs;
+          const statsActive = stats?.published_configs;
           const cards = [
             {
               label: 'Configured Jobs',
-              value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
+              value: statsJobs ?? (allConfigs.length ? totalJobs : 0),
               // Every config is one interview version, so the versions behind
               // the job count are the configs themselves (Total Interviews).
-              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
+              versions: (statsConfigs ?? allConfigs.length) as number | undefined,
               icon: Briefcase,
               tab: 'all' as TabKey,
               cardKey: 'jobs' as OverviewCardKey,
             },
             {
               label: 'Total Interviews',
-              value: allConfigs.length || (stats?.total_configs ?? 0),
-              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
+              value: statsConfigs ?? allConfigs.length,
+              versions: (statsConfigs ?? allConfigs.length) as number | undefined,
               icon: FileText,
               tab: 'all-interviews' as TabKey,
               cardKey: 'interviews' as OverviewCardKey,
@@ -3060,12 +3185,10 @@ export default function AIInterview() {
               // statuses (in_progress/scheduled/…) are still published configs
               // (see normalizeConfigStatus). Fall back to the backend stat only
               // before the config list has loaded.
-              value: configs.length
-                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
-                : (stats?.published_configs ?? 0),
-              versions: (configs.length
-                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
-                : (stats?.published_configs ?? 0)) as number | undefined,
+              /* The backend counts candidate-flow statuses as Active too
+                 (normalizeConfigStatus's rule). */
+              value: statsActive ?? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length,
+              versions: (statsActive ?? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length) as number | undefined,
               icon: Globe,
               tab: 'published' as TabKey,
               cardKey: 'active' as OverviewCardKey,
@@ -3449,7 +3572,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable seedConfigs={tableSeedConfigs} toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} defaultSort={sortBy} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable seedConfigs={tableSeedConfigs} toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} defaultSort={sortBy} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} onVisibleRowsChange={(rows) => { void loadConfigsForVisibleJobs(rows); }} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3469,13 +3592,14 @@ export default function AIInterview() {
               bulkActions={interviewBulkActions}
               canExport={canExportAIInterviews}
               onExported={(info) => void aiInterviewService.logListExport(info)}
+              onVisibleRowsChange={(rows) => { void loadConfigsForVisibleJobs(rows); }}
             />
           )}
 
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
-              {isRefreshingTab ? (
+              {isRefreshingTab || (serverTotalJobs && totalJobsPaged.loading) ? (
                 <div
                   aria-busy="true"
                   aria-label="Refreshing jobs"
@@ -3483,7 +3607,7 @@ export default function AIInterview() {
                 >
                   {configRowsSkeleton}
                 </div>
-              ) : collapsedConfigs.length === 0 ? (
+              ) : (serverTotalJobs ? (totalJobsPaged.loading ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
                     <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
@@ -3908,7 +4032,7 @@ export default function AIInterview() {
               <ListPagination
                 currentPage={configListPage}
                 itemsPerPage={configListItemsPerPage}
-                totalItems={collapsedConfigs.length}
+                totalItems={groupedListTotal}
                 onPageChange={setConfigListPage}
                 onItemsPerPageChange={setConfigListItemsPerPage}
                 /* The list is one card per job, but the stat cards and tab badges

@@ -289,6 +289,8 @@ export interface AIInterviewResponse {
   /** Position in the interview's lineage (V1, V2..), stored by the backend. Null on
    *  candidate sessions and on rows that predate it. */
   interview_version?: number | null;
+  /** GET /configs (server-paged): the Nth config of its job version, over every config. */
+  list_ordinal?: number | null;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;
@@ -442,6 +444,71 @@ export interface AIInterviewStatsResponse {
   candidates_interviewed?: number;
   /** Finished interviews (completed + terminated), repeats included. */
   interview_sessions?: number;
+  /** Distinct jobs (JD lineages) with a config, for the same filters. */
+  total_jobs?: number;
+  /** Configs with at least one invitation ("Invite Shared"). */
+  invited_configs?: number;
+  /** Configs in completed / cancelled status. */
+  completed_configs?: number;
+}
+
+/**
+ * GET /ai-interview/configs and /configs/stats filter params — ONE builder on
+ * the server reads them for both, so a card's count equals the list's total.
+ * Every field optional; absent = the endpoint's original behaviour.
+ */
+export interface AIConfigListFilters {
+  /** One status, a comma list, or 'all' (archived included). */
+  status?: string;
+  search?: string;
+  /** 'table' = job name / JD id / AI id; 'list' = + creator name and must-have skills. */
+  search_scope?: 'table' | 'list';
+  mode?: 'timed' | 'flexible';
+  job?: string;
+  jd_version?: number;
+  interview_version?: number;
+  created_by?: string;
+  created_from?: string;
+  created_to?: string;
+  invited_only?: boolean;
+}
+
+export interface AIConfigListQuery extends AIConfigListFilters {
+  page: number;
+  page_size: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  status_first?: 'published' | 'active' | 'draft';
+  collapse?: 'lineage';
+  [k: string]: unknown;
+}
+
+export interface AIConfigFilterOptions {
+  jobs: { value: string; label: string; count: number }[];
+  job_versions: number[];
+  interview_versions: number[];
+  creators: string[];
+}
+
+export interface AIInvitationOverview {
+  total: number;
+  invited: number;
+  completed: number;
+  in_progress: number;
+  terminated: number;
+  cancelled: number;
+  revoked: number;
+  expired: number;
+}
+
+/** Drop empty values so the request (and the list cache key) carries only set filters. */
+export function cleanAIConfigParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
 }
 
 export interface SendInviteRequest {
@@ -917,6 +984,79 @@ export const aiInterviewService = {
       },
       listReadOptions(opts),
     );
+  },
+
+  /** One page of configs for the given filters / sort (server-side paging). */
+  async listConfigsPage(query: AIConfigListQuery): Promise<AIInterviewListResponse> {
+    try {
+      const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', {
+        params: { compact: true, ...cleanAIConfigParams(query) },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every config matching the filters — only for actions that need them all
+   *  (export of a whole filtered set), at click time, never on landing. */
+  async listAllMatchingConfigs(query: Omit<AIConfigListQuery, 'page' | 'page_size'>): Promise<AIInterviewResponse[]> {
+    const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigsPage({ ...query, page, page_size } as AIConfigListQuery));
+    return result.items || [];
+  },
+
+  /** Card counts for the same filters the list takes. */
+  async getConfigStatsFiltered(filters: AIConfigListFilters = {}): Promise<AIInterviewStatsResponse> {
+    try {
+      const response = await api.get<AIInterviewStatsResponse>('/ai-interview/configs/stats', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Ids of every config matching the filters — select-all across pages. */
+  async getConfigIds(filters: AIConfigListFilters = {}): Promise<string[]> {
+    try {
+      const response = await api.get<{ ids: string[] }>('/ai-interview/configs/ids', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data?.ids || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** The filter panel's option lists — fetched when the panel opens. */
+  async getConfigFilterOptions(status?: string): Promise<AIConfigFilterOptions> {
+    try {
+      const response = await api.get<AIConfigFilterOptions>('/ai-interview/configs/filter-options', {
+        params: status ? { status } : {},
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Invitation overview cards for many configs in one request (≤200 ids per call). */
+  async getInvitationOverview(configIds: string[]): Promise<Record<string, AIInvitationOverview>> {
+    const ids = Array.from(new Set(configIds.filter(Boolean)));
+    const out: Record<string, AIInvitationOverview> = {};
+    for (let i = 0; i < ids.length; i += 200) {
+      try {
+        const response = await api.get<{ overview: Record<string, AIInvitationOverview> }>(
+          '/ai-interview/invitation-overview',
+          { params: { ids: ids.slice(i, i + 200).join(',') } },
+        );
+        Object.assign(out, response.data?.overview || {});
+      } catch (error) {
+        throw new Error(handleApiError(error));
+      }
+    }
+    return out;
   },
 
   /**

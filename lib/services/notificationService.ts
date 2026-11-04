@@ -34,6 +34,8 @@ export interface NotificationCountResponse {
   total: number;
   unread: number;
   by_category: Record<string, number>;
+  /** true when the server honoured `exclude_chat` (absent on older backends). */
+  excludes_chat?: boolean | null;
 }
 
 export interface MarkReadResponse {
@@ -74,11 +76,13 @@ class NotificationService {
   }
 
   /**
-   * Get notification counts
+   * Get notification counts. `excludeChat` leaves chat rows out (check
+   * `excludes_chat` on the result: older backends ignore the flag).
    */
-  async getNotificationCounts(): Promise<NotificationCountResponse> {
+  async getNotificationCounts(options?: { excludeChat?: boolean }): Promise<NotificationCountResponse> {
     try {
-      const response = await api.get('/notifications/count');
+      const response = await api.get('/notifications/count',
+        options?.excludeChat ? { params: { exclude_chat: true } } : undefined);
       return response.data;
     } catch (error) {
       /* warn, not error: the badge count is polled and fails soft to zeros —

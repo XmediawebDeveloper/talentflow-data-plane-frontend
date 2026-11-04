@@ -13,8 +13,12 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
-import TrackInvitesModal from '@/components/TrackInvitesModal';
-import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
+import dynamic from 'next/dynamic';
+
+/* On demand: this panel is mounted from the dashboard layout, and both track
+   modals (with their invite tables and version panels) only open on a click. */
+const TrackInvitesModal = dynamic(() => import('@/components/TrackInvitesModal'), { ssr: false, loading: () => null });
+const AIInterviewTrackInvitesModal = dynamic(() => import('@/components/AIInterviewTrackInvitesModal'), { ssr: false, loading: () => null });
 
 const POLL_MS = 2000;
 const PAGE_SIZE = 50;

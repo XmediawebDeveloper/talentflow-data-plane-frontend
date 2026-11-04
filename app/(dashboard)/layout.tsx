@@ -32,6 +32,7 @@ import BulkInviteProgressIndicator from '@/components/bulk-invite/BulkInviteProg
 import RouteGuard from '@/components/RouteGuard';
 import { masterDataService } from '@/lib/services';
 import { setConfiguredExperienceLevels } from '@/lib/utils/jobExperience';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
@@ -114,8 +115,9 @@ function ExperienceLevelsBootstrapper() {
   useEffect(() => {
     if (ranRef.current) return;
     ranRef.current = true;
-    masterDataService
-      .listExperienceLevels(true)
+    // First load: the app-shell /bootstrap response, if it carried this part.
+    takeBootstrapPart<Awaited<ReturnType<typeof masterDataService.listExperienceLevels>>>('experience_levels')
+      .then((boot) => (boot.hit ? boot.data : masterDataService.listExperienceLevels(true)))
       .then((res) => setConfiguredExperienceLevels(res.items))
       .catch(() => {});
   }, []);
