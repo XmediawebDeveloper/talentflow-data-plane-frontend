@@ -3,6 +3,8 @@
  */
 
 import api, { handleApiError } from './api';
+import { cachedList, invalidateListCache, listCacheKey, listReadOptions, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 
 /* A job was enabled, disabled, archived or unarchived. Surfaces that show a
    job's status without owning that action (the Send Invite popup's job
@@ -693,6 +695,32 @@ export const jdService = {
   },
 
   /**
+   * Every JD record (all versions) of `source: 'my-jds'`, pages of 100 — page
+   * 1, then the rest a few at a time, kept in page order. Read through the
+   * shared list cache (lib/utils/listCache): identical reads in flight share
+   * one request; with `reuseRecent` a completed one is reused for a short
+   * while; `fresh` always asks the server. Every mutating function below, and
+   * any job status change, clears it.
+   */
+  async listAllMine(opts?: ListReadOptions): Promise<JDResponse[]> {
+    const PAGE_SIZE = 100;
+    return cachedList(
+      listCacheKey('jds|all-pages', { source: 'my-jds', page_size: PAGE_SIZE }),
+      async () => {
+        const first = await jdService.list({ page: 1, page_size: PAGE_SIZE, source: 'my-jds' });
+        const items = [...first.items];
+        const totalPages = Math.max(first.total_pages || Math.ceil(first.total / PAGE_SIZE), 1);
+        const rest = await fetchRemainingPages(totalPages, (page) =>
+          jdService.list({ page, page_size: PAGE_SIZE, source: 'my-jds' }),
+        );
+        for (const next of rest) items.push(...next.items);
+        return items;
+      },
+      listReadOptions(opts),
+    );
+  },
+
+  /**
    * Get single JD by ID
    */
   async get(id: string): Promise<JDResponse> {
@@ -1333,5 +1361,43 @@ export const jdService = {
     }
   },
 };
+
+/* Every function that writes clears the shared list cache (lib/utils/listCache)
+   before and after it runs — the cached JD, AI interview config and assessment
+   lists (configs and assessments carry their job's status). The API client's
+   write hook clears it too; this keeps the rule visible here and also covers
+   `generateStream`, which does not go through the API client. Read-only
+   helpers (validateTitle, extractParamsFromText, stripFresherInvitation,
+   validateIndustry) and logVersionDownload are left out on purpose. */
+withListCacheInvalidation(jdService, [
+  'create',
+  'generate',
+  'generateStream',
+  'extractParams',
+  'update',
+  'updateStatus',
+  'publish',
+  'startWorkingCopy',
+  'commitWorkingCopy',
+  'createNewVersion',
+  'reformatWithParams',
+  'archive',
+  'disable',
+  'enable',
+  'delete',
+]);
+
+/* A job's status changed (this tab, or another tab of the app over the
+   BroadcastChannel): the cached lists may show the old status — drop them so
+   the next read, cached or not, asks the server. */
+if (typeof window !== 'undefined') {
+  window.addEventListener(JD_STATUS_CHANGED_EVENT, () => invalidateListCache());
+  try {
+    const channel = new BroadcastChannel(JD_STATUS_CHANNEL);
+    channel.onmessage = () => invalidateListCache();
+  } catch {
+    // No BroadcastChannel: other tabs' changes show after the cache's TTL.
+  }
+}
 
 export default jdService;

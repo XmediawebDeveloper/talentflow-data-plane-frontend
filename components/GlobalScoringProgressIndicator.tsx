@@ -421,7 +421,7 @@ export default function GlobalScoringProgressIndicator() {
             variant="secondary"
             size="sm"
             onClick={() => setMinimized(true)}
-            className="px-2"
+            className=""
             aria-label="Minimize" title="Minimize"
           >
             <Minimize2 className="w-4 h-4" />
@@ -431,7 +431,7 @@ export default function GlobalScoringProgressIndicator() {
             variant="secondary"
             size="sm"
             onClick={() => activeScoringJobs.forEach(job => clearJob(job.jobId))}
-            className="px-2"
+            className=""
             aria-label="Close"
           >
             <X className="w-4 h-4" />
@@ -551,7 +551,7 @@ function JobProgressItem({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-gray-900 truncate">
+            <div className="tf-row-name truncate">
               {job.jobTitle}
             </div>
             <div className="tf-meta">
@@ -591,14 +591,14 @@ function JobProgressItem({
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="tf-grid-stats mb-3">
             <div className="text-center">
               <div className="tf-meta">Queued</div>
-              <div className="text-sm font-medium text-gray-700">{job.queued}</div>
+              <div className="tf-label">{job.queued}</div>
             </div>
             <div className="text-center">
               <div className="tf-meta">Processing</div>
-              <div className="text-sm font-medium text-gray-800">{job.processing}</div>
+              <div className="tf-label">{job.processing}</div>
             </div>
             <div className="text-center">
               <div className="tf-meta">Done</div>

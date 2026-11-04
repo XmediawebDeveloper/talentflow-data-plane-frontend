@@ -143,7 +143,7 @@ function ClusterCard({
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <div className="tf-cell-name leading-relaxed break-words">{cluster.name}</div>
+            <div className="tf-row-title leading-relaxed break-words">{cluster.name}</div>
             {/* Same priority colours as the Interview Details → Skill Clusters badges. */}
             <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${priorityBadgeCls}`}>
               {priorityText}
@@ -151,7 +151,7 @@ function ClusterCard({
           </div>
           <div className="mt-2 flex items-end gap-x-3 gap-y-1.5 flex-wrap">
             <div className="flex-1 min-w-[140px]">
-              <div className="text-xs font-medium text-gray-500 mb-1">{covered}/{total} covered</div>
+              <div className="tf-caption mb-1">{covered}/{total} covered</div>
               <SegmentedBar
                 total={total}
                 demonstrated={demonstrated}
@@ -181,7 +181,7 @@ function SkillTable({ skills }: { skills: Cluster['skills'] }) {
   const cols = '@xs:grid-cols-[minmax(0,1fr)_auto]';
   if (skills.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 p-2.5 text-center text-xs text-gray-400 italic">
+      <div className="rounded-lg border border-gray-200 p-2.5 text-center tf-hint italic">
         No skills configured.
       </div>
     );
@@ -235,14 +235,14 @@ function SkillListTable({
 }) {
   if (clusters.every(c => c.skills.length === 0)) {
     return (
-      <div className="rounded-2xl border border-gray-200 p-6 text-center text-sm text-gray-400 italic">
+      <div className="rounded-2xl border border-gray-200 p-6 text-center tf-body-muted italic">
         {emptyText}
       </div>
     );
   }
   const cols = '@xl:grid-cols-[minmax(0,1fr)_7rem_10rem]';
   return (
-    <div className="@container rounded-2xl border border-gray-200 bg-white overflow-hidden">
+    <div className="tf-panel @container overflow-hidden">
       <div className={`hidden @xl:grid ${cols} items-center gap-x-4 px-4 sm:px-5 py-2.5 bg-brand-blue/5 border-b border-gray-200 text-xs font-semibold text-gray-700`}>
         <div>Skill</div>
         <div title="Question numbers as in Question Analysis">Asked in</div>
@@ -263,13 +263,13 @@ function SkillListTable({
                     <div className={`w-6 h-6 rounded-md border flex items-center justify-center shrink-0 text-xs font-bold tabular-nums ${pr.color}`}>
                       {String(ci + 1).padStart(2, '0')}
                     </div>
-                    <div className="tf-cell-name break-words">{c.name}</div>
+                    <div className="tf-row-title break-words">{c.name}</div>
                     <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border whitespace-nowrap ${pr.color}`}>
                       {tag} · {c.priority} Priority
                     </span>
                   </div>
                   <div className="ml-auto flex items-center gap-2">
-                    <span className="text-xs font-medium text-gray-500 whitespace-nowrap">{covered}/{total} covered</span>
+                    <span className="tf-caption whitespace-nowrap">{covered}/{total} covered</span>
                     <div className="w-24">
                       <SegmentedBar
                         total={total}
@@ -300,7 +300,7 @@ function SkillListTable({
                         </div>
                         <div className={`text-sm font-medium break-words min-w-0 ${tone.text}`}>{s.name}</div>
                       </div>
-                      <div className="pl-6 @xl:pl-0 text-xs tabular-nums text-gray-700">
+                      <div className="pl-6 @xl:pl-0 tf-meta tabular-nums">
                         <span className="@xl:hidden text-gray-500">Asked in </span>
                         {qs.length > 0 ? qs.map(n => `Q${n}`).join(', ') : <span className="text-gray-400">—</span>}
                       </div>
@@ -334,10 +334,10 @@ function SummaryTile({
   return (
     <div className="rounded-xl border border-gray-200 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/40 p-4">
       <div className="flex items-baseline justify-between gap-3">
-        <div className="text-sm font-semibold text-gray-700 dark:text-slate-300">{label}</div>
+        <div className="tf-row-title">{label}</div>
         <div className={`text-2xl font-bold tabular-nums ${accent}`}>{pct}%</div>
       </div>
-      <div className="mt-1 mb-1 text-xs font-medium text-gray-500 dark:text-slate-400">
+      <div className="mt-1 mb-1 tf-caption">
         <span className="font-semibold text-gray-900 dark:text-slate-100 tabular-nums">{covered} / {total}</span> skills covered
       </div>
       <SegmentedBar
@@ -436,7 +436,7 @@ export function CoverageV2({ data }: Props) {
       : kind === firstKind ? '' : 'hidden';
     return (
       <div className="flex items-center gap-2 mb-3 flex-wrap min-h-7">
-        <div className="text-base font-bold text-gray-900">
+        <div className="tf-section-title">
           {kind === 'mh' ? 'Must-Have Section (MHS)' : 'Nice-to-Have Section (NHS)'}
         </div>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${kind === 'mh' ? 'bg-indigo-50 text-indigo-700' : 'bg-amber-50 text-amber-700'}`}>
@@ -477,7 +477,7 @@ export function CoverageV2({ data }: Props) {
                 {mhClusters.length > 0 ? (
                   mhClusters.map((c, i) => <ClusterCard key={i} index={i} cluster={c} sectionType="mh" />)
                 ) : (
-                  <div className="rounded-2xl border border-gray-200 p-6 text-center text-sm text-gray-400 italic">
+                  <div className="rounded-2xl border border-gray-200 p-6 text-center tf-body-muted italic">
                     No must-have clusters configured.
                   </div>
                 )}
@@ -493,7 +493,7 @@ export function CoverageV2({ data }: Props) {
                 {nhClusters.length > 0 ? (
                   nhClusters.map((c, i) => <ClusterCard key={i} index={i} cluster={c} sectionType="nh" />)
                 ) : (
-                  <div className="rounded-2xl border border-gray-200 p-6 text-center text-sm text-gray-400 italic">
+                  <div className="rounded-2xl border border-gray-200 p-6 text-center tf-body-muted italic">
                     No nice-to-have clusters configured.
                   </div>
                 )}
@@ -505,7 +505,7 @@ export function CoverageV2({ data }: Props) {
 
       {/* Coverage Summary — one tile per configured section: label and
           coverage % on one line, a bar for the %, then the counts. */}
-      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+      <div className="tf-card-soft p-6 text-gray-900 dark:text-slate-50">
         <div className="mb-4">
           <div className="text-base font-bold">Coverage Summary</div>
           <div className="tf-body-muted">Skills asked during the interview, out of the skills configured for each section.</div>

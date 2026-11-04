@@ -276,7 +276,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
             <Briefcase style={{ width: 16, height: 16 }} />
             Join Our Team
           </div>
-          <h1 style={titleStyle}>Build the future of hiring with us</h1>
+          <h1 className="tf-page-title" style={titleStyle}>Build the future of hiring with us</h1>
           <p style={subtitleStyle}>
             We're looking for passionate people to help us transform how companies find and hire talent.
           </p>

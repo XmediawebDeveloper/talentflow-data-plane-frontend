@@ -46,7 +46,7 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
   const hasSalary = !!(jd.salary_min || jd.salary_max);
 
   return (
-    <div className="mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+    <div className="mb-5 tf-card p-4 sm:p-5">
       <div className="flex flex-1 min-w-0 items-start gap-3">
         <div className="hidden sm:flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
           <Briefcase className="h-4 w-4 text-brand-blue" />
@@ -59,7 +59,7 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
                 {job.job_id}
               </span>
             )}
-            <h3 className="min-w-0 font-semibold text-gray-900 dark:text-slate-50 text-lg sm:text-xl truncate" title={job.title}>
+            <h3 className="min-w-0 tf-section-title sm:text-xl truncate" title={job.title}>
               {job.title}
             </h3>
             {status && (
@@ -71,7 +71,7 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
 
           {/* Row 2: Location, experience, employment type, work mode, salary,
               Posted / By / Last Updated, version */}
-          <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
+          <div className="flex flex-wrap items-center gap-1.5 tf-meta">
             {job.location && (
               <>
                 {formatLocationGroups(job.locations, job.location).map((label) => (
@@ -120,7 +120,7 @@ export default function JDHeaderCard({ jd }: { jd: JDResponse }) {
             {job.versionNumber && job.versionNumber > 0 ? (
               <>
                 <span className="text-gray-300">•</span>
-                <span className="inline-flex items-center px-2.5 py-1 bg-brand-orange-deep text-white rounded-full text-xs font-medium">
+                <span className="tf-badge bg-brand-orange-deep text-white">
                   v{job.versionNumber}.0
                 </span>
               </>

@@ -11,6 +11,7 @@ import { usePlanChange } from '@/components/providers/PlanChangeProvider';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import type { PlanChangeSummary } from '@/lib/types/planChanges';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 const changeTypeLabels: Record<string, { title: string; icon: IconComponent; color: string }> = {
   price_increase: { title: 'Price Change', icon: DollarSign, color: 'text-amber-600' },
@@ -54,15 +55,15 @@ function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeS
   const increase = priceChange.direction === 'increase' || newPrice > oldPrice;
   const diff = Math.abs(newPrice - oldPrice);
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+    <div className="tf-panel p-4">
+      <h4 className="tf-row-title mb-3 flex items-center gap-2">
         <DollarSign className="w-4 h-4" />
         Price Change
       </h4>
       <div className="flex items-center gap-4">
         <div className="text-center">
           <p className="tf-meta">Current</p>
-          <p className="text-lg font-bold text-gray-900">
+          <p className="tf-section-title">
             ₹{oldPrice.toLocaleString()}
           </p>
         </div>
@@ -76,12 +77,12 @@ function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeS
         {diff > 0 && (
           <div className="ml-auto">
             {increase ? (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700">
+              <span className="tf-badge bg-red-50 text-red-700">
                 <TrendingUp className="w-3 h-3" />
                 +₹{diff.toLocaleString()}
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700">
+              <span className="tf-badge bg-green-50 text-green-700">
                 <TrendingDown className="w-3 h-3" />
                 -₹{diff.toLocaleString()}
               </span>
@@ -95,19 +96,19 @@ function PriceChangeCard({ priceChange }: { priceChange: NonNullable<PlanChangeS
 
 function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary['quota_changes']> }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+    <div className="tf-panel p-4">
+      <h4 className="tf-row-title mb-3 flex items-center gap-2">
         <Gauge className="w-4 h-4" />
         Quota Changes
       </h4>
-      <div className="overflow-hidden rounded-lg border border-gray-100 tf-table-shell tf-table-shell--compact">
+      <div className={`overflow-hidden rounded-lg border border-gray-100 tf-table-shell tf-table-shell--compact ${DESKTOP_TABLE_ONLY}`}>
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-white">
-              <th className="text-left px-3 py-2 tf-th">Quota</th>
-              <th className="text-center px-3 py-2 tf-th">Current</th>
-              <th className="text-center px-3 py-2 tf-th">New</th>
-              <th className="text-center px-3 py-2 tf-th">Change</th>
+              <th className="tf-th-cell text-left tf-th">Quota</th>
+              <th className="tf-th-cell text-center tf-th">Current</th>
+              <th className="tf-th-cell text-center tf-th">New</th>
+              <th className="tf-th-cell text-center tf-th">Change</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -115,14 +116,14 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
               const decrease = change.direction === 'decrease';
               return (
                 <tr key={i}>
-                  <td className="px-3 py-2 text-gray-900">
+                  <td className="tf-td text-gray-900">
                     {QUOTA_LABELS[change.key] || change.key}
                   </td>
-                  <td className="px-3 py-2 text-center text-gray-600">{change.old}</td>
+                  <td className="tf-td text-center text-gray-600">{change.old}</td>
                   <td className={`px-3 py-2 text-center font-medium ${decrease ? 'text-red-600' : 'text-green-600'}`}>
                     {change.new}
                   </td>
-                  <td className="px-3 py-2 text-center">
+                  <td className="tf-td text-center">
                     {decrease ? (
                       <span className="inline-flex items-center gap-0.5 text-red-600 text-xs font-medium">
                         <Minus className="w-3 h-3" />
@@ -141,6 +142,35 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
           </tbody>
         </table>
       </div>
+      <MobileRecordList>
+        {changes.map((change, i) => {
+          const decrease = change.direction === 'decrease';
+          return (
+            <MobileRecordCard
+              key={i}
+              title={QUOTA_LABELS[change.key] || change.key}
+              fields={[
+                { label: 'Current', value: change.old },
+                { label: 'New', value: <span className={`font-medium ${decrease ? 'text-red-600' : 'text-green-600'}`}>{change.new}</span> },
+                {
+                  label: 'Change',
+                  value: decrease ? (
+                    <span className="inline-flex items-center gap-0.5 text-red-600 text-xs font-medium">
+                      <Minus className="w-3 h-3" />
+                      {change.old - change.new}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-0.5 text-green-600 text-xs font-medium">
+                      <Plus className="w-3 h-3" />
+                      {change.new - change.old}
+                    </span>
+                  ),
+                },
+              ]}
+            />
+          );
+        })}
+      </MobileRecordList>
     </div>
   );
 }
@@ -148,8 +178,8 @@ function QuotaChangesTable({ changes }: { changes: NonNullable<PlanChangeSummary
 function FeatureBadges({ features, type }: { features: string[]; type: 'removed' | 'added' }) {
   const isRemoved = type === 'removed';
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+    <div className="tf-panel p-4">
+      <h4 className="tf-row-title mb-3 flex items-center gap-2">
         <Zap className="w-4 h-4" />
         Features {isRemoved ? 'Removed' : 'Added'}
       </h4>
@@ -302,8 +332,8 @@ export default function PlanChangeReviewModal() {
 
           {/* Impact explanation */}
           <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-2">
-            <h4 className="text-sm font-semibold text-gray-700">What happens next?</h4>
-            <div className="space-y-1.5 tf-meta-strong">
+            <h4 className="tf-row-title">What happens next?</h4>
+            <div className="space-y-1.5 tf-meta">
               <p className="flex items-start gap-2">
                 <Check className="w-3.5 h-3.5 text-green-500 mt-0.5 flex-shrink-0" />
                 <span><strong>Accept:</strong> Your subscription continues with the updated plan terms from the next billing cycle.</span>

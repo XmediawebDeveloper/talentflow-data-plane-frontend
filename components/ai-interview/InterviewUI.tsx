@@ -356,7 +356,10 @@ const REVEAL_TICK_MS = 50;
 // visible burst on "…for the <role> role. In this position" every interview.
 // Kept a little under the measurement: a slight lag catches up gently, running
 // ahead would freeze the caption until the voice catches up.
-const DEFAULT_REVEAL_CPS = 16;
+// 2026-11-03: that measurement was taken with 0.85 configured but NOT applied
+// (gpt-4o-mini-tts ignores `speed`); the backend now really stretches to 0.85,
+// so 16.9 × 0.85 ≈ 14.4 cps.
+const DEFAULT_REVEAL_CPS = 14;
 // Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
@@ -501,7 +504,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
             <p className="text-sm leading-relaxed break-words">{msg.content}</p>
           </div>
           {msg.timestamp && (
-            <p className="text-2xs text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
+            <p className="tf-micro-hint mt-0.5 text-right">{msg.timestamp}</p>
           )}
         </div>
       </div>
@@ -525,7 +528,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
           <p className="text-sm leading-relaxed whitespace-pre-line break-words">{msg.content}</p>
         </div>
         {msg.timestamp && (
-          <p className="text-2xs text-gray-400 mt-0.5">{msg.timestamp}</p>
+          <p className="tf-micro-hint mt-0.5">{msg.timestamp}</p>
         )}
       </div>
     </div>
@@ -11210,7 +11213,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </p>
               <button
                 onClick={() => window.location.reload()}
-                className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
+                className="tf-btn tf-btn-destructive w-full px-6 py-3 bg-red-600 hover:bg-red-700 font-semibold rounded-xl transition-colors whitespace-normal shadow-none gap-0"
               >
                 Refresh &amp; Reconnect
               </button>
@@ -11276,7 +11279,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             )}
             <div className="flex flex-wrap gap-3 justify-center">
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
-              <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
+              <button onClick={handleMicPopupNo} className="tf-btn tf-btn-destructive px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-colors whitespace-normal shadow-none gap-0">No, End Interview</button>
             </div>
             <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
           </div>
@@ -11520,7 +11523,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {bridgeCaption && (
               <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-2xs font-semibold uppercase tracking-wider text-purple-100">
+                  <span className="tf-badge bg-purple-500/30 border border-purple-400/40 text-2xs uppercase tracking-wider text-purple-100">
                     Bina · Transition
                   </span>
                 </div>
@@ -11765,7 +11768,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <button
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!isConnected}
-                  className="shrink-0 flex items-center gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 font-semibold text-sm"
+                  className="tf-btn tf-btn-destructive shrink-0 flex gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 shadow-sm duration-200 font-semibold text-sm whitespace-normal justify-start"
                 >
                   <LogOut className="w-4 h-4" />
                   <span className="hidden @md:inline">End</span>
@@ -11881,7 +11884,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {messages.length === 0 && !hasAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
               && (binaHasSpoken || isClosing || isRecording) && (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
+                <p className="tf-body-muted text-center">Conversation will appear here...</p>
               </div>
             )}
 
@@ -11910,14 +11913,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[260px] w-full">
-                  <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm p-2.5">
+                  <div className="tf-card-soft w-full p-2.5">
                     <div className="flex flex-col gap-1.5">
                       <button
                         type="button"
                         onClick={() => submitStructuredHrAnswer('Yes')}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shrink-0">A</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-2xs font-bold shrink-0">A</span>
                         Yes
                       </button>
                       <button
@@ -11925,7 +11928,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         onClick={() => submitStructuredHrAnswer('No')}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-500/15 hover:border-rose-300 dark:hover:border-rose-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold shrink-0">B</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-2xs font-bold shrink-0">B</span>
                         No
                       </button>
                       <button
@@ -11954,11 +11957,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-300 text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/15 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-2xs font-bold shrink-0">C</span>
                         Need to Explain More
                       </button>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-center text-xs font-semibold text-gray-700">
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center tf-caption">
                       Select only one option
                     </div>
                   </div>
@@ -12056,7 +12059,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                                   setShowEndConfirm(true);
                                 }}
                                 disabled={!isConnected || isClosing}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="tf-btn tf-btn-destructive flex gap-1.5 px-3 py-1.5 text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 transition-colors whitespace-normal shadow-none justify-start"
                               >
                                 <LogOut className="w-3.5 h-3.5" />
                                 End
@@ -12282,7 +12285,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         type="button"
                         onClick={() => setShowEndConfirm(true)}
                         disabled={!isConnected || isClosing}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="tf-btn tf-btn-destructive flex-1 gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-sm font-semibold shadow-sm hover:bg-red-700 transition-colors whitespace-normal"
                       >
                         <LogOut className="w-4 h-4" />
                         End
@@ -12547,7 +12550,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="text-center">
               <h3 className="text-gray-900 dark:text-white font-bold mb-1.5" style={{ fontSize: 17 }}>End the interview?</h3>
               {questionNumber !== null && totalQuestions !== null && (
-                <p className="mb-2 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                <p className="tf-badge mb-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 tabular-nums">
                   You&apos;re on question {questionNumber} of {totalQuestions}
                 </p>
               )}
@@ -12617,7 +12620,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all duration-200 shadow-sm"
+                className="tf-btn tf-btn-destructive flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 duration-200 shadow-sm whitespace-normal gap-0 font-normal"
                 style={{ fontSize: 13, fontWeight: 600 }}
               >
                 End Interview

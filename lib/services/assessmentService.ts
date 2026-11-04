@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import { withListCacheInvalidation } from '@/lib/utils/listCache';
 
 // A configured HR topic: either a plain topic label or a full question object.
 // Mirrors the backend's `List[Any]` (app/schemas/assessment.py).
@@ -1505,6 +1506,36 @@ export const assessmentService = {
     }
   },
 };
+
+/* Every function that writes (or can change an assessment, its counts or an
+   invitation) clears the shared list cache (lib/utils/listCache) before and
+   after it runs — the cached whole-list reads in jobAssessmentHierarchy and
+   the assessment tables. The API client's write hook clears it too; this
+   keeps the rule visible here. The best-effort log* calls and the PDF
+   exports are left out on purpose. */
+withListCacheInvalidation(assessmentService, [
+  'create',
+  'update',
+  'publish',
+  'close',
+  'delete',
+  'invite',
+  'bulkInvite',
+  'deleteResult',
+  'generateCandidateInsights',
+  'clone',
+  'archive',
+  'unarchive',
+  'revokePendingInvitations',
+  'createInviteLink',
+  'resendInvitation',
+  'revokeInvitation',
+  'updateInvitationEmail',
+  'updateInvitationDetails',
+  'requestRefund',
+  'processRefund',
+  'regenerateQuestions',
+]);
 
 // Candidate-facing services (public)
 export const candidateAssessmentService = {

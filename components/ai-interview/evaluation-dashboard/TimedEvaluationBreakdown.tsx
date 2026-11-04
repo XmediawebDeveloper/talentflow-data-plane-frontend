@@ -2,6 +2,7 @@ import { Calculator, CheckCircle, XCircle } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 
 import { formatSkillScore, formatScore1 } from '@/lib/utils/matchStatus';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 interface Props {
   data: DashboardData;
 }
@@ -29,13 +30,13 @@ export function TimedEvaluationBreakdown({ data }: Props) {
   const isPass = finalResult === 'Pass';
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+    <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
       <div className="flex items-center gap-3 mb-6">
         <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
           <Calculator size={20} className="text-blue-600" />
         </div>
         <div>
-          <h2 className="text-2xl font-bold">Evaluation Breakdown</h2>
+          <h2 className="text-lg sm:text-2xl font-bold">Evaluation Breakdown</h2>
           <p className="tf-body-muted">
             Skill → Question → Section → Final result. Weights: High = 10, Medium = 7, Low = 4.
           </p>
@@ -45,7 +46,7 @@ export function TimedEvaluationBreakdown({ data }: Props) {
       <div className="space-y-8">
         {/* STEP 1 — Skill score */}
         <Step n={1} title="Skill Score (0–10)">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
+          <p className="tf-body-secondary">
             Every skill assigned to a question is rated independently by the LLM evaluator (0–10)
             based on the candidate's answer — quoting evidence and noting any gaps.
           </p>
@@ -53,13 +54,13 @@ export function TimedEvaluationBreakdown({ data }: Props) {
 
         {/* STEP 2 — Weighted contribution */}
         <Step n={2} title="Weighted Contribution per Skill">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          <p className="tf-body-secondary mb-3">
             Each skill's contribution to its question is its score scaled by its priority weight.
           </p>
           <CodeBlock>
             Weighted Contribution = Skill Score × Priority Weight
           </CodeBlock>
-          <div className="mt-3 grid grid-cols-3 gap-3">
+          <div className="tf-grid-3 mt-3">
             <Weight label="High Priority" value={10} color="emerald" />
             <Weight label="Medium Priority" value={7} color="amber" />
             <Weight label="Low Priority" value={4} color="slate" />
@@ -95,7 +96,7 @@ export function TimedEvaluationBreakdown({ data }: Props) {
 
         {/* STEP 4 — Section scores */}
         <Step n={4} title="Section Score">
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+          <p className="tf-body-secondary mb-3">
             Each section's score is the simple average of its question scores.
           </p>
           <div className="grid grid-cols-2 gap-3">
@@ -149,13 +150,13 @@ export function TimedEvaluationBreakdown({ data }: Props) {
                 >
                   {finalResult ? finalResult.toUpperCase() : '—'}
                 </div>
-                <div className="tf-card-desc">
+                <div className="tf-body-secondary">
                   Must-Have <strong>{formatScore1(scores.mustHave)} / 10</strong>
                   {' '}
                   {isPass ? '≥' : '<'} {mhsThreshold.toFixed(1)} threshold
                 </div>
               </div>
-              <p className="tf-card-desc mt-2">
+              <p className="tf-body-secondary mt-2">
                 The Must-Have section score is the primary pass/fail gate. Nice-to-Have is
                 informational. HR questions are never scored.
               </p>
@@ -258,17 +259,17 @@ function QuestionTable({
       <div className={`px-4 py-2 text-xs uppercase tracking-wider font-semibold ${palette.header}`} style={{ fontFamily: 'var(--font-mono)' }}>
         {title}
       </div>
-      <div className="overflow-x-auto tf-table-shell">
+      <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
         <table className="w-full text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
           <thead className="bg-white text-gray-600">
             <tr>
-              <th className="px-4 py-2 text-left font-semibold text-xs">Q</th>
-              <th className="px-4 py-2 text-left font-semibold text-xs">Skill</th>
-              <th className="px-4 py-2 text-right font-semibold text-xs">Priority</th>
-              <th className="px-4 py-2 text-right font-semibold text-xs">Weight</th>
-              <th className="px-4 py-2 text-right font-semibold text-xs">Score</th>
-              <th className="px-4 py-2 text-right font-semibold text-xs">Score × Weight</th>
-              <th className="px-4 py-2 text-right font-semibold text-xs">Question Score</th>
+              <th className="tf-th-cell text-left font-semibold text-xs">Q</th>
+              <th className="tf-th-cell text-left font-semibold text-xs">Skill</th>
+              <th className="tf-th-cell text-right font-semibold text-xs">Priority</th>
+              <th className="tf-th-cell text-right font-semibold text-xs">Weight</th>
+              <th className="tf-th-cell text-right font-semibold text-xs">Score</th>
+              <th className="tf-th-cell text-right font-semibold text-xs">Score × Weight</th>
+              <th className="tf-th-cell text-right font-semibold text-xs">Question Score</th>
             </tr>
           </thead>
           <tbody>
@@ -284,10 +285,10 @@ function QuestionTable({
                       Q{q.qNum}
                     </td>
                   )}
-                  <td className="px-4 py-2 text-gray-800">{s.name}</td>
-                  <td className="px-4 py-2 text-right">{s.priority ?? '—'}</td>
-                  <td className="px-4 py-2 text-right">{s.weight}</td>
-                  <td className="px-4 py-2 text-right">
+                  <td className="tf-td text-gray-800">{s.name}</td>
+                  <td className="tf-td text-right">{s.priority ?? '—'}</td>
+                  <td className="tf-td text-right">{s.weight}</td>
+                  <td className="tf-td text-right">
                     <span className="inline-flex items-center gap-1">
                       <span className={s.is_skipped ? 'text-gray-400' : ''}>{formatSkillScore(s.score)}</span>
                       {s.is_skipped ? (
@@ -307,7 +308,7 @@ function QuestionTable({
                       ) : null}
                     </span>
                   </td>
-                  <td className="px-4 py-2 text-right">{(s.score * s.weight).toFixed(1)}</td>
+                  <td className="tf-td text-right">{(s.score * s.weight).toFixed(1)}</td>
                   {idx === 0 && (
                     <td
                       rowSpan={skillCount}
@@ -322,6 +323,51 @@ function QuestionTable({
           </tbody>
         </table>
       </div>
+      <MobileRecordList className="p-3">
+        {rows.map(q => (
+          <MobileRecordCard
+            key={q.qNum}
+            title={<span className={`font-bold ${palette.strong}`} style={{ fontFamily: 'var(--font-mono)' }}>Q{q.qNum}</span>}
+            footer={
+              <span className="text-right">
+                <span className="block text-2xs text-gray-500">Question Score</span>
+                <span className={`font-bold text-base ${palette.strong}`} style={{ fontFamily: 'var(--font-mono)' }}>{formatScore1(q.questionScore)}</span>
+              </span>
+            }
+          >
+            <div className="mt-2.5 divide-y divide-gray-100 text-xs" style={{ fontFamily: 'var(--font-mono)' }}>
+              {q.skills.map((s, idx) => (
+                <div key={`${q.qNum}-${idx}`} className="py-1.5">
+                  <div className="font-medium text-gray-800">{s.name}</div>
+                  <div className="mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5 text-gray-600">
+                    <span>Priority: {s.priority ?? '—'}</span>
+                    <span>Weight: {s.weight}</span>
+                    <span className="inline-flex items-center gap-1">
+                      Score: <span className={s.is_skipped ? 'text-gray-400' : ''}>{formatSkillScore(s.score)}</span>
+                      {s.is_skipped ? (
+                        <span
+                          className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                          title="Candidate skipped or said 'I don't know' — not scored for this skill."
+                        >
+                          Skipped
+                        </span>
+                      ) : s.is_fallback ? (
+                        <span
+                          className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                          title="Q-level fallback: not directly evaluated; reflects overall answer score for this question."
+                        >
+                          Q
+                        </span>
+                      ) : null}
+                    </span>
+                    <span>Score × Weight: {(s.score * s.weight).toFixed(1)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </MobileRecordCard>
+        ))}
+      </MobileRecordList>
     </div>
   );
 }

@@ -186,7 +186,7 @@ export default function SearchableSelect({
   return (
     <div className={cn('relative', className)} ref={rootRef}>
       {label && (
-        <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+        <label className="block tf-caption mb-1.5">
           {label}
         </label>
       )}
@@ -262,7 +262,7 @@ export default function SearchableSelect({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={searchPlaceholder}
-                className="w-full h-8 pl-8 pr-7 text-sm rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                className="tf-input h-8 pl-8 pr-7 rounded-md"
               />
               {query && (
                 <button
@@ -282,7 +282,7 @@ export default function SearchableSelect({
 
           <div ref={listRef} role="listbox" className="max-h-56 overflow-y-auto py-1">
             {rows.length === 0 ? (
-              <p className="px-3 py-4 text-xs text-center text-gray-500 dark:text-slate-400">
+              <p className="px-3 py-4 tf-meta text-center">
                 {emptyMessage}
               </p>
             ) : (
@@ -314,7 +314,7 @@ export default function SearchableSelect({
                       {row.label}
                     </span>
                     {'hint' in row && row.hint && (
-                      <span className="ml-auto text-xs text-gray-400 flex-shrink-0">{row.hint}</span>
+                      <span className="ml-auto tf-hint flex-shrink-0">{row.hint}</span>
                     )}
                   </button>
                 );

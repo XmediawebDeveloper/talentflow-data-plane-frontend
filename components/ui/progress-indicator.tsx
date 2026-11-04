@@ -36,7 +36,7 @@ export function ProgressIndicator({ steps, currentStep }: ProgressIndicatorProps
             >
               {isCompleted && <CheckCircle className="w-5 h-5 text-white" />}
               {isProcessing && <Loader2 className="w-5 h-5 text-white animate-spin" />}
-              {step.status === 'pending' && <span className="text-xs text-gray-500">{index + 1}</span>}
+              {step.status === 'pending' && <span className="tf-meta">{index + 1}</span>}
               {isError && <span className="text-white text-xs">!</span>}
             </div>
 
@@ -74,8 +74,8 @@ export function LinearProgress({ progress, label }: { progress: number; label?: 
     <div className="w-full">
       {label && (
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-600">{label}</span>
-          <span className="text-sm font-medium text-gray-900">{Math.round(progress)}%</span>
+          <span className="tf-body-secondary">{label}</span>
+          <span className="tf-row-name">{Math.round(progress)}%</span>
         </div>
       )}
       <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

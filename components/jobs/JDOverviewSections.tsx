@@ -67,7 +67,7 @@ const workModeLabel = (value?: string): string => {
 
 /** The page's own card shell, so every section here sits in the same box. */
 const CARD =
-  'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5';
+  'tf-card';
 
 /**
  * The three passes the Job Details page makes over the stored description: an
@@ -137,7 +137,7 @@ export default function JDOverviewSections({
         <div className="p-4 sm:p-5">
           {jd.description ? (
             <div>
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
+              <h2 className="tf-row-title mb-3">
                 Job Description
               </h2>
               <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3" />
@@ -162,12 +162,12 @@ export default function JDOverviewSections({
       {jd.additional_details && (
         <div className={`${CARD} p-4`}>
           <div className="flex items-center gap-2 mb-3">
-            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
+            <h3 className="tf-row-name">Additional Details</h3>
             <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
               Visible to candidates
             </span>
           </div>
-          <p className="tf-card-desc whitespace-pre-wrap">{jd.additional_details}</p>
+          <p className="tf-body-secondary whitespace-pre-wrap">{jd.additional_details}</p>
         </div>
       )}
 
@@ -175,10 +175,10 @@ export default function JDOverviewSections({
           the page. One column below `sm`. The guidance card always renders —
           greyed with the plan message when the plan lacks assessments — so the
           layout never shifts once plan features load. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="tf-grid-2">
         <div className={`${CARD} p-4`}>
-          <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
-          <div className="tf-card-desc space-y-2">
+          <h3 className="tf-row-name mb-3">Internal Recruiter Notes</h3>
+          <div className="tf-body-secondary space-y-2">
             {internalRecruiterComments.length > 0 ? (
               <ul className="list-disc list-inside space-y-1">
                 {internalRecruiterComments.map((note, index) => (
@@ -200,12 +200,12 @@ export default function JDOverviewSections({
             <h3 className="flex items-center gap-1.5 text-sm font-medium text-gray-400 dark:text-slate-500 mb-3">
               Assessment Guidance <Lock className="w-3 h-3" />
             </h3>
-            <p className="text-sm text-gray-400 dark:text-slate-500 italic">{PLAN_LOCKED_MESSAGE}</p>
+            <p className="tf-body-muted italic">{PLAN_LOCKED_MESSAGE}</p>
           </div>
         ) : (
           <div className={`${CARD} p-4`}>
-            <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
-            <div className="tf-card-desc">
+            <h3 className="tf-row-name mb-3">Assessment Guidance</h3>
+            <div className="tf-body-secondary">
               {jd.assessment_guidance ? (
                 <p className="whitespace-pre-wrap">{jd.assessment_guidance}</p>
               ) : (

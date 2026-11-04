@@ -239,8 +239,8 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                 <AlertCircle className="w-5 h-5 text-brand-orange" />
               </div>
               <div>
-                <h2 className="tf-section-title mb-1">Duplicate Resume Detected</h2>
-                <p className="tf-card-desc">
+                <h2 className="tf-section-title sm:text-lg mb-1">Duplicate Resume Detected</h2>
+                <p className="tf-body-secondary">
                   This candidate already exists in the system. Choose how to handle this duplicate.
                 </p>
                 <div className="flex items-center gap-4 mt-3">
@@ -268,7 +268,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-slate-950">
           {/* Candidate Info */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-5 mb-6">
+          <div className="tf-card-soft p-5 mb-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                 <User className="w-5 h-5 text-brand-blue" />
@@ -285,35 +285,35 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               <div className="bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/60 rounded-lg p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <FileText className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                  <span className="text-sm text-gray-900 dark:text-slate-50">Existing Resume</span>
+                  <span className="tf-body">Existing Resume</span>
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-start gap-2">
                     <MapPin className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">Location</div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingLocation}</div>
+                      <div className="tf-body">{currentFile.existingLocation}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">Upload Date</div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingResumeDate}</div>
+                      <div className="tf-body">{currentFile.existingResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="tf-meta">File Size</div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50">{currentFile.existingResumeSize}</div>
+                      <div className="tf-body">{currentFile.existingResumeSize}</div>
                     </div>
                   </div>
                 </div>
                 <button
                   onClick={() => currentFile.existingResumeId && handlePreviewExisting(currentFile.existingResumeId)}
                   disabled={!currentFile.existingResumeId || previewLoading === 'existing'}
-                  className="w-full mt-3 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary w-full mt-3 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex whitespace-normal font-normal"
                 >
                   {previewLoading === 'existing' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                   {previewLoading === 'existing' ? 'Loading...' : 'Preview Existing'}
@@ -331,28 +331,28 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                     <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">File Name</div>
-                      <div className="text-sm text-gray-800 dark:text-slate-100 truncate">{currentFile.fileName}</div>
+                      <div className="tf-body truncate">{currentFile.fileName}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">Upload Date</div>
-                      <div className="text-sm text-gray-800 dark:text-slate-100">{currentFile.newResumeDate}</div>
+                      <div className="tf-body">{currentFile.newResumeDate}</div>
                     </div>
                   </div>
                   <div className="flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
                     <div>
                       <div className="text-xs text-gray-800 dark:text-slate-100">File Size</div>
-                      <div className="text-sm text-gray-800 dark:text-slate-100">{currentFile.newResumeSize}</div>
+                      <div className="tf-body">{currentFile.newResumeSize}</div>
                     </div>
                   </div>
                 </div>
                 <button
                   onClick={() => currentFile.newFile && handlePreviewNew(currentFile.newFile)}
                   disabled={!currentFile.newFile || previewLoading === 'new'}
-                  className="w-full mt-3 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary w-full mt-3 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex whitespace-normal font-normal"
                 >
                   {previewLoading === 'new' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
                   {previewLoading === 'new' ? 'Loading...' : 'Preview New'}
@@ -380,7 +380,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
 
           {/* Action Selection */}
           <div className="space-y-3">
-            <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Choose an action:</h4>
+            <h4 className="tf-body mb-3">Choose an action:</h4>
 
             {/* Option 1: Discard New Resume */}
             <button
@@ -401,7 +401,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'discard' ? 'text-red-900' : 'text-gray-900 dark:text-slate-50'}`}>
                     1. Discard New Resume
                   </div>
-                  <p className="tf-meta-strong">
+                  <p className="tf-meta">
                     Keep existing resume unchanged. New resume will be deleted.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
@@ -439,7 +439,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'overwrite' ? 'text-brand-orange-deep' : 'text-gray-900 dark:text-slate-50'}`}>
                     2. Overwrite Existing Resume
                   </div>
-                  <p className="tf-meta-strong">
+                  <p className="tf-meta">
                     Replace old resume with new one. Original will be permanently deleted.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
@@ -477,7 +477,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
                   <div className={`text-sm mb-1 ${selectedAction === 'version' ? 'text-brand-cyan' : 'text-gray-900 dark:text-slate-50'}`}>
                     3. Save as New Version
                   </div>
-                  <p className="tf-meta-strong">
+                  <p className="tf-meta">
                     Keep both resumes. New resume stored as a versioned update. Recommended for tracking changes.
                   </p>
                   <div className="flex items-center gap-4 mt-2">
@@ -521,7 +521,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
               <button
                 onClick={handleNext}
                 disabled={!hasResolvedCurrent}
-                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                className="tf-btn tf-btn-primary px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex whitespace-normal justify-start font-normal"
               >
                 {isLastFile ? 'Complete & Upload' : 'Next File'}
                 {!isLastFile && <span className="text-xs opacity-75">({duplicateFiles.length - currentIndex - 1} remaining)</span>}
@@ -539,7 +539,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
             <div className="flex items-center gap-2">
               <Eye className="w-5 h-5 text-brand-blue" />
-              <h3 className="tf-section-title">{previewTitle}</h3>
+              <h3 className="tf-section-title sm:text-lg">{previewTitle}</h3>
             </div>
             <button onClick={closePreview} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
               <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />

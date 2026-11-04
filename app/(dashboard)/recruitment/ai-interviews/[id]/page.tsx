@@ -17,9 +17,9 @@ import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 // stacked info section cards.
 function AIInterviewDetailsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1600px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 flex items-center gap-2">
             <Skeleton className="h-3 w-16" />
@@ -55,7 +55,7 @@ function AIInterviewDetailsSkeleton() {
           {/* Section cards */}
           <div className="space-y-6">
             {Array.from({ length: 3 }).map((_, card) => (
-              <div key={card} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+              <div key={card} className="tf-panel p-5 sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
                   <Skeleton className="h-9 w-9 rounded-lg" />
                   <Skeleton className="h-6 w-48" />
@@ -270,7 +270,7 @@ function AIInterviewDetailsContent() {
           <div className="text-red-500 text-base">{error || 'AI Interview config not found'}</div>
           <button
             onClick={handleBack}
-            className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+            className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
           >
             Back to AI Interviews
           </button>

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import api, { handleUnauthorized, UNITS_CONSUMED_EVENT } from '@/lib/services/api';
 
 interface FeatureItem {
@@ -303,8 +303,13 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     return quotaDataRef.current;
   }, [fetchQuotaData]);
 
+  const contextValue = useMemo<QuotaContextType>(
+    () => ({ quotaData, loading, error, hasPermission, refetch, lastFetchTime }),
+    [quotaData, loading, error, hasPermission, refetch, lastFetchTime],
+  );
+
   return (
-    <QuotaContext.Provider value={{ quotaData, loading, error, hasPermission, refetch, lastFetchTime }}>
+    <QuotaContext.Provider value={contextValue}>
       {children}
     </QuotaContext.Provider>
   );

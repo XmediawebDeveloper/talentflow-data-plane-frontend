@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing, { type BulkStatusAction } from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
@@ -18,7 +18,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import api from '@/lib/services/api';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
@@ -62,9 +62,9 @@ const JD_BATCH_SIZE = 100;
 // beside the layout it shadows and can't drift from it.
 function JobOpeningsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 h-4 w-56 rounded bg-gray-200 animate-pulse" />
 
@@ -85,9 +85,9 @@ function JobOpeningsSkeleton() {
             </div>
 
             {/* Stat cards — 4-up grid (matches StatsCardGrid columns=4) */}
-            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="tf-grid-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                <div key={i} className="relative overflow-hidden tf-panel px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-2.5">
                       <div className="h-9 w-9 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
@@ -142,7 +142,6 @@ export default function JobOpeningsPage() {
      are still loading, and those pages may still carry the deleted row. Only
      that row - a delete removes ONE version; the job's other versions stay. */
   const deletedIdsRef = useRef(new Set<string>());
-  const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
      each one with its own dashboard icon and count, so it needs the parts. */
@@ -185,6 +184,21 @@ export default function JobOpeningsPage() {
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  /* Job-publishing quota from the shared QuotaContext (one /usage/quota-status
+     call app-wide); useFreshQuota refreshes it on open unless it is seconds old. */
+  const { quotaData } = useFreshQuota(5000, user?.id);
+  const quotaInfo = useMemo<{ remaining: number; limit: number; used: number } | undefined>(() => {
+    const maxJobs = quotaData?.quotas?.max_jobs;
+    if (!maxJobs) return undefined;
+    // Same expressions the page's own fetch used (values passed through as-is).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = maxJobs as any;
+    return {
+      remaining: m.total_remaining || 0,
+      limit: (m.subscription?.limit || 0) + (m.addon?.total_purchased || 0),
+      used: m.subscription?.used || 0,
+    };
+  }, [quotaData]);
   // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
   // JD's own "Score Resume" permission (jd:add_applicants).
   // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
@@ -255,26 +269,9 @@ export default function JobOpeningsPage() {
   useEffect(() => {
     if (!user) return;
     fetchJobs();
-    fetchQuotaInfo();
     // Invalidate this run's in-flight pages on user change / unmount.
     return () => { fetchSeqRef.current += 1; };
   }, [user?.id]);
-
-  const fetchQuotaInfo = async () => {
-    try {
-      const response = await api.get('/usage/quota-status');
-      if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
-        const maxJobs = response.data.data.quotas.max_jobs;
-        setQuotaInfo({
-          remaining: maxJobs.total_remaining || 0,
-          limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
-          used: maxJobs.subscription?.used || 0,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch quota info:', error);
-    }
-  };
 
   const fetchJobs = async () => {
     const seq = ++fetchSeqRef.current;
@@ -778,7 +775,7 @@ export default function JobOpeningsPage() {
 
   /* The "Cannot Delete" popup's module chips: one job's "Active in" list. */
   const renderUsageChips = (usageDetails: string[]) => (
-    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="tf-grid-2 mt-3">
       {usageDetails.map((usage, index) => {
         const UsageIcon = usageModuleIcon(usage);
         return (
@@ -876,7 +873,7 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+    <div ref={rootRef} className="tf-page relative flex flex-col">
       <JobsListing
         jobs={jobs}
         onRefresh={fetchJobs}
@@ -994,10 +991,10 @@ export default function JobOpeningsPage() {
                 <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 fill-red-600/15" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">
+                <AlertDialogTitle className="tf-section-title sm:text-xl">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-1 text-sm text-gray-500">
+                <AlertDialogDescription className="mt-1 tf-body-muted">
                   {deleteWarningJobs
                     ? `These ${deleteWarningJobs.length} job descriptions are actively used and cannot be deleted.`
                     : 'This job description is actively used and cannot be deleted.'}
@@ -1028,7 +1025,7 @@ export default function JobOpeningsPage() {
                 <ul className="mt-3 space-y-3 max-h-64 overflow-y-auto">
                   {deleteWarningJobs.map((job, jobIndex) => (
                     <li key={jobIndex} className="min-w-0">
-                      <p className="tf-cell-name [overflow-wrap:anywhere]">{job.title}</p>
+                      <p className="tf-row-title [overflow-wrap:anywhere]">{job.title}</p>
                       {renderUsageChips(job.usageDetails)}
                     </li>
                   ))}
@@ -1050,7 +1047,7 @@ export default function JobOpeningsPage() {
                       ? <><span className="font-bold text-brand-blue">These {deleteWarningJobs.length} job descriptions</span> are linked to the active modules above.</>
                       : <><span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.</>}
                   </p>
-                  <p className="mt-1 tf-card-desc">
+                  <p className="mt-1 tf-body-secondary">
                     Deleting it could affect existing data and processes.
                   </p>
                 </div>
@@ -1066,7 +1063,7 @@ export default function JobOpeningsPage() {
                   <p className="tf-body">
                     <span className="font-bold text-brand-blue">We recommend disabling</span> {deleteWarningJobs ? 'them' : 'the job description'} instead.
                   </p>
-                  <p className="mt-1 tf-card-desc">
+                  <p className="mt-1 tf-body-secondary">
                     This will stop new applications while keeping existing data safe.
                   </p>
                 </div>

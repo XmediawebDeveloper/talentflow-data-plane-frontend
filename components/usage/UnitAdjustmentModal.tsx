@@ -238,21 +238,21 @@ export default function UnitAdjustmentModal({
                                 }`}>
                                   {isPositive ? '+' : ''}{entry.units_amount} {entry.unit_type}
                                 </span>
-                                <span className="tf-meta-strong bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                                <span className="tf-meta bg-gray-200 dark:bg-slate-800 px-1.5 py-0.5 rounded">
                                   {entry.action_type}
                                 </span>
                               </div>
-                              <p className="tf-card-desc mt-0.5">
+                              <p className="tf-body-secondary mt-0.5">
                                 {entry.reason}
                               </p>
                               {entry.notes && (
-                                <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">
+                                <p className="tf-hint mt-1">
                                   Note: {entry.notes}
                                 </p>
                               )}
                             </div>
                           </div>
-                          <div className="text-right text-xs text-gray-400 dark:text-slate-500">
+                          <div className="text-right tf-hint">
                             <p>{entry.actor_email || entry.actor_type}</p>
                             <p>{formatIST(entry.created_at)}</p>
                             <p className="mt-1 text-gray-500 dark:text-slate-500">
@@ -271,7 +271,7 @@ export default function UnitAdjustmentModal({
             <>
               {/* Current Balances */}
               <div className="mb-6">
-                <h3 className="text-sm font-medium text-gray-700 dark:text-slate-300 mb-3">Current Balances</h3>
+                <h3 className="tf-label mb-3">Current Balances</h3>
                 <div className="grid grid-cols-3 gap-3">
                   {(['RS', 'AS', 'AIU'] as UnitType[]).map(type => {
                     const pool = pools?.[type];
@@ -290,7 +290,7 @@ export default function UnitAdjustmentModal({
                       >
                         <div className="flex items-center gap-2">
                           <Icon className={`w-4 h-4 ${isSelected ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`} />
-                          <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                          <span className="tf-label">
                             {getUnitTypeName(type)}
                           </span>
                         </div>
@@ -357,7 +357,7 @@ export default function UnitAdjustmentModal({
                   min={0}
                   value={amount}
                   onChange={(e) => setAmount(parseInt(e.target.value) || 0)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="tf-input"
                   placeholder="Enter amount"
                 />
                 {amount > 0 && (
@@ -386,7 +386,7 @@ export default function UnitAdjustmentModal({
                   type="text"
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                  className="tf-input"
                   placeholder="e.g., Customer request, Plan upgrade, Billing adjustment"
                   maxLength={100}
                 />
@@ -400,7 +400,7 @@ export default function UnitAdjustmentModal({
                 <textarea
                   value={notes}
                   onChange={(e) => setNotes(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900 resize-none"
+                  className="tf-textarea resize-none"
                   rows={2}
                   placeholder="Optional additional details..."
                   maxLength={500}
@@ -435,7 +435,7 @@ export default function UnitAdjustmentModal({
                     type="text"
                     value={referenceId}
                     onChange={(e) => setReferenceId(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-900"
+                    className="tf-input"
                     placeholder="Optional"
                   />
                 </div>

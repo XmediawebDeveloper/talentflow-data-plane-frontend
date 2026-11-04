@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 // the hero footprint doesn't reshuffle when the client component takes over.
 export default function Loading() {
   return (
-    <div className="flex-1 bg-slate-50 overflow-x-clip">
+    <div className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Breadcrumb */}
@@ -39,9 +39,9 @@ export default function Loading() {
           {/* Content */}
           <div className="p-3 sm:p-4 md:p-6 lg:p-8 space-y-4 sm:space-y-6">
             {/* Stats cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
+            <div className="tf-grid-stats">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4 md:p-6">
+                <div key={i} className="tf-panel p-3 sm:p-4 md:p-6">
                   <div className="flex items-center justify-between mb-2">
                     <Skeleton className="h-3.5 w-20" />
                     <Skeleton className="h-5 w-5 rounded-full" />
@@ -53,9 +53,9 @@ export default function Loading() {
             </div>
 
             {/* Quick actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 md:gap-6">
+            <div className="tf-grid-2">
               {Array.from({ length: 2 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6 md:p-8">
+                <div key={i} className="tf-panel p-4 sm:p-6 md:p-8">
                   <Skeleton className="h-8 w-8 mb-2 sm:mb-4 rounded-lg" />
                   <Skeleton className="h-5 w-40 mb-2" />
                   <Skeleton className="h-3 w-full max-w-xs" />
@@ -64,7 +64,7 @@ export default function Loading() {
             </div>
 
             {/* Recent tickets list card */}
-            <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 sm:p-4 md:p-6">
+            <div className="tf-panel p-3 sm:p-4 md:p-6">
               <div className="flex items-center justify-between mb-3 sm:mb-4 md:mb-6">
                 <Skeleton className="h-5 w-32" />
                 <Skeleton className="h-4 w-16" />

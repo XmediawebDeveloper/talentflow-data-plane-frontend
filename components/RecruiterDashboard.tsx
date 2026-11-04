@@ -100,14 +100,14 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
   const aiInterviewQuota = { used: toNum(aiInterviewQ?.subscription?.used), limit: toNum(aiInterviewQ?.subscription?.limit) };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <main className="tf-page">
+      <div className="tf-page-pad w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />
         </div>
 
         {/* KPI tiles */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 sm:gap-6 mb-6">
+        <div className="tf-grid-4 mb-6">
           <KpiTile
             label="My Active JDs"
             value={myJDs.length || 0}
@@ -143,8 +143,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
         </div>
 
         {/* Pipeline funnel + quota mini */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2 p-6">
             <div className="flex items-center justify-between mb-6">
               <div>
                 <h2 className="tf-section-title">Recruitment Pipeline</h2>
@@ -169,16 +169,16 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                         style={{ width: `${widthPct}%` }}
                       />
                     </div>
-                    <div className="w-12 text-right tf-cell-name">{stage.count}</div>
+                    <div className="w-12 text-right tf-row-title">{stage.count}</div>
                   </div>
                 );
               })}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-6">
+          <div className="tf-card-soft p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="tf-subsection-title">Quota This Cycle</h3>
+              <h3 className="tf-row-title">Quota This Cycle</h3>
               <button
                 onClick={() => router.push('/organization/usage')}
                 className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
@@ -200,7 +200,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
         </div>
 
         {/* Quick actions strip */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="tf-grid-stats mb-6">
           {canCreateJD && (
             <QuickAction
               label="Post JD"
@@ -236,8 +236,8 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
         </div>
 
         {/* My JDs + today's schedule */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2">
             <div className="flex items-center justify-between p-6 border-b border-gray-100 dark:border-slate-700/60">
               <div>
                 <h2 className="tf-section-title">My Active JDs</h2>
@@ -290,11 +290,11 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                               <h3 className="font-medium text-gray-900 dark:text-slate-50 truncate group-hover:text-brand-blue">
                                 {jd.title || 'Untitled'}
                               </h3>
-                              <span className="px-2 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                              <span className="tf-badge text-2xs bg-success-subtle text-success ring-1 ring-success-line">
                                 Published
                               </span>
                             </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
+                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta">
                               {jd.department && <span>{jd.department}</span>}
                               {jd.location && <span>· {jd.location}</span>}
                               {daysOpen !== null && (
@@ -318,7 +318,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm">
+          <div className="tf-card-soft">
             <div className="p-6 border-b border-gray-100 dark:border-slate-700/60">
               <h2 className="tf-section-title">Today's Schedule</h2>
               <p className="tf-meta mt-0.5">Interviews & reviews</p>
@@ -331,10 +331,10 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                 { time: '05:00 PM', title: 'Assessment Review · UX Lead', type: 'Review', tone: 'brand-teal' },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <div className="w-16 flex-shrink-0 text-2xs font-medium text-gray-500 dark:text-slate-500 pt-1">{item.time}</div>
+                  <div className="w-16 flex-shrink-0 tf-micro-hint pt-1">{item.time}</div>
                   <div className="flex-1 min-w-0 border-l-2 pl-3" style={{ borderColor: `var(--${item.tone})` }}>
-                    <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{item.title}</div>
-                    <div className="text-2xs text-gray-500 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{item.type}</div>
+                    <div className="tf-body truncate">{item.title}</div>
+                    <div className="tf-micro-hint mt-0.5 uppercase tracking-wide">{item.type}</div>
                   </div>
                 </div>
               ))}
@@ -355,7 +355,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
               <AlertCircle className="w-5 h-5 text-brand-orange-deep" />
             </div>
             <div className="flex-1">
-              <h3 className="tf-subsection-title mb-1">Action items</h3>
+              <h3 className="tf-row-title mb-1">Action items</h3>
               <p className="tf-body mb-3">
                 You have <span className="font-semibold text-brand-orange-deep">8 assessments</span> awaiting review and{' '}
                 <span className="font-semibold text-brand-orange-deep">3 AI interview reports</span> ready.
@@ -402,7 +402,7 @@ function KpiTile({
   trend?: string;
 }) {
   return (
-    <div className="group relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-6 hover:shadow-md hover:-translate-y-0.5 transition-all">
+    <div className="tf-card-soft group relative overflow-hidden p-6 hover:shadow-md hover:-translate-y-0.5 transition-all">
       <div className="flex items-start justify-between mb-3">
         <div className={`w-12 h-12 rounded-xl ${accent} ring-1 flex items-center justify-center`}>{icon}</div>
         {trend && (
@@ -413,8 +413,8 @@ function KpiTile({
         )}
       </div>
       <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
-      <div className="tf-card-desc mt-0.5">{label}</div>
-      {sub && <div className="text-2xs text-gray-500 dark:text-slate-500 mt-1" dangerouslySetInnerHTML={{ __html: sub }} />}
+      <div className="tf-body-secondary mt-0.5">{label}</div>
+      {sub && <div className="tf-micro-hint mt-1" dangerouslySetInnerHTML={{ __html: sub }} />}
     </div>
   );
 }
@@ -464,8 +464,8 @@ function QuickAction({
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="text-right">
-      <div className="text-base font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{value}</div>
-      <div className="text-2xs text-gray-500 dark:text-slate-500 uppercase tracking-wide">{label}</div>
+      <div className="tf-section-title tabular-nums">{value}</div>
+      <div className="tf-micro-hint uppercase tracking-wide">{label}</div>
     </div>
   );
 }
@@ -484,7 +484,7 @@ function EmptyState({
   return (
     <div className="text-center py-10">
       <div className="mx-auto mb-3 w-fit">{icon}</div>
-      <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-1">{title}</h3>
+      <h3 className="tf-row-name mb-1">{title}</h3>
       <p className="tf-meta mb-4">{body}</p>
       {cta && (
         <Button

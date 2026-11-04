@@ -161,8 +161,8 @@ function Demo({ name, path, children }: { name: string; path: string; children: 
   return (
     <div className="min-w-0">
       <div className="mb-3 flex flex-wrap items-baseline gap-x-2 gap-y-1">
-        <h3 className="tf-subsection-title">{name}</h3>
-        <code className="min-w-0 text-xs text-gray-500 dark:text-slate-400 [overflow-wrap:anywhere]">{path}</code>
+        <h3 className="tf-row-title">{name}</h3>
+        <code className="min-w-0 tf-meta [overflow-wrap:anywhere]">{path}</code>
       </div>
       <div className="min-w-0">{children}</div>
     </div>
@@ -691,7 +691,7 @@ export default function UiReferencePage() {
                   <div className="tf-table-shell">
                     <table className="w-full min-w-[640px] text-sm">
                       <thead>
-                        <tr className="border-b border-gray-200 text-left text-xs font-semibold text-gray-600 dark:border-slate-700 dark:text-slate-300">
+                        <tr className="border-b border-gray-200 text-left tf-caption dark:border-slate-700">
                           <th className="w-10 px-3 py-3 tf-th">
                             <Checkbox
                               aria-label="Select this page"
@@ -727,7 +727,7 @@ export default function UiReferencePage() {
                               <Checkbox aria-label={`Select ${r.name}`} checked={selected.has(r.id)} onCheckedChange={() => toggleRow(r.id)} />
                             </td>
                             <td className="px-3 py-2.5 font-medium text-gray-900 dark:text-slate-100">{r.name}</td>
-                            {columns.path && <td className="px-3 py-2.5 font-mono text-xs text-gray-500 dark:text-slate-400">{r.path}</td>}
+                            {columns.path && <td className="px-3 py-2.5 font-mono tf-meta">{r.path}</td>}
                             {columns.category && <td className="px-3 py-2.5 text-gray-700 dark:text-slate-300">{r.category}</td>}
                             {columns.files && <td className="px-3 py-2.5 text-right tabular-nums text-gray-700 dark:text-slate-300">{r.files}</td>}
                             {columns.status && (
@@ -808,7 +808,7 @@ export default function UiReferencePage() {
               <Row>
                 <MiniPagination page={miniPage} totalPages={INVENTORY_CATEGORIES.length} onPageChange={setMiniPage} />
                 <MiniPagination page={miniPage} totalPages={INVENTORY_CATEGORIES.length} onPageChange={setMiniPage} showEnds />
-                <span className="tf-card-desc">{INVENTORY_CATEGORIES[miniPage - 1]}</span>
+                <span className="tf-body-secondary">{INVENTORY_CATEGORIES[miniPage - 1]}</span>
               </Row>
             </Demo>
             <Demo name="RecordPager (Previous / Next record)" path="components/RecordPager.tsx">
@@ -864,7 +864,7 @@ export default function UiReferencePage() {
                   ))}
                 </TabsList>
                 {(['Shared', 'Duplicated', 'Barely used'] as const).map((s) => (
-                  <TabsContent key={s} value={s} className="text-sm text-gray-600 dark:text-slate-400 [overflow-wrap:anywhere]">
+                  <TabsContent key={s} value={s} className="tf-body-secondary [overflow-wrap:anywhere]">
                     {INVENTORY.filter((r) => r.status === s).map((r) => r.name).join(' · ')}
                   </TabsContent>
                 ))}
@@ -946,7 +946,7 @@ export default function UiReferencePage() {
                       <Badge variant="success">Shared</Badge>
                     </CardAction>
                   </CardHeader>
-                  <CardContent className="text-sm text-gray-600 dark:text-slate-400">Card header, action, content and footer slots.</CardContent>
+                  <CardContent className="tf-body-secondary">Card header, action, content and footer slots.</CardContent>
                   <CardFooter>
                     <Button size="sm" variant="secondary">Open</Button>
                   </CardFooter>
@@ -954,7 +954,7 @@ export default function UiReferencePage() {
               </Demo>
               <Demo name="SurfaceCard" path="components/ui/section-container.tsx">
                 <SurfaceCard>
-                  <div className="tf-card-desc">The plain panel every section on this page sits on.</div>
+                  <div className="tf-body-secondary">The plain panel every section on this page sits on.</div>
                 </SurfaceCard>
               </Demo>
             </div>
@@ -1064,13 +1064,13 @@ export default function UiReferencePage() {
           <div className="grid grid-cols-[repeat(auto-fill,minmax(min(100%,12rem),1fr))] gap-3">
             {categoryGroups.map(({ c, rows }) => (
               <div key={c} className="min-w-0 rounded-lg border border-gray-200 p-3 dark:border-slate-700">
-                <div className="text-sm font-medium text-gray-900 dark:text-slate-100">{c}</div>
+                <div className="tf-row-name">{c}</div>
                 <div className="mt-1 tf-meta">{componentCount(rows.length)}</div>
               </div>
             ))}
           </div>
         ) : (
-          <p className="tf-card-desc">
+          <p className="tf-body-secondary">
             {modal === 'warning' ? 'Your changes will be lost.' : 'Confirm, delete and other short prompts use the small size.'}
           </p>
         )}

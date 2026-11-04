@@ -40,9 +40,10 @@ const SKIP_SENTENCE = 0.8;
 const SKIP_COMMA = 0.08;
 const SENTENCE_BONUS = 0.1;
 /** Spoken weight per VOICED ms. Prior only — learned from each finished
- *  utterance. Staging 2026-11-02 (AI_TTS_SPEED 0.85): intro 890 chars / 52.6 s
- *  incl. pauses ≈ 17 weight/s → ~18 per voiced second. */
-const DEFAULT_RATE = 0.018;
+ *  utterance. Staging 2026-11-03 measured 0.0203–0.0206 with AI_TTS_SPEED not
+ *  yet applied (gpt-4o-mini-tts ignored it); the backend now stretches the PCM
+ *  to 0.85 → ~0.0175. */
+const DEFAULT_RATE = 0.0175;
 /** How much anchored speech (ms) it takes for this utterance's own rate to dominate the prior. */
 const RATE_PRIOR_MS = 1500;
 /** Frames quieter than this fraction of the speech level count as silence. */

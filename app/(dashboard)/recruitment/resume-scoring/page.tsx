@@ -11,6 +11,7 @@ import { Resume, Folder } from '@/lib/types/types';
 import { toast } from 'sonner';
 import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 
@@ -70,6 +71,13 @@ export default function ResumeScoringRoute() {
   // ResumeScoringPage's `scoreCounts` prop.
   const [scoreCounts, setScoreCounts] = useState<{ total: number; exact: number; partial: number; none: number } | null>(null);
   const [loading, setLoading] = useState(true);
+  // Set once the mount effect has read the URL params into state, so the page
+  // never mounts with them still unset.
+  const [paramsReady, setParamsReady] = useState(false);
+  // Read only to time the first mount (see the render gate at the bottom):
+  // FeatureGate shows a bare spinner until plan availability is known.
+  const { loading: planFeatureLoading } = usePlanFeature('resume_scoring');
+  const [pageMounted, setPageMounted] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
   const [initialScoreId, setInitialScoreId] = useState<string | null>(null);
@@ -270,6 +278,9 @@ export default function ResumeScoringRoute() {
     // loading state, so firing both together is safe.
     fetchData();
     loadScoredHistory();
+    // The URL-derived state above is now set, so <ResumeScoringPage> can mount
+    // with it (see the render gate at the bottom).
+    setParamsReady(true);
   }, []);
 
   // Poll for batch status when we have a pending batch
@@ -748,14 +759,17 @@ export default function ResumeScoringRoute() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch JDs and resumes from tenant database. Probe each for total then
-      // pull every record so the dropdowns reflect actual counts.
+      // Fetch JDs from tenant database. Probe for total then pull every record
+      // so the dropdowns reflect actual counts.
+      //
+      // The full resume table is NOT fetched here any more. <ResumeScoringPage>
+      // only reads its `resumes` prop in the legacy in-page resume list
+      // (filteredResumes / handleSelectAll), which nothing renders — the
+      // Select Resumes popup (SelectSourceModal) loads its own resumes. The
+      // `refreshResumes` callback below still loads them on demand.
       const jdParams = { status: 'published' as const, source: 'my-jds' as const };
-      const resumeParams = { include_archived: true };
-      const [jdResponse, resumeResponse, folderResponse] = await Promise.all([
+      const [jdResponse, folderResponse] = await Promise.all([
         fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
-        fetchAllRows((page_size, page) => resumeService.list({ ...resumeParams, page_size, page }))
-          .catch(() => ({ items: [] })),
         folderService.list().catch(() => []),
       ]);
 
@@ -781,31 +795,6 @@ export default function ResumeScoringRoute() {
         creation_method: jd.creation_method,
         industry_type: jd.industry_type,
         remote_type: jd.remote_type,
-      }));
-
-      // Convert API Resume to component Resume type
-      const convertedResumes: Resume[] = resumeResponse.items.map((r: any) => ({
-        id: r.id,
-        name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
-        email: r.email || 'No email',
-        phone: r.phone || 'No phone',
-        title: r.current_title || 'N/A',
-        experience: r.experience_years ? `${r.experience_years} years` : 'N/A',
-        education: r.education?.[0]?.degree || 'N/A',
-        location: r.location || 'N/A',
-        skills: r.skills || [],
-        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
-        folderId: r.folder_id || '',
-        uploadDate: r.created_at,
-        attachments: r.file_name ? 1 : 0,
-        uploadedBy: r.uploaded_by || 'System',
-        // Version info for scoring version selection
-        version: r.version || 1,
-        versionCount: r.version_count || 1,
-        fileName: r.file_name,
-        fileSizeKb: r.file_size_kb,
-        isArchived: r.is_archived || false,
-        archivedAt: r.archived_at,
       }));
 
       // Convert API Folder to component Folder type AND flatten the tree.
@@ -834,7 +823,6 @@ export default function ResumeScoringRoute() {
       );
 
       setJobs(convertedJobs);
-      setResumes(convertedResumes);
       setFolders(convertedFolders);
 
     } catch (error) {
@@ -878,7 +866,18 @@ export default function ResumeScoringRoute() {
     }
   };
 
-  if (loading) {
+  // Only a ?jd_id landing waits for the JD list before mounting: the JD-first
+  // flow (mode=new&jd_id) looks the JD up in `jobs` and would otherwise show
+  // the overview first, and the scored-list landing keeps its previous timing.
+  // Every other landing mounts right away — <ResumeScoringPage> holds its own
+  // overview skeleton until its history, global list and quota are in, and
+  // the JD list keeps loading in the background for the Score Resumes flow.
+  // Also held until plan availability is known, so FeatureGate's spinner never
+  // flashes between this skeleton and the page's own. Once mounted it stays
+  // mounted (as before: `loading` only ever flipped once).
+  const readyToMount = paramsReady && !planFeatureLoading && !(loading && searchParams.get('jd_id'));
+  if (readyToMount && !pageMounted) setPageMounted(true);
+  if (!pageMounted && !readyToMount) {
     // A ?jd_id in the URL means we're landing on the scored-resumes LIST view,
     // so show the list-shaped skeleton (stats + filter pills + table) rather than
     // the stats-only overview — otherwise the overview skeleton flashes first and
@@ -888,7 +887,7 @@ export default function ResumeScoringRoute() {
 
   return (
     <FeatureGate feature="resume_scoring">
-      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+      <div className="tf-page relative flex flex-col">
         <ResumeScoringPage
         jobs={jobs}
         resumes={resumes}

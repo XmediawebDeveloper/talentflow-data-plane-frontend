@@ -17,6 +17,7 @@ import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
 
@@ -465,9 +466,9 @@ export default function UnitDisputesPage() {
   // --- Render ---
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Unit Disputes' }]} />
 
         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -485,7 +486,7 @@ export default function UnitDisputesPage() {
               }}
               disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
               title={!canExportDisputes ? 'You do not have permission to export disputes' : ''}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center gap-2 tf-panel px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <Download className="h-4 w-4" />
               <span className="hidden sm:inline">Export</span>
@@ -501,7 +502,7 @@ export default function UnitDisputesPage() {
             <button
               onClick={fetchDisputes}
               disabled={loading}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
+              className="inline-flex items-center justify-center gap-2 tf-panel px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
             >
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
@@ -526,7 +527,7 @@ export default function UnitDisputesPage() {
         </div>
 
         {/* Stats Cards — clicking a card drills into the dispute list with the matching filter applied */}
-        <div className="mb-5 grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
+        <div className="tf-grid-3 mb-5">
           <button
             type="button"
             onClick={() => openListView('all')}
@@ -534,7 +535,7 @@ export default function UnitDisputesPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Total Disputes</p>
+                <p className="tf-eyebrow tracking-wider">Total Disputes</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-blue">{stats.total}</p>
                 <p className="mt-1 tf-meta">All time</p>
               </div>
@@ -550,7 +551,7 @@ export default function UnitDisputesPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Pending Review</p>
+                <p className="tf-eyebrow tracking-wider">Pending Review</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-orange-deep">{stats.pending}</p>
                 <p className="mt-1 tf-meta">Awaiting decision</p>
               </div>
@@ -566,7 +567,7 @@ export default function UnitDisputesPage() {
           >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-400 dark:text-slate-500">Resolved</p>
+                <p className="tf-eyebrow tracking-wider">Resolved</p>
                 <p className="mt-2 text-2xl font-semibold tracking-tight tabular-nums break-words text-brand-teal">{stats.resolved}</p>
                 <p className="mt-1 tf-meta">Approved or rejected</p>
               </div>
@@ -580,12 +581,12 @@ export default function UnitDisputesPage() {
         {pageView === 'list' && (
           <>
         {/* Filters */}
-        <div className="mb-6 rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5">
+        <div className="tf-card-soft mb-6 p-4 sm:p-5">
           <div className="mb-3 flex items-center gap-2">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Filter className="h-3.5 w-3.5 text-brand-blue" />
             </span>
-            <span className="tf-cell-name">Filters</span>
+            <span className="tf-row-title">Filters</span>
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
@@ -595,7 +596,7 @@ export default function UnitDisputesPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-4">
+          <div className="tf-grid-4">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
               <input
@@ -603,7 +604,7 @@ export default function UnitDisputesPage() {
                 placeholder="Search by ID, reason, description"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                className="tf-input rounded-xl pl-9 pr-3"
               />
             </div>
             <FilterSelect
@@ -638,7 +639,7 @@ export default function UnitDisputesPage() {
 
         {/* Loading — mirrors the disputes table columns (ID, Date, Unit Type, Units, Reason, Status, Actions) */}
         {loading && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+          <div className="tf-panel overflow-hidden">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
               <Skeleton className="h-4 w-24" />
               <Skeleton className="mt-1.5 h-3 w-32" />
@@ -676,7 +677,7 @@ export default function UnitDisputesPage() {
 
         {/* Empty */}
         {!loading && !error && filteredDisputes.length === 0 && (
-          <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="tf-card-soft p-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
               <Shield className="h-7 w-7 text-brand-blue" />
             </div>
@@ -717,35 +718,35 @@ export default function UnitDisputesPage() {
 
         {/* Table */}
         {!loading && !error && filteredDisputes.length > 0 && (
-          <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="tf-card-soft overflow-hidden">
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-4 sm:px-6">
               <div>
-                <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Disputes</h2>
+                <h2 className="tf-row-title">Disputes</h2>
                 <p className="tf-meta">
                   Showing {filteredDisputes.length} dispute{filteredDisputes.length !== 1 ? 's' : ''}
                   {hasActiveFilters && ` (filtered from ${disputes.length})`}
                 </p>
               </div>
             </div>
-            <div className="overflow-x-auto tf-table-shell">
+            <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
               <table className="w-full min-w-[900px]">
                 <thead className="bg-white dark:bg-slate-900">
                   <tr className="text-left">
-                    <th className="px-4 py-4 tf-th w-[160px]">Dispute ID</th>
-                    <th className="px-4 py-4 tf-th w-[110px]">Date</th>
-                    <th className="px-4 py-4 text-center tf-th w-[90px]">Unit Type</th>
-                    <th className="px-4 py-4 text-right tf-th w-[90px]">Units</th>
-                    <th className="px-4 py-4 tf-th w-[160px]">Reason</th>
-                    <th className="px-4 py-4 text-center tf-th w-[140px]">Status</th>
-                    <th className="px-4 py-4 text-right tf-th w-[100px] tf-sticky-col">Actions</th>
+                    <th className="tf-th-cell tf-th w-[160px]">Dispute ID</th>
+                    <th className="tf-th-cell tf-th w-[110px]">Date</th>
+                    <th className="tf-th-cell text-center tf-th w-[90px]">Unit Type</th>
+                    <th className="tf-th-cell text-right tf-th w-[90px]">Units</th>
+                    <th className="tf-th-cell tf-th w-[160px]">Reason</th>
+                    <th className="tf-th-cell text-center tf-th w-[140px]">Status</th>
+                    <th className="tf-th-cell text-right tf-th w-[100px] tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                   {paginatedDisputes.map((dispute) => (
                     <tr key={dispute.id} className="transition-colors hover:bg-brand-blue/[0.02]">
-                      <td className="px-4 py-4">
+                      <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-1.5">
-                          <span className="min-w-0 truncate font-mono tf-cell-name" title={dispute.id}>
+                          <span className="min-w-0 truncate font-mono tf-row-title" title={dispute.id}>
                             {truncateId(dispute.id)}
                           </span>
                           <button
@@ -757,27 +758,27 @@ export default function UnitDisputesPage() {
                           </button>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-4 py-4 tf-td">
+                      <td className="tf-td whitespace-nowrap tf-body">
                         {formatDate(dispute.created_at)}
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         {getUnitTypeBadge(dispute.unit_type)}
                       </td>
-                      <td className="px-4 py-4 text-right">
+                      <td className="tf-td text-right">
                         <span className="text-sm font-semibold text-brand-blue">{dispute.units_to_refund}</span>
                       </td>
-                      <td className="px-4 py-4">
-                        <span className="block truncate tf-card-desc" title={dispute.reason}>
+                      <td className="tf-td">
+                        <span className="block truncate tf-body-secondary" title={dispute.reason}>
                           {getReasonLabel(dispute.reason)}
                         </span>
                       </td>
-                      <td className="px-4 py-4 text-center">
+                      <td className="tf-td text-center">
                         <Badge variant={getStatusVariant(dispute.status)}>
                           {getStatusIcon(dispute.status)}
                           {getStatusLabel(dispute.status)}
                         </Badge>
                       </td>
-                      <td className="px-4 py-4 text-right tf-sticky-col">
+                      <td className="tf-td text-right tf-sticky-col">
                         <RowActions
                           menuLabel="Dispute actions"
                           actions={[
@@ -790,6 +791,47 @@ export default function UnitDisputesPage() {
                 </tbody>
               </table>
             </div>
+            <MobileRecordList>
+              {paginatedDisputes.map((dispute) => (
+                <MobileRecordCard
+                  key={dispute.id}
+                  badges={
+                    <>
+                      {getUnitTypeBadge(dispute.unit_type)}
+                      <Badge variant={getStatusVariant(dispute.status)}>
+                        {getStatusIcon(dispute.status)}
+                        {getStatusLabel(dispute.status)}
+                      </Badge>
+                    </>
+                  }
+                  title={
+                    <span className="inline-flex min-w-0 items-center gap-1.5">
+                      <span className="min-w-0 truncate font-mono" title={dispute.id}>{truncateId(dispute.id)}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); copyToClipboard(dispute.id); }}
+                        className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-gray-400 dark:text-slate-500 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
+                        aria-label="Copy full ID" title="Copy full ID"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </button>
+                    </span>
+                  }
+                  actions={
+                    <RowActions
+                      menuLabel="Dispute actions"
+                      actions={[
+                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => setSelectedDispute(dispute) },
+                      ]}
+                    />
+                  }
+                  fields={[
+                    { label: 'Date', value: formatDate(dispute.created_at) },
+                    { label: 'Units', value: <span className="font-semibold text-brand-blue">{dispute.units_to_refund}</span> },
+                    { label: 'Reason', value: getReasonLabel(dispute.reason) },
+                  ]}
+                />
+              ))}
+            </MobileRecordList>
           </div>
         )}
 
@@ -834,26 +876,26 @@ export default function UnitDisputesPage() {
               </div>
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 {/* Top info */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+                <div className="tf-grid-2">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Created</p>
-                    <p className="mt-1 tf-cell-name">{formatDateTime(selectedDispute.created_at)}</p>
+                    <p className="tf-micro-hint uppercase tracking-wider">Created</p>
+                    <p className="mt-1 tf-row-title">{formatDateTime(selectedDispute.created_at)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Unit Type</p>
+                    <p className="tf-micro-hint uppercase tracking-wider">Unit Type</p>
                     <div className="mt-1">{getUnitTypeBadge(selectedDispute.unit_type)}</div>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Status</p>
+                    <p className="tf-micro-hint uppercase tracking-wider">Status</p>
                     <Badge variant={getStatusVariant(selectedDispute.status)} className="mt-1">
                       {getStatusIcon(selectedDispute.status)}
                       {getStatusLabel(selectedDispute.status)}
                     </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-2xs uppercase tracking-wider text-gray-400 dark:text-slate-500">Consumption Log ID</p>
+                    <p className="tf-micro-hint uppercase tracking-wider">Consumption Log ID</p>
                     <div className="mt-1 flex items-center gap-1.5">
-                      <p className="break-all font-mono tf-cell-name">{truncateId(selectedDispute.consumption_log_id)}</p>
+                      <p className="break-all font-mono tf-row-title">{truncateId(selectedDispute.consumption_log_id)}</p>
                       <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 dark:text-slate-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
                         <Copy className="h-3 w-3" />
                       </button>
@@ -868,12 +910,12 @@ export default function UnitDisputesPage() {
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
-                      <span className="tf-card-desc">Reason</span>
-                      <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{getReasonLabel(selectedDispute.reason)}</span>
+                      <span className="tf-body-secondary">Reason</span>
+                      <span className="text-right tf-row-name">{getReasonLabel(selectedDispute.reason)}</span>
                     </div>
                     <div>
-                      <span className="tf-card-desc">Description</span>
-                      <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.description}</p>
+                      <span className="tf-body-secondary">Description</span>
+                      <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 tf-body ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.description}</p>
                     </div>
                   </div>
                 </div>
@@ -905,20 +947,20 @@ export default function UnitDisputesPage() {
                     <div className="space-y-3 p-4">
                       {selectedDispute.resolution_notes && (
                         <div>
-                          <span className="tf-card-desc">Notes</span>
-                          <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 text-sm text-gray-900 dark:text-slate-50 ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.resolution_notes}</p>
+                          <span className="tf-body-secondary">Notes</span>
+                          <p className="mt-1 rounded-lg bg-slate-50 dark:bg-slate-800/50 p-3 tf-body ring-1 ring-gray-100 dark:ring-slate-700/60">{selectedDispute.resolution_notes}</p>
                         </div>
                       )}
                       {selectedDispute.resolved_by_email && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="tf-card-desc">Resolved By</span>
-                          <span className="break-all text-right text-sm font-medium text-gray-900 dark:text-slate-50">{selectedDispute.resolved_by_email}</span>
+                          <span className="tf-body-secondary">Resolved By</span>
+                          <span className="break-all text-right tf-row-name">{selectedDispute.resolved_by_email}</span>
                         </div>
                       )}
                       {selectedDispute.resolved_at && (
                         <div className="flex items-start justify-between gap-4">
-                          <span className="tf-card-desc">Resolved At</span>
-                          <span className="text-right text-sm font-medium text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.resolved_at)}</span>
+                          <span className="tf-body-secondary">Resolved At</span>
+                          <span className="text-right tf-row-name">{formatDateTime(selectedDispute.resolved_at)}</span>
                         </div>
                       )}
                     </div>
@@ -928,7 +970,7 @@ export default function UnitDisputesPage() {
                 {/* Requested By */}
                 <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
                   <p className="text-2xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-500">Requested By</p>
-                  <p className="mt-1 text-sm text-gray-900 dark:text-slate-50">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
+                  <p className="mt-1 tf-body">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
                 </div>
 
               </div>
@@ -968,14 +1010,14 @@ export default function UnitDisputesPage() {
                 {/* Step 1: Select consumption log */}
                 {fileStep === 1 && (
                   <>
-                    <p className="mb-4 tf-card-desc">Select the consumption record you want to dispute.</p>
+                    <p className="mb-4 tf-body-secondary">Select the consumption record you want to dispute.</p>
 
                     {loadingLogs && (
                       <div className="mb-4 space-y-2">
                         {/* Mirrors each consumption-log card: unit badge +
                             units, a meta line, and the id line. */}
                         {Array.from({ length: LOG_PAGE_SIZE }).map((_, i) => (
-                          <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                          <div key={i} className="tf-panel p-3">
                             <div className="flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Skeleton className="h-5 w-10 rounded-full" />
@@ -1017,7 +1059,7 @@ export default function UnitDisputesPage() {
                               <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                   {getUnitTypeBadge(log.unit_type)}
-                                  <span className="tf-cell-name">
+                                  <span className="tf-row-title">
                                     {log.units_consumed} unit{log.units_consumed !== 1 ? 's' : ''}
                                   </span>
                                 </div>
@@ -1030,7 +1072,7 @@ export default function UnitDisputesPage() {
                                 {log.user_name && <span className="text-gray-400 dark:text-slate-500">·</span>}
                                 {log.user_name && <span>{log.user_name}</span>}
                               </div>
-                              <div className="mt-1 font-mono text-2xs text-gray-400 dark:text-slate-500">{truncateId(log.id)}</div>
+                              <div className="mt-1 font-mono tf-micro-hint">{truncateId(log.id)}</div>
                             </button>
                           ))}
                         </div>
@@ -1042,7 +1084,7 @@ export default function UnitDisputesPage() {
                           </p>
                           <div className="flex items-center gap-2 sm:gap-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="tf-meta-strong whitespace-nowrap">Go to</span>
+                              <span className="tf-meta whitespace-nowrap">Go to</span>
                               <input
                                 type="number"
                                 min={1}
@@ -1057,7 +1099,7 @@ export default function UnitDisputesPage() {
                                 }}
                                 onBlur={commitLogGoToPage}
                                 aria-label="Go to page"
-                                className="w-12 h-8 px-1.5 text-xs text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                className="tf-input w-12 h-8 px-1.5 text-xs text-center"
                               />
                             </div>
                             <button
@@ -1067,7 +1109,7 @@ export default function UnitDisputesPage() {
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
-                            <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                            <span className="tf-caption whitespace-nowrap">
                               <span className="text-brand-blue font-semibold">{logPage + 1}</span> / {logTotalPages}
                             </span>
                             <button
@@ -1100,8 +1142,8 @@ export default function UnitDisputesPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {getUnitTypeBadge(selectedLog.unit_type)}
-                        <span className="tf-cell-name">{selectedLog.units_consumed} units</span>
-                        <span className="text-xs text-gray-400 dark:text-slate-500">·</span>
+                        <span className="tf-row-title">{selectedLog.units_consumed} units</span>
+                        <span className="tf-hint">·</span>
                         <span className="tf-meta">{formatDateTime(selectedLog.created_at)}</span>
                       </div>
                     </div>
@@ -1109,7 +1151,7 @@ export default function UnitDisputesPage() {
                     <div className="space-y-5">
                       {/* Reason */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Reason <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block tf-label">Reason <span className="text-brand-orange">*</span></span>
                         <FilterSelect
                           value={disputeReason}
                           onChange={(v) => setDisputeReason(v)}
@@ -1124,20 +1166,20 @@ export default function UnitDisputesPage() {
 
                       {/* Description */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Description <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block tf-label">Description <span className="text-brand-orange">*</span></span>
                         <textarea
                           value={disputeDescription}
                           onChange={(e) => setDisputeDescription(e.target.value)}
                           placeholder="Describe the issue in detail (min 10 characters)"
                           rows={4}
-                          className="w-full resize-none rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          className="tf-textarea resize-none rounded-xl py-2.5"
                         />
-                        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">{disputeDescription.length}/1000 characters</p>
+                        <p className="mt-1 tf-hint">{disputeDescription.length}/1000 characters</p>
                       </label>
 
                       {/* Units */}
                       <label className="block">
-                        <span className="mb-2 block text-sm font-medium text-gray-700 dark:text-slate-300">Units to Refund <span className="text-brand-orange">*</span></span>
+                        <span className="mb-2 block tf-label">Units to Refund <span className="text-brand-orange">*</span></span>
                         <input
                           type="number"
                           value={disputeUnits}
@@ -1145,9 +1187,9 @@ export default function UnitDisputesPage() {
                           min={0.01}
                           max={selectedLog.units_consumed}
                           step={0.01}
-                          className="w-full rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+                          className="tf-input rounded-xl"
                         />
-                        <p className="mt-1 text-xs text-gray-400 dark:text-slate-500">Max: {selectedLog.units_consumed} units (total consumed)</p>
+                        <p className="mt-1 tf-hint">Max: {selectedLog.units_consumed} units (total consumed)</p>
                       </label>
                     </div>
 
@@ -1155,7 +1197,7 @@ export default function UnitDisputesPage() {
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                       <button
                         onClick={() => setFileStep(1)}
-                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        className="flex items-center justify-center gap-2 tf-panel px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                       >
                         <ArrowLeft className="w-4 h-4" />
                         Back
@@ -1163,7 +1205,7 @@ export default function UnitDisputesPage() {
                       <button
                         onClick={handleSubmitDispute}
                         disabled={submitting || !disputeReason || disputeDescription.length < 10 || !disputeUnits}
-                        className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"
+                        className="tf-btn tf-btn-primary flex flex-1 rounded-xl bg-brand-blue px-4 py-2.5 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70 whitespace-normal hover:bg-brand-blue"
                       >
                         {submitting ? (
                           <>

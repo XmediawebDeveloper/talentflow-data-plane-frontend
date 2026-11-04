@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from './utils';
+import { StickyBulkBar } from './sticky-bulk-bar';
 
 /**
  * One fixed place on a tabbed page for that page's `ListToolbar`.
@@ -131,6 +132,8 @@ export function ListBulkActions({ children }: { children: React.ReactNode }) {
   React.useLayoutEffect(() => {
     setSlot(document.querySelector<HTMLElement>('[data-list-bulk-slot]'));
   }, []);
-  if (slot) return createPortal(children, slot);
-  return <>{children}</>;
+  // Pinned to the top of the page while the list scrolls (StickyBulkBar).
+  const bar = <StickyBulkBar>{children}</StickyBulkBar>;
+  if (slot) return createPortal(bar, slot);
+  return bar;
 }

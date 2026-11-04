@@ -143,7 +143,7 @@ export default function StepJDReview({
     <div className="w-full max-w-4xl mx-auto px-4 py-8 space-y-8">
       {/* Page Heading */}
       <div className="text-center">
-        <span className="inline-flex items-center gap-1.5 bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1 rounded-full">
+        <span className="tf-badge gap-1.5 bg-blue-100 text-blue-700">
           <FileText className="w-3.5 h-3.5" />
           Job Details
         </span>
@@ -193,15 +193,15 @@ export default function StepJDReview({
           )}
 
           {/* Interview Info Boxes */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="tf-grid-3">
             <div className="rounded-xl p-4 bg-purple-50 border border-purple-200">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Interview Type</p>
+              <p className="tf-meta uppercase tracking-wide">Interview Type</p>
               <p className="font-semibold text-gray-900 mt-1">
                 {interviewType ? formatInterviewType(interviewType) : 'General'}
               </p>
             </div>
             <div className="rounded-xl p-4 bg-blue-50 border border-blue-200">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Expected Duration</p>
+              <p className="tf-meta uppercase tracking-wide">Expected Duration</p>
               <div className="flex items-center gap-1.5 mt-1">
                 <Clock className="w-4 h-4 text-blue-600" />
                 <p className="font-semibold text-gray-900">
@@ -210,7 +210,7 @@ export default function StepJDReview({
               </div>
             </div>
             <div className="rounded-xl p-4 bg-teal-50 border border-teal-200">
-              <p className="text-xs text-gray-500 uppercase tracking-wide">Total Questions</p>
+              <p className="tf-meta uppercase tracking-wide">Total Questions</p>
               <div className="flex items-center gap-1.5 mt-1">
                 <HelpCircle className="w-4 h-4 text-teal-600" />
                 <p className="font-semibold text-gray-900">
@@ -224,18 +224,18 @@ export default function StepJDReview({
           {quickInfo.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <h4 className="text-lg font-semibold text-gray-900">Position Details</h4>
+                <h4 className="tf-section-title">Position Details</h4>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="tf-grid-3">
                 {quickInfo.map((item) => {
                   const Icon = item.icon;
                   return (
                     <div key={item.label} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
                       <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                       <div>
-                        <p className="text-2xs text-gray-400 uppercase tracking-wide">{item.label}</p>
-                        <p className="text-sm font-medium text-gray-900">{item.value}</p>
+                        <p className="tf-micro-hint uppercase tracking-wide">{item.label}</p>
+                        <p className="tf-row-name">{item.value}</p>
                       </div>
                     </div>
                   );
@@ -248,7 +248,7 @@ export default function StepJDReview({
           {jdDescription && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <h4 className="text-lg font-semibold text-gray-900">About the Role</h4>
+                <h4 className="tf-section-title">About the Role</h4>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
               <div
@@ -281,7 +281,7 @@ export default function StepJDReview({
           {mustHaveSkills && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <h4 className="text-lg font-semibold text-gray-900">Required Skills</h4>
+                <h4 className="tf-section-title">Required Skills</h4>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -290,7 +290,7 @@ export default function StepJDReview({
                   return (
                     <span
                       key={i}
-                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200"
+                      className="tf-badge bg-blue-50 text-blue-700 border border-blue-200"
                     >
                       <CheckCircle className="w-3 h-3" />
                       {label}
@@ -305,7 +305,7 @@ export default function StepJDReview({
           {niceToHaveSkills && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <h4 className="text-lg font-semibold text-gray-900">Nice to Have</h4>
+                <h4 className="tf-section-title">Nice to Have</h4>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
               <div className="flex flex-wrap gap-2">
@@ -314,7 +314,7 @@ export default function StepJDReview({
                   return (
                     <span
                       key={i}
-                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200"
+                      className="tf-badge bg-gray-100 text-gray-600 border border-gray-200"
                     >
                       <Star className="w-3 h-3" />
                       {label}

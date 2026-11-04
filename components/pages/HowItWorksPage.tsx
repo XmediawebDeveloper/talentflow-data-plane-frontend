@@ -310,7 +310,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
             <Clock style={{ width: 16, height: 16 }} />
             Simple Process
           </div>
-          <h1 style={titleStyle}>How TalentFlow Works</h1>
+          <h1 className="tf-page-title" style={titleStyle}>How TalentFlow Works</h1>
           <p style={subtitleStyle}>
             From resume upload to final hire, our 5-step process streamlines your entire recruitment workflow.
           </p>

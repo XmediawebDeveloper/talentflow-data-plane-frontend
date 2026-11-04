@@ -7,7 +7,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw, SlidersHorizontal,
   Square, CheckSquare, ChevronDown, FileDown, FileText, FileSpreadsheet,
-  Archive, ArchiveRestore, Trash2
+  Archive, ArchiveRestore, Trash2, Send, CheckCircle2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -206,7 +207,7 @@ function CreatedBy({ name }: { name: string }) {
     // instead of widening the Created column.
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate tf-card-desc" title={name}>
+      <span className="truncate tf-body-secondary" title={name}>
         {name}
       </span>
     </span>
@@ -395,9 +396,12 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
  * it is ready), then each row's Completed count. Module level so the page can
  * warm the tab (`prefetchInterviewRows`) through the same code the table uses.
  */
-async function loadInterviewRows(onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> {
+async function loadInterviewRows(onList: (rows: InterviewRow[]) => void, fresh = false): Promise<InterviewRow[]> {
   const startedAt = performance.now();
-  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
+  /* The config lists come through the shared list cache (lib/utils/listCache);
+     `fresh` (every reload after the table's first load) always asks the
+     server. The Completed counts below are always read fresh. */
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit(fresh ? { fresh } : { reuseRecent: true });
 
   const seen = new Set<string>();
   const merged: AIInterviewResponse[] = [];
@@ -529,7 +533,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       setError(null);
       setIsLoading(false);
     };
-    fetchAll(show)
+    // A refresh always asks the server; the first load may share a recent read.
+    fetchAll(show, isRefresh)
       .then((next) => {
         if (!alive) return;
         // Fresh objects, so the rows whose Completed just landed re-render.
@@ -557,13 +562,14 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
   /* Each row's job badge comes from its config's `jd_status`, which only
      arrives with the rows — so a job disabled / archived / re-enabled anywhere
-     (this tab, another tab, window focus, or every 30s for another user's
-     change) re-reads them quietly: no skeleton, rows kept on a failure. */
+     (this tab or another tab: at once; tab visible again or another user's
+     change: throttled, see useJobStatusRefresh) re-reads them quietly: no
+     skeleton, rows kept on a failure. */
   useJobStatusRefresh(() => {
     if (!hasLoadedOnce.current) return;
     quietReloadRef.current = true;
     setReloadToken((t) => t + 1);
-  }, { pollMs: 30_000 });
+  });
 
   const retry = () => {
     setIsLoading(true);
@@ -1043,7 +1049,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   const cellContent = (row: InterviewRow, key: SortKey) => {
     switch (key) {
       case 'jobId':
-        return row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>;
+        return row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : <span className="tf-hint">—</span>;
       case 'jobName':
         return (
           /* Fixed width on the wrapper, not the td: a table cell's max-width
@@ -1081,14 +1087,14 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               <span
                 key={`${type}-${index}`}
                 title={ROUND_LABELS[type] || type}
-                className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
               >
                 {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
               </span>
             ))}
           </div>
         ) : (
-          <span className="text-xs text-gray-400">—</span>
+          <span className="tf-hint">—</span>
         );
       case 'invitations':
         return (
@@ -1142,10 +1148,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         Unable to load interviews
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         Something went wrong while loading the interview list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1158,10 +1164,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
         <Video className="w-7 h-7 text-brand-blue" />
       </div>
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         {isNarrowed ? 'No interviews found' : 'No interviews yet'}
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No interviews match your current search or filter criteria.'
           : 'AI interviews you create will be listed here.'}
@@ -1190,7 +1196,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               placeholder="Search interview..."
               aria-label="Search interviews by job name or job ID"
               disabled={isLoading && rows.length === 0}
-              className="w-full h-9 pl-9 pr-9 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:opacity-50"
+              className="tf-input pl-9 pr-9"
             />
             {search && (
               <button
@@ -1300,7 +1306,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
         {filtersOpen && (
           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="tf-grid-4">
               <SearchableSelect
                 label="Job"
                 value={draftFilters.job}
@@ -1348,7 +1354,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               <div className="sm:col-span-2">
                 <label
                   htmlFor="all-interviews-created-from"
-                  className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
+                  className="block tf-caption mb-1.5"
                 >
                   Created On
                 </label>
@@ -1361,7 +1367,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
                     className="sm:flex-1 sm:min-w-0"
                   />
-                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                   <DateField
                     aria-label="Created to"
                     value={draftFilters.createdTo}
@@ -1399,9 +1405,9 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       {/* ── Card view ── the Candidate Results tab's card grid: one card per
           row, carrying the same fields the table shows. */}
       {displayMode === 'grid' ? (
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+      <div className="tf-card-soft overflow-hidden">
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+          <div className="tf-grid-4 p-4">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={`skeleton-${i}`} className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col gap-3">
                 <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
@@ -1415,7 +1421,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
         ) : pageRows.length === 0 ? (
           emptyPanel
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+          <div className="tf-grid-4 p-4">
             {pageRows.map((row) => {
               const isSelected = selectedIds.has(row.id);
               return (
@@ -1458,7 +1464,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                         <span
                           key={`${type}-${index}`}
                           title={ROUND_LABELS[type] || type}
-                          className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                          className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
                         >
                           {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
                         </span>
@@ -1469,8 +1475,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                   <div className="flex items-center gap-4 text-sm">
                     {/* No column headers on a card, so the counts keep their words
                         (the table cells show the number alone). */}
-                    <span>{cellContent(row, 'invitations')}<span className="text-xs text-gray-400 ml-1">sent</span></span>
-                    <span>{cellContent(row, 'completed')}<span className="text-xs text-gray-400 ml-1">completed</span></span>
+                    <span>{cellContent(row, 'invitations')}<span className="tf-hint ml-1">sent</span></span>
+                    <span>{cellContent(row, 'completed')}<span className="tf-hint ml-1">completed</span></span>
                   </div>
 
                   <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-slate-800 text-xs">
@@ -1486,7 +1492,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       ) : (
       <>
       {/* ── The table ── */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+      <div className={`tf-card-soft overflow-hidden ${DESKTOP_TABLE_ONLY}`}>
         <div ref={scrollRef} className="tf-table-shell">
           <table className="w-full text-sm border-collapse">
             {hasBodyRows && (
@@ -1494,7 +1500,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 {/* Select All — this page's rows. Not pinned: Job ID is the
                     pinned column, and it covers this one as the table scrolls. */}
-                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle tf-th">
+                <th scope="col" className="tf-th-cell pl-3 pr-0 w-10 tf-th">
                   {/* Loading: the header is skeleton bars too, as in the shared
                       TableSkeleton — no real labels until the rows arrive. */}
                   {isLoading ? (
@@ -1546,7 +1552,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 })}
                 <th
                   scope="col"
-                  className="px-3 py-2.5 text-right tf-th tf-sticky-col"
+                  className="tf-th-cell text-right tf-th tf-sticky-col"
                 >
                   {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                 </th>
@@ -1558,7 +1564,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               {isLoading &&
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`skeleton-${i}`} className="border-b border-gray-100 dark:border-slate-700/60">
-                    <td className="pl-3 pr-0 py-3 w-10">
+                    <td className="tf-td pl-3 pr-0 w-10">
                       <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                     </td>
                     {shownColumns.map((col) => (
@@ -1572,7 +1578,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                         />
                       </td>
                     ))}
-                    <td className="px-3 py-3 tf-sticky-col">
+                    <td className="tf-td tf-sticky-col">
                       <div className="h-6 w-6 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                     </td>
                   </tr>
@@ -1607,7 +1613,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                       flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''
                     }`}
                   >
-                    <td className="pl-3 pr-0 py-2.5 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                    <td className="tf-td pl-3 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => toggleSelected(row.id)}
@@ -1630,7 +1636,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     ))}
 
                     <td
-                      className="px-3 py-2.5 align-middle text-right tf-sticky-col"
+                      className="tf-td text-right tf-sticky-col"
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex items-center justify-end gap-1">
@@ -1643,7 +1649,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                           aria-expanded={isExpanded}
                           aria-label={isExpanded ? 'Hide details' : 'Show details'}
                           title={isExpanded ? 'Hide details' : 'Show details'}
-                          className="h-8 w-8 p-0"
+                          className="h-8 w-8"
                         >
                           <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         </Button>
@@ -1656,8 +1662,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                       list's expanded full-width row. */}
                   {isExpanded && (
                     <tr className="bg-gray-50/60 dark:bg-slate-800/20 border-b border-gray-100 dark:border-slate-700/60 last:border-b-0">
-                      <td colSpan={columnCount} className="px-3 sm:px-4 lg:px-6 pt-3 pb-4">
-                        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-3">
+                      <td colSpan={columnCount} className="tf-td pt-3 pb-4">
+                        <dl className="tf-grid-stats">
                           {detailColumns.map((col) => (
                             <div key={col.key} className="min-w-0">
                               <dt className="text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider mb-1">
@@ -1677,6 +1683,71 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
           </table>
         </div>
       </div>
+      <MobileRecordList
+        empty={
+          isLoading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={`m-skeleton-${i}`} className="tf-record-card flex flex-col gap-3">
+                <div className="h-4 w-1/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                <div className="h-3 w-1/2 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+              </div>
+            ))
+          ) : error ? (
+            <div className="tf-card-soft overflow-hidden">{errorPanel}</div>
+          ) : (
+            <div className="tf-card-soft overflow-hidden">{emptyPanel}</div>
+          )
+        }
+      >
+        {!isLoading && !error && pageRows.map((row) => {
+          const lockBadge = jobLockBadgeFor(row.config.jd_status, row.jdId ? jdLineage.filterLineages[row.jdId] : undefined);
+          return (
+            <MobileRecordCard
+              key={row.id}
+              selected={selectedIds.has(row.id)}
+              className={flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : undefined}
+              select={
+                <button
+                  type="button"
+                  onClick={() => toggleSelected(row.id)}
+                  className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                  aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
+                >
+                  {selectedIds.has(row.id) ? (
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+              }
+              idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
+              badges={cellContent(row, 'status')}
+              title={<span title={row.jobName}>{row.jobName}</span>}
+              titleAddon={lockBadge ? <AIInterviewJobStatusBadge kind={lockBadge} /> : undefined}
+              actions={actionsCell(row)}
+              fields={[
+                { label: 'Job Version', value: cellContent(row, 'jobVersion') },
+                { label: 'Interview Version', value: cellContent(row, 'interviewVersion') },
+                { label: 'Rounds', value: row.rounds.length > 0 ? <span className="inline-flex flex-wrap gap-1.5">{cellContent(row, 'rounds')}</span> : '—' },
+                { label: 'Created', value: <span className="tabular-nums">{formatISTStamp(row.createdAt)}</span> },
+                { label: 'By', value: <CreatedBy name={row.createdBy} /> },
+              ]}
+              footer={
+                <>
+                  <MobileStatChip tone="info" icon={<Send />}>{row.invitations.toLocaleString()} Sent</MobileStatChip>
+                  <MobileStatChip tone="success" icon={<CheckCircle2 />}>
+                    {row.completedPending
+                      ? <span aria-label="Loading" className="inline-block h-3 w-5 rounded bg-gray-200 dark:bg-slate-700 animate-pulse align-middle" />
+                      : row.completed.toLocaleString()} Completed
+                  </MobileStatChip>
+                </>
+              }
+              onClick={() => (expandableRows ? toggleExpanded(row.id) : openRow(row))}
+            />
+          );
+        })}
+      </MobileRecordList>
       </>
       )}
 

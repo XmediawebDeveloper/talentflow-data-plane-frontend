@@ -74,11 +74,11 @@ export default function UserPermissionsSummary({
   return (
     <div className="space-y-3">
       {/* Summary strip */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 tf-panel px-3 py-2.5">
         <span className={`max-w-[50%] truncate rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset ring-black/5 ${roleBadgeClass}`}>
           {roleLabel}
         </span>
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-slate-400">
+        <span className="inline-flex items-center gap-1.5 tf-caption">
           <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-brand-blue' : 'bg-gray-300'}`} />
           {isActive ? 'Active' : 'Inactive'}
         </span>
@@ -106,7 +106,7 @@ export default function UserPermissionsSummary({
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Filter permissions"
             aria-label="Filter permissions"
-            className="h-9 w-full rounded-lg border border-gray-200 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-colors placeholder:text-gray-400 hover:border-brand-blue/40 focus:border-brand-blue focus:ring-2 focus:ring-brand-blue/30 focus-visible:!outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100"
+            className="tf-input pl-9 pr-3 focus-visible:!outline-none"
           />
         </div>
         <div role="radiogroup" aria-label="Show permissions" className="relative grid h-9 shrink-0 grid-cols-2 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10">
@@ -137,7 +137,7 @@ export default function UserPermissionsSummary({
       {isLoading ? (
         <div className="space-y-2">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="rounded-xl border border-gray-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+            <div key={i} className="tf-panel p-3">
               <div className="flex items-center justify-between">
                 <Skeleton className="h-4 w-32" />
                 <Skeleton className="h-4 w-10" />
@@ -151,11 +151,11 @@ export default function UserPermissionsSummary({
           ))}
         </div>
       ) : sections.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center tf-body-muted max-sm:text-[13px] dark:border-slate-700 dark:bg-slate-900">
+        <p className="tf-panel border-dashed px-4 py-8 text-center tf-body-muted">
           {q ? `No permissions match “${query.trim()}”` : 'No permissions granted'}
         </p>
       ) : (
-        <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white dark:divide-slate-700/60 dark:border-slate-700 dark:bg-slate-900">
+        <div className="divide-y divide-gray-100 overflow-hidden tf-panel dark:divide-slate-700/60">
           {sections.map((section) => {
             // A filter opens its matches; otherwise collapsed until tapped.
             const open = !!q || expanded.has(section.id);
@@ -170,7 +170,7 @@ export default function UserPermissionsSummary({
                   <ChevronDown
                     className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${open ? '' : '-rotate-90'}`}
                   />
-                  <span className="min-w-0 flex-1 truncate tf-cell-name max-sm:text-[13px]">{section.name}</span>
+                  <span className="min-w-0 flex-1 truncate tf-row-title">{section.name}</span>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-2xs font-semibold tabular-nums ${
                       section.grantedHere > 0

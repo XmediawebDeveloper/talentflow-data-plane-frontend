@@ -18,6 +18,7 @@ import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
 import NameAvatar from '@/components/ui/name-avatar';
 import { jobInterviewConfigs } from './JobInterviewVersionPicker';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 /* ── Status palette for the results donut ─────────────────────────────
    Validated (dataviz validate_palette.js) as a RING — the wrap pair
@@ -239,11 +240,11 @@ export default function AIInterviewVersionHistoryModal({
                 <Video className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <h2 id="aiiv-history-title" className="tf-section-title">AI Interview Version History</h2>
+                <h2 id="aiiv-history-title" className="tf-section-title sm:text-lg tracking-tight">AI Interview Version History</h2>
                 {/* JD ID · job name · job version */}
                 <div className="flex items-center gap-2 mt-0.5 min-w-0 flex-wrap">
                   {jobShortId && <JobIdBadge>{jobShortId}</JobIdBadge>}
-                  <span className="tf-card-desc truncate">{jobTitle || 'This job'}</span>
+                  <span className="tf-body-secondary truncate">{jobTitle || 'This job'}</span>
                   {jobVersion != null && (
                     <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20" title="Job version">V{jobVersion}</span>
                   )}
@@ -268,7 +269,7 @@ export default function AIInterviewVersionHistoryModal({
 
           <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
             {/* Stat cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="tf-grid-stats">
               {[
                 { label: 'Total Interview Versions', value: filtered.length === versions.length ? `${versions.length}` : `${filtered.length} / ${versions.length}`,
                   hint: filtered.length === versions.length ? undefined : 'Matching the filters / all versions', Icon: FileText, tile: 'bg-brand-blue/10 text-brand-blue', text: 'text-gray-900 dark:text-slate-50' },
@@ -276,7 +277,7 @@ export default function AIInterviewVersionHistoryModal({
                 { label: 'Draft', value: String(counts.draft), Icon: Clock, tile: 'bg-warning-subtle text-warning', text: 'text-warning-strong' },
                 { label: 'Archived / Disabled', value: String(counts.archived), Icon: Archive, tile: 'bg-slate-100 dark:bg-slate-800 text-gray-500', text: 'text-gray-900 dark:text-slate-50' },
               ].map(({ label, value, hint, Icon, tile, text }) => (
-                <div key={label} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 px-4 py-2.5 flex items-center gap-3 min-w-0">
+                <div key={label} className="tf-panel px-4 py-2.5 flex items-center gap-3 min-w-0">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${tile}`}><Icon className="w-4 h-4" /></div>
                   <div className="min-w-0">
                     <div className="tf-meta truncate">{label}</div>
@@ -290,9 +291,9 @@ export default function AIInterviewVersionHistoryModal({
             </div>
 
             {/* Filters — one row above the table */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="tf-grid-4">
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Interview Version</span>
+                <span className="block tf-caption mb-1">Interview Version</span>
                 <FilterSelect
                   value={versionFilter}
                   onChange={(v) => setVersionFilter(v)}
@@ -305,7 +306,7 @@ export default function AIInterviewVersionHistoryModal({
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Status</span>
+                <span className="block tf-caption mb-1">Status</span>
                 <FilterSelect
                   value={statusFilter}
                   onChange={(v) => setStatusFilter(v)}
@@ -321,7 +322,7 @@ export default function AIInterviewVersionHistoryModal({
                 />
               </label>
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Created By</span>
+                <span className="block tf-caption mb-1">Created By</span>
                 <FilterSelect
                   value={creatorFilter}
                   onChange={(v) => setCreatorFilter(v)}
@@ -331,10 +332,10 @@ export default function AIInterviewVersionHistoryModal({
                 />
               </label>
               <div>
-                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Date Range</span>
+                <span className="block tf-caption mb-1">Date Range</span>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                   <DateField value={dateFrom} max={dateTo || undefined} onChange={setDateFrom} className="sm:flex-1 sm:min-w-0" aria-label="Created from" />
-                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                   <DateField value={dateTo} min={dateFrom || undefined} onChange={setDateTo} className="sm:flex-1 sm:min-w-0" aria-label="Created to" />
                 </div>
               </div>
@@ -351,10 +352,10 @@ export default function AIInterviewVersionHistoryModal({
                 {/* Versions table — a FIXED five-row height: 40px header + 5 × 53px
                     rows (+2px border). Fewer versions leave the box its size;
                     more scroll inside under the sticky header. */}
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-auto h-[307px]">
+                <div className={`${DESKTOP_TABLE_ONLY} rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-auto h-[307px]`}>
                   <table className="w-full text-sm min-w-[900px]">
                     <thead className="sticky top-0 z-10">
-                      <tr className="h-10 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 text-xs text-gray-600 dark:text-slate-300">
+                      <tr className="h-10 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-meta">
                         {([
                           ['Version', 'created'], ['Created On', 'created'], ['Created By', 'creator'], ['Rounds', 'rounds'],
                           ['Invited'], ['Completed'], ['Terminated'], ['Expired'], ['Revoked'], ['Status', 'status'], ['Action'],
@@ -376,7 +377,7 @@ export default function AIInterviewVersionHistoryModal({
                     </thead>
                     <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-100 dark:divide-slate-800">
                       {filtered.length === 0 && (
-                        <tr><td colSpan={11} className="px-3 py-8 text-center text-sm text-gray-500">No versions match the filters.</td></tr>
+                        <tr><td colSpan={11} className="tf-td text-center tf-body-muted">No versions match the filters.</td></tr>
                       )}
                       {sorted.map((c) => {
                         const st = stats[c.id];
@@ -393,20 +394,20 @@ export default function AIInterviewVersionHistoryModal({
                               ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/10 shadow-[inset_3px_0_0_var(--brand-blue)]'
                               : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'}`}
                           >
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="tf-td whitespace-nowrap">
                               <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">{labelOf(c)}</span>
-                              {multiJobVersions && <div className="text-2xs text-gray-400 mt-1">Job V{c.jd_version ?? 1}</div>}
+                              {multiJobVersions && <div className="tf-micro-hint mt-1">Job V{c.jd_version ?? 1}</div>}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                              {c.created_at ? <><div>{formatISTDate(c.created_at)}</div><div className="text-xs text-gray-400">{formatISTTime(c.created_at)}</div></> : '—'}
+                            <td className="tf-td whitespace-nowrap text-gray-700 dark:text-slate-300">
+                              {c.created_at ? <><div>{formatISTDate(c.created_at)}</div><div className="tf-hint">{formatISTTime(c.created_at)}</div></> : '—'}
                             </td>
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="tf-td whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 <NameAvatar name={c.created_by_name} size="sm" />
                                 <span className="text-gray-700 dark:text-slate-300 truncate max-w-[9rem]">{c.created_by_name || '—'}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-3">
+                            <td className="tf-td">
                               <div className="flex items-center gap-1 flex-nowrap whitespace-nowrap">
                                 {rounds.length === 0 ? <span className="text-gray-400">—</span> : rounds.map((r, i) => (
                                   <span key={`${r.type}-${i}`} title={ROUND_LABELS[r.type] || r.type} className="px-1.5 py-0.5 rounded text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
@@ -418,12 +419,12 @@ export default function AIInterviewVersionHistoryModal({
                             {[st?.total, st?.completed, st?.terminated, st?.expired, st?.revoked].map((n, i) => (
                               <td key={i} className={`px-3 py-2 text-center tabular-nums font-semibold ${i === 0 ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-100'}`}>{num(n)}</td>
                             ))}
-                            <td className="px-3 py-2 whitespace-nowrap">
+                            <td className="tf-td whitespace-nowrap">
                               <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${pill.className}`}>
                                 <span className="w-1.5 h-1.5 rounded-full bg-current" />{pill.label}
                               </span>
                             </td>
-                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                            <td className="tf-td text-center" onClick={(e) => e.stopPropagation()}>
                               <button
                                 type="button"
                                 onClick={() => router.push(`/recruitment/ai-interviews/${c.id}?tab=results`)}
@@ -440,6 +441,75 @@ export default function AIInterviewVersionHistoryModal({
                     </tbody>
                   </table>
                 </div>
+                <MobileRecordList
+                  empty={<div className="py-6 text-center tf-body-muted">No versions match the filters.</div>}
+                >
+                  {sorted.map((c) => {
+                    const st = stats[c.id];
+                    const rounds = (c.rounds_config || []).filter((r) => r.enabled !== false);
+                    const isSel = selected?.id === c.id;
+                    const pill = pillFor(c.status);
+                    const num = (n: number | undefined) => (st ? n : <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-300" />);
+                    return (
+                      <MobileRecordCard
+                        key={c.id}
+                        onClick={() => setSelectedId(c.id)}
+                        selected={isSel}
+                        aria-selected={isSel}
+                        idBadge={<span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">{labelOf(c)}</span>}
+                        badges={
+                          <>
+                            {multiJobVersions && <span className="tf-micro-hint">Job V{c.jd_version ?? 1}</span>}
+                            <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${pill.className}`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-current" />{pill.label}
+                            </span>
+                          </>
+                        }
+                        title={
+                          <span className="flex items-center gap-2 min-w-0">
+                            <NameAvatar name={c.created_by_name} size="sm" />
+                            <span className="truncate">{c.created_by_name || '—'}</span>
+                          </span>
+                        }
+                        actions={
+                          <button
+                            type="button"
+                            onClick={() => router.push(`/recruitment/ai-interviews/${c.id}?tab=results`)}
+                            title="View interview"
+                            aria-label={`View interview ${labelOf(c)}`}
+                            className="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 text-gray-500 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        }
+                        fields={[
+                          { label: 'Created On', value: c.created_at ? `${formatISTDate(c.created_at)} ${formatISTTime(c.created_at)}` : '—' },
+                          {
+                            label: 'Rounds',
+                            value: rounds.length === 0 ? '—' : (
+                              <span className="inline-flex items-center gap-1 flex-wrap">
+                                {rounds.map((r, i) => (
+                                  <span key={`${r.type}-${i}`} title={ROUND_LABELS[r.type] || r.type} className="px-1.5 py-0.5 rounded text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                                    {ROUND_SHORT_LABELS[r.type] || r.type}
+                                  </span>
+                                ))}
+                              </span>
+                            ),
+                          },
+                        ]}
+                        footer={
+                          <>
+                            <MobileStatChip tone="info">{num(st?.total)} Invited</MobileStatChip>
+                            <MobileStatChip tone="success">{num(st?.completed)} Completed</MobileStatChip>
+                            <MobileStatChip tone="danger">{num(st?.terminated)} Terminated</MobileStatChip>
+                            <MobileStatChip tone="warning">{num(st?.expired)} Expired</MobileStatChip>
+                            <MobileStatChip tone="neutral">{num(st?.revoked)} Revoked</MobileStatChip>
+                          </>
+                        }
+                      />
+                    );
+                  })}
+                </MobileRecordList>
 
                 {/* Completion / Pass / Fail / Terminated rate — for the version picked in
                     Version Wise Results (a row click picks it too). */}
@@ -448,7 +518,7 @@ export default function AIInterviewVersionHistoryModal({
                     <div className="tf-meta mb-3">
                       Rates for <span className="font-semibold text-gray-700 dark:text-slate-300">{showAll ? 'All Versions' : selected ? labelOf(selected) : ''}</span>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
+                    <div className="tf-grid-4">
                       {[
                         { label: 'Completion Rate', hint: 'Completed ÷ all candidates (revoked excluded)', value: pct(sel.completed, sel.total),
                           sub: `${sel.completed} of ${sel.total} completed`, bar: 'bg-success', text: 'text-success' },
@@ -461,7 +531,7 @@ export default function AIInterviewVersionHistoryModal({
                       ].map((r) => (
                         <div key={r.label}>
                           <div className="flex items-center justify-between">
-                            <span className="tf-cell-name inline-flex items-center gap-1">
+                            <span className="tf-row-title inline-flex items-center gap-1">
                               {r.label}<span title={r.hint}><Info className="w-3.5 h-3.5 text-gray-400" /></span>
                             </span>
                             <span className={`text-base font-bold tabular-nums ${r.text}`}>{r.value}%</span>
@@ -482,7 +552,7 @@ export default function AIInterviewVersionHistoryModal({
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center"><BarChart3 className="w-4 h-4" /></div>
-                      <span className="tf-cell-name">Version Wise Results</span>
+                      <span className="tf-row-title">Version Wise Results</span>
                     </div>
                     <FilterSelect
                       value={showAll ? ALL_VERSIONS : selected?.id || ''}

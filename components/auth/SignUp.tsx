@@ -7,7 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Briefcase, Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
+  Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
   Building2, User, CheckCircle, Loader2, Phone, ShieldCheck, CreditCard, Check, Sparkles,
   FileText, Shield, X
 } from 'lucide-react';
@@ -17,7 +17,8 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
 import PlanSelectionModal from './PlanSelectionModal';
 import { AUTH_THEME_CSS } from './authTheme';
-import AuthBrandPanel from './AuthBrandPanel';
+import Image from 'next/image';
+import SuccessAnimation from '@/components/ui/success-animation';
 import type { TermsAndConditions } from '@/lib/types/terms';
 // Auto-login support after paid signup payment — see handlePaymentSubmit.
 import { setTokens, clearTokens } from '@/lib/services/api';
@@ -55,7 +56,7 @@ interface SignUpForm {
   confirmPassword: string;
 }
 
-type SignUpStep = 'form' | 'verification' | 'payment' | 'success';
+type SignUpStep = 'form' | 'terms' | 'payment' | 'success';
 
 interface PlanDetails {
   id: number;
@@ -80,7 +81,8 @@ interface PlanDetails {
   };
 }
 
-export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps) {
+// onSwitchToLogin stays in SignUpProps for callers; the in-card "Sign in" link was removed.
+export default function SignUp({ onBackToPublic }: SignUpProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -129,6 +131,16 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     billingIntervalFromUrl === 'ANNUAL' ? 'ANNUAL' : 'MONTHLY'
   );
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PlanDetails | null>(null);
+  // Where the success screen's buttons go (no more automatic redirect).
+  // `dashboard` is the token hand-off that signs the admin straight in; it is
+  // only available after a paid checkout that returned tokens.
+  const [successLinks, setSuccessLinks] = useState<{ dashboard: string | null; login: string } | null>(null);
+  // After a successful payment the success view counts down and then opens
+  // the dashboard on its own. `redirectAt` is the deadline; `clockNow` ticks.
+  const [redirectAt, setRedirectAt] = useState<number | null>(null);
+  const [clockNow, setClockNow] = useState(0);
+  // Which billing periods the chosen plan is sold in (drives the summary toggle).
+  const [availableIntervals, setAvailableIntervals] = useState<{ MONTHLY: boolean; ANNUAL: boolean }>({ MONTHLY: false, ANNUAL: false });
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
@@ -137,7 +149,6 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
   // Terms & Conditions state for signup flow
   const [acceptedTermsId, setAcceptedTermsId] = useState<string | null>(null);
-  const [showTermsConsentModal, setShowTermsConsentModal] = useState(false);
   const [termsConsentContent, setTermsConsentContent] = useState<{ terms: TermsAndConditions | null; privacy: TermsAndConditions | null }>({ terms: null, privacy: null });
   const [termsConsentLoading, setTermsConsentLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
@@ -148,8 +159,9 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
 
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
+  // Terms are the second step of the signup card (formerly a modal).
   const openTermsConsentModal = async () => {
-    setShowTermsConsentModal(true);
+    setStep('terms');
     setAgreedToTerms(false);
     setAgreedToPrivacy(false);
     setActiveTermsTab('terms');
@@ -181,7 +193,6 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const handleCreateAccount = async () => {
     const termsId = termsConsentContent.terms?.id || null;
     setAcceptedTermsId(termsId);
-    setShowTermsConsentModal(false);
     await completeRegistration(termsId);
   };
 
@@ -241,6 +252,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             const annual = groupedPlan.billing_options?.annual;
 
             if (monthly?.id === parseInt(planId) || annual?.id === parseInt(planId)) {
+              setAvailableIntervals({
+                MONTHLY: !!monthly && monthly.is_active !== false,
+                ANNUAL: !!annual && annual.is_active !== false,
+              });
               // Determine which plan variant to use based on billingInterval
               const planVariant = billingInterval === 'ANNUAL' ? (annual || monthly) : (monthly || annual);
               if (planVariant) {
@@ -403,6 +418,10 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   const passwordsMatch = form.password && form.confirmPassword && form.password === form.confirmPassword;
 
   // All required fields are filled and valid — gates the "View Terms & Conditions" button
+  // Shown inline once something is typed, so a short number doesn't leave the
+  // submit button disabled without explanation.
+  const phoneInvalid = form.phoneNumber.trim().length > 0 && !/^[0-9+\-\s()]{10,}$/.test(form.phoneNumber.trim());
+
   const isFormComplete =
     (freeTrialAcknowledged || !!selectedPlanDetails) &&
     form.companyName.trim().length >= 2 &&
@@ -591,16 +610,15 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
             ? `Your ${trialDays}-${trialDays === 1 ? 'day' : 'days'} free trial has started. Explore all features!`
             : 'Your account has been created successfully.',
         });
-        // Redirect to org subdomain login after brief success message
-        setTimeout(() => {
-          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
-          const sub = data.subdomain;
-          if (sub) {
-            window.location.href = `https://${sub}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
-          } else {
-            router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
-          }
-        }, 2000);
+        // The success screen offers the way in; nothing redirects on its own.
+        const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
+        const sub = data.subdomain;
+        setSuccessLinks({
+          dashboard: null,
+          login: sub
+            ? `https://${sub}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`
+            : `/login?email=${encodeURIComponent(form.adminEmail)}`,
+        });
       }
 
     } catch (err: any) {
@@ -701,26 +719,21 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
       const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'talentflow.data.mo.vc';
       const hasTokens = Boolean(data?.access_token && data?.refresh_token);
 
-      setTimeout(() => {
-        if (hasTokens) {
-          // Always cross-domain redirect when we have tokens so they land on
-          // the tenant subdomain. Pass tokens via URL fragment so the new
-          // subdomain origin can pick them up (localStorage is per-origin).
-          const target = createdSubdomain
+      // The success screen offers both ways in. With tokens, "Go to dashboard"
+      // hands them to the tenant subdomain via the URL fragment (localStorage
+      // is per-origin) so the admin lands signed in.
+      const loginUrl = createdSubdomain
+        ? `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`
+        : `/login?email=${encodeURIComponent(form.adminEmail)}`;
+      setSuccessLinks({
+        dashboard: hasTokens
+          ? createdSubdomain
             ? `https://${createdSubdomain}.${baseDomain}/auth/handoff#access_token=${encodeURIComponent(data.access_token)}&refresh_token=${encodeURIComponent(data.refresh_token)}`
-            : `/auth/handoff#access_token=${encodeURIComponent(data.access_token)}&refresh_token=${encodeURIComponent(data.refresh_token)}`;
-          // Wipe any stale tokens on the current origin so we don't leave a
-          // mismatched token behind.
-          try { clearTokens(); } catch {}
-          window.location.href = target;
-        } else {
-          if (createdSubdomain) {
-            window.location.href = `https://${createdSubdomain}.${baseDomain}/login?email=${encodeURIComponent(form.adminEmail)}`;
-          } else {
-            router.push(`/login?email=${encodeURIComponent(form.adminEmail)}`);
-          }
-        }
-      }, 2000);
+            : `/auth/handoff#access_token=${encodeURIComponent(data.access_token)}&refresh_token=${encodeURIComponent(data.refresh_token)}`
+          : null,
+        login: loginUrl,
+      });
+      setRedirectAt(Date.now() + 5000);
 
     } catch (err: any) {
       console.error('Payment error:', err);
@@ -1063,7 +1076,6 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
   // The Sign Up card is wider than Login's (it carries two-column fields), which
   // is the only geometry that differs between the two pages — everything else
   // comes from the shared tokens in authTheme.ts.
-  const formWidthVar = { ['--tf-form-width' as string]: '520px' } as React.CSSProperties;
 
   // Helper function to format currency with up to 2 decimal places
   const formatCurrency = (amount: number, currency: string): string => {
@@ -1080,48 +1092,248 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
     return `${symbol}${formatted}`;
   };
 
-  // Payment Step UI (shown after account created - user needs to complete payment)
-  if (step === 'payment' && selectedPlanDetails) {
-    // Helper to get quota label
-    const getQuotaLabel = (key: string): string => {
-      const labels: Record<string, string> = {
-        max_seats: 'Max Users',
-        max_jobs: 'Max Jobs',
-        RS: 'Resume Scores',
-        RU: 'Resume Storage',
-        AS: 'Assessments',
-        AIU: 'AI Interviews',
-        api_rate_limit: 'API Rate Limit',
-      };
-      return labels[key] || key;
+  /* ── Payment, success and terms render as panels inside the one signup
+     card (no separate screens), so the stepper and the left-hand art stay
+     in place while the visitor moves through the steps. ── */
+  // Helper to get quota label
+  const getQuotaLabel = (key: string): string => {
+    const labels: Record<string, string> = {
+      max_seats: 'Max Users',
+      max_jobs: 'Max Jobs',
+      RS: 'Resume Scores',
+      RU: 'Resume Storage',
+      AS: 'Assessments',
+      AIU: 'AI Interviews',
+      api_rate_limit: 'API Rate Limit',
     };
+    return labels[key] || key;
+  };
 
-    // Helper to format quota value
-    const formatQuotaValue = (key: string, value: number | string | undefined): string => {
-      if (value === undefined || value === null) return 'Unlimited';
-      if (value === -1) return 'Unlimited';
-      if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
-      return Number(value).toLocaleString();
-    };
+  // Helper to format quota value
+  const formatQuotaValue = (key: string, value: number | string | undefined): string => {
+    if (value === undefined || value === null) return 'Unlimited';
+    if (value === -1) return 'Unlimited';
+    if (typeof value === 'string' && value.toLowerCase() === 'unlimited') return 'Unlimited';
+    return Number(value).toLocaleString();
+  };
 
-    return (
-      <div className="tf-auth">
-        <style>{AUTH_THEME_CSS}</style>
 
-        <div className="tf-auth-main" style={{ ['--tf-form-width' as string]: '600px' } as React.CSSProperties}>
-          <div className="tf-auth-card" style={{ maxHeight: '88vh', overflowY: 'auto' }}>
-            {/* Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-              <div className="tf-auth-feature-icon" style={{ width: 42, height: 42 }}>
-                <CreditCard style={{ width: 20, height: 20 }} />
-              </div>
-              <div>
-                <h2 className="tf-auth-title" style={{ fontSize: 21, marginBottom: 2 }}>Complete your purchase</h2>
-                <p className="tf-auth-subtitle" style={{ marginBottom: 0 }}>
-                  Your account is ready. Complete payment to activate your plan.
-                </p>
-              </div>
+  /** Leave the success screen. The dashboard link carries fresh tokens, so
+   *  any stale ones on this origin are wiped first. */
+  const goTo = (url: string, handoff = false) => {
+    if (handoff) {
+      try { clearTokens(); } catch {}
+    }
+    if (/^https?:/.test(url)) window.location.href = url;
+    else router.push(url);
+  };
+
+  useEffect(() => {
+    if (!redirectAt || !successLinks) return;
+    const id = window.setInterval(() => {
+      const t = Date.now();
+      setClockNow(t);
+      if (t >= redirectAt) {
+        window.clearInterval(id);
+        const target = successLinks.dashboard ?? successLinks.login;
+        if (successLinks.dashboard) {
+          try { clearTokens(); } catch {}
+        }
+        if (/^https?:/.test(target)) window.location.href = target;
+        else router.push(target);
+      }
+    }, 200);
+    return () => window.clearInterval(id);
+  }, [redirectAt, successLinks, router]);
+  const redirectSeconds = redirectAt ? (clockNow ? Math.max(0, Math.ceil((redirectAt - clockNow) / 1000)) : 5) : null;
+
+  const isPaidCheckout = !freeTrialAcknowledged && !!selectedPlanDetails;
+  const checkoutDone = step === 'success';
+  const payTotal = selectedPlanDetails ? Math.round(selectedPlanDetails.base_price * 1.18 * 100) / 100 : 0;
+  const payCurrency = selectedPlanDetails?.currency || 'INR';
+  const periodWord = billingInterval === 'ANNUAL' ? 'year' : 'month';
+  const nextSteps = isPaidCheckout
+    ? [
+        { title: 'Pay securely', text: 'Complete payment in the secure checkout window.' },
+        { title: 'Plan activates', text: 'Your units and limits switch on straight away.' },
+        { title: 'Sign in', text: 'Open your workspace and start hiring.' },
+      ]
+    : [
+        { title: 'Workspace created', text: 'Your organisation is set up.' },
+        { title: 'Trial started', text: `${trialDays} ${trialDays === 1 ? 'day' : 'days'} with the trial plan's limits.` },
+        { title: 'Sign in', text: 'Open your workspace and start hiring.' },
+      ];
+  // 0 = paying now, 1..3 = finished.
+  const nextDoneCount = checkoutDone ? nextSteps.length : 0;
+
+  // Payment and Done are one view: it changes in place when payment succeeds.
+  const checkoutPanel = (
+    <div className={`tf-co${checkoutDone ? ' is-done' : ''}`}>
+      <div className="tf-co-hero">
+        <div className="tf-co-badge">
+          {checkoutDone ? (
+            <SuccessAnimation
+              className="tf-co-lottie"
+              fallback={
+                <span className="tf-co-icon tf-co-icon--ok"><CheckCircle style={{ width: 30, height: 30 }} /></span>
+              }
+              placeholder={<span className="tf-co-icon tf-co-icon--blank" />}
+            />
+          ) : (
+            <span className="tf-co-icon"><CreditCard style={{ width: 26, height: 26 }} /></span>
+          )}
+        </div>
+        <h2 className="tf-auth-title" style={{ margin: 0 }}>
+          {checkoutDone ? (isPaidCheckout ? 'Payment successful' : 'Your free trial has started') : 'Complete your purchase'}
+        </h2>
+        <p className="tf-co-sub">
+          {checkoutDone
+            ? isPaidCheckout
+              ? `${selectedPlanDetails?.plan_name} is now active for ${form.companyName || 'your workspace'}.`
+              : `${form.companyName || 'Your workspace'} is ready to use.`
+            : 'Your workspace is ready. Pay to activate your plan.'}
+        </p>
+      </div>
+
+      {error && !checkoutDone && (
+        <div className="tf-auth-alert tf-auth-alert--danger" style={{ marginBottom: 0 }}>
+          <AlertCircle style={{ width: 17, height: 17 }} />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="tf-co-grid">
+        <section className="tf-co-box" aria-label="Your workspace">
+          <h3><Building2 style={{ width: 15, height: 15 }} /> Your workspace</h3>
+          <dl>
+            <div><dt>Company</dt><dd>{form.companyName || '—'}</dd></div>
+            <div><dt>Admin</dt><dd>{form.adminName || '—'}</dd></div>
+            <div><dt>Email</dt><dd className="tf-co-ellipsis">{form.adminEmail || '—'}</dd></div>
+            <div><dt>Phone</dt><dd>{form.phoneNumber || '—'}</dd></div>
+          </dl>
+        </section>
+        <section className="tf-co-box" aria-label="Plan">
+          <h3><Sparkles style={{ width: 15, height: 15 }} /> {checkoutDone ? 'Your plan' : "You're paying for"}</h3>
+          <dl>
+            <div><dt>Plan</dt><dd>{isPaidCheckout ? selectedPlanDetails?.plan_name : 'Free trial'}</dd></div>
+            <div><dt>Billing</dt><dd>{isPaidCheckout ? (billingInterval === 'ANNUAL' ? 'Yearly' : 'Monthly') : `${trialDays} ${trialDays === 1 ? 'day' : 'days'}`}</dd></div>
+            <div><dt>Total</dt><dd>{isPaidCheckout ? `${formatCurrency(payTotal, payCurrency)} / ${periodWord}` : formatCurrency(0, payCurrency)}</dd></div>
+            <div>
+              <dt>Status</dt>
+              <dd>
+                <span className={`tf-co-status${checkoutDone ? ' is-ok' : ''}`}>
+                  {checkoutDone ? (isPaidCheckout ? 'Paid' : 'Active') : 'Awaiting payment'}
+                </span>
+              </dd>
             </div>
+          </dl>
+        </section>
+      </div>
+
+      <div className="tf-co-next">
+        <p className="tf-co-next-title">{checkoutDone ? "You're all set" : 'What happens next'}</p>
+        <ol>
+          {nextSteps.map((n, i) => {
+            const state = i < nextDoneCount ? 'done' : i === nextDoneCount ? 'current' : 'todo';
+            return (
+              <li key={n.title} className={`is-${state}`}>
+                <span className="tf-co-next-dot">
+                  {state === 'done' ? <Check style={{ width: 13, height: 13 }} strokeWidth={3.2} /> : i + 1}
+                </span>
+                <div>
+                  <strong>{n.title}</strong>
+                  <span>{n.text}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+
+      {checkoutDone ? (
+        <div className="tf-co-actions">
+          {successLinks?.dashboard ? (
+            <>
+              <button type="button" className="tf-auth-btn" onClick={() => goTo(successLinks.dashboard as string, true)}>
+                Go to dashboard
+                <ArrowRight style={{ width: 17, height: 17 }} />
+              </button>
+              <button type="button" className="tf-auth-btn tf-auth-btn--outline" onClick={() => goTo(successLinks.login)}>
+                Go to login
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="tf-auth-btn"
+                disabled={!successLinks}
+                onClick={() => successLinks && goTo(successLinks.login)}
+              >
+                Log in to your dashboard
+                <ArrowRight style={{ width: 17, height: 17 }} />
+              </button>
+              <button type="button" className="tf-auth-btn tf-auth-btn--outline" onClick={() => goTo('/')}>
+                Back to home
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
+
+      {checkoutDone && redirectSeconds !== null && (
+        <div className="tf-co-redirect" role="status" aria-live="polite">
+          <span className="tf-co-redirect-bar" aria-hidden="true"><i /></span>
+          <span>
+            Taking you to your {successLinks?.dashboard ? 'dashboard' : 'login'} in <strong>{redirectSeconds}s</strong>
+          </span>
+          <button type="button" className="tf-auth-link" onClick={() => setRedirectAt(null)}>
+            Stay on this page
+          </button>
+        </div>
+      )}
+
+      {!checkoutDone && (
+        <div className="tf-co-pay">
+          <button
+            onClick={handlePaymentSubmit}
+            disabled={paymentProcessing || razorpayProcessing || !selectedPlanDetails}
+            className={`tf-auth-btn${paymentProcessing || razorpayProcessing ? ' tf-auth-btn--busy' : ''}`}
+          >
+            {paymentProcessing || razorpayProcessing ? (
+              <>
+                <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                Processing payment…
+              </>
+            ) : (
+              <>
+                <Lock style={{ width: 16, height: 16 }} />
+                Pay {formatCurrency(payTotal, payCurrency)} and activate
+              </>
+            )}
+          </button>
+          <p className="tf-co-secure">
+            <ShieldCheck style={{ width: 15, height: 15 }} />
+            Secure payment · GST included
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  const termsPanel = (
+          <>
+            <button
+              type="button"
+              onClick={() => { setStep('form'); setError(''); }}
+              className="tf-auth-back"
+              disabled={isLoading}
+            >
+              <ArrowLeft style={{ width: 15, height: 15 }} />
+              <span>Back to details</span>
+            </button>
+            <h2 className="tf-auth-title">Review and accept</h2>
+            <p className="tf-auth-subtitle">Read both documents, then accept them to create your workspace.</p>
 
             {error && (
               <div className="tf-auth-alert tf-auth-alert--danger">
@@ -1130,247 +1342,437 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </div>
             )}
 
-            {/* Plan Summary Card */}
-            <div className="tf-auth-panel" style={{ padding: 20, marginBottom: 20 }}>
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <span style={{ fontSize: 17, fontWeight: 650, color: 'var(--tf-ink)', letterSpacing: '-0.01em' }}>
-                    {selectedPlanDetails.plan_name}
-                  </span>
-                  <span style={{
-                    background: 'var(--tf-brand-tint-solid)',
-                    color: 'var(--tf-brand-ink)',
-                    fontSize: 11.5,
-                    fontWeight: 600,
-                    letterSpacing: '0.02em',
-                    textTransform: 'uppercase',
-                    padding: '2px 8px',
-                    borderRadius: 999,
-                  }}>
-                    {selectedPlanDetails.plan_tier}
-                  </span>
-                </div>
-                <p style={{ color: 'var(--tf-ink-subtle)', fontSize: 13.5, lineHeight: 1.5, margin: 0 }}>
-                  {selectedPlanDetails.description}
-                </p>
-              </div>
+            {/* Tabs */}
+            <div style={{
+              display: 'flex',
+              border: '1px solid var(--tf-border)',
+              borderRadius: 'var(--tf-radius-sm) var(--tf-radius-sm) 0 0',
+              overflow: 'hidden',
+              background: 'var(--tf-surface-subtle)',
+              flexShrink: 0,
+            }}>
+              {([
+                { key: 'terms' as const, label: 'Terms & Conditions', Icon: FileText, agreed: agreedToTerms },
+                { key: 'privacy' as const, label: 'Privacy Policy', Icon: Shield, agreed: agreedToPrivacy },
+              ]).map(({ key, label, Icon, agreed }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => { setActiveTermsTab(key); setVisitedTabs(prev => new Set([...prev, key])); }}
+                  style={{
+                    flex: 1,
+                    padding: '12px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    fontFamily: 'inherit',
+                    fontSize: 13.5,
+                    fontWeight: activeTermsTab === key ? 600 : 500,
+                    color: activeTermsTab === key ? 'var(--tf-brand-ink)' : 'var(--tf-ink-subtle)',
+                    background: 'transparent',
+                    border: 'none',
+                    borderBottom: activeTermsTab === key ? '2px solid var(--tf-brand)' : '2px solid transparent',
+                    marginBottom: -1,
+                    cursor: 'pointer',
+                    transition: 'color 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
+                  <Icon style={{ width: 15, height: 15 }} />
+                  {label}
+                  {agreed && <CheckCircle style={{ width: 14, height: 14, color: 'var(--tf-success)' }} />}
+                </button>
+              ))}
+            </div>
 
-              {/* Price Display with GST Breakdown */}
-              <div style={{ padding: '14px 0', borderTop: '1px solid var(--tf-border)', borderBottom: '1px solid var(--tf-border)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>Billing</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tf-ink)' }}>
-                    {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
-                  </span>
+            {/* Document Content */}
+            <div style={{ maxHeight: 300, overflowY: 'auto', padding: '16px 18px', border: '1px solid var(--tf-border)', borderTop: 'none', borderRadius: '0 0 var(--tf-radius-sm) var(--tf-radius-sm)', marginBottom: 16 }}>
+              {termsConsentLoading ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 14 }}>
+                  <Loader2 className="tf-auth-spin" style={{ width: 28, height: 28, color: 'var(--tf-brand-ink)' }} />
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', margin: 0 }}>Loading documents…</p>
                 </div>
-                {/* Strikethrough price and Save badge for annual plans */}
-                {billingInterval === 'ANNUAL' && selectedPlanDetails.monthly_price && (selectedPlanDetails.monthly_price * 12) > selectedPlanDetails.base_price && (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginBottom: 8 }}>
-                    <span style={{ fontSize: 13.5, color: 'var(--tf-ink-faint)', textDecoration: 'line-through' }}>
-                      {formatCurrency(selectedPlanDetails.monthly_price * 12, selectedPlanDetails.currency)}
-                    </span>
-                    {selectedPlanDetails.discount_percentage && selectedPlanDetails.discount_percentage > 0 && (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        fontSize: 11.5,
-                        fontWeight: 600,
-                        background: 'var(--tf-success-tint)',
-                        color: 'var(--tf-success-ink)',
-                        borderRadius: 999,
-                      }}>
-                        Save {Math.round(selectedPlanDetails.discount_percentage)}%
+              ) : activeTermsTab === 'terms' ? (
+                termsConsentContent.terms ? (
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
+                ) : (
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Terms &amp; Conditions content is currently unavailable. You may still proceed.</p>
+                )
+              ) : (
+                termsConsentContent.privacy ? (
+                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
+                ) : (
+                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
+                )
+              )}
+            </div>
+
+              {/* Acceptance Checkboxes */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+                {/* Terms & Conditions checkbox — enabled only after content has loaded */}
+                <label
+                  className="tf-auth-check"
+                  style={{
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: agreedToTerms ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
+                    border: `1px solid ${agreedToTerms ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
+                    borderRadius: 'var(--tf-radius-sm)',
+                    cursor: termsConsentLoading ? 'not-allowed' : 'pointer',
+                    opacity: termsConsentLoading ? 0.6 : 1,
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={agreedToTerms}
+                    disabled={termsConsentLoading}
+                    onChange={(e) => setAgreedToTerms(e.target.checked)}
+                    style={{ marginTop: 1 }}
+                  />
+                  <span style={{ lineHeight: 1.5 }}>
+                    I have read and agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }}
+                      className="tf-auth-link"
+                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
+                      Terms &amp; Conditions
+                    </button>
+                  </span>
+                  {agreedToTerms && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
+                </label>
+
+                {/* Privacy Policy checkbox — disabled until content loads and user clicks the Privacy Policy tab */}
+                <label
+                  className="tf-auth-check"
+                  title={termsConsentLoading ? 'Please wait for documents to load' : !visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
+                  style={{
+                    alignItems: 'flex-start',
+                    gap: 10,
+                    padding: '10px 12px',
+                    background: agreedToPrivacy ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
+                    border: `1px solid ${agreedToPrivacy ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
+                    borderRadius: 'var(--tf-radius-sm)',
+                    cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer',
+                    opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1,
+                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={agreedToPrivacy}
+                    disabled={termsConsentLoading || !visitedTabs.has('privacy')}
+                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
+                    style={{ marginTop: 1 }}
+                  />
+                  <span style={{ lineHeight: 1.5 }}>
+                    I have read and agree to the{' '}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }}
+                      className="tf-auth-link"
+                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
+                    >
+                      Privacy Policy
+                    </button>
+                    {!visitedTabs.has('privacy') && (
+                      <span style={{ fontSize: 12, color: 'var(--tf-warning)', marginLeft: 6, fontWeight: 500 }}>
+                        Read this tab first
                       </span>
                     )}
-                  </div>
+                  </span>
+                  {agreedToPrivacy && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
+                </label>
+              </div>
+
+              {/* Create Account Button */}
+              <button
+                type="button"
+                onClick={handleCreateAccount}
+                disabled={!agreedToTerms || !agreedToPrivacy || isLoading || termsConsentLoading}
+                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
+                    Creating your workspace…
+                  </>
+                ) : (
+                  <>
+                    Create account
+                    <ArrowRight style={{ width: 17, height: 17 }} />
+                  </>
                 )}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>Plan price</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--tf-ink)' }}>
-                    {formatCurrency(selectedPlanDetails.base_price, selectedPlanDetails.currency)}
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)' }}>GST (18%)</span>
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: 'var(--tf-ink)' }}>
-                    {formatCurrency(Math.round(selectedPlanDetails.base_price * 0.18 * 100) / 100, selectedPlanDetails.currency)}
-                  </span>
-                </div>
-                <div style={{ height: 1, background: 'var(--tf-border)', marginBottom: 12 }} />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                  <span style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--tf-ink)' }}>Total</span>
-                  <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: 26, fontWeight: 650, letterSpacing: '-0.02em', color: 'var(--tf-ink)' }}>
-                      {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
-                    </span>
-                    <span style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', marginLeft: 4 }}>
-                      /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+              </button>
+          </>
+  );
 
-              {/* Included Seats */}
-              {selectedPlanDetails.included_seats && (
-                <div style={{
-                  marginTop: 14,
-                  padding: '10px 12px',
-                  background: 'var(--tf-brand-tint)',
-                  border: '1px solid var(--tf-brand-border)',
-                  borderRadius: 'var(--tf-radius-sm)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}>
-                  <span style={{ fontSize: 13.5, color: 'var(--tf-brand-ink)', fontWeight: 500 }}>Included team seats</span>
-                  <span style={{ fontSize: 15, fontWeight: 650, color: 'var(--tf-brand-ink)' }}>{selectedPlanDetails.included_seats}</span>
-                </div>
-              )}
-            </div>
+  // Steps shown in the card. Payment only appears for a paid plan.
+  const isPaidPlan = !freeTrialAcknowledged && !!selectedPlanDetails;
+  // Three steps. The last one is Payment for a paid plan (its success view
+  // appears in place) and Done for the free trial — never both.
+  const stepItems: Array<{ key: SignUpStep; label: string }> = [
+    { key: 'form', label: 'Details' },
+    { key: 'terms', label: 'Terms' },
+    isPaidPlan ? { key: 'payment', label: 'Payment' } : { key: 'success', label: 'Done' },
+  ];
+  const stepIndex = step === 'success' ? stepItems.length - 1 : Math.max(0, stepItems.findIndex((s) => s.key === step));
 
-            {/* Plan Quotas */}
-            {selectedPlanDetails.quotas && Object.keys(selectedPlanDetails.quotas).length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>Plan quotas</h4>
-                <div className="tf-auth-panel">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {Object.entries(selectedPlanDetails.quotas)
-                      .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
-                      .map(([key, value]) => (
-                      <div key={key} style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: 8,
-                        padding: '8px 12px',
-                        background: 'var(--tf-surface)',
-                        borderRadius: 'var(--tf-radius-sm)',
-                        border: '1px solid var(--tf-border)',
-                      }}>
-                        <span style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)' }}>{getQuotaLabel(key)}</span>
-                        <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink)' }}>{formatQuotaValue(key, value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
 
-            {/* Features List */}
-            {selectedPlanDetails.features && selectedPlanDetails.features.length > 0 && (
-              <div style={{ marginBottom: 20 }}>
-                <h4 style={{ fontSize: 13, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>Included features</h4>
-                <div className="tf-auth-panel">
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                    {selectedPlanDetails.features
-                      .filter(f => f.is_enabled)
-                      .map((feature, index) => (
-                        <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                          <Check style={{ width: 15, height: 15, color: 'var(--tf-brand-ink)', flexShrink: 0 }} />
-                          <span style={{ fontSize: 12.5, color: 'var(--tf-ink-muted)' }}>{feature.feature_name}</span>
-                        </div>
-                      ))}
-                  </div>
-                </div>
-              </div>
-            )}
+  const billingLabel = billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly';
 
-            {/* Account Summary */}
-            <div className="tf-auth-alert tf-auth-alert--success" style={{ display: 'block', marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <CheckCircle style={{ width: 16, height: 16 }} />
-                <span style={{ fontWeight: 600 }}>Account details confirmed</span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, fontSize: 12.5 }}>
-                <div><strong style={{ fontWeight: 600 }}>Company:</strong> {form.companyName}</div>
-                <div><strong style={{ fontWeight: 600 }}>Name:</strong> {form.adminName}</div>
-                <div><strong style={{ fontWeight: 600 }}>Email:</strong> {form.adminEmail}</div>
-                <div><strong style={{ fontWeight: 600 }}>Phone:</strong> {form.phoneNumber}</div>
+  // Monthly ↔ Yearly from the order summary. The plan-details effect refetches
+  // the matching variant (its id is what registration and payment send), and
+  // the URL keeps the choice on refresh. Locked once the account exists,
+  // because the interval has already been sent with the registration.
+  const canSwitchBilling =
+    !freeTrialAcknowledged && !!selectedPlanDetails && availableIntervals.MONTHLY && availableIntervals.ANNUAL &&
+    (step === 'form' || step === 'terms') && !isLoading;
+  const changeBilling = (interval: 'MONTHLY' | 'ANNUAL') => {
+    if (!canSwitchBilling || interval === billingInterval) return;
+    setBillingInterval(interval);
+    const url = new URL(window.location.href);
+    url.searchParams.set('billing', interval);
+    window.history.replaceState(window.history.state, '', url.toString());
+  };
+  const yearlySave = Math.round(selectedPlanDetails?.discount_percentage ?? 0);
+  // Cancel leaves signup. Before the account exists it returns to pricing
+  // (confirming first if anything was typed); once the account exists
+  // (payment step) it skips payment and goes to sign in, so nothing is lost.
+  const handleCancel = () => {
+    if (step === 'payment') {
+      handleSkipPayment();
+      return;
+    }
+    const typed = Object.values(form).some((v) => typeof v === 'string' && v.trim() !== '');
+    if (typed && !window.confirm('Leave signup? The details you entered will be lost.')) return;
+    router.push('/pricing');
+  };
+  const cancelBusy = isLoading || paymentProcessing || razorpayProcessing;
+
+  // Order summary figures (GST at 18%, as in the payment step).
+  const subtotal = selectedPlanDetails?.base_price ?? 0;
+  const gst = Math.round(subtotal * 0.18 * 100) / 100;
+  const total = Math.round(subtotal * 1.18 * 100) / 100;
+  const summaryCurrency = selectedPlanDetails?.currency || 'INR';
+  const includedUnits = selectedPlanDetails?.quotas
+    ? Object.entries(selectedPlanDetails.quotas).filter(
+        ([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined
+      )
+    : [];
+
+  const planDescription = freeTrialAcknowledged
+    ? 'Try TalentFlow before you pick a plan. The trial comes with its own limits for users, jobs and AI usage.'
+    : selectedPlanDetails?.description?.trim() || '';
+  const enabledFeatures = (selectedPlanDetails?.features || []).filter((f) => f.is_enabled).map((f) => f.feature_name);
+  const shownFeatures = enabledFeatures.slice(0, 4);
+  const currentStepLabel = stepItems[stepIndex]?.label ?? '';
+  const priceOn = !freeTrialAcknowledged && !!selectedPlanDetails;
+
+  const tick = (on: boolean) =>
+    on ? (
+      <span className="tf-su-dot tf-su-dot--on"><Check style={{ width: 11, height: 11 }} strokeWidth={3.5} /></span>
+    ) : (
+      <span className="tf-su-dot" />
+    );
+
+  const orderSummary = (
+    <aside className={`tf-su-summary${planLoading ? ' is-loading' : ''}`} aria-label="Order summary" aria-busy={planLoading || undefined}>
+      <div className="tf-su-summary-head">
+        <h2>Order summary</h2>
+        <span className="tf-su-chip">{summaryCurrency}</span>
+      </div>
+
+      {/* Plan — always shown */}
+      {freeTrialAcknowledged || selectedPlanDetails ? (
+        <div className="tf-su-plan">
+          <div className="tf-su-plan-top">
+            <div style={{ minWidth: 0 }}>
+              <div className="tf-su-plan-name">{freeTrialAcknowledged ? 'Free trial' : selectedPlanDetails?.plan_name}</div>
+              <div className="tf-su-plan-sub">
+                {freeTrialAcknowledged
+                  ? `${trialDays} ${trialDays === 1 ? 'day' : 'days'} · no payment today`
+                  : `${selectedPlanDetails?.plan_tier ? `${selectedPlanDetails.plan_tier.charAt(0)}${selectedPlanDetails.plan_tier.slice(1).toLowerCase()} plan · ` : ''}${formatCurrency(subtotal, summaryCurrency)} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
               </div>
             </div>
+            {canSwitchBilling ? (
+              <div className="tf-su-toggle" role="radiogroup" aria-label="Billing period" data-period={billingInterval}>
+                <span className="tf-su-toggle-thumb" aria-hidden="true" />
+                {(['MONTHLY', 'ANNUAL'] as const).map((interval) => (
+                  <button
+                    key={interval}
+                    type="button"
+                    role="radio"
+                    aria-checked={billingInterval === interval}
+                    onClick={() => changeBilling(interval)}
+                    className="tf-su-toggle-opt"
+                  >
+                    {interval === 'MONTHLY' ? 'Monthly' : 'Yearly'}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="tf-su-chip tf-su-chip--accent">{freeTrialAcknowledged ? 'Trial' : billingLabel}</span>
+            )}
+          </div>
+          {canSwitchBilling && yearlySave > 0 && (
+            <p className="tf-su-save">
+              {billingInterval === 'ANNUAL' ? `You save ${yearlySave}% with yearly billing` : `Save ${yearlySave}% by switching to yearly`}
+            </p>
+          )}
+          {planDescription && <p className="tf-su-desc">{planDescription}</p>}
+        </div>
+      ) : (
+        <p className="tf-su-muted" style={{ margin: '18px 0' }}>Choose a plan to see your order summary.</p>
+      )}
 
-            {/* Complete Purchase Button */}
+      {/* Step-aware block — follows the step on the left */}
+      <div key={step} className="tf-su-stepblock">
+        <p className="tf-su-eyebrow">Step {stepIndex + 1} of {stepItems.length} · {currentStepLabel}</p>
+
+        {step === 'form' && (
+          <>
+            {includedUnits.length > 0 && (
+              <div className="tf-su-box">
+                <p className="tf-su-box-title">Included in your plan</p>
+                <dl className="tf-su-rows tf-su-rows--two">
+                  {includedUnits.map(([key, value]) => (
+                    <div key={key}>
+                      <dt>{getQuotaLabel(key)}</dt>
+                      <dd>{formatQuotaValue(key, value as number | string | undefined)}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+            {shownFeatures.length > 0 && (
+              <ul className="tf-su-features">
+                {shownFeatures.map((f) => (
+                  <li key={f}><Check style={{ width: 14, height: 14 }} strokeWidth={3} /> {f}</li>
+                ))}
+                {enabledFeatures.length > shownFeatures.length && (
+                  <li className="tf-su-more">+{enabledFeatures.length - shownFeatures.length} more features</li>
+                )}
+              </ul>
+            )}
+          </>
+        )}
+
+        {step === 'terms' && (
+          <>
+            <div className="tf-su-box">
+              <p className="tf-su-box-title">Your details</p>
+              <dl className="tf-su-rows">
+                <div><dt>Company</dt><dd>{form.companyName || '—'}</dd></div>
+                <div><dt>Name</dt><dd>{form.adminName || '—'}</dd></div>
+                <div>
+                  <dt>Email</dt>
+                  <dd className="tf-su-ellipsis">{form.adminEmail || '—'}{otpVerified && <CheckCircle style={{ width: 13, height: 13, marginLeft: 5, color: 'var(--tf-success)', verticalAlign: -2 }} />}</dd>
+                </div>
+                <div><dt>Phone</dt><dd>{form.phoneNumber || '—'}</dd></div>
+              </dl>
+            </div>
+            <div className="tf-su-box">
+              <p className="tf-su-box-title">Documents to accept</p>
+              <ul className="tf-su-checks">
+                <li>{tick(agreedToTerms)} Terms &amp; Conditions</li>
+                <li>{tick(agreedToPrivacy)} Privacy Policy</li>
+              </ul>
+            </div>
+          </>
+        )}
+
+        {step === 'payment' && (
+          <>
+            <div className="tf-su-note">
+              <CheckCircle style={{ width: 16, height: 16, flexShrink: 0 }} />
+              <span>Workspace created for <strong>{form.companyName || 'your company'}</strong>. Pay to activate your plan.</span>
+            </div>
+            <div className="tf-su-box">
+              <p className="tf-su-box-title">Account</p>
+              <dl className="tf-su-rows">
+                <div><dt>Admin</dt><dd>{form.adminName || '—'}</dd></div>
+                <div><dt>Email</dt><dd className="tf-su-ellipsis">{form.adminEmail || '—'}</dd></div>
+              </dl>
+            </div>
+          </>
+        )}
+
+        {step === 'success' && (
+          <div className="tf-su-note">
+            <Sparkles style={{ width: 16, height: 16, flexShrink: 0 }} />
+            <span>
+              {freeTrialAcknowledged
+                ? `Your ${trialDays}-day free trial is active.`
+                : `${selectedPlanDetails?.plan_name || 'Your'} plan is active.`}{' '}
+              Sign in as {form.adminEmail || 'your admin account'} to start hiring.
+            </span>
+          </div>
+        )}
+      </div>
+
+      {/* Price — shown until the order is complete */}
+      {priceOn && step !== 'success' && (
+        <>
+          <dl className="tf-su-lines">
+            {billingInterval === 'ANNUAL' && selectedPlanDetails?.monthly_price && selectedPlanDetails.monthly_price * 12 > subtotal ? (
+              <div>
+                <dt>12 × monthly</dt>
+                <dd className="tf-su-strike">{formatCurrency(selectedPlanDetails.monthly_price * 12, summaryCurrency)}</dd>
+              </div>
+            ) : null}
+            <div><dt>Subtotal</dt><dd>{formatCurrency(subtotal, summaryCurrency)}</dd></div>
+            <div><dt>GST (18%)</dt><dd>{formatCurrency(gst, summaryCurrency)}</dd></div>
+          </dl>
+          <div className="tf-su-total">
+            <span>{step === 'payment' ? 'Amount due' : 'Total today'}</span>
+            <div style={{ textAlign: 'right' }}>
+              <strong>{formatCurrency(total, summaryCurrency)}</strong>
+              <small>per {billingInterval === 'ANNUAL' ? 'year' : 'month'}</small>
+            </div>
+          </div>
+        </>
+      )}
+      {freeTrialAcknowledged && step !== 'success' && (
+        <div className="tf-su-total">
+          <span>Total today</span>
+          <strong>{formatCurrency(0, summaryCurrency)}</strong>
+        </div>
+      )}
+
+      {step !== 'success' && (
+        <div className="tf-su-actions">
+          {step === 'form' && (
             <button
-              onClick={handlePaymentSubmit}
-              disabled={paymentProcessing || razorpayProcessing}
-              className={`tf-auth-btn${paymentProcessing || razorpayProcessing ? ' tf-auth-btn--busy' : ''}`}
+              type="button"
+              onClick={() => setShowPlanModal(true)}
+              className="tf-auth-btn tf-auth-btn--outline tf-auth-btn--sm"
             >
-              {paymentProcessing || razorpayProcessing ? (
-                <>
-                  <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
-                  Processing payment…
-                </>
-              ) : (
-                <>
-                  <CreditCard style={{ width: 17, height: 17 }} />
-                  Pay and activate — {formatCurrency(Math.round((selectedPlanDetails.base_price * 1.18) * 100) / 100, selectedPlanDetails.currency)}
-                </>
-              )}
+              Change plan
             </button>
-
-            {/* Security Notice */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, color: 'var(--tf-ink-subtle)', fontSize: 12.5 }}>
-              <ShieldCheck style={{ width: 15, height: 15 }} />
-              <span>Secure payment processing</span>
-            </div>
-          </div>
+          )}
+          <button type="button" onClick={handleCancel} disabled={cancelBusy} className="tf-su-cancel">
+            <X style={{ width: 16, height: 16 }} />
+            {step === 'payment' ? 'Cancel and pay later' : 'Cancel'}
+          </button>
         </div>
-      </div>
-    );
-  }
+      )}
 
-  // Success Step UI
-  if (step === 'success') {
-    return (
-      <div className="tf-auth">
-        <style>{AUTH_THEME_CSS}</style>
+      <ul className="tf-su-trust">
+        <li><ShieldCheck style={{ width: 15, height: 15 }} /> Secure checkout</li>
+        <li><Check style={{ width: 15, height: 15 }} /> Top up units anytime, no plan change needed</li>
+        <li><Check style={{ width: 15, height: 15 }} /> Units lost to a technical problem can be disputed and refunded</li>
+      </ul>
+    </aside>
+  );
 
-        <div className="tf-auth-main">
-          <div className="tf-auth-card" style={{ textAlign: 'center' }}>
-            <div
-              className="tf-auth-feature-icon"
-              style={{
-                width: 52,
-                height: 52,
-                margin: '0 auto 20px',
-                background: 'var(--tf-success-tint)',
-                color: 'var(--tf-success-ink)',
-              }}
-            >
-              <CheckCircle style={{ width: 26, height: 26 }} />
-            </div>
-            <h2 className="tf-auth-title">Welcome to TalentFlow</h2>
-            <p className="tf-auth-subtitle" style={{ marginBottom: 20 }}>Your account has been created successfully.</p>
-
-            {/* Show plan info */}
-            {freeTrialAcknowledged && (
-              <div className="tf-auth-alert tf-auth-alert--success" style={{ display: 'block', textAlign: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 4 }}>
-                  <Sparkles style={{ width: 17, height: 17 }} />
-                  <span style={{ fontWeight: 600 }}>
-                    {trialDays}-{trialDays === 1 ? 'day' : 'day'} free trial activated
-                  </span>
-                </div>
-                <p style={{ margin: 0, opacity: 0.85 }}>
-                  Explore all premium features. Upgrade anytime from your dashboard.
-                </p>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--tf-ink-subtle)', fontSize: 13.5 }}>
-              <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
-              Redirecting to sign in…
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Main Form UI
   return (
-    <div className="tf-auth tf-auth--split">
+    <div className="tf-auth tf-signup-page">
       <style>{AUTH_THEME_CSS}</style>
+      <style>{SIGNUP_FLOW_CSS}</style>
 
       {/* Plan Selection Modal - shown when no plan in URL */}
       <PlanSelectionModal
@@ -1379,86 +1781,53 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
         onClose={() => router.push('/pricing')}
       />
 
-      <div className="tf-auth-shell">
-        {/* Left column — the same shared brand panel Login uses, so the two
-            screens read as one product. */}
-        <AuthBrandPanel
-          onBackToPublic={onBackToPublic}
-          label="TalentFlow sign up overview"
-          headline={<>
-            Start your<br />
-            <span className="tf-accent">recruitment journey</span>
-          </>}
-          lede={<>
-            Create your organization&apos;s recruitment workspace in minutes and start
-            hiring smarter with AI-powered tools.
-          </>}
-        />
+      {/* Top bar */}
+      <header className="tf-su-top">
+        <div className="tf-su-top-inner">
+          <button type="button" onClick={onBackToPublic} className="tf-su-logo" aria-label="TalentFlow home">
+            <Image src="/logos/talent_flow_logo.png" alt="BION TalentFlow" width={157} height={35} priority />
+          </button>
+          <h1 className="tf-su-sr-only">Sign up for TalentFlow</h1>
+          <span className="tf-su-secure">
+            <Lock style={{ width: 14, height: 14 }} />
+            Secure checkout
+          </span>
+        </div>
+      </header>
 
-        {/* Right column — the form */}
-        <div className="tf-auth-main" style={formWidthVar}>
-          <div className="tf-auth-card">
-            {/* Back Button */}
-            {onBackToPublic && (
-              <button type="button" onClick={onBackToPublic} className="tf-auth-back">
-                <ArrowLeft style={{ width: 15, height: 15 }} />
-                <span>Back to home</span>
-              </button>
-            )}
-
-            {/* Compact lockup — only rendered visibly on narrow viewports */}
-            <div className="tf-auth-lockup tf-auth-lockup--card">
-              <div className="tf-auth-brandmark tf-auth-brandmark--sm">
-                <Briefcase style={{ width: 19, height: 19 }} />
-              </div>
-              <div>
-                <div className="tf-auth-wordmark" style={{ fontSize: 18 }}>TalentFlow</div>
-                <div className="tf-auth-wordmark-sub">Recruitment Platform</div>
-              </div>
+      <div className="tf-su-shell">
+        <main className="tf-su-main">
+          <div className="tf-auth-card tf-su-card">
+            {/* Stepper — same look as the AI interview creation wizard:
+                solid brand-blue + white tick when done, gradient + pulse
+                when current, grey numbered circle when still to come. */}
+            <div className="tf-su-steps">
+              <ol className="tf-su-steps-row" aria-label="Signup progress">
+                {stepItems.map((s, i) => {
+                  const state = step === 'success' || i < stepIndex ? 'done' : i === stepIndex ? 'current' : 'todo';
+                  return (
+                    <li key={s.key} className={`tf-su-step is-${state}`} aria-current={state === 'current' ? 'step' : undefined}>
+                      <span className="tf-su-step-pill">
+                        <span className="tf-su-step-dotwrap">
+                          <span className="tf-su-step-dot">
+                            {state === 'done' ? <CheckCircle style={{ width: 20, height: 20 }} /> : <span className="tf-su-step-num">{i + 1}</span>}
+                          </span>
+                          {state === 'current' && <span aria-hidden="true" className="tf-su-step-pulse tf-step-pulse" />}
+                        </span>
+                        <span className="tf-su-step-label">{s.label}</span>
+                      </span>
+                      {i < stepItems.length - 1 && <span className="tf-su-step-bar" aria-hidden="true" />}
+                    </li>
+                  );
+                })}
+              </ol>
             </div>
-
-            <h2 className="tf-auth-title">Create account</h2>
+  
+            <div key={step} className="tf-signup-panel">
+            {step === 'form' && (
+              <>
+            <h2 className="tf-auth-title">Create your account</h2>
             <p className="tf-auth-subtitle">Set up your recruitment workspace.</p>
-
-            {/* Selected Plan Indicator */}
-            {(freeTrialAcknowledged || selectedPlanDetails) && (
-              <div
-                className="tf-auth-panel"
-                style={{
-                  marginBottom: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-                  <div className="tf-auth-feature-icon">
-                    {freeTrialAcknowledged
-                      ? <Sparkles style={{ width: 18, height: 18 }} />
-                      : <CreditCard style={{ width: 18, height: 18 }} />}
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--tf-ink)' }}>
-                      {freeTrialAcknowledged ? `Free trial (${trialDays} days)` : selectedPlanDetails?.plan_name}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)' }}>
-                      {freeTrialAcknowledged
-                        ? 'No credit card required'
-                        : `${formatCurrency(selectedPlanDetails?.base_price || 0, selectedPlanDetails?.currency || 'INR')} / ${billingInterval === 'ANNUAL' ? 'year' : 'month'}`}
-                    </div>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setShowPlanModal(true)}
-                  className="tf-auth-btn tf-auth-btn--outline tf-auth-btn--auto tf-auth-btn--sm"
-                  style={{ flexShrink: 0 }}
-                >
-                  Change plan
-                </button>
-              </div>
-            )}
 
             {error && (
               <div className="tf-auth-alert tf-auth-alert--danger">
@@ -1467,7 +1836,7 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </div>
             )}
 
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} className="tf-su-form">
               {/* Company Name */}
               <div className="tf-auth-field">
                 <label className="tf-auth-label" htmlFor="tf-signup-company">Company name</label>
@@ -1651,9 +2020,18 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
                     onChange={handleChange('phoneNumber')}
                     placeholder="+91 98765 43210"
                     required
-                    className="tf-auth-input"
+                    aria-invalid={phoneInvalid || undefined}
+                    aria-describedby={phoneInvalid ? 'tf-signup-phone-error' : undefined}
+                    className={`tf-auth-input${phoneInvalid ? ' is-invalid' : ''}`}
                   />
                 </div>
+                {/* The submit button stays disabled until this passes, so say why. */}
+                {phoneInvalid && (
+                  <p id="tf-signup-phone-error" className="tf-auth-field-error">
+                    <AlertCircle style={{ width: 14, height: 14 }} />
+                    Enter a valid phone number (at least 10 digits)
+                  </p>
+                )}
               </div>
 
               {/* Passwords */}
@@ -1807,259 +2185,214 @@ export default function SignUp({ onSwitchToLogin, onBackToPublic }: SignUpProps)
               </button>
             </form>
 
-            {/* Footer */}
-            <div className="tf-auth-footer">
-              Already have an account?{' '}
-              <button type="button" onClick={onSwitchToLogin} className="tf-auth-link">
-                Sign in
-              </button>
+              </>
+            )}
+            {step === 'terms' && termsPanel}
+            {(step === 'payment' || step === 'success') && checkoutPanel}
             </div>
           </div>
 
           <div className="tf-auth-legal">© 2026 TalentFlow. All rights reserved.</div>
-        </div>
+        </main>
+
+        {orderSummary}
       </div>
-
-      {/* Terms Consent Modal */}
-      {showTermsConsentModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(16, 24, 40, 0.55)',
-            zIndex: 99999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Review legal documents"
-            style={{
-              background: 'var(--tf-surface)',
-              border: '1px solid var(--tf-border)',
-              borderRadius: 'var(--tf-radius)',
-              boxShadow: 'var(--tf-shadow)',
-              width: '100%',
-              maxWidth: 720,
-              maxHeight: '92vh',
-              display: 'flex',
-              flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Header */}
-            <div style={{
-              padding: '18px 22px',
-              borderBottom: '1px solid var(--tf-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 12,
-              flexShrink: 0,
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div className="tf-auth-feature-icon">
-                  <FileText style={{ width: 18, height: 18 }} />
-                </div>
-                <div>
-                  <h2 style={{ fontSize: 16.5, fontWeight: 650, letterSpacing: '-0.01em', color: 'var(--tf-ink)', margin: 0 }}>
-                    Review legal documents
-                  </h2>
-                  <p style={{ fontSize: 12.5, color: 'var(--tf-ink-subtle)', margin: '2px 0 0' }}>
-                    Accept both documents to create your account
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowTermsConsentModal(false)}
-                className="tf-auth-reveal"
-                style={{ position: 'static', transform: 'none', width: 28, height: 28 }}
-                aria-label="Close"
-              >
-                <X style={{ width: 18, height: 18 }} />
-              </button>
-            </div>
-
-            {/* Tabs */}
-            <div style={{
-              display: 'flex',
-              borderBottom: '1px solid var(--tf-border)',
-              background: 'var(--tf-surface-subtle)',
-              flexShrink: 0,
-            }}>
-              {([
-                { key: 'terms' as const, label: 'Terms & Conditions', Icon: FileText, agreed: agreedToTerms },
-                { key: 'privacy' as const, label: 'Privacy Policy', Icon: Shield, agreed: agreedToPrivacy },
-              ]).map(({ key, label, Icon, agreed }) => (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => { setActiveTermsTab(key); setVisitedTabs(prev => new Set([...prev, key])); }}
-                  style={{
-                    flex: 1,
-                    padding: '12px 16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    fontFamily: 'inherit',
-                    fontSize: 13.5,
-                    fontWeight: activeTermsTab === key ? 600 : 500,
-                    color: activeTermsTab === key ? 'var(--tf-brand-ink)' : 'var(--tf-ink-subtle)',
-                    background: 'transparent',
-                    border: 'none',
-                    borderBottom: activeTermsTab === key ? '2px solid var(--tf-brand)' : '2px solid transparent',
-                    marginBottom: -1,
-                    cursor: 'pointer',
-                    transition: 'color 0.15s ease, border-color 0.15s ease',
-                  }}
-                >
-                  <Icon style={{ width: 15, height: 15 }} />
-                  {label}
-                  {agreed && <CheckCircle style={{ width: 14, height: 14, color: 'var(--tf-success)' }} />}
-                </button>
-              ))}
-            </div>
-
-            {/* Document Content */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
-              {termsConsentLoading ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 60, gap: 14 }}>
-                  <Loader2 className="tf-auth-spin" style={{ width: 28, height: 28, color: 'var(--tf-brand-ink)' }} />
-                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', margin: 0 }}>Loading documents…</p>
-                </div>
-              ) : activeTermsTab === 'terms' ? (
-                termsConsentContent.terms ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.terms.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
-                ) : (
-                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Terms &amp; Conditions content is currently unavailable. You may still proceed.</p>
-                )
-              ) : (
-                termsConsentContent.privacy ? (
-                  <div dangerouslySetInnerHTML={{ __html: termsConsentContent.privacy.content_html }} style={{ fontSize: 13.5, color: 'var(--tf-ink-muted)', lineHeight: 1.7 }} />
-                ) : (
-                  <p style={{ fontSize: 13.5, color: 'var(--tf-ink-subtle)', textAlign: 'center', padding: 40 }}>Privacy Policy content is currently unavailable. You may still proceed.</p>
-                )
-              )}
-            </div>
-
-            {/* Footer — Checkboxes + Create Account */}
-            <div style={{
-              padding: '18px 22px',
-              borderTop: '1px solid var(--tf-border)',
-              background: 'var(--tf-surface-subtle)',
-              flexShrink: 0,
-            }}>
-              {/* Acceptance Checkboxes */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
-                {/* Terms & Conditions checkbox — enabled only after content has loaded */}
-                <label
-                  className="tf-auth-check"
-                  style={{
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '10px 12px',
-                    background: agreedToTerms ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
-                    border: `1px solid ${agreedToTerms ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
-                    borderRadius: 'var(--tf-radius-sm)',
-                    cursor: termsConsentLoading ? 'not-allowed' : 'pointer',
-                    opacity: termsConsentLoading ? 0.6 : 1,
-                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={agreedToTerms}
-                    disabled={termsConsentLoading}
-                    onChange={(e) => setAgreedToTerms(e.target.checked)}
-                    style={{ marginTop: 1 }}
-                  />
-                  <span style={{ lineHeight: 1.5 }}>
-                    I have read and agree to the{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('terms'); setVisitedTabs(prev => new Set([...prev, 'terms' as const])); }}
-                      className="tf-auth-link"
-                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
-                    >
-                      Terms &amp; Conditions
-                    </button>
-                  </span>
-                  {agreedToTerms && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
-                </label>
-
-                {/* Privacy Policy checkbox — disabled until content loads and user clicks the Privacy Policy tab */}
-                <label
-                  className="tf-auth-check"
-                  title={termsConsentLoading ? 'Please wait for documents to load' : !visitedTabs.has('privacy') ? 'Please read the Privacy Policy tab first' : undefined}
-                  style={{
-                    alignItems: 'flex-start',
-                    gap: 10,
-                    padding: '10px 12px',
-                    background: agreedToPrivacy ? 'var(--tf-brand-tint)' : 'var(--tf-surface)',
-                    border: `1px solid ${agreedToPrivacy ? 'var(--tf-brand-border)' : 'var(--tf-border)'}`,
-                    borderRadius: 'var(--tf-radius-sm)',
-                    cursor: termsConsentLoading || !visitedTabs.has('privacy') ? 'not-allowed' : 'pointer',
-                    opacity: termsConsentLoading || !visitedTabs.has('privacy') ? 0.6 : 1,
-                    transition: 'background-color 0.15s ease, border-color 0.15s ease',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={agreedToPrivacy}
-                    disabled={termsConsentLoading || !visitedTabs.has('privacy')}
-                    onChange={(e) => setAgreedToPrivacy(e.target.checked)}
-                    style={{ marginTop: 1 }}
-                  />
-                  <span style={{ lineHeight: 1.5 }}>
-                    I have read and agree to the{' '}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.preventDefault(); setActiveTermsTab('privacy'); setVisitedTabs(prev => new Set([...prev, 'privacy' as const])); }}
-                      className="tf-auth-link"
-                      style={{ textDecoration: 'underline', textUnderlineOffset: 2 }}
-                    >
-                      Privacy Policy
-                    </button>
-                    {!visitedTabs.has('privacy') && (
-                      <span style={{ fontSize: 12, color: 'var(--tf-warning)', marginLeft: 6, fontWeight: 500 }}>
-                        Read this tab first
-                      </span>
-                    )}
-                  </span>
-                  {agreedToPrivacy && <CheckCircle style={{ width: 16, height: 16, color: 'var(--tf-success)', flexShrink: 0, marginLeft: 'auto' }} />}
-                </label>
-              </div>
-
-              {/* Create Account Button */}
-              <button
-                type="button"
-                onClick={handleCreateAccount}
-                disabled={!agreedToTerms || !agreedToPrivacy || isLoading || termsConsentLoading}
-                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="tf-auth-spin" style={{ width: 17, height: 17 }} />
-                    Creating your workspace…
-                  </>
-                ) : (
-                  <>
-                    Create account
-                    <ArrowRight style={{ width: 17, height: 17 }} />
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
+
+const SIGNUP_FLOW_CSS = `
+.tf-signup-page { display: block; padding: 0; }
+.tf-signup-page::before { opacity: .12; }
+
+/* top bar */
+.tf-su-top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--tf-surface) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--tf-border); }
+.tf-su-top-inner { max-width: 1560px; margin: 0 auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: 18px; }
+.tf-su-logo { display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; }
+.tf-su-logo img { height: 32px; width: auto; }
+.tf-su-secure { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--tf-success-tint); color: var(--tf-success-ink); border: 1px solid var(--tf-success-border); font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.tf-su-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tf-su-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; height: 42px; border-radius: var(--tf-radius-sm); border: 1px solid transparent; background: transparent; color: var(--tf-ink-subtle); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
+.tf-su-cancel:hover:not(:disabled) { color: #c2410c; background: rgba(234, 88, 12, .07); border-color: rgba(234, 88, 12, .22); }
+.tf-su-cancel:disabled { opacity: .5; cursor: not-allowed; }
+@keyframes tf-signup-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* layout */
+/* Focused fields: no border or ring — a lighter fill, a soft lift and the
+   blue icon show where you are. Invalid fields keep their red border. */
+.tf-signup-page .tf-auth-input:focus:not(.is-invalid),
+.tf-signup-page .tf-auth-otp:focus {
+  border-color: transparent;
+  box-shadow: 0 6px 18px -10px rgba(15, 60, 153, .35), 0 0 0 1px rgba(15, 60, 153, .06);
+  background: var(--tf-surface);
+  outline: none;
+}
+.tf-signup-page .tf-auth-input.is-invalid:focus { box-shadow: none; }
+
+.tf-su-shell { max-width: 1560px; margin: 0 auto; padding: clamp(20px, 3vw, 40px) clamp(16px, 3vw, 32px) 56px; display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: clamp(24px, 3vw, 40px); align-items: start; }
+.tf-su-card { padding: clamp(20px, 2.6vw, 36px); }
+
+/* stepper */
+.tf-su-steps { margin: 0 0 22px; padding: 12px 16px; border-radius: 14px; border: 1px solid var(--tf-border); background: linear-gradient(135deg, var(--tf-surface-subtle), var(--tf-surface)); }
+.tf-su-steps-row { display: flex; align-items: center; justify-content: center; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.tf-su-step { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.tf-su-step-pill { display: flex; align-items: center; gap: 10px; }
+.tf-su-step-dotwrap { position: relative; flex-shrink: 0; }
+.tf-su-step-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; font-size: 14px; font-weight: 600; background: #f3f4f6; color: #9ca3af; box-shadow: 0 0 0 1px #e5e7eb; transition: background .3s ease, color .3s ease, box-shadow .3s ease; }
+.tf-su-step-num { font-variant-numeric: tabular-nums; }
+.tf-su-step.is-done .tf-su-step-dot { background: var(--brand-blue); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.tf-su-step.is-current .tf-su-step-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: #fff; box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand-blue) 10%, transparent), 0 10px 18px -6px color-mix(in srgb, var(--brand-blue) 40%, transparent); }
+.tf-su-step-pulse { position: absolute; inset: 0; border-radius: 50%; background: color-mix(in srgb, var(--brand-blue) 25%, transparent); pointer-events: none; }
+.tf-su-step-label { font-size: 14px; font-weight: 500; white-space: nowrap; color: #9ca3af; transition: color .3s ease; }
+.tf-su-step.is-done .tf-su-step-label { color: #374151; }
+.tf-su-step.is-current .tf-su-step-label { color: var(--tf-brand-active, #0a2f7a); }
+.dark .tf-su-step-dot { background: rgba(255,255,255,.06); color: #94a3b8; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.dark .tf-su-step.is-done .tf-su-step-label { color: #e2e8f0; }
+.dark .tf-su-step.is-current .tf-su-step-label { color: #93b4ff; }
+.tf-su-step-bar { width: clamp(20px, 6vw, 96px); height: 2px; border-radius: 999px; background: #e5e7eb; transition: background-color .5s ease; }
+.dark .tf-su-step-bar { background: rgba(255,255,255,.12); }
+.tf-su-step.is-done .tf-su-step-bar { background: var(--brand-blue); }
+
+/* order summary */
+.tf-su-summary { position: sticky; top: 92px; background: var(--tf-surface); border: 1px solid var(--tf-border); border-radius: var(--tf-radius); box-shadow: var(--tf-shadow); padding: 24px; animation: tf-signup-rise .6s .1s cubic-bezier(.22,1,.36,1) both; }
+.tf-su-summary-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.tf-su-summary-head h2 { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.015em; color: var(--tf-ink); }
+.tf-su-chip { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--tf-surface-subtle); color: var(--tf-ink-subtle); border: 1px solid var(--tf-border); white-space: nowrap; }
+.tf-su-chip--accent { background: var(--tf-brand-tint-solid); color: var(--tf-brand-ink); border-color: var(--tf-brand-border); }
+.tf-su-plan { margin-top: 18px; padding-bottom: 16px; border-bottom: 1px solid var(--tf-border); }
+.tf-su-plan-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.tf-su-toggle { position: relative; display: inline-flex; flex-shrink: 0; padding: 3px; border-radius: 999px; background: var(--tf-surface-subtle); border: 1px solid var(--tf-border); }
+.tf-su-toggle-thumb { position: absolute; top: 3px; bottom: 3px; left: 3px; width: calc(50% - 3px); border-radius: 999px; background: var(--brand-blue); box-shadow: 0 6px 14px -6px color-mix(in srgb, var(--brand-blue) 70%, transparent); transition: transform .35s cubic-bezier(.34,1.56,.64,1); }
+.tf-su-toggle[data-period="ANNUAL"] .tf-su-toggle-thumb { transform: translateX(100%); }
+.tf-su-toggle-opt { position: relative; z-index: 1; min-width: 64px; height: 28px; padding: 0 12px; border: 0; background: none; border-radius: 999px; font: inherit; font-size: 12.5px; font-weight: 700; color: var(--tf-ink-subtle); cursor: pointer; transition: color .25s ease; }
+.tf-su-toggle-opt[aria-checked="true"] { color: #fff; }
+.tf-su-toggle-opt:focus-visible { outline: 2px solid var(--tf-brand); outline-offset: 2px; }
+.tf-su-save { margin: 8px 0 0; display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; background: var(--tf-success-tint); color: var(--tf-success-ink); border: 1px solid var(--tf-success-border); }
+.tf-su-summary.is-loading .tf-su-lines, .tf-su-summary.is-loading .tf-su-total, .tf-su-summary.is-loading .tf-su-rows, .tf-su-summary.is-loading .tf-su-plan-sub { opacity: .45; transition: opacity .2s ease; }
+.tf-su-desc { margin: 10px 0 0; font-size: 13px; line-height: 1.55; color: var(--tf-ink-muted); }
+.tf-su-stepblock { animation: tf-signup-panel .45s cubic-bezier(.22,1,.36,1) both; }
+.tf-su-eyebrow { margin: 16px 0 0; font-size: 11.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--tf-brand-ink); }
+.tf-su-stepblock .tf-su-box { margin-top: 10px; }
+.tf-su-stepblock .tf-su-note { margin-top: 10px; }
+.tf-su-features { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 6px 14px; }
+.tf-su-features li { min-width: 0; }
+.tf-su-features .tf-su-more { grid-column: 1 / -1; }
+.tf-su-rows--two { grid-template-columns: minmax(0,1fr) minmax(0,1fr); column-gap: 20px; }
+.tf-su-actions { display: flex; gap: 10px; margin-top: 14px; }
+.tf-su-actions > * { flex: 1; min-width: 0; margin: 0 !important; }
+.tf-su-features li { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tf-ink-muted); }
+.tf-su-features svg { flex-shrink: 0; color: var(--tf-brand-ink); }
+.tf-su-features .tf-su-more { padding-left: 22px; color: var(--tf-ink-subtle); font-weight: 600; }
+.tf-su-ellipsis { max-width: 210px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-su-checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tf-su-checks li { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 600; color: var(--tf-ink); }
+.tf-su-dot { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--tf-border); flex-shrink: 0; transition: background-color .3s ease, border-color .3s ease, transform .3s cubic-bezier(.34,1.56,.64,1); }
+.tf-su-dot--on { background: var(--tf-success); border-color: var(--tf-success); color: #fff; transform: scale(1.08); }
+.tf-su-plan-name { font-size: 16.5px; font-weight: 700; color: var(--tf-ink); }
+.tf-su-plan-sub { margin-top: 2px; font-size: 13px; color: var(--tf-ink-subtle); }
+.tf-su-box { margin-top: 16px; padding: 14px 16px; border-radius: var(--tf-radius-sm); background: var(--tf-surface-subtle); border: 1px solid var(--tf-border); }
+.tf-su-box-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--tf-ink); }
+.tf-su-rows { margin: 0; display: grid; gap: 7px; }
+.tf-su-rows > div, .tf-su-lines > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.tf-su-rows dt, .tf-su-lines dt { color: var(--tf-ink-subtle); }
+.tf-su-rows dd, .tf-su-lines dd { margin: 0; font-weight: 600; color: var(--tf-ink); font-variant-numeric: tabular-nums; }
+.tf-su-lines { margin: 18px 0 0; padding-top: 16px; border-top: 1px solid var(--tf-border); display: grid; gap: 9px; }
+.tf-su-strike { text-decoration: line-through; color: var(--tf-ink-faint) !important; font-weight: 500 !important; }
+.tf-su-total { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--tf-border); }
+.tf-su-total > span { font-size: 15px; font-weight: 700; color: var(--tf-ink); }
+.tf-su-total strong { display: block; font-size: 28px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; color: var(--tf-ink); font-variant-numeric: tabular-nums; }
+.tf-su-total small { display: block; margin-top: 4px; font-size: 12.5px; color: var(--tf-ink-subtle); }
+.tf-su-note { display: flex; gap: 10px; margin-top: 18px; padding: 14px; border-radius: var(--tf-radius-sm); background: var(--tf-success-tint); border: 1px solid var(--tf-success-border); color: var(--tf-success-ink); font-size: 13px; line-height: 1.5; }
+.tf-su-muted { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tf-ink-subtle); }
+.tf-su-trust { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--tf-border); display: grid; gap: 8px; }
+.tf-su-trust li { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.45; color: var(--tf-ink-subtle); }
+.tf-su-trust svg { flex-shrink: 0; margin-top: 1px; color: var(--tf-brand-ink); }
+
+/* checkout (payment + done in one view) */
+.tf-co { display: flex; flex-direction: column; justify-content: space-evenly; gap: 16px; min-height: 100%; }
+.tf-co-hero { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+.tf-co-badge { display: grid; place-items: center; width: 96px; height: 96px; margin-bottom: 2px; }
+.tf-co-lottie { width: 120px; height: 120px; }
+.tf-co-icon { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 20px; color: #fff;
+  background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); box-shadow: 0 16px 30px -14px color-mix(in srgb, var(--brand-blue) 70%, transparent);
+  animation: tf-co-pop .5s cubic-bezier(.34,1.56,.64,1) both; }
+.tf-co-icon--ok { background: linear-gradient(135deg, #16a34a, #22c55e); box-shadow: 0 16px 30px -14px rgba(22,163,74,.7); }
+.tf-co-icon--blank { background: transparent; box-shadow: none; }
+@keyframes tf-co-pop { from { transform: scale(.6); opacity: 0; } to { transform: none; opacity: 1; } }
+.tf-co-sub { margin: 0; font-size: 14.5px; color: var(--tf-ink-subtle); }
+.tf-co-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+.tf-co-box { padding: 16px 18px; border-radius: var(--tf-radius-sm); border: 1px solid var(--tf-border); background: var(--tf-surface-subtle); }
+.tf-co-box h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 10px; font-size: 13px; font-weight: 700; color: var(--tf-ink); }
+.tf-co-box h3 svg { color: var(--tf-brand-ink); }
+.tf-co-box dl { margin: 0; display: grid; gap: 8px; }
+.tf-co-box dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
+.tf-co-box dt { color: var(--tf-ink-subtle); flex-shrink: 0; }
+.tf-co-box dd { margin: 0; font-weight: 600; color: var(--tf-ink); text-align: right; min-width: 0; }
+.tf-co-ellipsis { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-co-status { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  background: color-mix(in srgb, #f59e0b 16%, transparent); color: #b45309; }
+.tf-co-status.is-ok { background: var(--tf-success-tint); color: var(--tf-success-ink); }
+.tf-co-next { padding: 14px 18px; border-radius: var(--tf-radius-sm); border: 1px solid var(--tf-border); }
+.tf-co-next-title { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: var(--tf-ink); }
+.tf-co-next ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.tf-co-next li { position: relative; display: flex; gap: 10px; align-items: flex-start; }
+.tf-co-next-dot { position: relative; z-index: 1; display: grid; place-items: center; width: 26px; height: 26px; flex-shrink: 0; border-radius: 50%; font-size: 12px; font-weight: 700;
+  background: #f3f4f6; color: #9ca3af; box-shadow: 0 0 0 1px #e5e7eb; transition: background .3s ease, color .3s ease; }
+.tf-co-next li.is-current .tf-co-next-dot { background: linear-gradient(135deg, var(--brand-blue), var(--brand-blue-2)); color: #fff; box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 14%, transparent); }
+.tf-co-next li.is-done .tf-co-next-dot { background: var(--brand-blue); color: #fff; box-shadow: none; }
+.tf-co-next li > div { display: flex; flex-direction: column; gap: 2px; padding-top: 3px; min-width: 0; }
+.tf-co-next strong { font-size: 13px; color: var(--tf-ink); }
+.tf-co-next span { font-size: 12px; line-height: 1.45; color: var(--tf-ink-subtle); }
+.tf-co-pay { display: flex; flex-direction: column; gap: 10px; }
+.tf-co-secure { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0; font-size: 12.5px; color: var(--tf-ink-subtle); }
+.tf-co-actions { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; }
+.tf-co-redirect { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 6px 12px; font-size: 13px; color: var(--tf-ink-subtle); }
+.tf-co-redirect strong { color: var(--tf-ink); font-variant-numeric: tabular-nums; }
+.tf-co-redirect-bar { flex-basis: 100%; height: 3px; border-radius: 3px; background: var(--tf-border); overflow: hidden; }
+.tf-co-redirect-bar > i { display: block; height: 100%; background: var(--tf-grad); transform-origin: left; animation: tf-co-count 5s linear both; }
+@keyframes tf-co-count { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+.tf-co.is-done .tf-co-hero h2, .tf-co.is-done .tf-co-sub { animation: tf-signup-rise .5s .15s cubic-bezier(.22,1,.36,1) both; }
+.dark .tf-co-next-dot { background: rgba(255,255,255,.06); color: #94a3b8; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+@media (max-width: 640px) {
+  .tf-co-grid, .tf-co-actions, .tf-co-next ol { grid-template-columns: 1fr; }
+}
+.tf-signup-panel { animation: tf-signup-panel .5s cubic-bezier(.22,1,.36,1) both; }
+@keyframes tf-signup-panel { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+
+/* Desktop: everything fits one screen. The two columns share the height
+   below the top bar; long steps (terms, payment) scroll inside the card. */
+@media (min-width: 1024px) and (min-height: 640px) {
+  .tf-signup-page { --tf-su-top: 63px; }
+  .tf-su-shell { height: calc(100dvh - var(--tf-su-top)); padding-top: 20px; padding-bottom: 20px; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
+  .tf-su-main { display: flex; flex-direction: column; min-height: 0; }
+  .tf-su-steps { margin: 0 0 18px; flex: none; }
+  .tf-su-card { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding: 22px 28px 24px; }
+  .tf-su-card > .tf-signup-panel { flex: 1; min-height: 0; overflow-y: auto; margin-right: -10px; padding-right: 10px; scrollbar-width: thin; }
+  .tf-su-card .tf-auth-subtitle { margin-bottom: 16px; }
+  .tf-su-card .tf-auth-field { margin-bottom: 12px; }
+  .tf-su-main > .tf-auth-legal { display: none; }
+  .tf-su-summary { position: static; height: 100%; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: thin; }
+  .tf-su-trust { margin-top: auto; }
+  .tf-su-summary > .tf-su-actions { margin-bottom: 16px; }
+  .tf-su-summary { padding: 20px 22px; }
+  .tf-su-summary .tf-su-total { margin-top: 12px; padding-top: 12px; }
+  .tf-su-summary .tf-su-lines { margin-top: 14px; padding-top: 12px; gap: 6px; }
+  .tf-su-summary .tf-su-trust { padding-top: 12px; gap: 6px; }
+  /* Fields in pairs: company | name, email | phone; the rest span the row. */
+  .tf-su-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; align-items: start; }
+  .tf-su-form > * { grid-column: 1 / -1; }
+  .tf-su-form > .tf-auth-field { grid-column: auto; }
+}
+
+@media (max-width: 1023px) {
+  .tf-su-shell { grid-template-columns: 1fr; max-width: 680px; }
+  .tf-su-summary { position: static; }
+}
+@media (max-width: 640px) {
+  .tf-su-logo img { height: 26px; }
+  .tf-su-top-inner { gap: 12px; }
+  .tf-su-step-dot { width: 36px; height: 36px; }
+  .tf-su-step-label { display: none; }
+  .tf-su-steps-row, .tf-su-step { gap: 8px; }
+}
+`;

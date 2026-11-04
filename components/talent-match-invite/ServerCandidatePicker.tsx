@@ -2,7 +2,7 @@
 
 import { Fragment, useEffect, useEffectEvent, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, Archive, ArchiveRestore, Briefcase, Download, Eye, Layers, Lightbulb, Loader2, Lock, Mail, Search, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, Archive, ArchiveRestore, Briefcase, Download, Eye, Info, Layers, Lightbulb, Loader2, Lock, Mail, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { SourceIcon } from './inviteSources';
 import InviteFolderTree, { flattenTree, isArchivedFolder, isRootFolder } from './InviteFolderTree';
@@ -261,6 +261,9 @@ interface ResumeVersionRow { id: string; version: number; file_name?: string; cr
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 2).toUpperCase() || '?';
 
+/** A pick to show in its own tab: Manual's View. */
+export interface PickReveal { source: InviteCandidateSourceTab; resumeId: string; email: string }
+
 /**
  * What the popup sends: rows ticked one by one, or "every row matching this
  * tab's filter" minus the ones unticked afterwards. Resolved again on the
@@ -343,6 +346,9 @@ export default function ServerCandidatePicker({
   addedEmails,
   addPanel,
   footer,
+  revealRef,
+  noUnitsNoun = null,
+  noUnitsAction,
 }: {
   /** The list tab to open on (the Resume Database's side the popup was
    *  opened from); omitted: AI Talent Match. */
@@ -376,6 +382,14 @@ export default function ServerCandidatePicker({
   addPanel: ReactNode;
   /** Below every tab: the selection summary. */
   footer?: ReactNode;
+  /** Filled with "show this pick in its own tab" (Manual's View): the tab
+   *  opens, searched to that email, the row highlighted a moment. */
+  revealRef?: { current: ((r: PickReveal) => void) | null };
+  /** No units left at all ("Assessment" / "AI interview"): the lists are
+   *  greyed, with the reason above them. Null = units left (or unlimited). */
+  noUnitsNoun?: string | null;
+  /** Beside that reason: Add units (or who to ask). */
+  noUnitsAction?: ReactNode;
 }) {
   const [source, setSource] = useState<InviteCandidateSourceTab>(initialSource ?? 'talent-match');
   /* The database tabs follow the resume list's own permissions (the share
@@ -522,16 +536,6 @@ export default function ServerCandidatePicker({
   const tabCount = (t: InviteCandidateSourceTab): number | null =>
     (jobCounts.jdId === jdId ? jobCounts[t] : undefined) ?? counts?.[t] ?? null;
 
-  /* First open: a job with no AI Talent Match candidates opens on Manual. */
-  const defaulted = useRef(false);
-  useEffect(() => {
-    if (defaulted.current || !counts) return;
-    defaulted.current = true;
-    if (!initialSource && counts['talent-match'] === 0 && addTab === null && selectionCount(selection) === 0) onAddTabChange('manual');
-    // Once, when the first counts arrive.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [counts]);
-
   /* Load the next 50 when the end of the list scrolls into view. */
   const hasMore = rows.length < total;
   useEffect(() => {
@@ -643,6 +647,7 @@ export default function ServerCandidatePicker({
       : pickingDisabled ? 'Pick a version first'
       : inFilterMode && !filterModeHere ? 'Clear “Select all matching” to pick here'
       : !isOn(r) && addedDirectly(r) ? 'Already added in Manual / Upload Excel'
+      : !isOn(r) && noUnitsNoun ? 'No units left — selection is turned off.'
       : !isOn(r) && !canAdd ? 'No units left. Remove someone to add more.' : null;
 
   /* ── a row's resume: 👁 opens it (AI Talent Match / Scored Resumes send the
@@ -1066,6 +1071,22 @@ export default function ServerCandidatePicker({
     return parts.some((x) => x === null) ? null : parts.reduce<number>((a, b) => a + (b ?? 0), 0);
   };
   const switchDb = (d: 'my-resumes' | 'internal-db') => { setLastDb(d); switchTab(d); };
+
+  const [revealed, setRevealed] = useState<string | null>(null);
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showRevealed = (r: PickReveal) => {
+    if (r.source === 'my-resumes' || r.source === 'internal-db') switchDb(r.source);
+    else switchTab(r.source);
+    setSearchInput(r.email);
+    setRevealed(r.resumeId);
+    if (revealTimer.current) clearTimeout(revealTimer.current);
+    revealTimer.current = setTimeout(() => setRevealed(null), 2500);
+  };
+  useEffect(() => {
+    if (!revealRef) return;
+    revealRef.current = showRevealed;
+  });
+  useEffect(() => () => { if (revealTimer.current) clearTimeout(revealTimer.current); }, []);
   const dbTabButton = () => {
     // While the cached (localStorage) permissions are still being re-validated
     // against /auth/me, "no access" may just be stale — show a neutral
@@ -1180,6 +1201,15 @@ export default function ServerCandidatePicker({
       {/* Manual / Upload Excel: always mounted, so its rows stay. */}
       <div className={addTab ? '' : 'hidden'}>{addPanel}</div>
       <div className={addTab ? 'hidden' : 'space-y-3'}>
+        {noUnitsNoun && (
+          <div role="status" className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-lg border border-info-line bg-info-subtle px-3 py-2 text-sm font-medium text-info-strong">
+            <span className="flex items-start gap-2 min-w-0 flex-1 basis-60">
+              <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+              Selection is turned off — 0 {noUnitsNoun} units available.
+            </span>
+            {noUnitsAction && <span className="pl-6 sm:pl-0">{noUnitsAction}</span>}
+          </div>
+        )}
       {/* Resume Database: My Resumes / Shared DB, as the Resume Database
           page's own tabs — each with its count and its picks — and Upload
           resumes at the right. One side only (permissions): no toggle. */}
@@ -1320,7 +1350,7 @@ export default function ServerCandidatePicker({
           ]}
           className={SELECT_CONTROL}
         />
-        <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
+        <label className="inline-flex items-center gap-1.5 tf-meta cursor-pointer">
           <input type="checkbox" checked={!!filters.exclude_invited} onChange={(e) => setFilter('exclude_invited', e.target.checked || undefined)} disabled={!versionId} className="m-0 rounded border-gray-300" />
           Hide already invited
         </label>
@@ -1486,7 +1516,11 @@ export default function ServerCandidatePicker({
             const why = tickBlockReason(r) ?? undefined;
             const shownName = kind === 'interview' ? formatCandidateFirstName(r.name) : r.name;
             return (
-              <li key={r.resume_id}>
+              <li
+                key={r.resume_id}
+                ref={revealed === r.resume_id ? (el) => el?.scrollIntoView({ block: 'nearest' }) : undefined}
+                className={`${revealed === r.resume_id ? 'ring-2 ring-inset ring-info transition-shadow' : ''} ${noUnitsNoun && !on ? 'opacity-50' : ''}`.trim() || undefined}
+              >
                 <label title={why} className={`flex items-center gap-2.5 px-3 py-2 ${tickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : 'cursor-not-allowed'} ${on ? 'bg-blue-50 dark:bg-slate-800/50' : ''} ${r.archived ? 'opacity-60' : ''}`}>
                   <input
                     type="checkbox"
@@ -1501,7 +1535,7 @@ export default function ServerCandidatePicker({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={r.name}>{shownName}</span>
+                      <span className="tf-row-name truncate" title={r.name}>{shownName}</span>
                       {isDbTab(source) && versionChip(r)}
                     </span>
                     <span className="flex items-center gap-1 min-w-0 tf-meta">
@@ -1519,7 +1553,7 @@ export default function ServerCandidatePicker({
                     </span>
                   </span>
                   {r.already_invited && (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Invited</span>
                   )}
                   {r.archived && (
                     <span title="Archived — unarchive it (Resume Database) to invite this candidate" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
@@ -1536,7 +1570,7 @@ export default function ServerCandidatePicker({
                       {r.score.percent}%<span className="hidden sm:inline font-medium">&nbsp;· {SERVER_MATCH_LABEL[r.score.match_status]}</span>
                     </span>
                   ) : (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Not scored</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Not scored</span>
                   )}
                   {(r.rating || !r.score) && r.source === 'talent-match' && (
                     <span title="Match rating" className={`shrink-0 inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-md text-xs font-bold border ${ratingTone(r.rating || 0)}`}>
@@ -1570,7 +1604,7 @@ export default function ServerCandidatePicker({
       </div>
 
       {filterModeHere && (
-        <p role="note" className="tf-meta-strong">
+        <p role="note" className="tf-meta">
           Every candidate matching {describeFilters(selection.filters) || 'this tab'} is selected ({fmt(selectionCount(selection))}). Untick a row to leave them out; the list is re-checked when you send.
         </p>
       )}

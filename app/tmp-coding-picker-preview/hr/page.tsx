@@ -77,8 +77,8 @@ export default function TmpHrPreview() {
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
                       <div className="flex-1">
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                          <p className="text-sm font-medium text-gray-900">{q.text}</p>
-                          <span className="px-2 py-0.5 rounded text-2xs font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
+                          <p className="tf-row-name">{q.text}</p>
+                          <span className="px-2 py-0.5 rounded tf-micro-hint flex-shrink-0 ml-2 bg-gray-100">
                             {isYesNo ? 'Yes/No' : 'Text'}
                           </span>
                         </div>
@@ -117,7 +117,7 @@ export default function TmpHrPreview() {
                                 [q.key]: value
                               }));
                             }}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 text-black"
+                            className="tf-textarea"
                           />
                         )}
                       </div>

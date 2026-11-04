@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRef } from "react";
-import { ArrowUp, ArrowUpRight, Facebook, Linkedin, Twitter } from "lucide-react";
+import { ArrowUp, ArrowUpRight } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { Cta } from "./Cta";
 import { display, DISPLAY } from "./fonts";
@@ -11,7 +11,7 @@ import { DASHBOARD_HREF, useSignedIn } from "./session";
 
 const TRIAL_LINK = `https://${process.env.NEXT_PUBLIC_BASE_DOMAIN}/signup?plan=free_trial`;
 
-const COLUMNS: Array<{ title: string; links: Array<{ label: string; href: string; plain?: boolean }> }> = [
+const COLUMNS: Array<{ title: string; links: Array<{ label: string; href: string }> }> = [
   {
     title: "Product",
     links: [
@@ -25,7 +25,6 @@ const COLUMNS: Array<{ title: string; links: Array<{ label: string; href: string
     title: "Company",
     links: [
       { label: "About us", href: "/about" },
-      { label: "Careers", href: "/careers" },
       { label: "Contact", href: "/contact" },
       { label: "FAQ", href: "/faq" },
     ],
@@ -35,22 +34,14 @@ const COLUMNS: Array<{ title: string; links: Array<{ label: string; href: string
     links: [
       { label: "Privacy policy", href: "/privacy" },
       { label: "Terms of service", href: "/terms" },
-      { label: "Cookie policy", href: "#", plain: true },
-      { label: "GDPR compliance", href: "#", plain: true },
     ],
   },
-];
-
-const SOCIAL = [
-  { name: "LinkedIn", icon: Linkedin },
-  { name: "Twitter", icon: Twitter },
-  { name: "Facebook", icon: Facebook },
 ];
 
 const WORDMARK = "TalentFlow";
 
 /** A footer link: brightens on hover while a small arrow slides in. */
-function FooterLink({ label, href, plain }: { label: string; href: string; plain?: boolean }) {
+function FooterLink({ label, href }: { label: string; href: string }) {
   const className =
     "group inline-flex items-center gap-1 rounded text-sm text-white/60 sm:text-[15px] transition-colors duration-300 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50";
   const inner = (
@@ -59,11 +50,7 @@ function FooterLink({ label, href, plain }: { label: string; href: string; plain
       <ArrowUpRight className="h-3.5 w-3.5 -translate-x-1 translate-y-0.5 opacity-0 transition-[opacity,translate] duration-300 ease-out group-hover:translate-x-0.5 group-hover:translate-y-0 group-hover:opacity-100" />
     </>
   );
-  return plain ? (
-    <a href={href} className={className}>
-      {inner}
-    </a>
-  ) : (
+  return (
     <Link href={href} prefetch={false} className={className}>
       {inner}
     </Link>
@@ -123,13 +110,12 @@ export function SiteFooter() {
         <div className="grid grid-cols-1 gap-10 pb-10 pt-12 sm:gap-14 sm:pb-14 sm:pt-24 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] lg:gap-20 lg:pb-20">
           <div>
             <RevealHeading
-              text="Your next hire is already in the pile."
+              text="Ready to hire smarter?"
               className={`${DISPLAY} max-w-xl text-[clamp(1.75rem,4.6vw,3.5rem)] font-extrabold leading-[1.02] tracking-[-0.04em] text-balance`}
             />
             <RevealGroup stagger={0.1}>
               <p data-reveal className="mt-3 max-w-md text-[15px] leading-relaxed text-white/65 sm:mt-5 sm:text-lg">
-                2,500+ recruiting teams use TalentFlow to find them faster. SOC 2 certified, rated 4.9
-                out of 5.
+                Let AI do the heavy lifting, so your team can focus on people.
               </p>
               <div data-reveal className="mt-6 flex flex-col gap-2.5 sm:mt-8 sm:flex-row sm:gap-3">
                 <Cta
@@ -142,7 +128,7 @@ export function SiteFooter() {
                   {signedIn ? "Go to dashboard" : "Start free trial"}
                 </Cta>
                 <Cta href="/contact" variant="outlineLight" arrow="upRight" className="w-full sm:w-auto">
-                  Talk to sales
+                  Talk to Sales
                 </Cta>
               </div>
             </RevealGroup>
@@ -179,22 +165,11 @@ export function SiteFooter() {
               <img src="/logos/talent_flow_logo.png" alt="TalentFlow" className="h-7 w-auto brightness-0 invert sm:h-8" />
             </Link>
             <p className="max-w-sm text-[13px] text-white/50 sm:text-sm">
-              Recruiting software for agencies, in-house teams and freelance recruiters.
+              From JD to hire, all with AI. Any industry, any role.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {SOCIAL.map(({ name, icon: Icon }) => (
-              <a
-                key={name}
-                href="#"
-                aria-label={name}
-                className="group grid h-10 w-10 place-items-center rounded-full border border-white/15 text-white/70 transition-[background-color,border-color,color] duration-300 hover:border-white hover:bg-white hover:text-mkt-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-              >
-                <Icon className="h-4 w-4 transition-transform duration-300 ease-out group-hover:scale-110" />
-              </a>
-            ))}
-            <span aria-hidden="true" className="mx-2 h-6 w-px bg-white/15" />
             <button
               type="button"
               onClick={backToTop}

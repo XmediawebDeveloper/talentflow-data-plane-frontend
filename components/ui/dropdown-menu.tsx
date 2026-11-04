@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 
 import { cn } from "./utils";
+import { useMobileRecordCardVariant } from "./mobile-record-card";
 
 function DropdownMenu({
   ...props
@@ -31,18 +32,74 @@ function DropdownMenuTrigger({
   );
 }
 
+/** Phones: below the `sm` breakpoint (640px). */
+const PHONE_MAX_WIDTH = 640;
+
 function DropdownMenuContent({
   className,
   sideOffset = 4,
   collisionPadding = 8,
+  align,
+  alignOffset,
+  ref,
   ...props
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Content>) {
+  /* Job Openings module, phones only: the menu opens centred on the screen
+     (still just below / above its trigger) instead of hugging the trigger's
+     edge. Measured once it mounts: the offset from the trigger's left edge to
+     where a centred menu's left edge falls. Everywhere else, and from `sm` up,
+     the caller's own align / alignOffset apply unchanged. */
+  const opensVertically = !props.side || props.side === "bottom" || props.side === "top";
+  const centerOnPhone = useMobileRecordCardVariant() === "jd" && opensVertically;
+  const [phoneOffset, setPhoneOffset] = React.useState<number | null>(null);
+  const [contentEl, setContentEl] = React.useState<HTMLDivElement | null>(null);
+  /* The portal mounts the menu a beat after this component renders, so the
+     measuring keys off the element itself (set from the ref) — not off mount. */
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setContentEl(node);
+      if (typeof ref === "function") ref(node);
+      else if (ref) (ref as React.RefObject<HTMLDivElement | null>).current = node;
+    },
+    [ref],
+  );
+  React.useLayoutEffect(() => {
+    if (!centerOnPhone || !contentEl) return;
+    const measure = () => {
+      if (window.innerWidth >= PHONE_MAX_WIDTH) {
+        setPhoneOffset(null);
+        return;
+      }
+      const trigger = contentEl.id ? document.querySelector<HTMLElement>(`[aria-controls="${contentEl.id}"]`) : null;
+      if (!trigger) return;
+      // align="start" + this offset puts the menu's left edge where a centred menu starts
+      // (Radix ignores alignOffset for align="center").
+      const t = trigger.getBoundingClientRect();
+      const viewport = document.documentElement.clientWidth;
+      const centredLeft = (viewport - contentEl.offsetWidth) / 2;
+      setPhoneOffset(Math.round(centredLeft - t.left));
+    };
+    measure();
+    // The menu reaches its final width only after its items lay out — re-measure on any size change.
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(contentEl);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [centerOnPhone, contentEl]);
+  const phoneCentered = centerOnPhone && phoneOffset !== null;
+
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Content
+        ref={setRefs}
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}
         collisionPadding={collisionPadding}
+        align={phoneCentered ? "start" : align}
+        alignOffset={phoneCentered ? phoneOffset : alignOffset}
         className={cn(
           "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-h-(--radix-dropdown-menu-content-available-height) min-w-[8rem] max-w-[calc(100vw-1rem)] origin-(--radix-dropdown-menu-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md p-1 shadow-md",
           className,

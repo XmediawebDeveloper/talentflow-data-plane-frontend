@@ -27,9 +27,9 @@ export const toast = {
             <CheckCircle2 className="w-4 h-4 text-green-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 text-sm">{config.title}</div>
+            <div className="tf-row-name">{config.title}</div>
             {config.description && (
-              <div className="text-sm text-gray-600 mt-1">{config.description}</div>
+              <div className="tf-body-secondary mt-1">{config.description}</div>
             )}
             {config.action && (
               <button
@@ -67,9 +67,9 @@ export const toast = {
             <XCircle className="w-4 h-4 text-red-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 text-sm">{config.title}</div>
+            <div className="tf-row-name">{config.title}</div>
             {config.description && (
-              <div className="text-sm text-gray-600 mt-1">{config.description}</div>
+              <div className="tf-body-secondary mt-1">{config.description}</div>
             )}
             {config.action && (
               <button
@@ -107,9 +107,9 @@ export const toast = {
             <AlertCircle className="w-4 h-4 text-amber-600" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 text-sm">{config.title}</div>
+            <div className="tf-row-name">{config.title}</div>
             {config.description && (
-              <div className="text-sm text-gray-600 mt-1">{config.description}</div>
+              <div className="tf-body-secondary mt-1">{config.description}</div>
             )}
             {config.action && (
               <button
@@ -142,14 +142,14 @@ export const toast = {
     
     sonnerToast.custom(
       (t) => (
-        <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[320px] max-w-md animate-scale-in">
+        <div className="tf-card-soft p-4 flex items-start gap-3 w-[calc(100vw-2rem)] sm:w-auto sm:min-w-[320px] max-w-md animate-scale-in">
           <div className="flex-shrink-0 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
             <Info className="w-4 h-4 text-gray-800" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="font-medium text-gray-900 text-sm">{config.title}</div>
+            <div className="tf-row-name">{config.title}</div>
             {config.description && (
-              <div className="text-sm text-gray-600 mt-1">{config.description}</div>
+              <div className="tf-body-secondary mt-1">{config.description}</div>
             )}
             {config.action && (
               <button

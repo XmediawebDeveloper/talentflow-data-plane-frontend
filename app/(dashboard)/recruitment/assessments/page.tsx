@@ -150,9 +150,9 @@ export default function AssessmentsRoute() {
     // gray-background skeleton, which popped into a completely different
     // frame once <Assessments> actually mounted.
     return (
-      <div className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             <Skeleton className="h-4 w-40 mb-4 md:mb-6" />
 
             {/* Header */}
@@ -172,7 +172,7 @@ export default function AssessmentsRoute() {
             </div>
 
             {/* Stats row — Total Jobs / Total Assessments / Active / Draft / Total Assessed */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="tf-grid-stats-5 mb-4 sm:mb-6">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-gray-100 p-3 sm:p-4 space-y-2">
                   <Skeleton className="h-8 w-8 rounded-lg" />
@@ -192,7 +192,7 @@ export default function AssessmentsRoute() {
             {/* List rows */}
             <div className="space-y-3">
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
+                <div key={i} className="tf-panel p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex min-w-0 items-center gap-3">
                       <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
@@ -218,7 +218,7 @@ export default function AssessmentsRoute() {
 
   return (
     <FeatureGate feature="assessment">
-      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+      <div className="tf-page relative flex flex-col">
         <Assessments
           jobs={jobs}
           autoOpenCreate={initialAutoCreate.current}

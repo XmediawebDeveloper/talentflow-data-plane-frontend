@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import ListPagination from '@/components/ListPagination';
 import FilterSelect from '@/components/ui/filter-select';
 import { RowActions } from '@/components/subscription/RowActionsMenu';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 // Structural subset of the billing-history invoice — only what the reports read.
 export interface ReportInvoice {
@@ -77,11 +78,11 @@ const inrCompact = (n: number) =>
   n >= 100000 ? `₹${(n / 100000).toFixed(n % 100000 === 0 ? 0 : 1)}L` : n >= 1000 ? `₹${Math.round(n / 1000)}k` : `₹${n}`;
 
 const cardClass =
-  'rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5';
+  'tf-card-soft p-4 sm:p-5';
 
 function Select({ label, value, onChange, options }: { label?: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
-    <label className="inline-flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+    <label className="inline-flex items-center gap-2 tf-meta">
       {label}
       <FilterSelect
         value={value}
@@ -185,7 +186,7 @@ export default function BillingReports<T extends ReportInvoice>({
   const hasFilters = statusFilter !== 'all' || moduleFilter !== 'all' || search !== '';
 
   const emptyChart = (
-    <div className="flex h-full items-center justify-center text-sm text-gray-400 dark:text-slate-500">No paid invoices in this period</div>
+    <div className="flex h-full items-center justify-center tf-body-muted">No paid invoices in this period</div>
   );
 
   return (
@@ -198,9 +199,9 @@ export default function BillingReports<T extends ReportInvoice>({
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="tf-grid-3">
         <div className={cardClass}>
-          <h3 className="tf-subsection-title">{groupBy === 'month' ? 'Monthly' : 'Quarterly'} Billing Amount</h3>
+          <h3 className="tf-row-title">{groupBy === 'month' ? 'Monthly' : 'Quarterly'} Billing Amount</h3>
           <div className="mt-3 h-52">
             {paidScoped.length === 0 ? emptyChart : (
               <ResponsiveContainer width="100%" height="100%">
@@ -221,7 +222,7 @@ export default function BillingReports<T extends ReportInvoice>({
         </div>
 
         <div className={cardClass}>
-          <h3 className="tf-subsection-title">Amount by Module</h3>
+          <h3 className="tf-row-title">Amount by Module</h3>
           <div className="mt-3 flex h-52 items-center gap-4">
             {moduleData.length === 0 ? emptyChart : (
               <>
@@ -235,8 +236,8 @@ export default function BillingReports<T extends ReportInvoice>({
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="tf-cell-name tabular-nums">{inr(moduleTotal)}</span>
-                    <span className="text-2xs text-gray-500 dark:text-slate-500">Total</span>
+                    <span className="tf-row-title tabular-nums">{inr(moduleTotal)}</span>
+                    <span className="tf-micro-hint">Total</span>
                   </div>
                 </div>
                 <ul className="min-w-0 flex-1 space-y-2">
@@ -258,10 +259,10 @@ export default function BillingReports<T extends ReportInvoice>({
         </div>
 
         <div className={cardClass}>
-          <h3 className="tf-subsection-title">Invoices by Status</h3>
+          <h3 className="tf-row-title">Invoices by Status</h3>
           <div className="mt-3 h-52">
             {scoped.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-sm text-gray-400 dark:text-slate-500">No invoices in this period</div>
+              <div className="flex h-full items-center justify-center tf-body-muted">No invoices in this period</div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={statusData} margin={{ top: 20, right: 4, left: 4, bottom: 0 }}>
@@ -288,7 +289,7 @@ export default function BillingReports<T extends ReportInvoice>({
             placeholder="Search by invoice number, plan name, or description"
             value={search}
             onChange={(e) => changeSearch(e.target.value)}
-            className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-10 pr-4 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+            className="tf-input pl-10 pr-4"
           />
         </div>
         <div className="flex items-center gap-3">
@@ -308,27 +309,27 @@ export default function BillingReports<T extends ReportInvoice>({
 
       {/* Invoice table */}
       {tableRows.length === 0 ? (
-        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-12 text-center shadow-sm shadow-brand-blue/5">
+        <div className="tf-card-soft p-12 text-center">
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
             <BarChart3 className="h-7 w-7 text-brand-blue" />
           </div>
-          <h3 className="tf-section-title">No invoices found</h3>
+          <h3 className="tf-section-title sm:text-lg">No invoices found</h3>
           <p className="mx-auto mt-1 max-w-md tf-body-muted">Try a different year, module, status or search.</p>
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-          <div className="overflow-x-auto tf-table-shell">
+        <div className="overflow-hidden tf-card-soft">
+          <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
             <table className="w-full min-w-[900px] tf-premium-table">
               <thead className="bg-white dark:bg-slate-900">
                 <tr className="text-left">
-                  <th className="px-5 py-4 tf-th w-[200px]">Invoice</th>
-                  <th className="px-5 py-4 tf-th w-[160px]">Date</th>
-                  <th className="px-5 py-4 tf-th">Description</th>
-                  <th className="px-5 py-4 tf-th w-[140px]">Module</th>
-                  <th className="px-5 py-4 tf-th w-[160px]">Payment Method</th>
-                  <th className="px-5 py-4 text-right tf-th w-[130px]">Amount</th>
-                  <th className="px-5 py-4 text-center tf-th w-[100px]">Status</th>
-                  <th className="px-5 py-4 text-right tf-th w-[100px] tf-sticky-col">Actions</th>
+                  <th className="tf-th-cell tf-th w-[200px]">Invoice</th>
+                  <th className="tf-th-cell tf-th w-[160px]">Date</th>
+                  <th className="tf-th-cell tf-th">Description</th>
+                  <th className="tf-th-cell tf-th w-[140px]">Module</th>
+                  <th className="tf-th-cell tf-th w-[160px]">Payment Method</th>
+                  <th className="tf-th-cell text-right tf-th w-[130px]">Amount</th>
+                  <th className="tf-th-cell text-center tf-th w-[100px]">Status</th>
+                  <th className="tf-th-cell text-right tf-th w-[100px] tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,38 +337,38 @@ export default function BillingReports<T extends ReportInvoice>({
                   const mod = getModule(inv);
                   return (
                     <tr key={inv.id}>
-                      <td className="px-5 py-4">
+                      <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <FileText className="h-4 w-4 shrink-0 text-brand-blue" />
-                          <span className="min-w-0 truncate tf-cell-name" title={inv.invoice_number}>{inv.invoice_number}</span>
+                          <span className="min-w-0 truncate tf-row-title" title={inv.invoice_number}>{inv.invoice_number}</span>
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-5 py-4 tf-td">{formatIST(inv.issue_date)}</td>
-                      <td className="px-5 py-4">
-                        <div className="truncate text-sm font-medium text-gray-900 dark:text-slate-50" title={getDescription(inv)}>{getDescription(inv)}</div>
+                      <td className="tf-td whitespace-nowrap tf-body">{formatIST(inv.issue_date)}</td>
+                      <td className="tf-td">
+                        <div className="truncate tf-row-name" title={getDescription(inv)}>{getDescription(inv)}</div>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="tf-td">
                         <span className={`inline-flex rounded-md px-2 py-0.5 text-2xs font-medium ring-1 ${mod.badge}`}>{mod.key}</span>
                       </td>
-                      <td className="px-5 py-4">
+                      <td className="tf-td">
                         <div className="flex min-w-0 items-center gap-1.5">
                           <CreditCard className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
                           <span className="min-w-0 truncate tf-body" title={getPaymentLabel(inv)}>{getPaymentLabel(inv)}</span>
                         </div>
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <span className="tf-cell-name">{inr(inv.total_amount_inr || 0, 2)}</span>
+                      <td className="tf-td text-right">
+                        <span className="tf-row-title">{inr(inv.total_amount_inr || 0, 2)}</span>
                         {(inv.tax_amount_inr || 0) > 0 && (
                           <div className="tf-meta">incl. {inr(inv.tax_amount_inr, 2)} tax</div>
                         )}
                       </td>
-                      <td className="px-5 py-4 text-center">
+                      <td className="tf-td text-center">
                         <Badge variant={getStatusVariant(inv.status)} className="capitalize">
                           {getStatusIcon(inv.status)}
                           {inv.status}
                         </Badge>
                       </td>
-                      <td className="px-5 py-4 text-right tf-sticky-col">
+                      <td className="tf-td text-right tf-sticky-col">
                         <RowActions
                           menuLabel="Invoice actions"
                           actions={[
@@ -382,6 +383,51 @@ export default function BillingReports<T extends ReportInvoice>({
               </tbody>
             </table>
           </div>
+          <MobileRecordList>
+            {pageRows.map(inv => {
+              const mod = getModule(inv);
+              return (
+                <MobileRecordCard
+                  key={inv.id}
+                  badges={
+                    <>
+                      <span className={`inline-flex rounded-md px-2 py-0.5 text-2xs font-medium ring-1 ${mod.badge}`}>{mod.key}</span>
+                      <Badge variant={getStatusVariant(inv.status)} className="capitalize">
+                        {getStatusIcon(inv.status)}
+                        {inv.status}
+                      </Badge>
+                    </>
+                  }
+                  title={inv.invoice_number}
+                  actions={
+                    <RowActions
+                      menuLabel="Invoice actions"
+                      actions={[
+                        { key: 'view', label: 'View', icon: ExternalLink, variant: 'primary', onClick: () => onView(inv) },
+                        { key: 'download', label: 'Download Invoice', icon: Download, loading: downloadingId === inv.id, onClick: () => onDownload(inv) },
+                      ]}
+                    />
+                  }
+                  meta={[
+                    { icon: <FileText className="h-3.5 w-3.5" />, label: getDescription(inv) },
+                    { icon: <CreditCard className="h-3.5 w-3.5" />, label: getPaymentLabel(inv) },
+                  ]}
+                  fields={[
+                    { label: 'Date', value: formatIST(inv.issue_date) },
+                    {
+                      label: 'Amount',
+                      value: (
+                        <>
+                          {inr(inv.total_amount_inr || 0, 2)}
+                          {(inv.tax_amount_inr || 0) > 0 && ` (incl. ${inr(inv.tax_amount_inr, 2)} tax)`}
+                        </>
+                      ),
+                    },
+                  ]}
+                />
+              );
+            })}
+          </MobileRecordList>
           <ListPagination
             currentPage={page}
             itemsPerPage={pageSize}

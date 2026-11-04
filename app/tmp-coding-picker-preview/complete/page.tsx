@@ -94,7 +94,7 @@ export default function TmpCompletePreview() {
                   <p className="text-sm font-semibold text-destructive-strong">
                     {unansweredCount} Unanswered Question{unansweredCount === 1 ? '' : 's'}
                   </p>
-                  <p className="tf-meta-strong mb-3">These questions will be submitted without answers.</p>
+                  <p className="tf-meta mb-3">These questions will be submitted without answers.</p>
                 </>
               ) : (
                 <p className="text-sm font-semibold text-success-strong mb-3">All questions answered!</p>
@@ -122,7 +122,7 @@ export default function TmpCompletePreview() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 mb-3">
               {statCards.map(({ key, label, count, Icon, tile, icon, num }) => (
                 <div key={key} className={`rounded-lg border bg-white px-3 py-2 min-w-0 ${tile}`}>
-                  <p className="flex items-center gap-1.5 tf-cell-name leading-snug whitespace-nowrap">
+                  <p className="flex items-center gap-1.5 tf-row-title leading-snug whitespace-nowrap">
                     <Icon className={`w-4 h-4 shrink-0 ${icon}`} aria-hidden />
                     <span><span className={num}>{count}</span> {label}</span>
                   </p>
@@ -133,7 +133,7 @@ export default function TmpCompletePreview() {
             <div className="flex items-start gap-3 p-3 sm:p-4 rounded-xl mb-3 border border-info-line bg-info-subtle">
               <Info className="w-5 h-5 text-info shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <h4 className="tf-subsection-title">What happens next?</h4>
+                <h4 className="tf-row-title">What happens next?</h4>
                 <ul className="mt-1 space-y-0.5 text-sm text-gray-700 list-disc pl-4 marker:text-info">
                   <li>Your answered and draft responses will be submitted.</li>
                   <li>Unanswered questions will be submitted as blank.</li>
@@ -147,7 +147,7 @@ export default function TmpCompletePreview() {
                 <p className="text-sm font-semibold text-destructive-strong">
                   Once submitted, you cannot modify your answers.
                 </p>
-                <p className="tf-card-desc">Please review the summary above before continuing.</p>
+                <p className="tf-body-secondary">Please review the summary above before continuing.</p>
               </div>
             </div>
 

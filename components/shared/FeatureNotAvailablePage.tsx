@@ -46,12 +46,12 @@ export default function FeatureNotAvailablePage({ feature }: FeatureNotAvailable
           <Icon className="w-8 h-8 text-gray-400" />
         </div>
 
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-gray-100 text-gray-600 rounded-full text-xs font-medium mb-4">
+        <div className="tf-badge gap-1.5 bg-gray-100 text-gray-600 mb-4">
           <Lock className="w-3 h-3" />
           Feature Not Available
         </div>
 
-        <h1 className="text-2xl font-semibold text-gray-900 mb-3">
+        <h1 className="tf-page-title mb-3">
           {meta.name}
         </h1>
 

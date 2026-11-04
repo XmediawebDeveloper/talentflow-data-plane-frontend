@@ -47,7 +47,7 @@ export function SectionHeader({
           <Icon className="w-5 h-5" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight break-words">{title}</div>
+          <div className="tf-row-title tracking-tight break-words">{title}</div>
           {subtitle && <p className="tf-meta mt-0.5">{subtitle}</p>}
         </div>
       </div>
@@ -100,11 +100,11 @@ export function SummaryLocation({
   const places = locations?.length ? formatLocationGroups(locations) : splitLocations(value);
 
   if (places.length === 0) {
-    return <span className="text-xs font-semibold text-gray-900 text-right">—</span>;
+    return <span className="tf-caption text-right">—</span>;
   }
 
   if (places.length === 1) {
-    return <span className="text-xs font-semibold text-gray-900 text-right">{places[0]}</span>;
+    return <span className="tf-caption text-right">{places[0]}</span>;
   }
 
   return (

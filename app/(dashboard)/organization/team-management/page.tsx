@@ -50,6 +50,7 @@ import ListPagination from '@/components/ListPagination';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
 
@@ -790,7 +791,7 @@ export default function TeamManagementPage() {
                   }}
                   aria-disabled={!canCreateTeams}
                   title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
-                  className={!canCreateTeams ? 'opacity-60 cursor-not-allowed' : ''}
+                  className={`${(!canCreateTeams ? 'opacity-60 cursor-not-allowed' : '')} disabled:opacity-50`}
                   icon={<Plus className="h-4 w-4" />}
                 >
                   Create Team
@@ -798,7 +799,7 @@ export default function TeamManagementPage() {
               }
             />
 
-            <div className="mb-6 overflow-hidden rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+            <div className="tf-card-soft mb-6 overflow-hidden">
               {/* Mobile / tablet (<lg): one segmented control — the sliding
                   white-tile toggle used across the app (same as the organization
                   tabs above). Equal cells on a fixed grid, so it never scrolls;
@@ -871,12 +872,12 @@ export default function TeamManagementPage() {
                       aria-disabled={!t.enabled}
                       title={!t.enabled ? t.denyMsg : ''}
                       onClick={() => selectInnerTab(t)}
-                      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-medium transition-all ${
+                      className={`tf-tab-line justify-center ${
                         !t.enabled
-                          ? 'cursor-not-allowed border-transparent text-gray-300 opacity-60 dark:text-slate-600'
+                          ? 'tf-tab-line-disabled'
                           : active
-                            ? 'border-brand-blue text-brand-blue'
-                            : 'border-transparent text-gray-600 hover:text-brand-blue dark:text-slate-400'
+                            ? 'tf-tab-line-active'
+                            : ''
                       }`}
                     >
                       <Icon className="h-4 w-4" />
@@ -1033,7 +1034,7 @@ export default function TeamManagementPage() {
                       onCreateTeam={handleOpenCreateModal}
                     />
                   ) : filteredTeams.length === 0 ? (
-                    <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                    <div className="tf-panel">
                       <ListEmptyState icon={Users} isNarrowed query={searchQuery} entityLabel="team" emptyTitle="No teams yet" />
                     </div>
                   ) : displayMode === 'list' ? (
@@ -1050,7 +1051,7 @@ export default function TeamManagementPage() {
                     </FadeIn>
                   ) : (
                     <>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                      <div className="tf-grid-3">
                         {paginatedTeams.map((team, index) => (
                           // Short stagger on first paint / page change; capped so a full page settles fast.
                           <FadeIn key={team.id} delay={Math.min(index, 8) * 0.04} duration={0.4} distance={10} className="h-full">
@@ -1067,58 +1068,60 @@ export default function TeamManagementPage() {
                 {/* Team Members view — every assigned member across all teams.
                     Clicking a member opens their team. */}
                 {listView === 'members' && (
-                  <section className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <section className="overflow-hidden tf-card-soft">
                     {flattenedMembers.length === 0 ? (
                       <div className="px-6 py-16 text-center">
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserCheck className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="tf-card-title max-sm:text-sm">No members found</h3>
-                        <p className="mt-1 tf-body-muted max-sm:text-[13px]">Try a different search query or assign users to a team.</p>
+                        <h3 className="tf-section-title max-sm:text-sm">No members found</h3>
+                        <p className="mt-1 tf-body-muted">Try a different search query or assign users to a team.</p>
                       </div>
                     ) : (
                       <>
                       {/* Phones: one compact row per member. */}
-                      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60 md:hidden">
+                      <MobileRecordList className="p-3">
                         {pagedMembers.map((row) => (
-                          <li key={row.id}>
-                            <button
-                              type="button"
-                              onClick={() => handleViewDetails(row.teamId)}
-                              className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left transition-colors active:bg-brand-blue/[0.04]"
-                            >
-                              <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="sm" />
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate tf-cell-name max-sm:text-[13px]">{row.name}</p>
-                                <p className="truncate tf-meta">{row.email}</p>
-                                <p className="mt-0.5 truncate text-2xs text-gray-400 dark:text-slate-500">
-                                  {row.teamName}
-                                  {row.role && <span className="capitalize"> · {formatRole(row.role)}</span>}
-                                </p>
-                              </div>
-                              {row.isLead && (
-                                <span className="shrink-0 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                          <MobileRecordCard
+                            key={row.id}
+                            onClick={() => handleViewDetails(row.teamId)}
+                            title={
+                              <span className="flex min-w-0 items-center gap-2">
+                                <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="sm" />
+                                <span className="min-w-0 truncate">{row.name}</span>
+                              </span>
+                            }
+                            badges={
+                              row.isLead ? (
+                                <span className="tf-badge shrink-0 bg-brand-orange/10 text-2xs text-brand-orange-deep ring-1 ring-brand-orange/15">
                                   Lead
                                 </span>
-                              )}
-                            </button>
-                          </li>
+                              ) : undefined
+                            }
+                            meta={[
+                              { label: row.email },
+                              { icon: <Users className="h-4 w-4" />, label: row.teamName },
+                            ]}
+                            fields={[
+                              { label: 'Role', value: row.role ? <span className="capitalize">{formatRole(row.role)}</span> : null },
+                            ]}
+                          />
                         ))}
-                      </ul>
-                      <div className="hidden overflow-x-auto tf-table-shell md:block">
+                      </MobileRecordList>
+                      <div className="hidden overflow-x-auto tf-table-shell lg:block">
                         <table className="w-full min-w-[640px]">
                           <thead className="bg-white dark:bg-slate-900">
                             <tr className="text-left">
-                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'name')}>
+                              <th className="tf-th-cell tf-th" aria-sort={ariaSort(memberSort, 'name')}>
                                 <SortableHeader label="Member" column="name" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'team')}>
+                              <th className="tf-th-cell tf-th" aria-sort={ariaSort(memberSort, 'team')}>
                                 <SortableHeader label="Team" column="team" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 tf-th" aria-sort={ariaSort(memberSort, 'role')}>
+                              <th className="tf-th-cell tf-th" aria-sort={ariaSort(memberSort, 'role')}>
                                 <SortableHeader label="Role" column="role" sort={memberSort} />
                               </th>
-                              <th className="px-6 py-4 tf-th text-right" aria-sort={ariaSort(memberSort, 'lead')}>
+                              <th className="tf-th-cell tf-th text-right" aria-sort={ariaSort(memberSort, 'lead')}>
                                 <SortableHeader label="Lead" column="lead" sort={memberSort} align="right" />
                               </th>
                             </tr>
@@ -1131,30 +1134,30 @@ export default function TeamManagementPage() {
                                 title={`Open ${row.teamName}`}
                                 className="cursor-pointer transition-colors hover:bg-brand-blue/[0.04]"
                               >
-                                <td className="px-6 py-4">
+                                <td className="tf-td">
                                   <div className="flex items-center gap-3">
                                     <NameAvatar name={row.name} fallback={row.email} src={row.avatar_url} userId={row.memberId} size="md" />
                                     <div className="min-w-0">
-                                      <p className="tf-cell-name max-sm:text-[13px] truncate">{row.name}</p>
+                                      <p className="tf-row-title truncate">{row.name}</p>
                                       <p className="tf-meta truncate">{row.email}</p>
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-6 py-4 tf-td max-sm:text-[13px]">{row.teamName}</td>
-                                <td className="px-6 py-4 tf-card-desc max-sm:text-[13px]">
+                                <td className="tf-td tf-body">{row.teamName}</td>
+                                <td className="tf-td tf-body-secondary">
                                   {row.role ? (
                                     <span className="capitalize">{formatRole(row.role)}</span>
                                   ) : (
                                     <span className="text-gray-400 dark:text-slate-500">—</span>
                                   )}
                                 </td>
-                                <td className="px-6 py-4 text-right">
+                                <td className="tf-td text-right">
                                   {row.isLead ? (
-                                    <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-3 py-1 text-xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                    <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
                                       Team Lead
                                     </span>
                                   ) : (
-                                    <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                                    <span className="tf-hint">—</span>
                                   )}
                                 </td>
                               </tr>
@@ -1170,16 +1173,16 @@ export default function TeamManagementPage() {
 
                 {/* Unassigned users — active users who belong to no team. */}
                 {listView === 'unassigned' && (
-                  <section className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                  <section className="overflow-hidden tf-card-soft">
                     {filteredUnassigned.length === 0 ? (
                       <div className="px-6 py-16 text-center">
                         <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
                           <UserMinus className="h-6 w-6 text-brand-blue" />
                         </div>
-                        <h3 className="tf-card-title max-sm:text-sm">
+                        <h3 className="tf-section-title max-sm:text-sm">
                           {searchQuery ? 'No matching users' : 'Everyone is in a team'}
                         </h3>
-                        <p className="mt-1 tf-body-muted max-sm:text-[13px]">
+                        <p className="mt-1 tf-body-muted">
                           {searchQuery ? 'Try a different search query.' : 'Every active user already belongs to a team.'}
                         </p>
                       </div>
@@ -1190,11 +1193,11 @@ export default function TeamManagementPage() {
                             <li key={u.id} className="flex items-center gap-2.5 px-3 py-2.5 sm:gap-3 sm:px-6 sm:py-3.5">
                               <NameAvatar name={u.name} fallback={u.email} src={u.avatar_url} userId={u.id} size="md" />
                               <div className="min-w-0 flex-1">
-                                <p className="truncate tf-cell-name max-sm:text-[13px]">{u.name}</p>
+                                <p className="truncate tf-row-title">{u.name}</p>
                                 <p className="truncate tf-meta">{u.email}</p>
                               </div>
                               {u.role && (
-                                <span className="hidden shrink-0 rounded-full bg-gray-100 px-2.5 py-1 text-xs capitalize text-gray-700 dark:bg-slate-800 dark:text-slate-300 sm:inline">
+                                <span className="tf-badge hidden shrink-0 bg-gray-100 capitalize text-gray-700 dark:bg-slate-800 dark:text-slate-300 sm:inline">
                                   {formatRole(u.role)}
                                 </span>
                               )}

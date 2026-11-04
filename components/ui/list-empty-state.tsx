@@ -74,7 +74,7 @@ export default function ListEmptyState({
 
       {isNarrowed ? (
         <>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
+          <h3 className="tf-section-title mb-1">
             No {entityLabel}s match
             {trimmedQuery && (
               <>
@@ -83,15 +83,15 @@ export default function ListEmptyState({
               </>
             )}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-slate-400">
+          <p className="tf-body-muted">
             Try a different search, or clear what you have narrowed by.
           </p>
         </>
       ) : (
         <>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">{emptyTitle}</h3>
+          <h3 className="tf-section-title mb-1">{emptyTitle}</h3>
           {emptyDescription && (
-            <p className="text-sm text-gray-500 dark:text-slate-400">{emptyDescription}</p>
+            <p className="tf-body-muted">{emptyDescription}</p>
           )}
           {action && <div className="mt-4 flex justify-center">{action}</div>}
         </>

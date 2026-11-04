@@ -183,9 +183,9 @@ export default function NotificationsPage() {
   ];
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Notifications' }]} />
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
@@ -213,7 +213,7 @@ export default function NotificationsPage() {
           {unreadCount > 0 && (
             <button
               onClick={handleMarkAllAsRead}
-              className="px-4 py-2 text-sm font-medium bg-brand-blue text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5"
+              className="tf-btn tf-btn-primary px-4 py-2 text-sm bg-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex gap-1.5 whitespace-normal justify-start"
             >
               <Check className="w-4 h-4" />
               Mark All Read
@@ -259,7 +259,7 @@ export default function NotificationsPage() {
       </div>
 
       {/* Notifications List */}
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-10 tf-loader-center">
             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -307,14 +307,14 @@ export default function NotificationsPage() {
                         </div>
                         <span className="tf-meta whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
                       </div>
-                      <p className="tf-card-desc mb-2 line-clamp-2">{notification.message}</p>
+                      <p className="tf-body-secondary mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">
                         {isTenantAdmin && notification.action_label && (
                           <span className="text-xs text-brand-blue font-medium hover:underline">
                             {notification.action_label}
                           </span>
                         )}
-                        <span className="text-xs text-gray-400 capitalize">{notification.category}</span>
+                        <span className="tf-hint capitalize">{notification.category}</span>
                       </div>
                     </div>
 

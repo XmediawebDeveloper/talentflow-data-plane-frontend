@@ -202,7 +202,7 @@ export default function BulkInviteProgressPanel({
 
   if (!job) {
     return (
-      <div className="flex items-center justify-center py-10 tf-card-desc">
+      <div className="flex items-center justify-center py-10 tf-body-secondary">
         {loadError ? loadError : <><Loader2 className="w-4 h-4 animate-spin mr-2 text-brand-blue" /> Loading…</>}
       </div>
     );
@@ -369,7 +369,7 @@ export default function BulkInviteProgressPanel({
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search by candidate name or email"
             aria-label="Search results"
-            className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+            className="tf-input h-auto pl-8 pr-2 py-1.5 text-xs"
           />
         </div>
       </div>

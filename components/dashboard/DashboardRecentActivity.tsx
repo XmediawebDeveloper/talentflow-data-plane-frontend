@@ -54,11 +54,11 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
   return (
     <section
       aria-label="Recent activity"
-      className="flex flex-col rounded-2xl border border-gray-100 bg-white p-5 shadow-sm ring-1 ring-black/[0.02] dark:border-slate-700 dark:bg-slate-900 dark:ring-white/[0.02] sm:p-6"
+      className="tf-card-soft flex flex-col p-5 sm:p-6"
     >
       <header className="mb-5 flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Recent Activity</h2>
+          <h2 className="tf-section-title">Recent Activity</h2>
           <p className="mt-0.5 tf-meta">What&apos;s happened across your workspace.</p>
         </div>
         <Link
@@ -87,7 +87,7 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
           <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
             <Activity className="h-5 w-5" />
           </div>
-          <p className="text-sm font-medium text-gray-700 dark:text-slate-300">No recent activity yet</p>
+          <p className="tf-label">No recent activity yet</p>
           <p className="mt-0.5 max-w-[220px] tf-meta">
             Your team&apos;s actions will show up here as they happen.
           </p>
@@ -110,14 +110,14 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
                   <Icon className={`h-4 w-4 ${iconColor}`} />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-gray-800 dark:text-slate-300">
+                  <p className="truncate tf-body">
                     <span className="font-medium text-gray-900 dark:text-slate-50">{a.user_name || 'System'}</span>
                     <span className="text-gray-500 dark:text-slate-500"> · {a.action_display || a.action}</span>
                   </p>
                   {detailText && (
-                    <p className="truncate text-2xs text-gray-500 dark:text-slate-500">{detailText}</p>
+                    <p className="truncate tf-micro-hint">{detailText}</p>
                   )}
-                  <p className="mt-0.5 text-2xs text-gray-400 dark:text-slate-600">{a.time_ago}</p>
+                  <p className="mt-0.5 tf-micro-hint">{a.time_ago}</p>
                 </div>
               </li>
             );

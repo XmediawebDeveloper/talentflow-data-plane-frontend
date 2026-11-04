@@ -174,7 +174,7 @@ export function SQLQuestionView({
   return (
     <div className="flex gap-4 h-[650px]">
       {/* Left Panel - Problem/Results/Tables */}
-      <div className="w-[45%] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="w-[45%] flex flex-col tf-panel overflow-hidden">
         {/* Tabs */}
         <div className="flex items-center gap-1 p-2 border-b border-gray-200 bg-gray-50">
           <button
@@ -225,7 +225,7 @@ export function SQLQuestionView({
             <div className="p-6 space-y-6">
               {/* Problem Title & Description */}
               <div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-3">
+                <h3 className="tf-section-title mb-3">
                   {question.problem_title || question.question_text}
                 </h3>
                 <div className="prose prose-sm max-w-none text-gray-600">
@@ -236,8 +236,8 @@ export function SQLQuestionView({
               {/* Expected Output Format */}
               {question.output_format && (
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-2 text-sm">Expected Output</h4>
-                  <p className="tf-card-desc bg-gray-50 p-3 rounded-lg">
+                  <h4 className="tf-label mb-2">Expected Output</h4>
+                  <p className="tf-body-secondary bg-gray-50 p-3 rounded-lg">
                     {question.output_format}
                   </p>
                 </div>
@@ -246,8 +246,8 @@ export function SQLQuestionView({
               {/* Hints/Constraints */}
               {question.constraints && question.constraints.length > 0 && (
                 <div>
-                  <h4 className="font-medium text-gray-800 mb-2 text-sm">Hints</h4>
-                  <ul className="text-sm text-gray-600 space-y-1 bg-blue-50 p-3 rounded-lg">
+                  <h4 className="tf-label mb-2">Hints</h4>
+                  <ul className="tf-body-secondary space-y-1 bg-blue-50 p-3 rounded-lg">
                     {question.constraints.map((hint, idx) => (
                       <li key={idx} className="flex items-start gap-2">
                         <span className="text-blue-400">•</span>
@@ -262,7 +262,7 @@ export function SQLQuestionView({
               {question.sample_output && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-gray-800 text-sm">Expected Result</h4>
+                    <h4 className="tf-label">Expected Result</h4>
                     <button
                       onClick={() => copyToClipboard(question.sample_output || '')}
                       className="text-gray-400 hover:text-gray-600 p-1"
@@ -322,7 +322,7 @@ export function SQLQuestionView({
                                 {queryResult.columns?.map((column) => (
                                   <th
                                     key={column}
-                                    className="px-3 py-3 text-left tf-th break-words"
+                                    className="tf-th-cell text-left tf-th break-words"
                                   >
                                     {column}
                                   </th>
@@ -335,7 +335,7 @@ export function SQLQuestionView({
                                   {queryResult.columns?.map((column) => (
                                     <td
                                       key={column}
-                                      className="px-3 py-3 align-top tf-td break-words"
+                                      className="tf-td align-top tf-body break-words"
                                     >
                                       {String(row[column] ?? 'NULL')}
                                     </td>
@@ -427,7 +427,7 @@ export function SQLQuestionView({
           <Button
             onClick={executeQuery}
             disabled={isExecuting}
-            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-1.5 rounded-lg text-sm font-medium items-center gap-2"
           >
             {isExecuting ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -506,7 +506,7 @@ export function SQLQuestionView({
         {/* Note */}
         <div className="px-4 py-3 bg-gray-800 border-t border-gray-700 flex items-start gap-2">
           <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-gray-400">
+          <p className="tf-hint">
             Your query will be evaluated for correctness. Use the Tables tab to view available tables and their structure.
           </p>
         </div>

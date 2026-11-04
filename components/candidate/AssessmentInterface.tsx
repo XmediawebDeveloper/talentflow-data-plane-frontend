@@ -1755,7 +1755,7 @@ export function AssessmentInterface({
 
             {/* Consequence Notice */}
             <div className="bg-gray-100 border border-gray-400 rounded-xl p-4 sm:p-6 mb-5 sm:mb-6">
-              <p className="text-base sm:text-lg font-bold text-gray-900 mb-2 sm:mb-3">
+              <p className="tf-section-title sm:text-lg mb-2 sm:mb-3">
                 Your assessment has been terminated
               </p>
               <p className="tf-body">
@@ -1767,7 +1767,7 @@ export function AssessmentInterface({
             <Button
               variant="primary"
               onClick={handleDisqualificationAcknowledgment}
-              className="w-full bg-destructive hover:bg-destructive text-white py-3 sm:py-4 text-base sm:text-lg font-bold uppercase tracking-wide"
+              className="w-full bg-destructive hover:bg-destructive text-white py-3 sm:py-4 sm:text-lg uppercase tracking-wide"
             >
               I UNDERSTAND
             </Button>
@@ -1835,13 +1835,13 @@ export function AssessmentInterface({
 
             {/* Final Notice */}
             <div className="bg-gray-100 border-2 border-gray-400 rounded-xl p-4">
-              <p className="text-sm text-gray-700 font-semibold">
+              <p className="tf-row-title">
                 Your assessment will be automatically submitted. All answers up to this point have been recorded and will be evaluated.
               </p>
             </div>
 
             {/* Footer Warning */}
-            <p className="tf-meta-strong mt-4">
+            <p className="tf-meta mt-4">
               This incident will be reported to the examiner.
             </p>
           </div>
@@ -1981,7 +1981,7 @@ export function AssessmentInterface({
                   <aside className="lg:w-80 shrink-0 flex flex-col gap-4 lg:sticky lg:top-40 lg:self-start">
                     {/* Camera, then the candidate's details. Side by side on a
                         tablet; stacked on a phone and in the desktop column. */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:flex lg:flex-col">
+                    <div className="tf-grid-2 lg:flex lg:flex-col">
                       {/* A fixed 16:9 preview at every size; the card keeps
                           its natural height so there is no empty frame around it. */}
                       <div className={`${SIDE_CARD} !p-3`}>
@@ -2010,11 +2010,11 @@ export function AssessmentInterface({
                           <User className="w-5 h-5" />
                         </span>
                         <div className="min-w-0">
-                          <p className="text-sm sm:text-base font-semibold text-gray-900 truncate" title={candidateName || undefined}>
+                          <p className="tf-row-title sm:text-base truncate" title={candidateName || undefined}>
                             {candidateName || '-'}
                           </p>
                           {assessmentInfo.candidate_email && (
-                            <p className="mt-0.5 tf-card-desc truncate" title={assessmentInfo.candidate_email}>
+                            <p className="mt-0.5 tf-body-secondary truncate" title={assessmentInfo.candidate_email}>
                               {assessmentInfo.candidate_email}
                             </p>
                           )}
@@ -2029,7 +2029,7 @@ export function AssessmentInterface({
                           <Clock className={`w-5 h-5 ${timerTone}`} />
                         </span>
                         <div className="min-w-0 flex-1">
-                          <p className="tf-card-desc">Time Remaining</p>
+                          <p className="tf-body-secondary">Time Remaining</p>
                           <p className={`text-2xl sm:text-3xl font-bold tabular-nums leading-tight ${timerTone} ${globalTimeRemaining < 300 ? 'animate-pulse' : ''}`}>
                             {formatTime(globalTimeRemaining)}
                           </p>
@@ -2064,11 +2064,11 @@ export function AssessmentInterface({
                       <div className="mt-3.5 grid grid-cols-3 divide-x divide-gray-100">
                         {legend.map((item) => (
                           <div key={item.label} className="min-w-0 px-1 text-center">
-                            <p className="flex items-center justify-center gap-1.5 tf-meta-strong whitespace-nowrap">
+                            <p className="flex items-center justify-center gap-1.5 tf-meta whitespace-nowrap">
                               <span className={`w-2 h-2 rounded-full shrink-0 ${item.dot}`} />
                               {item.label}
                             </p>
-                            <p className="mt-1 text-base sm:text-lg font-bold text-gray-900 tabular-nums">{item.count}</p>
+                            <p className="mt-1 tf-section-title sm:text-lg tabular-nums">{item.count}</p>
                           </div>
                         ))}
                       </div>
@@ -2091,7 +2091,7 @@ export function AssessmentInterface({
                       </div>
                     )}
 
-                    <div className="flex-1 flex flex-col bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+                    <div className="tf-card-soft flex-1 flex flex-col overflow-hidden">
                       {/* Round header */}
                       <div className="px-4 sm:px-5 py-3 sm:py-4 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-3 min-w-0">
@@ -2103,7 +2103,7 @@ export function AssessmentInterface({
                         {currentQuestion.tags.length > 0 && (
                           <div className="flex items-center gap-1 sm:gap-2 flex-wrap justify-end">
                             {currentQuestion.tags.map((tag, idx) => (
-                              <span key={`${tag}-${idx}`} className="px-2 py-1 bg-gray-100 tf-meta-strong rounded-full">
+                              <span key={`${tag}-${idx}`} className="tf-badge bg-gray-100 text-gray-600">
                                 {tag}
                               </span>
                             ))}
@@ -2214,7 +2214,7 @@ export function AssessmentInterface({
                     single line (scrolling sideways rather than wrapping when
                     there are more than fit), a short tip at the end behind a
                     divider. On a phone the tip drops under the numbers. */}
-                <div className="mt-4 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 py-2.5 flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
+                <div className="tf-card-soft mt-4 px-3 sm:px-4 py-2.5 flex flex-col md:flex-row md:items-center gap-2 md:gap-4">
                   <div className="min-w-0 flex-1 overflow-x-auto scrollbar-auto-hide -my-1 py-1 px-0.5">
                     <div className="flex flex-nowrap gap-1.5 w-max">
                       {Array.from({ length: currentQuestion.total_questions }, (_, i) => {
@@ -2353,7 +2353,7 @@ export function AssessmentInterface({
                   <p className="text-sm font-semibold text-destructive-strong">
                     {unansweredCount} Unanswered Question{unansweredCount === 1 ? '' : 's'}
                   </p>
-                  <p className="tf-meta-strong mb-3">These questions will be submitted without answers.</p>
+                  <p className="tf-meta mb-3">These questions will be submitted without answers.</p>
                 </>
               ) : (
                 <p className="text-sm font-semibold text-success-strong mb-3">All questions answered!</p>
@@ -2378,10 +2378,10 @@ export function AssessmentInterface({
             {/* What happens to each status on submit. Three across from `sm`;
                 stacked single-line rows on phones, where three columns would
                 split "12 Unanswered" over two lines. */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 mb-3">
+            <div className="tf-grid-3 mb-3">
               {statCards.map(({ key, label, count, Icon, tile, icon, num }) => (
                 <div key={key} className={`rounded-lg border bg-white px-3 py-2 min-w-0 ${tile}`}>
-                  <p className="flex items-center gap-1.5 tf-cell-name leading-snug whitespace-nowrap">
+                  <p className="flex items-center gap-1.5 tf-row-title leading-snug whitespace-nowrap">
                     <Icon className={`w-4 h-4 shrink-0 ${icon}`} aria-hidden />
                     <span><span className={num}>{count}</span> {label}</span>
                   </p>
@@ -2392,7 +2392,7 @@ export function AssessmentInterface({
             <div className="flex items-start gap-3 p-3 sm:p-4 rounded-xl mb-3 border border-info-line bg-info-subtle">
               <Info className="w-5 h-5 text-info shrink-0 mt-0.5" />
               <div className="min-w-0">
-                <h4 className="tf-subsection-title">What happens next?</h4>
+                <h4 className="tf-row-title">What happens next?</h4>
                 <ul className="mt-1 space-y-0.5 text-sm text-gray-700 list-disc pl-4 marker:text-info">
                   <li>Your answered and draft responses will be submitted.</li>
                   <li>Unanswered questions will be submitted as blank.</li>
@@ -2406,7 +2406,7 @@ export function AssessmentInterface({
                 <p className="text-sm font-semibold text-destructive-strong">
                   Once submitted, you cannot modify your answers.
                 </p>
-                <p className="tf-card-desc">Please review the summary above before continuing.</p>
+                <p className="tf-body-secondary">Please review the summary above before continuing.</p>
               </div>
             </div>
 

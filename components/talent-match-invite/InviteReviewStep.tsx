@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Eye, Loader2, Search } from 'lucide-react';
 import ListPagination from '@/components/ListPagination';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import {
   bulkInviteService,
@@ -174,8 +175,8 @@ export default function InviteReviewStep({
 
   if (data && data.counts.all === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-10 text-center space-y-3">
-        <p className="tf-card-desc">
+      <div className="tf-panel border-dashed px-4 py-10 text-center space-y-3">
+        <p className="tf-body-secondary">
           <b className="font-semibold text-gray-900 dark:text-slate-50">No candidates yet.</b> Go back to add them by typing, uploading a sheet, or picking from your lists.
         </p>
         {onAddCandidates && (
@@ -198,7 +199,7 @@ export default function InviteReviewStep({
             onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search by name or email"
             aria-label="Search selected candidates"
-            className="h-9 w-full pl-8 pr-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+            className="tf-input pl-8 pr-2"
           />
         </label>
         <div role="group" aria-label="Show" className="inline-flex flex-wrap gap-0.5 rounded-lg bg-gray-100 dark:bg-slate-800 p-0.5">
@@ -251,10 +252,10 @@ export default function InviteReviewStep({
             {counts.skipped > 0 && <span className="text-gray-500 dark:text-slate-400"> · {counts.skipped.toLocaleString()} will be skipped</span>}
           </span>
           <span className="flex items-center gap-2">
-            <button type="button" onClick={() => void setAll(true)} disabled={busy || matching === 0} className="h-8 px-2.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
+            <button type="button" onClick={() => void setAll(true)} disabled={busy || matching === 0} className="tf-btn tf-btn-secondary h-8 px-2.5 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 whitespace-normal gap-0">
               Select all {matching.toLocaleString()}
             </button>
-            <button type="button" onClick={() => void setAll(false)} disabled={busy || matching === 0} className="h-8 px-2.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-50">
+            <button type="button" onClick={() => void setAll(false)} disabled={busy || matching === 0} className="tf-btn tf-btn-secondary h-8 px-2.5 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 whitespace-normal gap-0">
               Deselect all {matching.toLocaleString()}
             </button>
             {bulkBusy && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-blue" aria-label="Updating" />}
@@ -274,18 +275,19 @@ export default function InviteReviewStep({
           <button
             type="button"
             onClick={() => { setSearchInput(''); setSearch(''); setGroup(''); setView('all'); setPage(1); }}
-            className="h-8 px-3 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800"
+            className="tf-btn tf-btn-secondary h-8 px-3 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 whitespace-normal gap-0"
           >
             Clear search and filters
           </button>
         </div>
       ) : (
-        <div className="relative overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+        <>
+        <div className={`tf-panel relative overflow-hidden ${DESKTOP_TABLE_ONLY}`}>
           {busy && <div className="absolute inset-0 z-[1] bg-white/50 dark:bg-slate-900/50" aria-hidden="true" />}
           <table className="w-full table-fixed text-sm">
-            <thead className="bg-slate-50 dark:bg-slate-800 text-xs text-gray-500 dark:text-slate-400">
+            <thead className="bg-slate-50 dark:bg-slate-800 tf-meta">
               <tr>
-                <th className="w-10 px-3 py-2 text-left">
+                <th className="tf-th-cell w-10 text-left">
                   <input
                     type="checkbox"
                     checked={pageAllIn}
@@ -296,10 +298,10 @@ export default function InviteReviewStep({
                     className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
                   />
                 </th>
-                <th className="px-3 py-2 text-left font-semibold">Name</th>
-                <th className="hidden md:table-cell px-3 py-2 text-left font-semibold">Email</th>
-                <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>
-                <th className="w-32 sm:w-48 px-3 py-2 text-left font-semibold">Status</th>
+                <th className="tf-th-cell text-left font-semibold">Name</th>
+                <th className="tf-th-cell hidden md:table-cell text-left font-semibold">Email</th>
+                <th className="tf-th-cell hidden md:table-cell w-40 text-left font-semibold">Source</th>
+                <th className="tf-th-cell w-32 sm:w-48 text-left font-semibold">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -313,7 +315,7 @@ export default function InviteReviewStep({
                   onClick={() => { if (!skipped) toggle(r); }}
                   className={`${skipped ? '' : 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800/60'} ${on || skipped ? '' : 'text-gray-400 dark:text-slate-500'}`}
                 >
-                  <td className="px-3 py-2">
+                  <td className="tf-td">
                     <input
                       type="checkbox"
                       checked={on}
@@ -324,7 +326,7 @@ export default function InviteReviewStep({
                       className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
                     />
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="tf-td">
                     <span className="flex items-center gap-1 min-w-0">
                       <span className={`truncate font-medium ${on ? 'text-gray-900 dark:text-slate-50' : ''}`} title={`${r.name}${r.email ? ` · ${r.email}` : ''}`}>{showName(r.name)}</span>
                       {r.resume_id && (
@@ -341,16 +343,16 @@ export default function InviteReviewStep({
                     </span>
                     <span className="block truncate tf-meta md:hidden">{r.email || 'No email'}</span>
                   </td>
-                  <td className="hidden md:table-cell px-3 py-2"><span className="block truncate" title={r.email}>{r.email || '—'}</span></td>
-                  <td className="hidden md:table-cell px-3 py-2">
-                    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.group}>
+                  <td className="tf-td hidden md:table-cell"><span className="block truncate" title={r.email}>{r.email || '—'}</span></td>
+                  <td className="tf-td hidden md:table-cell">
+                    <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint" title={r.group}>
                       <SourceIcon source={src} className="w-3 h-3" />
                       <span className="truncate">{src ? SOURCE_META[src].label : r.group}</span>
                     </span>
                   </td>
-                  <td className="px-3 py-2">
+                  <td className="tf-td">
                     {skipped ? (
-                      <span title={r.reason ?? undefined} className="inline-flex max-w-full items-center rounded-full border border-warning-line bg-warning-subtle px-2 py-0.5 text-2xs font-medium text-warning-strong">
+                      <span title={r.reason ?? undefined} className="tf-badge max-w-full border border-warning-line bg-warning-subtle text-2xs text-warning-strong">
                         <span className="truncate">{r.reason ? `${r.reason} · skipped` : 'Skipped'}</span>
                       </span>
                     ) : on ? (
@@ -365,6 +367,78 @@ export default function InviteReviewStep({
             </tbody>
           </table>
         </div>
+        <div className="relative lg:hidden">
+          {busy && <div className="absolute inset-0 z-[1] bg-white/50 dark:bg-slate-900/50" aria-hidden="true" />}
+          <MobileRecordList>
+            <div className="flex items-center gap-2.5 min-w-0 px-1 pt-1">
+              <input
+                type="checkbox"
+                checked={pageAllIn}
+                disabled={tickable.length === 0 || busy}
+                ref={(el) => { if (el) el.indeterminate = !pageAllIn && tickable.some(isIn); }}
+                onChange={togglePage}
+                aria-label="Select everyone on this page"
+                className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+              />
+              <span className="tf-meta">Select this page</span>
+            </div>
+                  {items.map((r) => {
+                    const src = sourceFromLabel(r.group);
+                    const skipped = r.status === 'skipped';
+                    const on = !skipped && isIn(r);
+                    return (
+                      <MobileRecordCard
+                        key={r.key}
+                        selected={on}
+                        onClick={skipped ? undefined : () => toggle(r)}
+                        className={on || skipped ? '' : 'text-gray-400 dark:text-slate-500'}
+                        select={
+                          <input
+                            type="checkbox"
+                            checked={on}
+                            disabled={skipped}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => toggle(r)}
+                            aria-label={`Select ${r.name}`}
+                            className="m-0 rounded border-gray-300 cursor-pointer disabled:cursor-not-allowed"
+                          />
+                        }
+                        badges={
+                          <>
+                            <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint" title={r.group}>
+                              <SourceIcon source={src} className="w-3 h-3" />
+                              <span className="truncate">{src ? SOURCE_META[src].label : r.group}</span>
+                            </span>
+                            {skipped ? (
+                              <span title={r.reason ?? undefined} className="tf-badge max-w-full border border-warning-line bg-warning-subtle text-2xs text-warning-strong">
+                                <span className="truncate">{r.reason ? `${r.reason} · skipped` : 'Skipped'}</span>
+                              </span>
+                            ) : on ? (
+                              <span className="text-xs font-medium text-success-strong">Will be invited</span>
+                            ) : (
+                              <span className="text-xs">Not selected</span>
+                            )}
+                          </>
+                        }
+                        title={<span className={`truncate ${on ? 'text-gray-900 dark:text-slate-50' : ''}`} title={`${r.name}${r.email ? ` · ${r.email}` : ''}`}>{showName(r.name)}</span>}
+                        actions={r.resume_id ? (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); setPreviewing(r); onOverlayChange?.(closePreview); }}
+                            aria-label={`View resume of ${r.name}`}
+                            title="View resume"
+                            className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10"
+                          >
+                            <Eye className="w-3.5 h-3.5" aria-hidden="true" />
+                          </button>
+                        ) : undefined}
+                        fields={[{ label: 'Email', value: <span className="break-all" title={r.email}>{r.email || 'No email'}</span> }]}
+                      />
+                    );
+                  })}
+          </MobileRecordList>
+        </div>
+        </>
       )}
 
       {data && data.total > 0 && (

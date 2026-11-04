@@ -11,13 +11,13 @@ interface OverallSummaryProps {
 export function OverallSummary({ finalScore, mustHaveScore, niceToHaveScore }: OverallSummaryProps) {
   const strong = mustHaveScore >= 7;
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
+    <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <h2 className="text-3xl font-bold mb-2">Evaluation Summary</h2>
+          <h2 className="text-xl sm:text-3xl font-bold mb-2">Evaluation Summary</h2>
           <p className="text-gray-500 mb-8">Comprehensive assessment of candidate performance</p>
 
-          <div className="grid grid-cols-2 gap-6 mb-8">
+          <div className="tf-grid-2 mb-6 sm:mb-8">
             <div className="p-5 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
               <div className="text-xs text-emerald-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>
                 Must-Have Skills

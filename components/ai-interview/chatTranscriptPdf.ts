@@ -178,8 +178,9 @@ export async function downloadChatTranscriptPdf(data: ChatPdfData, filename: str
       html2canvas: { scale: 2, backgroundColor: '#ffffff' },
       jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       // Keep each message whole on a page (a bubble taller than a page still splits).
+      // html2pdf supports `pagebreak`; its bundled types leave it out (as in pdfInvoice.ts).
       pagebreak: { mode: ['css'], avoid: '.chat-msg' },
-    }).from(root).save();
+    } as NonNullable<Parameters<typeof html2pdf>[1]>).from(root).save();
   } finally {
     document.body.removeChild(root);
     baselineFix.remove();

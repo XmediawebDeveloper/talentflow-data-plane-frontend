@@ -59,7 +59,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
     // Compact skeleton mirrors the compact card: icon + "users" label, then a thin usage bar.
     if (compact) {
       return (
-        <div className="p-2.5 sm:p-3 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="tf-card-soft p-2.5 sm:p-3">
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
               <Skeleton className="w-7 h-7 rounded-lg flex-shrink-0" />
@@ -74,7 +74,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
     }
     // Full skeleton mirrors the full card: icon + title/plan, right-side count, then usage progress bar.
     return (
-      <div className="p-4 sm:p-5 rounded-xl border border-gray-200 bg-white shadow-sm">
+      <div className="tf-card-soft p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <Skeleton className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex-shrink-0" />
@@ -131,7 +131,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               }`}>
                 <Users className="w-3.5 h-3.5 text-white" />
               </div>
-              <span className="text-sm max-sm:text-[13px] font-medium text-gray-800 truncate">
+              <span className="tf-label truncate">
                 {limits.current_users}/{limits.max_users === -1 ? '∞' : limits.max_users} users
               </span>
             </div>
@@ -195,7 +195,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="tf-card-title max-sm:text-sm">User Seats</h3>
+              <h3 className="tf-section-title max-sm:text-sm">User Seats</h3>
               {limits.is_at_limit ? (
                 <Badge variant="destructive">At limit</Badge>
               ) : limits.approaching_limit ? (
@@ -213,7 +213,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
         <div className="text-right flex-shrink-0">
           <div className="text-xl max-sm:text-lg font-bold text-gray-900">
             {limits.current_users}
-            <span className="text-sm max-sm:text-[13px] text-gray-400">/{limits.max_users}</span>
+            <span className="tf-body-muted">/{limits.max_users}</span>
           </div>
           <p className="tf-meta">
             {limits.available_slots} available
@@ -223,7 +223,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
       {/* Progress bar */}
       <div className="mt-4">
-        <div className="flex items-center justify-between text-sm max-sm:text-[13px] mb-1.5">
+        <div className="flex items-center justify-between text-sm mb-1.5">
           <span className="text-gray-500">Usage</span>
           <span className={`font-semibold ${
             limits.is_at_limit ? 'text-destructive' : limits.approaching_limit ? 'text-brand-orange-deep' : 'text-brand-blue'
@@ -246,8 +246,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm max-sm:text-[13px] font-semibold text-destructive-strong">User limit reached</p>
-            <p className="text-sm max-sm:text-[13px] text-destructive mt-0.5">
+            <p className="text-sm font-semibold text-destructive-strong">User limit reached</p>
+            <p className="text-sm text-destructive mt-0.5">
               {isTrial
                 ? 'Purchasing additional seats is only available for paid subscriptions. Please upgrade your plan.'
                 : 'You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.'}
@@ -290,8 +290,8 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <Info className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm max-sm:text-[13px] font-semibold text-brand-orange-deep">Approaching user limit</p>
-            <p className="tf-card-desc max-sm:text-[13px] mt-0.5">
+            <p className="text-sm font-semibold text-brand-orange-deep">Approaching user limit</p>
+            <p className="tf-body-secondary mt-0.5">
               Only {limits.available_slots} user slot{limits.available_slots !== 1 ? 's' : ''} remaining.
               Consider adding more seats or upgrading your plan.
             </p>

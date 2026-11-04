@@ -3,7 +3,7 @@
 import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, Search, Trash2, Download, FileArchive, Users, Info } from 'lucide-react';
+import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -33,16 +33,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
+import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures, usePlanLock } from '@/lib/hooks/usePlanFeature';
@@ -368,7 +359,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     setSelectedResumes(selected ? resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id) : []);
   };
 
-  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[] } | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; names: string[] } | null>(null);
 
   const executeDelete = async (ids: string[]) => {
     try {
@@ -381,12 +372,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     }
   };
 
+  const resumeName = (id: string) => {
+    const r = resumes.find(r => r.id === id);
+    return r?.candidate_name || r?.file_name || 'this resume';
+  };
+
   const handleDelete = (id: string) => {
-    setDeleteConfirm({ ids: [id] });
+    setDeleteConfirm({ ids: [id], names: [resumeName(id)] });
   };
 
   const handleDeleteResumes = (ids: string[]) => {
-    setDeleteConfirm({ ids });
+    setDeleteConfirm({ ids, names: ids.map(resumeName) });
   };
 
   // Returns a result because UploadModal's onUpload contract is
@@ -1052,9 +1048,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     // and a table skeleton that mirrors ResumeTable's real columns — so the
     // placeholder lines up with the content that replaces it, not a generic block.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             {/* Breadcrumb + tab strip — rendered for real even while the list
                 loads, so switching tabs stays possible and nothing shifts. */}
             {header}
@@ -1070,7 +1066,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               </div>
             </div>
             {/* Search + table card */}
-            <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges overflow-hidden">
+            <div className="tf-card tf-round-edges overflow-hidden">
               <div className="p-3 flex gap-2 items-center border-b border-gray-200">
                 <Skeleton className="h-9 flex-1 rounded-lg" />
                 <Skeleton className="h-9 w-24 rounded-lg" />
@@ -1087,9 +1083,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {header}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-start gap-3">
@@ -1099,7 +1095,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <h1 className="tf-page-title">Shared Resume Database</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
+              <span className="tf-badge bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {/* The same rows the table lists (search applied). The
                     versions note is a server total for the whole list, so it
                     only shows while no search is narrowing it. */}
@@ -1109,7 +1105,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 )}
               </span>
             </div>
-            <p className="tf-card-desc">
+            <p className="tf-body-secondary">
               Search and filter resumes shared across your organization
             </p>
           </div>
@@ -1359,47 +1355,17 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         />
       )}
       {/* Delete Resume Confirmation Dialog */}
-      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => { if (!open) setDeleteConfirm(null); }}>
-        <AlertDialogContent className="sm:max-w-lg" hideClose>
-          <AlertDialogHeader>
-            <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
-                <Trash2 className="h-6 w-6 text-red-600" />
-              </div>
-              <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-2xl font-bold text-gray-900">
-                  Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? `${deleteConfirm.ids.length} Resumes` : 'Resume'}
-                </AlertDialogTitle>
-              </div>
-            </div>
-            <AlertDialogDescription asChild>
-              <p className="mt-2 tf-body">
-                {deleteConfirm && deleteConfirm.ids.length > 1
-                  ? <>Are you sure you want to delete <span className="font-semibold text-gray-900">{deleteConfirm.ids.length} resumes</span>? Once deleted, they will be permanently removed and cannot be recovered.</>
-                  : 'Are you sure you want to delete this resume? Once deleted, the resume will be permanently removed and cannot be recovered.'
-                }
-              </p>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel onClick={() => setDeleteConfirm(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              className="gap-2 bg-red-600 text-white hover:bg-red-700"
-              onClick={() => {
-                if (deleteConfirm) {
-                  executeDelete(deleteConfirm.ids);
-                  setDeleteConfirm(null);
-                }
-              }}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete {deleteConfirm && deleteConfirm.ids.length > 1 ? 'Resumes' : 'Resume'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <DeleteResumeDialog
+        open={!!deleteConfirm}
+        names={deleteConfirm?.names ?? []}
+        onCancel={() => setDeleteConfirm(null)}
+        onConfirm={() => {
+          if (deleteConfirm) {
+            executeDelete(deleteConfirm.ids);
+            setDeleteConfirm(null);
+          }
+        }}
+      />
 
       {/* ZIP Download Confirmation Modal */}
       {isZipDownloadModalOpen && (
@@ -1433,7 +1399,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 <div className="min-w-0">
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
                   <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
@@ -1456,14 +1422,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 <button
                   onClick={() => setIsZipDownloadModalOpen(false)}
                   disabled={isDownloadingSelection}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingSelection}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isDownloadingSelection ? (
                     <>

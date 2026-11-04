@@ -332,18 +332,18 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   };
 
   return (
-    <div className="flex-1 p-4 sm:p-8 overflow-y-auto bg-slate-50">
+    <div className="tf-page tf-page-pad overflow-y-auto">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <Button variant="secondary" size="sm" onClick={onBack} aria-label="Back" className="px-2">
+          <Button variant="secondary" size="sm" onClick={onBack} aria-label="Back">
             <ArrowLeft className="w-5 h-5" />
           </Button>
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
           <div>
-            <h1 className="text-gray-900 text-xl font-semibold tracking-tight">AI Interview Configuration</h1>
+            <h1 className="tf-page-title">AI Interview Configuration</h1>
             <p className="tf-body-muted">
               {step === 'select-jd' && 'Step 1: Select a published Job Description'}
               {step === 'configure' && 'Step 2: Configure interview rounds'}
@@ -383,7 +383,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 placeholder="Search job descriptions..."
                 value={jdSearch}
                 onChange={e => setJdSearch(e.target.value)}
-                className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                className="tf-input w-auto flex-1 px-4"
               />
               <Button
                 variant="primary"
@@ -401,7 +401,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 {Array.from({ length: 5 }).map((_, i) => (
                   <div
                     key={i}
-                    className="p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5"
+                    className="p-5 tf-card-soft"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -427,10 +427,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 ))}
               </div>
             ) : filteredJds.length === 0 ? (
-              <div className="text-center py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="text-center py-16 tf-card-soft">
                 <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-gray-500 mb-2">No published job descriptions found</p>
-                <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
+                <p className="tf-body-muted mb-4">Create and publish a JD first to configure an AI interview</p>
                 <Button variant="primary" size="md" onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')} icon={<Plus className="w-4 h-4" />}>
                   Create Job Description
                 </Button>
@@ -441,13 +441,13 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   <button
                     key={jd.id}
                     onClick={() => handleSelectJd(jd)}
-                    className="w-full text-left p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/40 hover:ring-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                    className="w-full text-left p-5 tf-card-soft hover:border-brand-blue/40 hover:ring-brand-blue/20 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <h3 className="font-semibold tracking-tight text-gray-900 truncate min-w-0" title={jd.title}>{jd.title}</h3>
-                          <span className="px-2 py-0.5 text-xs bg-success-subtle text-success rounded-full">Published</span>
+                          <span className="tf-badge bg-success-subtle text-success">Published</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1.5 tf-body-muted">
                           {jd.department && <span>{jd.department}</span>}
@@ -463,12 +463,12 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         {jd.must_have_skills.length > 0 && (
                           <div className="flex flex-wrap gap-1.5 mt-2">
                             {jd.must_have_skills.slice(0, 6).map(skill => (
-                              <span key={skill} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-xs rounded-full ring-1 ring-brand-blue/20">
+                              <span key={skill} className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                                 {skill}
                               </span>
                             ))}
                             {jd.must_have_skills.length > 6 && (
-                              <span className="text-xs text-gray-400">+{jd.must_have_skills.length - 6} more</span>
+                              <span className="tf-hint">+{jd.must_have_skills.length - 6} more</span>
                             )}
                           </div>
                         )}
@@ -484,11 +484,11 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
         {/* Step 2: Configure Rounds */}
         {step === 'configure' && selectedJd && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="tf-grid-3">
             {/* Left column: Round configuration */}
             <div className="space-y-4 lg:col-span-2">
               {/* Selected JD info */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <div className="tf-card-soft p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="tf-meta mb-1">Selected Job Description</div>
@@ -496,7 +496,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     {selectedJd.must_have_skills.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {selectedJd.must_have_skills.slice(0, 5).map(s => (
-                          <span key={s} className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue text-xs rounded-full ring-1 ring-brand-blue/20">{s}</span>
+                          <span key={s} className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{s}</span>
                         ))}
                       </div>
                     )}
@@ -535,7 +535,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 <Icon className="w-4 h-4" />
                               </div>
                               <span className="font-medium text-gray-900">{info?.label || round.type}</span>
-                              <span className="text-xs text-gray-400">Round {round.order}</span>
+                              <span className="tf-hint">Round {round.order}</span>
                             </div>
                             {rounds.length > 1 && (
                               <button
@@ -552,8 +552,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                               {/* Percentage Weight */}
                               <div className="mb-3">
                                 <div className="flex items-center justify-between mb-1">
-                                  <label className="text-xs text-gray-500">Percentage Weight</label>
-                                  <span className="text-xs text-gray-400">{getRoundDuration(round.percentage)} min</span>
+                                  <label className="tf-meta">Percentage Weight</label>
+                                  <span className="tf-hint">{getRoundDuration(round.percentage)} min</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <input
@@ -575,7 +575,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                               {/* Skills / Topics */}
                               <div>
                                 <div className="flex items-center justify-between mb-1.5">
-                                  <label className="text-xs text-gray-500">
+                                  <label className="tf-meta">
                                     Skills
                                     {round.topics.length > 0 && (
                                       <span className="ml-1 text-gray-400">({round.topics.length})</span>
@@ -620,7 +620,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                       return (
                                         <div key={topic} className="px-3 py-2">
                                           <div className="flex items-center gap-2">
-                                            <span className="text-xs text-gray-700 flex-1 min-w-0 truncate" title={topic}>{topic}</span>
+                                            <span className="tf-meta flex-1 min-w-0 truncate" title={topic}>{topic}</span>
                                             <div className="flex items-center gap-1.5 flex-shrink-0">
                                               <input
                                                 type="number"
@@ -633,7 +633,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                 }`}
                                               />
                                               <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-destructive' : 'text-gray-400'}`}>%</span>
-                                              <span className="text-xs text-gray-400 w-14 text-right">{skillTime} min</span>
+                                              <span className="tf-hint w-14 text-right">{skillTime} min</span>
                                               <button
                                                 onClick={() => toggleComment(round.type, topic)}
                                                 className={`p-0.5 rounded transition-colors ${
@@ -674,7 +674,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 {/* Suggested topics */}
                                 {round.suggestedTopics.length > 0 && (
                                   <div className="mb-2">
-                                    <div className="text-xs text-gray-400 mb-1">Suggestions (click to add):</div>
+                                    <div className="tf-hint mb-1">Suggestions (click to add):</div>
                                     <div className="flex flex-wrap gap-1">
                                       {round.suggestedTopics
                                         .filter(st => !round.topics.includes(st))
@@ -756,13 +756,13 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
               {/* Special Instructions */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Special Instructions</label>
+                <label className="block tf-row-name mb-2">Special Instructions</label>
                 <textarea
                   rows={3}
                   placeholder="e.g., Focus on system design skills. Candidate has 5 years of experience in microservices."
                   value={specialInstructions}
                   onChange={e => setSpecialInstructions(e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none"
+                  className="tf-textarea resize-none"
                 />
               </div>
 
@@ -772,14 +772,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   type="checkbox"
                   checked={recordingEnabled}
                   onChange={e => setRecordingEnabled(e.target.checked)}
-                  className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                  className="tf-checkbox focus:ring-brand-blue/40"
                 />
                 <span className="tf-body">Auto-record interview</span>
               </label>
 
               {/* Introduction Video (Optional) */}
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
+                <label className="block tf-row-name mb-2">
                   <div className="flex items-center gap-2">
                     <Video className="w-4 h-4" />
                     Introduction Video
@@ -790,9 +790,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   <div className="flex items-center gap-3 p-3 bg-brand-blue/5 border border-brand-blue/20 ring-1 ring-brand-blue/20 rounded-lg">
                     <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
+                      <p className="tf-body truncate">{introVideoFile?.name || 'Uploaded video'}</p>
                       {introVideoFile && (
-                        <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
+                        <p className="tf-hint">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                       )}
                     </div>
                     {uploadingVideo ? (
@@ -806,7 +806,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 ) : (
                   <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-brand-blue/30 rounded-lg cursor-pointer hover:border-brand-blue hover:bg-brand-blue/5 transition-colors">
                     <Upload className="w-4 h-4 text-brand-blue" />
-                    <span className="tf-card-desc">Click to upload an introduction video</span>
+                    <span className="tf-body-secondary">Click to upload an introduction video</span>
                     <input
                       type="file"
                       accept="video/*"
@@ -818,7 +818,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     />
                   </label>
                 )}
-                <p className="text-xs text-gray-400 mt-1">
+                <p className="tf-hint mt-1">
                   Candidates will see this video before the interview starts
                 </p>
               </div>
@@ -827,7 +827,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             {/* Right column: Summary sidebar */}
             <div className="space-y-4">
               {/* Interview Duration - Slider */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
+              <div className="tf-card-soft p-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Clock className="w-4 h-4 text-brand-blue" />
                   <h3 className="font-semibold tracking-tight text-gray-900">Interview Duration</h3>
@@ -853,16 +853,16 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                         const v = parseInt(e.target.value);
                         if (v >= 15 && v <= 90) setTotalDuration(v);
                       }}
-                      className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-center text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                      className="w-14 px-2 py-1.5 border border-gray-200 rounded-lg text-center tf-body focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
                     <span className="tf-body-muted">min</span>
                   </div>
                 </div>
-                <p className="text-xs text-gray-400 mt-2">Time is split across rounds based on percentage</p>
+                <p className="tf-hint mt-2">Time is split across rounds based on percentage</p>
               </div>
 
               {/* Summary */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-8">
+              <div className="tf-card-soft p-4 sticky top-8">
                 <h3 className="font-semibold tracking-tight text-gray-900 mb-3">Interview Summary</h3>
 
                 <div className="space-y-3 text-sm">
@@ -899,8 +899,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                       return (
                         <div key={r.type} className="py-1.5">
                           <div className="flex items-center justify-between">
-                            <span className="tf-meta-strong">{info?.label || r.type}</span>
-                            <span className="text-xs font-medium text-gray-900">{r.percentage}% &rarr; {roundMin} min</span>
+                            <span className="tf-meta">{info?.label || r.type}</span>
+                            <span className="tf-caption">{r.percentage}% &rarr; {roundMin} min</span>
                           </div>
                           {r.topics.length > 0 && (
                             <div className="mt-0.5 ml-2 space-y-0.5">
@@ -908,14 +908,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 const w = r.topicWeights[t] || 0;
                                 const tMin = ((w / 100) * roundMin).toFixed(1);
                                 return (
-                                  <div key={t} className="flex items-center justify-between text-2xs text-gray-400">
+                                  <div key={t} className="flex items-center justify-between tf-micro-hint">
                                     <span className="truncate max-w-[120px]">{t}</span>
                                     <span>{w}% / {tMin}m</span>
                                   </div>
                                 );
                               })}
                               {r.topics.length > 3 && (
-                                <div className="text-2xs text-gray-400">+{r.topics.length - 3} more skills</div>
+                                <div className="tf-micro-hint">+{r.topics.length - 3} more skills</div>
                               )}
                             </div>
                           )}

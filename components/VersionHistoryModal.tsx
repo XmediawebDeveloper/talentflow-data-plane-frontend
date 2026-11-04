@@ -145,10 +145,10 @@ export default function VersionHistoryModal({
               {comparison ? <GitCompare className="w-5 h-5 text-brand-blue" /> : <History className="w-5 h-5 text-brand-blue" />}
             </div>
             <div>
-              <h2 className="tf-section-title">
+              <h2 className="tf-section-title sm:text-lg">
                 {comparison ? 'Compare Versions' : 'Version History'}
               </h2>
-              <p className="tf-card-desc mt-0.5">
+              <p className="tf-body-secondary mt-0.5">
                 {comparison
                   ? `${displayTitle} • ${labelForVersion(selectedIds[0])} vs ${labelForVersion(selectedIds[1])}`
                   : `${displayTitle} • ${sortedVersions.length} version${sortedVersions.length !== 1 ? 's' : ''}`}
@@ -166,7 +166,7 @@ export default function VersionHistoryModal({
         {comparison ? (
           /* ---- Comparison view ------------------------------------------ */
           <div className="flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="grid grid-cols-[1fr_1fr] gap-2 sm:gap-3 mb-4 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400">
+            <div className="grid grid-cols-[1fr_1fr] gap-2 sm:gap-3 mb-4 tf-eyebrow tracking-wider">
               <span>Older · {labelForVersion(comparison.older.id)}</span>
               <span>Newer · {labelForVersion(comparison.newer.id)}</span>
             </div>
@@ -183,7 +183,7 @@ export default function VersionHistoryModal({
                       changed ? 'bg-brand-orange/[0.06]' : ''
                     }`}
                   >
-                    <p className="text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-1">
+                    <p className="tf-micro-hint uppercase tracking-wider mb-1">
                       {field.label}
                       {changed && (
                         <span className="ml-2 normal-case tracking-normal text-brand-orange-deep">changed</span>
@@ -205,7 +205,7 @@ export default function VersionHistoryModal({
             {/* Skills read as a set, not a string — added and dropped is the
                 useful shape, rather than two long lists side by side. */}
             <div className="mt-4 rounded-xl border border-gray-100 dark:border-slate-700/60 p-3">
-              <p className="text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
+              <p className="tf-micro-hint uppercase tracking-wider mb-2">
                 Skills
               </p>
               {addedSkills.length === 0 && removedSkills.length === 0 ? (
@@ -213,12 +213,12 @@ export default function VersionHistoryModal({
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {addedSkills.map((s) => (
-                    <span key={`add-${s}`} className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200">
+                    <span key={`add-${s}`} className="tf-badge bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
                       + {s}
                     </span>
                   ))}
                   {removedSkills.map((s) => (
-                    <span key={`del-${s}`} className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-0.5 text-xs font-medium text-red-700 ring-1 ring-red-200 line-through">
+                    <span key={`del-${s}`} className="tf-badge bg-red-50 text-red-700 ring-1 ring-red-200 line-through">
                       {s}
                     </span>
                   ))}
@@ -276,7 +276,7 @@ export default function VersionHistoryModal({
                               type="checkbox"
                               checked={selectedIds.includes(version.id)}
                               onChange={() => toggleSelected(version.id)}
-                              className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                              className="tf-checkbox focus:ring-brand-blue/40"
                               aria-label={`Select ${version.version ? `v${version.version}` : version.name} to compare`}
                             />
                           )}
@@ -290,11 +290,11 @@ export default function VersionHistoryModal({
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               {version.version && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 flex-shrink-0 tabular-nums">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded tf-caption bg-gray-100 dark:bg-slate-800 flex-shrink-0 tabular-nums">
                                   v{version.version}
                                 </span>
                               )}
-                              <h3 className="text-sm text-gray-900 dark:text-slate-50 truncate">
+                              <h3 className="tf-body truncate">
                                 {version.name}
                               </h3>
                               {index === 0 && (
@@ -303,7 +303,7 @@ export default function VersionHistoryModal({
                                 </span>
                               )}
                             </div>
-                            <div className="flex items-center gap-3 tf-meta-strong">
+                            <div className="flex items-center gap-3 tf-meta">
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 {formatIST(version.uploadDate || version.date || version.timestamp)}
@@ -385,7 +385,7 @@ export default function VersionHistoryModal({
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-3 border-t border-gray-100 dark:border-slate-700/60">
                         <div className="flex items-center gap-2 min-w-0">
                           <User className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500 flex-shrink-0" />
-                          <span className="tf-meta-strong truncate">
+                          <span className="tf-meta truncate">
                             Uploaded by <span className="text-gray-900 dark:text-slate-50">{version.uploadedBy}</span>
                           </span>
                         </div>
@@ -414,7 +414,7 @@ export default function VersionHistoryModal({
               Back to versions
             </button>
           ) : (
-            <div className="flex items-center gap-2 min-w-0 tf-card-desc">
+            <div className="flex items-center gap-2 min-w-0 tf-body-secondary">
               <FileText className="w-4 h-4 flex-shrink-0" />
               <span className="truncate">
                 {isJobVersion
@@ -431,7 +431,7 @@ export default function VersionHistoryModal({
               <button
                 onClick={handleCompare}
                 disabled={selectedIds.length !== 2 || isComparing}
-                className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-lg transition-colors bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none disabled:ring-0 disabled:cursor-not-allowed"
+                className="tf-btn tf-btn-primary gap-1.5 px-4 py-2 text-sm transition-colors bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:bg-gray-200 disabled:text-gray-500 disabled:shadow-none disabled:ring-0 whitespace-normal justify-start"
               >
                 {isComparing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GitCompare className="w-4 h-4" />}
                 Compare

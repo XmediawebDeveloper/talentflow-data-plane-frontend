@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { History, Loader2 } from 'lucide-react';
+import { Clock, History, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 
 /** How many timeline events a results row shows before "View History" —
@@ -79,15 +80,15 @@ export function TimelineHistoryDialog({
   rows?.forEach((r, i) => { if (r.isStatus) currentIndex = i; });
   const statusCell = (row: TimelineHistoryRow, i: number) =>
     i === currentIndex ? (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+      <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
         Current status
       </span>
     ) : row.isStatus ? (
-      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium whitespace-nowrap bg-gray-50 text-gray-600 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700">
+      <span className="tf-badge tf-micro-hint bg-gray-50 ring-1 ring-gray-200 dark:bg-slate-800 dark:ring-slate-700">
         Previous status
       </span>
     ) : (
-      <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Activity</span>
+      <span className="tf-meta whitespace-nowrap">Activity</span>
     );
   const details = (row: TimelineHistoryRow) => (
     <>
@@ -112,7 +113,7 @@ export function TimelineHistoryDialog({
           </div>
           <div className="min-w-0">
             <h3 id="timeline-history-title" className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 tracking-tight">Timeline History</h3>
-            <p className="text-sm text-gray-500 dark:text-slate-400 mt-0.5 truncate" title={[candidateName, candidateEmail].filter(Boolean).join(' · ')}>
+            <p className="tf-body-muted mt-0.5 truncate" title={[candidateName, candidateEmail].filter(Boolean).join(' · ')}>
               {candidateName || 'Candidate'}
               {candidateEmail && <span className="text-gray-400 dark:text-slate-500"> · {candidateEmail}</span>}
             </p>
@@ -129,44 +130,47 @@ export function TimelineHistoryDialog({
           ) : rows && rows.length > 0 ? (
             <>
               {/* Phones: one card per event. */}
-              <ol className="sm:hidden space-y-2">
+              <MobileRecordList>
                 {rows.map((row, i) => (
-                  <li key={`${row.label}-${row.at}-${i}`} className={`rounded-lg border p-3 ${i === currentIndex ? 'border-brand-blue/30 bg-brand-blue/5' : 'border-gray-200 dark:border-slate-700'}`}>
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`flex min-w-0 items-center gap-2 text-sm font-medium ${row.tone}`}>
+                  <MobileRecordCard
+                    key={`${row.label}-${row.at}-${i}`}
+                    selected={i === currentIndex}
+                    title={
+                      <span className={`flex min-w-0 items-center gap-2 ${row.tone}`}>
                         <row.Icon className="w-3.5 h-3.5 shrink-0" />
-                        <span className="truncate">{row.label}</span>
+                        <span className="min-w-0 break-words">{row.label}</span>
                       </span>
-                      <span className="shrink-0">{statusCell(row, i)}</span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-slate-400">{formatIST(row.at)}</p>
-                    <div className="mt-1 text-xs text-gray-700 dark:text-slate-300">{details(row)}</div>
-                  </li>
+                    }
+                    badges={<span className="shrink-0">{statusCell(row, i)}</span>}
+                    meta={[{ icon: <Clock />, label: formatIST(row.at) }]}
+                  >
+                    <div className="mt-2 tf-meta">{details(row)}</div>
+                  </MobileRecordCard>
                 ))}
-              </ol>
+              </MobileRecordList>
 
               {/* Tablet and up: the table. */}
-              <div className="hidden sm:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
+              <div className="hidden lg:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
                 <table className="w-full text-sm">
                   <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                     <tr>
                       {['Event', 'Date & Time', 'Status', 'Details'].map((h) => (
-                        <th key={h} className="text-left px-3 py-2.5 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap">{h}</th>
+                        <th key={h} className="tf-th-cell text-left tf-th">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
                     {rows.map((row, i) => (
                       <tr key={`${row.label}-${row.at}-${i}`} className={i === currentIndex ? 'bg-brand-blue/5' : ''}>
-                        <td className="px-3 py-2.5 align-top">
+                        <td className="tf-td align-top">
                           <span className={`flex items-center gap-2 font-medium whitespace-nowrap ${row.tone}`}>
                             <row.Icon className="w-3.5 h-3.5 shrink-0" />
                             {row.label}
                           </span>
                         </td>
-                        <td className="px-3 py-2.5 align-top text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">{formatIST(row.at)}</td>
-                        <td className="px-3 py-2.5 align-top">{statusCell(row, i)}</td>
-                        <td className="px-3 py-2.5 align-top text-xs text-gray-700 dark:text-slate-300 min-w-[10rem]">{details(row)}</td>
+                        <td className="tf-td align-top tf-meta whitespace-nowrap">{formatIST(row.at)}</td>
+                        <td className="tf-td align-top">{statusCell(row, i)}</td>
+                        <td className="tf-td align-top tf-meta min-w-[10rem]">{details(row)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -174,7 +178,7 @@ export function TimelineHistoryDialog({
               </div>
             </>
           ) : (
-            <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+            <p className="tf-body-muted py-6 text-center">No history recorded yet.</p>
           )}
         </div>
 

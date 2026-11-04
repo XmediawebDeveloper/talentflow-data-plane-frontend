@@ -154,7 +154,12 @@ const LIP_MORPHS = [
 
 /** Same URL TalkingHead resolves (`./playback-worklet.js` next to the module),
  *  so its own lazy addModule is a cached no-op if it ever runs. */
-const PLAYBACK_WORKLET_URL = "/talkinghead/playback-worklet.js";
+// `?v=` busts the 1-day browser/CDN cache of /talkinghead/* — bump it whenever
+// playback-worklet.js changes. Without it a returning browser kept the OLD
+// worklet (no speech clock) for a day: staging 2026-11-03, every turn ran on
+// legacy pacing. TalkingHead skips its own (unversioned) addModule once this
+// preload has registered the processor (head.workletLoaded).
+const PLAYBACK_WORKLET_URL = "/talkinghead/playback-worklet.js?v=20261103";
 const workletPreloads = new WeakMap<AudioContext, Promise<boolean>>();
 
 /** Register the playback worklet on `ctx` once (shared by StrictMode's double
@@ -300,14 +305,16 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         // slow start uses legacy pacing for THIS turn only.
         return performance.now() - begun > 6000 ? null : "hold";
       }
-      // Marked, no answer yet. A worklet without clock support (old cached
-      // file) never answers — then this node stays on legacy pacing.
-      if (clock.supported !== true && clock.msSinceMark() > 800) {
+      // Marked, no answer yet. A clock-capable worklet answers within a few
+      // ms ('hold' only then). Until this node has EVER answered, use legacy
+      // pacing right away — holding here kept lips shut and the caption still
+      // while Bina was already audible (staging 2026-11-03, old cached worklet).
+      if (clock.supported === true) return "hold";
+      if (clock.supported === null && clock.msSinceMark() > 800) {
         clock.supported = false;
         console.warn("[TalkingHead] speech clock unavailable (worklet did not answer) — legacy lip/caption pacing");
-        return null;
       }
-      return "hold";
+      return null;
     };
 
     /** Visemes of word `index` (lipsync-en, numbers expanded), with cumulative end fractions. */
@@ -1463,7 +1470,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           <div className="absolute inset-0 flex items-center justify-center bg-[#0a1020]/80 backdrop-blur-sm">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto mb-3" />
-              <p className="text-xs text-gray-400">Loading avatar...</p>
+              <p className="tf-hint">Loading avatar...</p>
             </div>
           </div>
         )}

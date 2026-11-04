@@ -23,9 +23,9 @@ export default function ResumeScoringSkeleton({
   variant?: 'overview' | 'list';
 }) {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" aria-busy="true" aria-label="Loading Resume Scoring">
+    <main className="tf-page" aria-busy="true" aria-label="Loading Resume Scoring">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl min-h-[calc(100dvh-7rem)]">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           {/* Breadcrumb bar */}
           <div className="flex items-center gap-3 h-[46px] px-4 mb-4 md:mb-6 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800/40">
             <Skeleton className="h-4 w-20" />
@@ -54,7 +54,7 @@ export default function ResumeScoringSkeleton({
             <>
             {/* 4 verdict cards — StatsCardGrid's 1 / 2 / 4 columns, each card's
                 icon · label · count · "N candidates" chip · corner arrow. */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3 mb-4 sm:mb-5">
+            <div className="tf-grid-4 mb-4 sm:mb-5">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="relative rounded-xl border border-gray-200 dark:border-slate-700/60 px-3.5 py-3.5 sm:px-4 sm:py-4 pr-12">
                   <div className="flex items-start gap-2.5">
@@ -72,28 +72,28 @@ export default function ResumeScoringSkeleton({
             <div className="rounded-lg border border-gray-200 dark:border-slate-700/60 p-4 sm:p-6">
               {/* Row 1: search + 2 filters + More Filters + Sort by + List/Grid */}
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 lg:gap-2">
-                <Skeleton className="h-[38px] w-full sm:flex-1 rounded-lg" />
+                <Skeleton className="h-9 w-full sm:flex-1 rounded-lg" />
                 <div className="flex flex-wrap items-center gap-2">
-                  <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
-                  <Skeleton className="h-[38px] w-full sm:w-48 rounded-lg" />
-                  <Skeleton className="h-[38px] w-36 rounded-lg" />
+                  <Skeleton className="h-9 w-full sm:w-48 rounded-lg" />
+                  <Skeleton className="h-9 w-full sm:w-48 rounded-lg" />
+                  <Skeleton className="h-9 w-36 rounded-lg" />
                   <Skeleton className="hidden sm:block h-4 w-12" />
-                  <Skeleton className="h-[38px] w-[12rem] rounded-lg" />
-                  <Skeleton className="h-[38px] w-[4.5rem] rounded-lg" />
+                  <Skeleton className="h-9 w-[12rem] rounded-lg" />
+                  <Skeleton className="h-9 w-[4.5rem] rounded-lg" />
                 </div>
               </div>
 
               {/* Row 2: Select All | 4 verdict pills | View by toggle */}
               <div className="mt-3 pt-3 mb-4 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-                <Skeleton className="h-[38px] w-36 rounded-lg" />
+                <Skeleton className="h-9 w-36 rounded-lg" />
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
-                <Skeleton className="h-[38px] w-24 rounded-lg" />
-                <Skeleton className="h-[38px] w-36 rounded-lg" />
-                <Skeleton className="h-[38px] w-40 rounded-lg" />
-                <Skeleton className="h-[38px] w-32 rounded-lg" />
+                <Skeleton className="h-9 w-24 rounded-lg" />
+                <Skeleton className="h-9 w-36 rounded-lg" />
+                <Skeleton className="h-9 w-40 rounded-lg" />
+                <Skeleton className="h-9 w-32 rounded-lg" />
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-200 dark:bg-slate-700 mx-1" />
                 <Skeleton className="h-4 w-14" />
-                <Skeleton className="h-[38px] w-[19rem] max-w-full rounded-lg" />
+                <Skeleton className="h-9 w-[19rem] max-w-full rounded-lg" />
               </div>
 
               {/* Job cards — JD-card layout: checkbox · JD badge · title ·

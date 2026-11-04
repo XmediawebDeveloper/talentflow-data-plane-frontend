@@ -1192,7 +1192,7 @@ const TrailChildren = ({ entry, parentText, readOnly, onPromote, onUseJdWording 
                   would create the very duplicate the precedence rule exists to prevent. */}
               {!isCrossListNote && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="tf-card-desc break-words" title={rm}>
+                  <span className="tf-body-secondary break-words" title={rm}>
                     {rm}
                   </span>
                   {!readOnly && onPromote && !isNarrowingNote && (
@@ -1224,11 +1224,11 @@ const TrailChildren = ({ entry, parentText, readOnly, onPromote, onUseJdWording 
               )}
               {/* The reason and the JD line are what make this checkable rather than
                   something to take on trust. */}
-              <p className="text-2xs text-gray-500 dark:text-slate-500 leading-snug mt-0.5">
+              <p className="tf-micro-hint leading-snug mt-0.5">
                 {entry.reasons?.[i]}
               </p>
               {entry.removed_sources?.[i] && (
-                <p className="text-2xs text-gray-400 dark:text-slate-600 italic leading-snug break-words">
+                <p className="tf-micro-hint italic leading-snug break-words">
                   From the JD: &ldquo;{entry.removed_sources[i]}&rdquo;
                 </p>
               )}
@@ -1414,7 +1414,7 @@ const DraggableSkill = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            className="tf-input w-auto h-auto flex-1 px-2 py-1 rounded"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -1523,7 +1523,7 @@ const DroppableSkillsContainer = ({ category, onDrop, children }: DroppableSkill
   return (
     <div
       ref={setListRef}
-      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      className={`relative space-y-2 min-h-12 sm:min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
@@ -1606,7 +1606,7 @@ const DraggableComment = ({
               if (e.key === 'Enter') onSaveEdit();
               if (e.key === 'Escape') onCancelEdit();
             }}
-            className="flex-1 px-2 py-1 border border-gray-200 dark:border-slate-700 rounded text-sm text-black focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+            className="tf-input w-auto h-auto flex-1 px-2 py-1 rounded"
             autoFocus
           />
           <div className="flex gap-1 ml-2">
@@ -1712,7 +1712,7 @@ const DroppableCommentsContainer = ({ category, onDrop, children }: DroppableCom
   return (
     <div
       ref={setListRef}
-      className={`relative space-y-2 min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
+      className={`relative space-y-2 min-h-12 sm:min-h-[100px] py-2 rounded-lg border-2 border-dashed transition-all ${
         isActive
           ? 'border-destructive-line bg-destructive-subtle'
           : 'border-transparent'
@@ -9322,7 +9322,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         <div className="mx-auto w-full max-w-[1400px] space-y-4 md:space-y-5">
 
         {/* Content Card: Breadcrumb + Title + Step Indicator + warning + step content (AI-Generated JD, Manual Input, Job Details, Generated JD) */}
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
 
           {/* Breadcrumb. The page title and blurb that used to sit here are
               gone: the breadcrumb leaf now names the current step and the
@@ -9345,7 +9345,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep mt-0.5 flex-shrink-0" />
                 <div>
                   <p className="text-sm font-medium text-brand-orange-deep">This Job Description cannot be edited</p>
-                  <p className="text-xs text-gray-700 dark:text-slate-300 mt-1">
+                  <p className="tf-meta mt-1">
                     {jdUsageMessage || 'This job description has been used in Resume Scoring, Assessments, or AI Talent Match and cannot be modified. Please create a new JD instead.'}
                   </p>
                 </div>
@@ -9371,10 +9371,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="flex items-start gap-2 sm:gap-3 text-left">
                   <Wand2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'ai' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
                   <div className="min-w-0">
-                    <h3 className="tf-card-title mb-1">
+                    <h3 className="tf-row-name sm:text-base mb-1">
                       AI-Generated JD
                     </h3>
-                    <p className="tf-card-desc">
+                    <p className="tf-body-secondary">
                       Let AI create a professional job description based on your inputs
                     </p>
                   </div>
@@ -9393,10 +9393,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 <div className="flex items-start gap-2 sm:gap-3 text-left">
                   <Edit2 className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${mode === 'manual' ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}`} />
                   <div className="min-w-0">
-                    <h3 className="tf-card-title mb-1">
+                    <h3 className="tf-row-name sm:text-base mb-1">
                       Manual Input
                     </h3>
-                    <p className="tf-card-desc">
+                    <p className="tf-body-secondary">
                       Write or paste your own job description
                     </p>
                   </div>
@@ -9404,12 +9404,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <div className="tf-grid-split">
               {/* Input Form - AI Mode */}
               {mode === 'ai' && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                <div className="tf-card-soft p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <h2 className="tf-section-title">Job Details</h2>
+                    <h2 className="tf-row-title sm:text-base">Job Details</h2>
                     {/* JD06: Autosave status indicator for AI mode */}
                     <div className="flex items-center gap-2 text-sm">
                       {autosaveStatus === 'saving' && (
@@ -9440,7 +9440,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
+                        className={`w-full px-4 h-9 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -9574,9 +9574,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Manual Input Mode */}
               {mode === 'manual' && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                <div className="tf-card-soft p-4 sm:p-6">
                   <div className="flex items-center justify-between mb-4 sm:mb-6">
-                    <h2 className="tf-section-title">Job Details</h2>
+                    <h2 className="tf-row-title sm:text-base">Job Details</h2>
                     {/* JD06: Autosave status indicator */}
                     <div className="flex items-center gap-2 text-sm">
                       {autosaveStatus === 'saving' && (
@@ -9607,7 +9607,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g., Registered Nurse, CNC Machinist, Senior Java Developer"
                         disabled={isJDInUse || isTitleLocked}
                         title={isTitleLocked && !isJDInUse ? titleLockedMessage : undefined}
-                        className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
+                        className={`w-full px-4 h-9 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black ${
                           isJDInUse || isTitleLocked
                             ? 'bg-gray-100 cursor-not-allowed'
                             : hasJobTitleValidationError
@@ -9668,9 +9668,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               )}
 
               {/* Preview */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-4 sm:mb-6">
-                  <h2 className="tf-section-title">
+                  <h2 className="tf-row-title sm:text-base">
                     {mode === 'ai' ? 'Generated Job Description' : 'Job Description Preview'}
                   </h2>
                   {((mode === 'ai' && generatedJD) || (mode === 'manual' && manualJD)) && (
@@ -9683,7 +9683,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           navigator.clipboard.writeText(text);
                           toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
                         }}
-                        className="px-2"
+                        className=""
                         title="Copy to clipboard"
                         aria-label="Copy to clipboard"
                       >
@@ -9703,7 +9703,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           URL.revokeObjectURL(url);
                           toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
                         }}
-                        className="px-2"
+                        className=""
                         title="Download as text file"
                         aria-label="Download as text file"
                       >
@@ -9736,7 +9736,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             <div className="text-center">
                               <Loader2 className="w-12 h-12 mx-auto mb-4 text-blue-600 animate-spin" />
                               <p className="text-gray-600 dark:text-slate-400 font-medium">AI is generating your job description...</p>
-                              <p className="tf-empty-text mt-2">This may take a few seconds</p>
+                              <p className="tf-body-muted mt-2">This may take a few seconds</p>
                             </div>
                           </div>
                         )}
@@ -9819,8 +9819,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-700">
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                        <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">No job description generated yet</p>
-                        <p className="tf-empty-text px-4">
+                        <p className="tf-body-secondary sm:text-base mb-2">No job description generated yet</p>
+                        <p className="tf-body-muted px-4">
                           Fill in the job details and click &quot;Generate Job Description&quot;
                         </p>
                       </div>
@@ -9840,8 +9840,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <div className="flex items-center justify-center h-[300px] sm:h-[400px] lg:h-[600px] bg-gray-50 dark:bg-slate-800/50 rounded-lg border-2 border-dashed border-gray-300 dark:border-slate-700">
                       <div className="text-center">
                         <FileText className="w-10 h-10 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                        <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-2">Start typing your job description</p>
-                        <p className="tf-empty-text px-4">
+                        <p className="tf-body-secondary sm:text-base mb-2">Start typing your job description</p>
+                        <p className="tf-body-muted px-4">
                           Paste or write your JD in the left panel
                         </p>
                       </div>
@@ -9889,7 +9889,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1.5">
-                      <h3 className="tf-label-compact flex items-center gap-1.5">
+                      <h3 className="tf-caption flex items-center gap-1.5">
                         <Lightbulb className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
                         Pro Tips
                       </h3>
@@ -9901,7 +9901,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         Dismiss
                       </button>
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 text-xs text-gray-700 dark:text-slate-300">
+                    <div className="tf-grid-3 tf-meta">
                       <div className="flex items-start gap-1.5">
                         <GripVertical className="w-3.5 h-3.5 mt-px text-brand-orange flex-shrink-0" />
                         <div>
@@ -9953,8 +9953,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <Sparkles className={`w-4 h-4 sm:w-5 sm:h-5 ${STEP2_SECTION_TONES.blue.icon}`} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="tf-section-title">Extracted Information</h2>
-                  <p className="tf-card-desc mt-0.5">
+                  <h2 className="tf-row-title sm:text-base">Extracted Information</h2>
+                  <p className="tf-body-secondary mt-0.5">
                     {isRegenerating
                       ? 'Processing... Fields are temporarily read-only.'
                       : 'AI has extracted the following information from your JD. You can modify, add, or remove items.'
@@ -9964,11 +9964,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </div>
 
               {/* Skills & Comments Section - Single Row with 3 Columns */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
+              <div className="tf-grid-3 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
                 <div data-step2-field="mustHaveSkills">
                   <div className="section-header-row">
-                    <h3 className="tf-card-title">Must-Have Skills <span className="text-destructive">*</span> ({extractedData.mustHaveSkills?.length || 0})</h3>
+                    <h3 className="tf-row-title sm:text-base">Must-Have Skills <span className="text-destructive">*</span> ({extractedData.mustHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('mustHave')}
@@ -9987,7 +9987,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have skills', setNewSkill)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('mustHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                        className="tf-input w-auto flex-1"
                         autoFocus
                       />
                       <Button
@@ -10010,7 +10010,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         }}
                         aria-label="Cancel"
                         title="Cancel"
-                        className="px-2.5 flex-shrink-0"
+                        className="flex-shrink-0"
                       >
                         <X className="w-4 h-4" />
                       </Button>
@@ -10078,7 +10078,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Column 2: Nice-to-Have Skills */}
                 <div>
                   <div className="section-header-row">
-                    <h3 className="tf-card-title">Nice-to-Have Skills ({extractedData.niceToHaveSkills?.length || 0})</h3>
+                    <h3 className="tf-row-title sm:text-base">Nice-to-Have Skills ({extractedData.niceToHaveSkills?.length || 0})</h3>
                     {!isRegenerating && (
                       <button
                         onClick={() => setEditingCategory('niceToHave')}
@@ -10097,7 +10097,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have skills', setNewSkill)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddSkill('niceToHaveSkills')}
                         placeholder="Enter skill..."
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                        className="tf-input w-auto flex-1"
                         autoFocus
                       />
                       <Button
@@ -10151,12 +10151,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   )}
                 </div>
 
-                {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below) */}
-                <div className="space-y-6">
+                {/* Column 3: Comments (Split - Must-Have on top, Nice-to-Have below).
+                    Tablets (2-column grid): spans both columns with the two lists side
+                    by side under the two skills columns, instead of wrapping under
+                    column 1 and leaving the right half empty. */}
+                <div className="grid gap-x-4 gap-y-6 sm:col-span-2 sm:grid-cols-2 lg:col-span-1 lg:grid-cols-1">
                   {/* Must-Have Comments */}
                   <div>
                     <div className="section-header-row">
-                      <h3 className="tf-card-title">Must-Have Additional Requirements ({extractedData.mustHaveComments?.length || 0})</h3>
+                      <h3 className="tf-row-title sm:text-base">Must-Have Additional Requirements ({extractedData.mustHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('comments')}
@@ -10175,7 +10178,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Must-have additional requirements', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddComment()}
                           placeholder="Enter additional requirement..."
-                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                          className="tf-input w-auto flex-1"
                           autoFocus
                         />
                         <Button
@@ -10240,7 +10243,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <div>
                     {(() => { console.log('[DEBUG] Rendering Nice-to-Have Comments, count:', extractedData.niceToHaveComments?.length, 'data:', extractedData.niceToHaveComments); return null; })()}
                     <div className="section-header-row">
-                      <h3 className="tf-card-title">Nice-to-Have Additional Requirements ({extractedData.niceToHaveComments?.length || 0})</h3>
+                      <h3 className="tf-row-title sm:text-base">Nice-to-Have Additional Requirements ({extractedData.niceToHaveComments?.length || 0})</h3>
                       {!isRegenerating && (
                         <button
                           onClick={() => setEditingCategory('nice-comments')}
@@ -10259,7 +10262,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           onChange={(e) => applyEnglishOnlyInputChange(e.target.value, 'Nice-to-have additional requirements', setNewComment)}
                           onKeyDown={(e) => e.key === 'Enter' && handleAddNiceComment()}
                           placeholder="Enter nice-to-have additional requirement..."
-                          className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                          className="tf-input w-auto flex-1"
                           autoFocus
                         />
                         <Button
@@ -10343,7 +10346,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     <div className="flex items-start gap-2 mb-2">
                       <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
                       <div>
-                        <p className="tf-cell-name">
+                        <p className="tf-row-title">
                           Possibly missed from the JD ({missed.length})
                         </p>
                         <p className="tf-meta">
@@ -10363,7 +10366,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {shownGroups.map(([source, items]) => (
                         <div key={source || items[0].removed[0]}>
                           {source && (
-                            <p className="text-2xs text-gray-500 dark:text-slate-500 italic mb-1 break-words">
+                            <p className="tf-micro-hint italic mb-1 break-words">
                               From the JD: &ldquo;{source}&rdquo;
                             </p>
                           )}
@@ -10415,7 +10418,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                                                   likely list is marked rather than
                                                   chosen for the recruiter. */}
                                               {t.category === primary && (
-                                                <span className="ml-auto pl-2 text-2xs text-gray-400">suggested</span>
+                                                <span className="ml-auto pl-2 tf-micro-hint">suggested</span>
                                               )}
                                             </DropdownMenuItem>
                                           ))}
@@ -10467,11 +10470,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 title="Role Requirements"
                 hint="Experience, industry, and compensation for this role."
               />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="tf-grid-2">
                 {/* Experience */}
                 <div data-step2-field="experience" className={STEP2_PANEL_CLASS}>
                   <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
-                    <h3 className="tf-card-title">Experience <span className="text-destructive">*</span></h3>
+                    <h3 className="tf-row-title sm:text-base">Experience <span className="text-destructive">*</span></h3>
                     <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
@@ -10487,7 +10490,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked }));
                           markExtractedDataModified();
                         }}
-                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                        className="tf-checkbox focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
                       <span className="tf-body">Required field</span>
@@ -10687,7 +10690,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         setExtractedData(prev => ({ ...prev, jobHoppingEnabled: e.target.checked }));
                         markExtractedDataModified();
                       }}
-                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                      className="tf-checkbox focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
                     <span className="tf-body">
@@ -10710,13 +10713,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Industry Type */}
                 <div data-step2-field="industryType" className={STEP2_PANEL_CLASS}>
                   <div className="mb-3 sm:mb-4 flex items-center justify-between gap-3">
-                    <h3 className="tf-card-title">Industry Type <span className="text-destructive">*</span></h3>
+                    <h3 className="tf-row-title sm:text-base">Industry Type <span className="text-destructive">*</span></h3>
                     <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
                         type="checkbox"
                         checked={Boolean(extractedData.industryTypeRequired)}
                         onChange={(e) => { setExtractedData(prev => ({ ...prev, industryTypeRequired: e.target.checked })); markExtractedDataModified(); }}
-                        className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                        className="tf-checkbox focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
                       <span className="tf-body">Required field</span>
@@ -10769,7 +10772,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <div className="min-w-0 flex-1">
                           {/* The Allow Overqualified Candidates card's heading
                               style, verbatim. */}
-                          <h3 className="tf-card-title mb-1">
+                          <h3 className="tf-row-title sm:text-base mb-1">
                             New Industry Type Detected
                           </h3>
                           <p className="tf-meta">
@@ -10787,7 +10790,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                               type="button"
                               onClick={handleAddSuggestedIndustry}
                               disabled={isRegenerating}
-                              className="rounded-lg bg-brand-blue px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
+                              className="tf-btn tf-btn-primary bg-brand-blue px-3 py-1.5 text-xs transition-colors hover:bg-brand-blue/90 disabled:opacity-60 whitespace-normal shadow-none gap-0"
                             >
                               Add this industry
                             </button>
@@ -10795,7 +10798,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                               type="button"
                               onClick={handleClearSuggestedIndustry}
                               disabled={isRegenerating}
-                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-brand-blue/30 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                              className="tf-btn tf-btn-secondary border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 whitespace-normal gap-0 font-normal hover:bg-white"
                             >
                               Clear and enter my own
                             </button>
@@ -10810,7 +10813,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
                   {extractedData.industryIsCustom && (
                     <div className="mt-1">
-                      <label className="mb-1 block tf-label-compact">
+                      <label className="mb-1 block tf-meta">
                         Industry not on the list — type it here
                       </label>
                       <input
@@ -10820,7 +10823,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         placeholder="e.g. Marine Logistics"
                         maxLength={60}
                         disabled={isRegenerating}
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-black focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/40 disabled:cursor-not-allowed disabled:bg-gray-100"
+                        className="tf-input disabled:bg-gray-100"
                       />
                       <div className="mt-1.5 flex flex-wrap items-center gap-3">
                         <button
@@ -10872,11 +10875,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   equal columns from md up (each panel stretches to the row's
                   height), stacked below that. Halving the row also stops the
                   From / To inputs running the full card width. */}
-              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="tf-grid-2 mt-4">
               {/* Salary */}
               <div data-step2-field="salaryRange" className={STEP2_PANEL_CLASS}>
                 <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mb-3">
-                  <h3 className="tf-card-title">Salary Range</h3>
+                  <h3 className="tf-row-title sm:text-base">Salary Range</h3>
                   <div className="flex items-center gap-4">
                     <label className={`flex items-center gap-1.5 ${isRegenerating || isFetchingExchangeRate ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                       <input
@@ -10885,7 +10888,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value="INR"
                         checked={extractedData.salaryCurrency === 'INR'}
                         onChange={() => handleSalaryCurrencyChange('INR')}
-                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                        className="tf-radio focus:ring-brand-blue/40"
                         disabled={isRegenerating || isFetchingExchangeRate}
                       />
                       <span className="tf-body">INR (₹)</span>
@@ -10897,7 +10900,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         value="USD"
                         checked={extractedData.salaryCurrency === 'USD'}
                         onChange={() => handleSalaryCurrencyChange('USD')}
-                        className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40"
+                        className="tf-radio focus:ring-brand-blue/40"
                         disabled={isRegenerating || isFetchingExchangeRate}
                       />
                       <span className="tf-body">USD ($)</span>
@@ -11024,7 +11027,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     choice it explains. */}
                 <div className="flex flex-col gap-3">
                   <div>
-                    <h3 className="tf-card-title mb-1">
+                    <h3 className="tf-row-title sm:text-base mb-1">
                       Allow Overqualified Candidates <span className="text-destructive">*</span>
                     </h3>
                     <p className="tf-meta">
@@ -11100,13 +11103,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   hint="Where the role is based and how it is worked."
                 />
                 <div data-step2-field="locations" className="flex flex-wrap items-center gap-3 mb-4">
-                  <h3 className="tf-card-title">Locations <span className="text-destructive">*</span></h3>
+                  <h3 className="tf-row-title sm:text-base">Locations <span className="text-destructive">*</span></h3>
                   <label className={`flex shrink-0 items-center gap-1.5 ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={extractedData.locationsRequired}
                       onChange={(e) => { setExtractedData(prev => ({ ...prev, locationsRequired: e.target.checked })); markExtractedDataModified(); }}
-                      className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
+                      className="tf-checkbox focus:ring-brand-blue/40"
                       disabled={isRegenerating}
                     />
                     <span className="tf-body">Required field</span>
@@ -11217,12 +11220,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 )}
 
                 {/* Added Locations Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                <div className="tf-grid-3">
                   {extractedData.locations.map((location, index) => (
                     <div key={index} className="p-3 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
                       <div className="flex items-center justify-between">
                         <div className="flex-1">
-                          <div className="text-sm text-gray-900 dark:text-slate-50">{location.city}</div>
+                          <div className="tf-body">{location.city}</div>
                           <div className="tf-meta">{location.radius} km radius</div>
                         </div>
                         {!isRegenerating && (
@@ -11243,7 +11246,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   label, the same select box, and a quarter-width column on
                   desktop (two columns on tablet, stacked on a phone), so the
                   pair lines up with the location fields above. */}
-              <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+              <div className="tf-grid-4 mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-gray-100 dark:border-slate-700/60">
                 {/* Employment Type */}
                 <div className="min-w-0">
                   <label htmlFor="jd-employment-type" className="block tf-body mb-1">Employment Type</label>
@@ -11291,7 +11294,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
               {/*
-              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+              <div className="tf-grid-2 mt-6">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Certifications</h3>
@@ -11313,7 +11316,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewCertification(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddCertification()}
                         placeholder="e.g., ISO 9001 Lead Auditor, PMP, AWS Solutions Architect"
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                        className="tf-input w-auto flex-1"
                         autoFocus
                       />
                       <Button
@@ -11330,7 +11333,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         key={index}
                         className={`flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg ${isRegenerating ? 'opacity-60' : ''}`}
                       >
-                        <span className="text-sm text-gray-900">{cert}</span>
+                        <span className="tf-body">{cert}</span>
                         {!isRegenerating && (
                           <button
                             onClick={() => handleRemoveCertification(index)}
@@ -11370,7 +11373,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onChange={(e) => setNewDomainKeyword(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleAddDomainKeyword()}
                         placeholder="e.g., Cold Chain, Retail Ops, Banking, Cloud"
-                        className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-black"
+                        className="tf-input w-auto flex-1"
                         autoFocus
                       />
                       <Button
@@ -11387,7 +11390,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         key={index}
                         className={`flex items-center justify-between p-3 bg-gray-50 border border-gray-200 rounded-lg ${isRegenerating ? 'opacity-60' : ''}`}
                       >
-                        <span className="text-sm text-gray-900">{keyword}</span>
+                        <span className="tf-body">{keyword}</span>
                         {!isRegenerating && (
                           <button
                             onClick={() => handleRemoveDomainKeyword(index)}
@@ -11429,14 +11432,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 hint="Guidance for assessments, private notes, and details for candidates."
               />
               {/* Assessment Guidance & Internal Recruiter Notes - Side by Side */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="tf-grid-2">
                 {/* Assessment Guidance - Left */}
                 <div className={STEP2_PANEL_CLASS}>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h3 className="tf-card-title">Assessment Guidance</h3>
+                    <h3 className="tf-row-title sm:text-base">Assessment Guidance</h3>
                     <span className="tf-meta bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
                   </div>
-                  <p className="tf-card-desc mb-3 flex items-center gap-1.5">
+                  <p className="tf-body-secondary mb-3 flex items-center gap-1.5">
                     <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
                     Visible to assessment team
                   </p>
@@ -11461,13 +11464,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 {/* Internal Recruiter Notes - Right */}
                 <div className={STEP2_PANEL_CLASS}>
                   <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <h3 className="tf-card-title">Internal Recruiter Notes</h3>
+                    <h3 className="tf-row-title sm:text-base">Internal Recruiter Notes</h3>
                     <span className={PRIVATE_BADGE_CLASS}>
                       <Lock className="w-3 h-3 flex-shrink-0" />
                       Private
                     </span>
                   </div>
-                  <p className="tf-card-desc mb-3">
+                  <p className="tf-body-secondary mb-3">
                     Private notes for team use only. Not visible to candidates or used in scoring/assessments.
                   </p>
                   <textarea
@@ -11510,14 +11513,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   ever reads it. */}
               <div className={`mt-4 ${STEP2_PANEL_CLASS}`}>
                 <div className="flex flex-wrap items-center gap-2 mb-2">
-                  <h3 className="tf-card-title">Additional Details</h3>
+                  <h3 className="tf-row-title sm:text-base">Additional Details</h3>
                   <span className="tf-meta bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded">Optional</span>
                   <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
                     <Eye className="w-3 h-3 flex-shrink-0" />
                     Visible to candidates
                   </span>
                 </div>
-                <p className="tf-card-desc mb-3">
+                <p className="tf-body-secondary mb-3">
                   Extra information about this job for the candidate — shift timings, work from
                   office / work from home, or anything else the extraction missed. This is
                   <span className="font-medium text-gray-700 dark:text-slate-300"> information only</span>: it is
@@ -11618,7 +11621,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 hint="This is the job description that will be published"
                 badge={mode === 'ai' ? (
                   /* JD12: AI-Generated indicator */
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                  <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                     <Wand2 className="w-3 h-3" />
                     AI Generated
                   </span>
@@ -11666,17 +11669,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       {effectiveEditingJD?.job_id && (
                         <JobIdBadge className="flex-shrink-0">{effectiveEditingJD.job_id}</JobIdBadge>
                       )}
-                      <h1 className="m-0 min-w-0 tf-card-title [overflow-wrap:anywhere]">
+                      <h1 className="tf-page-title m-0 min-w-0 tf-row-name [overflow-wrap:anywhere]">
                         {jobTitle}
                       </h1>
                       {reviewVersionNumber != null && (
-                        <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                        <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
                           v{reviewVersionNumber}
                         </span>
                       )}
                     </div>
-                    <div className="flex flex-wrap items-center gap-4 tf-card-desc">
+                    <div className="flex flex-wrap items-center gap-4 tf-body-secondary">
                       {groupLocationsByState(extractedData.locations).map(group => (
                         <span key={group.state} className="flex items-center gap-1.5">
                           <MapPin className="w-4 h-4 text-gray-500 dark:text-slate-400 flex-shrink-0" />
@@ -11729,13 +11732,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             {extractedData.additionalDetails && (
               <div className="min-w-0 rounded-lg border border-gray-100 dark:border-slate-700/60 p-4 sm:p-6 mt-4 sm:mt-6">
                 <div className="flex items-center gap-2 mb-3">
-                  <h3 className="tf-subsection-title">Additional Details</h3>
+                  <h3 className="tf-row-name">Additional Details</h3>
                   <span className={CANDIDATE_VISIBLE_BADGE_CLASS}>
                     <Eye className="w-3 h-3 flex-shrink-0" />
                     Visible to candidates
                   </span>
                 </div>
-                <p className="tf-card-desc whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
+                <p className="tf-body-secondary whitespace-pre-wrap [overflow-wrap:anywhere]">{extractedData.additionalDetails}</p>
               </div>
             )}
 
@@ -11794,28 +11797,28 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   <>
               {/* Job Title */}
               <div className="py-4 sm:py-5">
-                <h3 className="text-sm text-gray-500 dark:text-slate-500 mb-2">Job Title</h3>
+                <h3 className="tf-body-muted mb-2">Job Title</h3>
                 <p className="text-base sm:text-xl text-gray-900 dark:text-slate-50 [overflow-wrap:anywhere]">{jobTitle}</p>
               </div>
 
               {/* Skills & Requirements - Step 2's four lists */}
               <div className="py-4 sm:py-5">
                 {sectionHeading(Sparkles, 'blue', 'Skills & Requirements')}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+                <div className="tf-grid-2">
                   <div className="min-w-0">
-                    <h4 className="tf-subsection-title mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
+                    <h4 className="tf-body mb-3">Must-Have Skills ({extractedData.mustHaveSkills.length})</h4>
                     {itemList(extractedData.mustHaveSkills, 'None added')}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="tf-subsection-title mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
+                    <h4 className="tf-body mb-3">Nice-to-Have Skills ({extractedData.niceToHaveSkills.length})</h4>
                     {itemList(extractedData.niceToHaveSkills, 'None added')}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="tf-subsection-title mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
+                    <h4 className="tf-body mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
                     {itemList(mustHaveComments, 'None added')}
                   </div>
                   <div className="min-w-0">
-                    <h4 className="tf-subsection-title mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
+                    <h4 className="tf-body mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
                     {itemList(niceToHaveComments, 'None added')}
                   </div>
                 </div>
@@ -11824,7 +11827,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Role Requirements - Experience, Industry, Salary, Overqualified */}
               <div className="py-4 sm:py-5">
                 {sectionHeading(Briefcase, 'success', 'Role Requirements')}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="tf-grid-2">
                   <div className={tile}>
                     <h4 className={fieldLabel}>Experience</h4>
                     {extractedData.experience
@@ -11847,7 +11850,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {salaryText ? (
                       <p className="flex flex-wrap items-center gap-1.5">
                         <span className={fieldValue}>{salaryText}</span>
-                        <span className="tf-card-desc">/ {extractedData.compensationType}</span>
+                        <span className="tf-body-secondary">/ {extractedData.compensationType}</span>
                       </p>
                     ) : (
                       <p className={emptyValue}>Not specified</p>
@@ -11868,7 +11871,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Location & Work Setup - Locations, Employment Type, Work Mode */}
               <div className="py-4 sm:py-5">
                 {sectionHeading(MapPin, 'cyan', 'Location & Work Setup')}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div className="tf-grid-2">
                   <div className={`${tile} sm:col-span-2`}>
                     <h4 className={fieldLabel}>Locations ({extractedData.locations.length})</h4>
                     {extractedData.locations.length > 0 ? (
@@ -11876,7 +11879,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         {extractedData.locations.map((loc, index) => (
                           <span
                             key={index}
-                            className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 tf-body"
+                            className="tf-panel inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 tf-body"
                           >
                             <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
                             <span className="min-w-0 [overflow-wrap:anywhere]">{loc.city}</span>
@@ -11914,7 +11917,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               {/* Notes & Visibility - each with Step 2's visibility marker */}
               <div className="pt-4 sm:pt-5">
                 {sectionHeading(NotebookPen, 'orange', 'Notes & Visibility')}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                <div className="tf-grid-2">
                   <div className={tile}>
                     <h4 className={`${fieldLabel} flex flex-wrap items-center gap-2`}>
                       Assessment Guidance
@@ -11990,8 +11993,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         <Download className="w-5 h-5 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <h2 id="jd-download-format-title" className="tf-section-title">Download Job Description</h2>
-                        <p className="tf-card-desc">Choose a file format</p>
+                        <h2 id="jd-download-format-title" className="tf-section-title sm:text-lg tracking-tight">Download Job Description</h2>
+                        <p className="tf-body-secondary">Choose a file format</p>
                       </div>
                     </div>
                     <Button
@@ -12000,7 +12003,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       type="button"
                       onClick={() => setShowDownloadFormatDialog(false)}
                       aria-label="Close"
-                      className="px-2 flex-shrink-0"
+                      className="flex-shrink-0"
                     >
                       <X className="w-5 h-5" />
                     </Button>
@@ -12024,7 +12027,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         className="w-full flex items-center gap-3 p-3 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 transition-all text-left"
                       >
                         {option.icon}
-                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{option.label}</span>
+                        <span className="tf-row-name">{option.label}</span>
                       </button>
                     ))}
                   </div>
@@ -12212,7 +12215,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               type="button"
               onClick={() => setIndustryGate(null)}
               disabled={isResolvingIndustryGate}
-              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              className="tf-btn tf-btn-secondary px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm disabled:opacity-60 whitespace-normal gap-0 font-normal"
             >
               Go back and change it
             </button>
@@ -12221,7 +12224,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 type="button"
                 onClick={handleIndustryGateUseExisting}
                 disabled={isResolvingIndustryGate}
-                className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue/90 transition-colors text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue/90 transition-colors text-sm disabled:opacity-60 whitespace-normal shadow-none gap-0 font-normal"
               >
                 Use {industryGate.industry_label}
               </button>
@@ -12281,7 +12284,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           <DialogFooter>
             <button
               onClick={() => setShowExperienceContradictionDialog(false)}
-              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
+              className="tf-btn tf-btn-secondary px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm whitespace-normal gap-0 font-normal"
             >
               Keep it Preferred
             </button>

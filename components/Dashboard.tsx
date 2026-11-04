@@ -362,7 +362,7 @@ export default function Dashboard({
       <div className="max-w-7xl mx-auto">
         {/* Welcome Section */}
         <div className="mb-6">
-          <h1 className="text-gray-900 mb-2">Welcome back, {user?.name?.split(' ')[0] || 'there'}! 👋</h1>
+          <h1 className="tf-page-title mb-2">Welcome back, {user?.name?.split(' ')[0] || 'there'}! 👋</h1>
           <p className="text-gray-600 text-lg">Here's what's happening with your recruitment today.</p>
         </div>
 
@@ -372,8 +372,8 @@ export default function Dashboard({
         )}
 
         {/* Main Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6">
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+        <div className="tf-grid-4 mb-6">
+          <div className="tf-card-soft p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Users className="w-6 h-6 text-gray-800" />
@@ -384,10 +384,10 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">1,247</div>
-            <div className="tf-card-desc">Total Candidates</div>
+            <div className="tf-body-secondary">Total Candidates</div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+          <div className="tf-card-soft p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-success-subtle flex items-center justify-center flex-shrink-0">
                 <Briefcase className="w-6 h-6 text-success" />
@@ -398,10 +398,10 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">42</div>
-            <div className="tf-card-desc">Active Jobs</div>
+            <div className="tf-body-secondary">Active Jobs</div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+          <div className="tf-card-soft p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Video className="w-6 h-6 text-gray-800" />
@@ -412,36 +412,36 @@ export default function Dashboard({
               </span>
             </div>
             <div className="text-3xl text-gray-900 mb-1">24</div>
-            <div className="tf-card-desc">Scheduled Interviews</div>
+            <div className="tf-body-secondary">Scheduled Interviews</div>
           </div>
 
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
+          <div className="tf-card-soft p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
               <div className="w-12 h-12 rounded-xl bg-warning-subtle flex items-center justify-center flex-shrink-0">
                 <FileText className="w-6 h-6 text-warning" />
               </div>
             </div>
             <div className="text-3xl text-gray-900 mb-1">{assessmentStats.active_assessments}</div>
-            <div className="tf-card-desc">Active Assessments</div>
+            <div className="tf-body-secondary">Active Assessments</div>
           </div>
         </div>
 
         {/* Active Plan & Available Units Section */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
+        <div className="tf-card-soft p-6 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 mb-6 pb-6 border-b border-gray-200">
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Crown className="w-6 h-6 text-gray-800" />
                 <h2 className="text-gray-900 text-2xl">{subscription?.planName || '-'}</h2>
               </div>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {subscription?.status === 'active'
                   ? 'Your subscription is active and running smoothly'
                   : `Subscription ${subscription?.status || 'status unknown'}`}
               </p>
             </div>
             <div className="text-right bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <div className="tf-meta-strong mb-1">Renews on</div>
+              <div className="tf-meta mb-1">Renews on</div>
               <div className="text-gray-900 mb-2">
                 {subscription?.renewalDate
                   ? formatISTDate(subscription.renewalDate)
@@ -463,7 +463,7 @@ export default function Dashboard({
           </div>
 
           {/* Usage Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
+          <div className="tf-grid-stats-5 mb-6">
             {/* Resume Upload Units */}
             {<PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{<div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
@@ -472,7 +472,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="tf-meta-strong mb-2 sm:mb-3">Resume Storage</div>
+              <div className="tf-meta mb-2 sm:mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -480,7 +480,7 @@ export default function Dashboard({
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
-                <span className="tf-meta-strong w-8 sm:w-10 text-right">
+                <span className="tf-meta w-8 sm:w-10 text-right">
                   {limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%
                 </span>
               </div>
@@ -497,7 +497,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
-              <div className="tf-meta-strong mb-2 sm:mb-3">Job Postings</div>
+              <div className="tf-meta mb-2 sm:mb-3">Job Postings</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -505,7 +505,7 @@ export default function Dashboard({
                     style={{ width: `${limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%` }}
                   ></div>
                 </div>
-                <span className="tf-meta-strong w-8 sm:w-10 text-right">
+                <span className="tf-meta w-8 sm:w-10 text-right">
                   {limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%
                 </span>
               </div>
@@ -522,7 +522,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="tf-meta-strong mb-2 sm:mb-3">Assessment Units</div>
+              <div className="tf-meta mb-2 sm:mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -530,7 +530,7 @@ export default function Dashboard({
                     style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
-                <span className="tf-meta-strong w-8 sm:w-10 text-right">
+                <span className="tf-meta w-8 sm:w-10 text-right">
                   {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
@@ -549,7 +549,7 @@ export default function Dashboard({
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">
                 {limits?.aiInterviews === 'unlimited' ? 'Unlimited' : limits?.aiInterviews || 'Unlimited'}
               </div>
-              <div className="tf-meta-strong mb-2 sm:mb-3">AI Interviews</div>
+              <div className="tf-meta mb-2 sm:mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -561,7 +561,7 @@ export default function Dashboard({
                     }}
                   ></div>
                 </div>
-                <span className="tf-meta-strong w-8 sm:w-10 text-right">
+                <span className="tf-meta w-8 sm:w-10 text-right">
                   {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
@@ -576,7 +576,7 @@ export default function Dashboard({
 
           {/* Plan Features - Dynamic based on actual plan */}
           <div className="pt-4 border-t border-gray-200">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+            <div className="tf-grid-3 text-sm">
               {(Object.keys(planFeatures) as PlanFeatureKey[])
                 .filter(key => key !== 'seats') // seats is always included, skip display
                 .map(key => {
@@ -598,12 +598,12 @@ export default function Dashboard({
         </div>
 
         {/* Published Job Descriptions Section */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6">
+        <div className="tf-card-soft mb-6">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-gray-900 text-2xl mb-2">Published Job Descriptions</h2>
-                <p className="tf-card-desc">Active job postings accepting applications</p>
+                <p className="tf-body-secondary">Active job postings accepting applications</p>
               </div>
               {canCreateJD && (
                 <Button
@@ -620,7 +620,7 @@ export default function Dashboard({
             {loadingJDs ? (
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white">
+                  <div key={i} className="tf-panel p-5">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -648,7 +648,7 @@ export default function Dashboard({
               <div className="text-center py-12">
                 <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No published jobs yet</h3>
-                <p className="tf-card-desc mb-4">Create your first job description to start recruiting!</p>
+                <p className="tf-body-secondary mb-4">Create your first job description to start recruiting!</p>
                 {canCreateJD && (
                   <Button
                     variant="primary"
@@ -664,18 +664,18 @@ export default function Dashboard({
                 {publishedJDs.map((jd) => (
                   <div
                     key={jd.id}
-                    className="border border-gray-200 rounded-xl p-5 hover:border-gray-300 hover:shadow-md transition-all bg-white cursor-pointer"
+                    className="tf-panel p-5 hover:border-gray-300 hover:shadow-md transition-all cursor-pointer"
                     onClick={() => onViewJobDetails?.(jd)}
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled'}</h3>
-                          <span className="px-3 py-1 rounded-full text-xs bg-success-subtle text-success">
+                          <span className="tf-badge bg-success-subtle text-success">
                             Published
                           </span>
                         </div>
-                        <div className="flex items-center gap-5 tf-card-desc mb-3">
+                        <div className="flex items-center gap-5 tf-body-secondary mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-gray-400" />
@@ -695,7 +695,7 @@ export default function Dashboard({
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 tf-card-desc">
+                        <div className="flex items-center gap-4 tf-body-secondary">
                           <div className="flex items-center gap-1">
                             <Users className="w-4 h-4 text-gray-400" />
                             <span>{jd.applicants_count || 0} applicants</span>
@@ -730,7 +730,7 @@ export default function Dashboard({
           {publishedJDs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
               <div className="flex items-center justify-between">
-                <div className="tf-card-desc">Showing {publishedJDs.length} published job{publishedJDs.length !== 1 ? 's' : ''}</div>
+                <div className="tf-body-secondary">Showing {publishedJDs.length} published job{publishedJDs.length !== 1 ? 's' : ''}</div>
                 <button
                   onClick={onNavigateToJobs}
                   className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
@@ -744,12 +744,12 @@ export default function Dashboard({
         </div>
 
         {/* Draft Job Descriptions Section */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-sm mb-6">
+        <div className="tf-card-soft mb-6">
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-gray-900 text-2xl mb-2">Draft Job Descriptions</h2>
-                <p className="tf-card-desc">Incomplete job postings waiting to be published</p>
+                <p className="tf-body-secondary">Incomplete job postings waiting to be published</p>
               </div>
             </div>
           </div>
@@ -757,7 +757,7 @@ export default function Dashboard({
             {loadingJDs ? (
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white">
+                  <div key={i} className="tf-panel p-5">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -782,20 +782,20 @@ export default function Dashboard({
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No drafts saved</h3>
-                <p className="tf-card-desc">All your job descriptions are published or you haven't started any drafts yet.</p>
+                <p className="tf-body-secondary">All your job descriptions are published or you haven't started any drafts yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {draftJDs.map((jd) => (
                   <div
                     key={jd.id}
-                    className="border border-gray-200 rounded-xl p-5 hover:border-gray-300 hover:shadow-md transition-all bg-white"
+                    className="tf-panel p-5 hover:border-gray-300 hover:shadow-md transition-all"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled Draft'}</h3>
-                          <span className="px-3 py-1 rounded-full text-xs bg-warning-subtle text-warning">
+                          <span className="tf-badge bg-warning-subtle text-warning">
                             Draft
                           </span>
                           {jd.creation_stage && (
@@ -804,7 +804,7 @@ export default function Dashboard({
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-5 tf-card-desc mb-3">
+                        <div className="flex items-center gap-5 tf-body-secondary mb-3">
                           {jd.department && (
                             <div className="flex items-center gap-2">
                               <Building2 className="w-4 h-4 text-gray-400" />
@@ -846,7 +846,7 @@ export default function Dashboard({
           {draftJDs.length > 0 && (
             <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl">
               <div className="flex items-center justify-between">
-                <div className="tf-card-desc">Showing {draftJDs.length} draft{draftJDs.length !== 1 ? 's' : ''}</div>
+                <div className="tf-body-secondary">Showing {draftJDs.length} draft{draftJDs.length !== 1 ? 's' : ''}</div>
                 <button
                   onClick={onNavigateToJobs}
                   className="text-sm text-gray-800 hover:text-gray-900 flex items-center gap-2 transition-colors font-medium"
@@ -863,7 +863,7 @@ export default function Dashboard({
         <div className={`grid gap-6 mb-6 ${user?.is_tenant_admin ? 'grid-cols-1 lg:grid-cols-3' : 'grid-cols-1'}`}>
           {/* Recent Activity - Tenant Admin Only */}
           {user?.is_tenant_admin && (
-            <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-sm">
+            <div className="tf-card-soft lg:col-span-2">
               <div className="p-6 border-b border-gray-200">
                 <div className="flex items-center justify-between">
                   <h2 className="text-gray-900">Recent Activity</h2>
@@ -879,24 +879,24 @@ export default function Dashboard({
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
-                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
-                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
-                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <tr key={i}>
-                          <td className="px-6 py-4 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-2">
                               <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
                               <Skeleton className="h-4 w-28" />
                             </div>
                           </td>
-                          <td className="px-6 py-4"><Skeleton className="h-4 w-40" /></td>
-                          <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-24" /></td>
-                          <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-16" /></td>
+                          <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                          <td className="tf-td whitespace-nowrap"><Skeleton className="h-4 w-24" /></td>
+                          <td className="tf-td whitespace-nowrap"><Skeleton className="h-4 w-16" /></td>
                         </tr>
                       ))}
                     </tbody>
@@ -912,10 +912,10 @@ export default function Dashboard({
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-3 text-left tf-th">Action</th>
-                        <th className="px-6 py-3 text-left tf-th">Details</th>
-                        <th className="px-6 py-3 text-left tf-th">User</th>
-                        <th className="px-6 py-3 text-left tf-th">Time</th>
+                        <th className="tf-th-cell text-left tf-th">Action</th>
+                        <th className="tf-th-cell text-left tf-th">Details</th>
+                        <th className="tf-th-cell text-left tf-th">User</th>
+                        <th className="tf-th-cell text-left tf-th">Time</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100">
@@ -926,21 +926,21 @@ export default function Dashboard({
   
                         return (
                           <tr key={log.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="tf-td whitespace-nowrap">
                               <div className="flex items-center gap-2">
                                 <div className={`w-8 h-8 rounded-lg ${colors.bg} flex items-center justify-center flex-shrink-0`}>
                                   <Icon className={`w-4 h-4 ${colors.text}`} />
                                 </div>
-                                <span className="text-sm text-gray-900">{log.action_label}</span>
+                                <span className="tf-body">{log.action_label}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
-                              <span className="tf-card-desc">{details}</span>
+                            <td className="tf-td">
+                              <span className="tf-body-secondary">{details}</span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <span className="text-sm text-gray-900">{log.user_name}</span>
+                            <td className="tf-td whitespace-nowrap">
+                              <span className="tf-body">{log.user_name}</span>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
+                            <td className="tf-td whitespace-nowrap">
                               <span className="tf-body-muted">{getRelativeTime(log.created_at)}</span>
                             </td>
                           </tr>
@@ -956,7 +956,7 @@ export default function Dashboard({
 
           {/* Quick Actions */}
           <div className="space-y-6">
-            <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+            <div className="tf-card-soft p-6">
               <h3 className="text-gray-900 mb-4">Quick Actions</h3>
               <div className="space-y-3">
                 {<PlanLockedOverlay locked={isPlanLocked('resume_upload')}>{(
@@ -967,7 +967,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                     <Users className="w-4 h-4 text-gray-800" />
                   </div>
-                  <span className="text-sm text-gray-900">Upload Resume</span>
+                  <span className="tf-body">Upload Resume</span>
                 </button>
                 )}</PlanLockedOverlay>}
                 <button
@@ -977,7 +977,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-success-subtle flex items-center justify-center">
                     <Briefcase className="w-4 h-4 text-success" />
                   </div>
-                  <span className="text-sm text-gray-900">Post New Job</span>
+                  <span className="tf-body">Post New Job</span>
                 </button>
                 {<PlanLockedOverlay locked={isPlanLocked('ai_interview')}>{(
                 <button
@@ -987,7 +987,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center">
                     <Video className="w-4 h-4 text-gray-800" />
                   </div>
-                  <span className="text-sm text-gray-900">Schedule Interview</span>
+                  <span className="tf-body">Schedule Interview</span>
                 </button>
                 )}</PlanLockedOverlay>}
                 {<PlanLockedOverlay locked={isPlanLocked('assessment')}>{(
@@ -998,7 +998,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-warning-subtle flex items-center justify-center">
                     <FileText className="w-4 h-4 text-warning" />
                   </div>
-                  <span className="text-sm text-gray-900">Create AI Assessment</span>
+                  <span className="tf-body">Create AI Assessment</span>
                 </button>
                 )}</PlanLockedOverlay>}
                 <button 
@@ -1008,7 +1008,7 @@ export default function Dashboard({
                   <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-700 to-gray-700 flex items-center justify-center">
                     <Zap className="w-4 h-4 text-white" />
                   </div>
-                  <span className="text-sm text-gray-900">View Units Usage</span>
+                  <span className="tf-body">View Units Usage</span>
                 </button>
               </div>
             </div>
@@ -1016,8 +1016,8 @@ export default function Dashboard({
         </div>
 
         {/* Job Performance */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+        <div className="tf-grid-split mb-8">
+          <div className="tf-card-soft p-6">
             <h2 className="text-gray-900 mb-6">Top Performing Jobs</h2>
             <div className="space-y-4">
               {[
@@ -1028,8 +1028,8 @@ export default function Dashboard({
               ].map((job, index) => (
                 <div key={index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg">
                   <div>
-                    <div className="text-sm text-gray-900 mb-1">{job.title}</div>
-                    <div className="tf-meta-strong">{job.applicants} applicants</div>
+                    <div className="tf-body mb-1">{job.title}</div>
+                    <div className="tf-meta">{job.applicants} applicants</div>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs ${
                     job.color === 'red' ? 'bg-destructive-subtle text-destructive' :
@@ -1043,7 +1043,7 @@ export default function Dashboard({
             </div>
           </div>
 
-          <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
+          <div className="tf-card-soft p-6">
             <h2 className="text-gray-900 mb-6">Recruitment Pipeline</h2>
             <div className="space-y-4">
               {[
@@ -1060,8 +1060,8 @@ export default function Dashboard({
                     </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-gray-900">{stage.stage}</span>
-                        <span className="text-sm text-gray-900">{stage.count}</span>
+                        <span className="tf-body">{stage.stage}</span>
+                        <span className="tf-body">{stage.count}</span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
