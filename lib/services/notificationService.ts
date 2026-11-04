@@ -131,7 +131,8 @@ class NotificationService {
     billing_period?: string;
   }): Promise<{ status: 'created' | 'already_exists' }> {
     try {
-      const response = await api.post('/notifications/welcome', params);
+      // Notifications only — no listed data changes (see `invalidatesLists`).
+      const response = await api.post('/notifications/welcome', params, { invalidatesLists: false });
       return response.data;
     } catch (error) {
       console.error('Error ensuring welcome notification:', error);
@@ -151,7 +152,7 @@ class NotificationService {
     quotas?: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }>;
   }): Promise<{ status: string; created: any[]; count: number }> {
     try {
-      const response = await api.post('/notifications/check-status', params);
+      const response = await api.post('/notifications/check-status', params, { invalidatesLists: false });
       return response.data;
     } catch (error: any) {
       console.error('Error checking status notifications:', error?.response?.status, error?.response?.data?.detail || error?.response?.data, 'payload:', JSON.stringify(params));

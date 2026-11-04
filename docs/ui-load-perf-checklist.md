@@ -59,3 +59,16 @@ Standard per module: `GET /<module>/stats?<filters>` + `GET /<module>?page=1&pag
 - [ ] Export / "select all" cover every matching row, not just the visible page
 - [ ] RBAC: a restricted role sees the same rows in stats and list
 - [ ] Known behaviour changes listed in the hand-off summary
+
+## Round 2 (after first staging deploy, 2026-11-04)
+Staging check of round 1: all 8 tools 0 failed API calls; JD / Assessments / AI Interviews land on Total + list; card == list total verified for JD and Assessments.
+- [x] AI Interviews tab badges counted loaded rows (10/13/12) → now /configs/stats (verified on staging: 198/198, 269/269, 220/220, 47/47, 2/2)
+- [x] Merge 7b1b04bb re-added `jobs.find` in job-openings/page.tsx (tsc error) → job passed from caller
+- [x] JD / AI Interviews / Assessments landing fetched page 1 twice (default then restored state) → `useListStatePersistence` returns `restored`, lists wait for it
+- [x] Extra /usage/quota-status per hard load (ResumeUsageReconciler refetched even when reconcile was throttled) → refetch only when reconcile ran
+- [x] /users/:id every hard load for accounts with no display id → remembered per tab session
+- [x] Resume Scoring landing: no JD list download (was 1.9 s ps=10000 + 4× ps=100 walk)
+- [x] AI Interviews Results (6.9 s): /candidate-results (+stats/ids/filter-options) server-paged; GET /ai-interview/ heavy JSONB → `compact=true`
+- [x] Assessments Results (2.0 s serial chain): /assessments/results-page (+stats/ids/filter-options), visible-row lookups in parallel
+- [ ] Re-measure Results + Resume Scoring on staging after deploy
+- [x] tsc exit 0; backend suite: same 38 pre-existing failures, 0 new

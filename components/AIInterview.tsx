@@ -152,7 +152,10 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
-const SERVER_PAGED_TABS: string[] = ['all', 'all-interviews', 'published', 'draft', 'archived'];
+/* 'candidate-results' (Results) pages its own rows on the server
+   (GET /ai-interview/candidate-results) with every label it shows, so opening
+   it must not download the config list either. */
+const SERVER_PAGED_TABS: string[] = ['all', 'all-interviews', 'published', 'draft', 'archived', 'candidate-results'];
 const CONFIG_PAGE_SIZE = 10;
 /* Trigger classes for the filter panels' Dropdown (ui/filter-select) triggers. */
 const AI_FILTER_FIELD_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100';
@@ -850,7 +853,7 @@ export default function AIInterview() {
   const loadProcessingSessions = useCallback(async () => {
     setProcessingLoading(true);
     try {
-      const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page }));
+      const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page, compact: true }));
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);
@@ -1288,7 +1291,10 @@ export default function AIInterview() {
   // Re-detect the scroll container when the two-step view flips (its height
   // changes drastically between the cards overview and the list).
   const rootRef = useScrollRestoration('ai-interviews', !loading, [pageView]);
-  useListStatePersistence(
+  /* True from the render carrying the restored tab / filters / page: the
+     server-paged Total Jobs list waits for it, so landing fetches its page
+     once with the restored state rather than with the defaults and again. */
+  const listStateRestored = useListStatePersistence(
     'ai-interviews',
     { activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
@@ -2167,7 +2173,10 @@ export default function AIInterview() {
     name: 'ai-configs:total-jobs',
     query: totalJobsQuery,
     fetchPage: (q) => aiInterviewService.listConfigsPage(q).then((res) => ({ items: res.items || [], total: res.total ?? 0 })),
-    enabled: serverTotalJobs,
+    /* After the list state is restored, and only once the search has settled
+       (a restored search reaches `debouncedSearch` 300 ms later): one page
+       request on landing, for the state actually on screen. */
+    enabled: serverTotalJobs && listStateRestored && debouncedSearch === searchQuery,
   });
 
   /* Every version of the jobs on screen — one request per page of rows
@@ -2388,6 +2397,11 @@ export default function AIInterview() {
     return best;
   };
 
+  /* Still waiting for Total Jobs' first page — also while the request is held
+     for the restore / a restored search to settle, so that wait shows the
+     skeleton rather than a one-render "no jobs" flash. */
+  const totalJobsWaiting = totalJobsPaged.loading
+    || (totalJobsPaged.items.length === 0 && (!listStateRestored || debouncedSearch !== searchQuery));
   /* Total Jobs: the server's page and total; other grouped tabs page here. */
   const groupedListTotal = serverTotalJobs ? totalJobsPaged.total : collapsedConfigs.length;
   const configTotalPages = Math.max(1, Math.ceil(groupedListTotal / configListItemsPerPage));
@@ -3401,19 +3415,15 @@ export default function AIInterview() {
         <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-1.5 flex-wrap w-full">
           {(() => {
-            // Same counts as the stat cards, so a pill and the card it
-            // mirrors cannot disagree.
-            const seen = new Set(configs.map((c) => c.id));
-            const everyConfig = [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
-            const jobCount = new Set(
-              everyConfig.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
-            ).size;
+            // Server counts (/configs/stats, the same shared WHERE the lists
+            // page with), as on Assessments. `configs` now holds only the
+            // pages loaded so far, so tallying it under-counted every pill.
             return [
-              { key: 'all', label: 'Configured Jobs', count: everyConfig.length ? jobCount : (stats?.total_configs ?? 0) },
-              { key: 'all-interviews', label: 'All Interviews', count: everyConfig.length || (stats?.total_configs ?? 0) },
-              { key: 'published', label: 'Active', count: configs.length ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length : (stats?.published_configs ?? 0) },
-              { key: 'draft', label: 'Draft', count: configs.length ? configs.filter((c) => c.status === 'draft').length : (stats?.draft_configs ?? 0) },
-              { key: 'archived', label: 'Archived', count: archivedConfigs.length || (stats?.archived_configs ?? 0) },
+              { key: 'all', label: 'Configured Jobs', count: stats?.total_jobs ?? 0 },
+              { key: 'all-interviews', label: 'All Interviews', count: stats?.total_configs ?? 0 },
+              { key: 'published', label: 'Active', count: stats?.published_configs ?? 0 },
+              { key: 'draft', label: 'Draft', count: stats?.draft_configs ?? 0 },
+              { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? 0 },
             ];
           })().map(tab => {
             const isActive = activeTab === tab.key;
@@ -3599,7 +3609,7 @@ export default function AIInterview() {
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
-              {isRefreshingTab || (serverTotalJobs && totalJobsPaged.loading) ? (
+              {isRefreshingTab || (serverTotalJobs && totalJobsWaiting) ? (
                 <div
                   aria-busy="true"
                   aria-label="Refreshing jobs"
@@ -3607,7 +3617,7 @@ export default function AIInterview() {
                 >
                   {configRowsSkeleton}
                 </div>
-              ) : (serverTotalJobs ? (totalJobsPaged.loading ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
+              ) : (serverTotalJobs ? (totalJobsWaiting ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
                     <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />

@@ -14,7 +14,7 @@ import api, { handleApiError, dispatchUnitsConsumed, getTokens } from './api';
    `{ force: true }` to skip the throttle (e.g. right after a write). */
 const RECONCILE_THROTTLE_MS = 15 * 60 * 1000;
 const RECONCILE_STORAGE_PREFIX = 'tf-usage-reconcile-at:';
-let reconcileInFlight: Promise<void> | null = null;
+let reconcileInFlight: Promise<boolean> | null = null;
 
 function reconcileStorageKey(): string {
   // Key by account so a different login in the same tab is not throttled by
@@ -470,23 +470,27 @@ export const resumeService = {
    * the endpoint is idempotent and returns delta=0 when already in sync.
    * Throttled to once per 15 minutes per tab session (see
    * RECONCILE_THROTTLE_MS above); `force` bypasses the throttle.
+   * Resolves true only when a reconcile actually ran and succeeded, so a
+   * caller refreshes quota only when the counter may have moved.
    */
-  async reconcileUsage(options?: { force?: boolean }): Promise<void> {
+  async reconcileUsage(options?: { force?: boolean }): Promise<boolean> {
     if (reconcileInFlight) return reconcileInFlight;
     const key = typeof window !== 'undefined' ? reconcileStorageKey() : null;
     if (key && !options?.force) {
       const last = readReconcileStamp(key);
       const now = Date.now();
-      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return;
+      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return false;
     }
     if (key) writeReconcileStamp(key, Date.now());
     reconcileInFlight = (async () => {
       try {
         await api.post('/resumes/usage/reconcile');
+        return true;
       } catch {
         // Reconciliation is best-effort; never block the page on it. Drop the
         // stamp so the next mount retries, as it did before the throttle.
         if (key) writeReconcileStamp(key, null);
+        return false;
       } finally {
         reconcileInFlight = null;
       }
