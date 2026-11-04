@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { AlertCircle, Check, CheckCircle2, Copy, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { AlertCircle, Check, CheckCircle2, Copy, ListChecks, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
@@ -13,6 +14,13 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { usePermissions } from '@/lib/hooks/usePermissions';
+import dynamic from 'next/dynamic';
+
+/* On demand: this panel is mounted from the dashboard layout, and both track
+   modals (with their invite tables and version panels) only open on a click. */
+const TrackInvitesModal = dynamic(() => import('@/components/TrackInvitesModal'), { ssr: false, loading: () => null });
+const AIInterviewTrackInvitesModal = dynamic(() => import('@/components/AIInterviewTrackInvitesModal'), { ssr: false, loading: () => null });
 
 const POLL_MS = 2000;
 /* Rows per page, from the standard pager's ladder. */
@@ -82,6 +90,15 @@ export default function BulkInviteProgressPanel({
   const [loadingRows, setLoadingRows] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  /* "Track status" on a sent row: the tracker for this send's interview /
+     assessment, opened over this popup, filtered to that candidate. */
+  const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
+  /* Revoke / Edit on the "Track status" popup's own tracker — same gate the
+     Assessments page's Track Invites popup trusts implicitly (reaching that
+     page already requires this permission). This widget can surface anywhere,
+     so it checks explicitly rather than assuming the host page already did. */
+  const { hasPermission, isTenantAdmin } = usePermissions();
+  const canModifyAssessmentInvites = isTenantAdmin || hasPermission('canUpdateAssessments') || hasPermission('canCreateAssessments');
   const active = !!job && isBulkInviteActive(job);
 
   /* A run that no worker has picked up for two minutes: say so, rather
@@ -249,7 +266,7 @@ export default function BulkInviteProgressPanel({
     if (r.status === 'processing') return 'Sending now…';
     return 'Waiting in the queue.';
   };
-  const GRID = 'sm:grid-cols-[2rem_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_minmax(0,2fr)_4rem]';
+  const GRID = 'sm:grid-cols-[2rem_minmax(0,1.2fr)_minmax(0,1.3fr)_7rem_minmax(0,2fr)_8.5rem]';
 
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
@@ -420,9 +437,19 @@ export default function BulkInviteProgressPanel({
                 </span>
               </span>
               <p className={`text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</p>
-              {/* Action — a sent invite's link to copy */}
+              {/* Action — only a sent invite has a status to track */}
               <div className="flex items-center gap-1.5 sm:justify-end">
-                {isSent && r.link ? (
+                {isSent ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setTrackRow(r)}
+                      aria-label={`Track status for ${r.name || r.email}`}
+                      className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10"
+                    >
+                      <ListChecks className="w-3.5 h-3.5" /> Track status
+                    </button>
+                    {r.link && (
                       <button
                         type="button"
                         onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
@@ -432,6 +459,8 @@ export default function BulkInviteProgressPanel({
                       >
                         {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
+                    )}
+                  </>
                 ) : (
                   <span className="hidden sm:inline tf-meta">—</span>
                 )}
@@ -453,6 +482,33 @@ export default function BulkInviteProgressPanel({
           pageSizeOptions={PAGE_SIZE_OPTIONS}
         />
       </div>
+
+      {trackRow && typeof document !== 'undefined' && createPortal(
+        /* Portaled above the invite popup (its open animation's transform
+           would otherwise trap a fixed child) and above the results dialog. */
+        <div className="relative z-[80]">
+          {job.kind === 'interview' ? (
+            <AIInterviewTrackInvitesModal
+              isOpen
+              onClose={() => setTrackRow(null)}
+              configId={job.version_id}
+              jdTitle={job.version_label || 'AI Interview'}
+              hideJobVersionFilter
+              initialSearch={trackRow.email || trackRow.name || undefined}
+            />
+          ) : (
+            <TrackInvitesModal
+              isOpen
+              onClose={() => setTrackRow(null)}
+              jdId={job.jd_id}
+              jdTitle={job.version_label || 'Assessment'}
+              initialSearch={trackRow.email || trackRow.name || undefined}
+              canModifyInvites={canModifyAssessmentInvites}
+            />
+          )}
+        </div>,
+        document.body,
+      )}
 
     </div>
   );

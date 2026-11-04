@@ -42,6 +42,14 @@ declare module 'axios' {
      * away the shared GETs in flight. Never set it on a request that writes.
      */
     invalidatesCache?: boolean;
+    /**
+     * Non-GET only, narrower than `invalidatesCache`: `false` keeps the list
+     * caches (listCache, and the paged lists that re-read when it clears) but
+     * still clears the 1 s shared GETs. For writes that touch no listed data —
+     * e.g. the header's notification bookkeeping POSTs on every hard load,
+     * which otherwise made every paged list fetch its page a second time.
+     */
+    invalidatesLists?: boolean;
   }
 }
 const GET_REUSE_MS = 1000;
@@ -651,8 +659,16 @@ api.interceptors.response.use(
     }
 
     // ✅ Check if quota-status response has expired trial/plan dates
-    if (response.config.url?.includes('/usage/quota-status')) {
-      const quotaData = response.data?.data || response.data;
+    // The app-shell /bootstrap response carries the same quota-status body
+    // (parts.quota_status.data) — run the same expiry check on it.
+    const bootstrapQuotaPart = response.config.url?.includes('/bootstrap')
+      ? response.data?.parts?.quota_status
+      : undefined;
+    const bootstrapQuota = bootstrapQuotaPart?.status === 200 ? bootstrapQuotaPart.data : undefined;
+    if (response.config.url?.includes('/usage/quota-status') || bootstrapQuota) {
+      const quotaData = bootstrapQuota
+        ? (bootstrapQuota.data || bootstrapQuota)
+        : (response.data?.data || response.data);
       if (!quotaData) {
         return response; // No data to check
       }

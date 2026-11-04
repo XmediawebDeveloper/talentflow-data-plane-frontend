@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
-import { aiMatchService, AIMatchSessionResponse, AIMatchSessionListResponse } from '@/lib/services/aiMatchService';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -171,16 +170,6 @@ interface Job {
   compensationType?: string;
 }
 
-interface MatchHistory {
-  id: string;
-  jobId: string;
-  jobTitle: string;
-  matchedAt: Date;
-  totalMatches: number;
-  matchedCandidates: any[];
-  /** Who ran the match — the sessions API's `run_by_name`. */
-  matchedByName?: string;
-}
 
 // Transform JD API response to Job format for the component
 //
@@ -222,284 +211,41 @@ function transformJDToJob(jd: JDResponse): Job {
   };
 }
 
-/** How long a just-run match keeps being merged into refetched history while
- *  the sessions list doesn't carry it yet — see pendingMatchesRef. */
-const PENDING_MATCH_TTL_MS = 2 * 60 * 1000;
-
-
-/** Every match session, not just the first 100 — the endpoint caps page_size
- *  at 100, and history past that silently vanished. Page 1 carries the totals
- *  (and the tenant-wide rating-band counts), the rest are fetched in parallel.
- *  A later page failing keeps page 1 and every page that did load (flagged
- *  via `partial`) rather than discarding the whole history; a session that
- *  shifts across a page boundary between requests is kept once. */
-async function listAllSessions(): Promise<AIMatchSessionListResponse & { partial?: boolean }> {
-  const PAGE_SIZE = 100;
-  const first = await aiMatchService.listSessions({ page: 1, page_size: PAGE_SIZE });
-  const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
-  if (pages <= 1) return first;
-  const rest = await Promise.allSettled(
-    Array.from({ length: pages - 1 }, (_, i) => aiMatchService.listSessions({ page: i + 2, page_size: PAGE_SIZE }))
-  );
-  const seen = new Set<string>();
-  const items = [
-    ...(first.items || []),
-    ...rest.flatMap(r => (r.status === 'fulfilled' ? r.value.items || [] : [])),
-  ].filter(s => {
-    if (seen.has(s.id)) return false;
-    seen.add(s.id);
-    return true;
-  });
-  return { ...first, items, partial: rest.some(r => r.status === 'rejected') };
-}
-
 export default function AITalentMatchRoute() {
+  /* The landing is two calls, made by AITalentMatchPage itself (usePagedList):
+       GET /ai-match/stats   — the cards
+       GET /ai-match/jobs    — one page of matched jobs, JD records attached
+     This route no longer pages through every match session, or pulls the JD
+     list, before the first paint. The user's JD list is only for the Run AI
+     Match picker and deep links, so it loads when the page asks for it. */
   const [jobs, setJobs] = useState<Job[]>([]);
-  const [matchHistory, setMatchHistory] = useState<MatchHistory[]>([]);
-  const [matchSessionCounts, setMatchSessionCounts] = useState<Record<string, number>>({});
-  // "Top Match Rating (10)" / "Top Match Rating (9-7)": tenant-wide counts
-  // precomputed server-side in the same /ai-match/sessions call, so these
-  // stat cards render immediately instead of waiting on every session's
-  // full candidate detail to be fetched and bucket-counted client-side.
-  const [ratingBandCounts, setRatingBandCounts] = useState<{ exact: number; partial: number } | null>(null);
-  // "Match by Candidate": tenant-wide distinct-candidate count across every
-  // job's latest match session, precomputed server-side in the same call so
-  // the stat card renders immediately instead of fetching every job's
-  // session and de-duplicating the rows in the browser (see
-  // AITalentMatchPage's buildCandidateRows, which still builds the full
-  // roll-up table lazily when the tab is actually opened).
-  const [totalMatchedCandidatesCount, setTotalMatchedCandidatesCount] = useState<number | null>(null);
-  // Every session from the same call, kept raw (not collapsed to one-per-job
-  // like `matchHistory`) so "View Versions" can build its table straight from
-  // memory instead of re-fetching per job version — see
-  // AITalentMatchPage's getOptimisticAIMatchVersions.
-  const [allMatchSessions, setAllMatchSessions] = useState<AIMatchSessionResponse[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  /* Bumped by every fetchData run and on unmount, so a response belonging to
-     an older run is dropped instead of overwriting newer data. */
-  const fetchSeqRef = useRef(0);
-  /* Match runs this mount just made (handleSaveMatch), by job, until a
-     refetch returns their session. `baselineId` is the job's session id
-     before the run: the response is only "caught up" once the job's latest
-     session is a different one. Until then the optimistic entry is merged
-     back in, so a refetch that races the backend's write can't wipe it. */
-  const pendingMatchesRef = useRef(new Map<string, { entry: MatchHistory; baselineId: string | null; savedAt: number }>());
+  const [jobsLoaded, setJobsLoaded] = useState(false);
+  const jobsRequestedRef = useRef(false);
+  const mountedRef = useRef(true);
+  useEffect(() => () => { mountedRef.current = false; }, []);
 
-  /* Extracted so a completed match can trigger the same fetch again instead of
-     only ever running once per mount. `matchHistory`/`jobs`/`matchSessionCounts`
-     used to go stale after the FIRST match run because nothing re-called this —
-     running a match only updated AITalentMatchPage's own local state. It looked
-     like it "worked once" only because navigating away to create a JD and back
-     happened to remount this route the first time; a second round trip hit
-     Next's client-side route cache and reused the same (still stale) instance. */
-  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
-      const seq = ++fetchSeqRef.current;
-      const isStale = () => seq !== fetchSeqRef.current;
-      try {
-        if (!opts?.silent) setIsLoading(true);
-
-        // Fetch ALL jobs (not just published) so we can show disabled jobs in history
-        // and match history in parallel
-        const [jobsResponse, historyResponse] = await Promise.all([
-          jdService.list({ page_size: 100, source: 'my-jds' }), // Fetch user's jobs to show disabled jobs in history
-          listAllSessions().catch(
-            (): AIMatchSessionListResponse & { partial?: boolean } => ({ items: [], total: 0, page: 1, page_size: 100 })
-          ),
-        ]);
-        if (isStale()) return;
-        if (historyResponse.partial) {
-          toast.error('Some match history could not be loaded — counts may be incomplete. Refresh to try again.');
-        }
-
-        // The page of 100 above is the most recently updated JDs, and a tenant
-        // can have hundreds — a job matched weeks ago falls off it. Every lookup
-        // below (title, JD code, department, location, version) then missed, and
-        // the job's card read "Unknown Job" (8 of 11 on a 427-JD tenant). Pull
-        // exactly the JDs the sessions point at that the page didn't bring.
-        const listedIds = new Set(jobsResponse.items.map(jd => jd.id));
-        const missingIds = [...new Set(
-          historyResponse.items.map(s => s.jd_id).filter((id): id is string => !!id && !listedIds.has(id))
-        )];
-        let referencedJDs: JDResponse[] = [];
-        if (missingIds.length > 0) {
-          try {
-            // Chunked so a long id list can't outgrow the URL.
-            const chunks: string[][] = [];
-            for (let i = 0; i < missingIds.length; i += 100) chunks.push(missingIds.slice(i, i + 100));
-            const responses = await Promise.all(chunks.map(ids => jdService.list({ ids, page_size: ids.length })));
-            referencedJDs = responses.flatMap(r => r.items || []);
-          } catch (err) {
-            // Titles still come from the session's own jd_title below.
-            console.warn('[AITalentMatch] Failed to load JDs referenced by match sessions:', err);
-          }
-          if (isStale()) return;
-        }
-
-        const transformedJobs = [...jobsResponse.items, ...referencedJDs].map(transformJDToJob);
-        setJobs(transformedJobs);
-
-        // Group sessions by job - only keep the latest session per job
-        const sessionsByJob = new Map<string, AIMatchSessionResponse>();
-        // How many match runs a job has across its whole lineage, so the card
-        // can show "View Version History" only when there is more than one run
-        // to look back at. Keyed by the human JD-xxx code rather than the raw
-        // session.jd_id: a republish forks the JD into a new row with its own
-        // id, so a job matched once, republished, then matched again produces
-        // two sessions with two DIFFERENT jd_ids — counting by jd_id alone
-        // would read as "1 run" on each version and never show the button.
-        const sessionCounts: Record<string, number> = {};
-        for (const session of historyResponse.items) {
-          const jobId = session.jd_id || session.search_query || 'unknown';
-          const ownerJob = transformedJobs.find(j => j.id === session.jd_id);
-          const countKey = ownerJob?.jobId || session.jd_job_id || jobId;
-          sessionCounts[countKey] = (sessionCounts[countKey] || 0) + 1;
-          const existing = sessionsByJob.get(jobId);
-          // Keep the most recent session for each job
-          if (!existing || new Date(session.created_at) > new Date(existing.created_at)) {
-            sessionsByJob.set(jobId, session);
-          }
-        }
-        setMatchSessionCounts(sessionCounts);
-        setRatingBandCounts({
-          exact: historyResponse.top_rating_exact_count ?? 0,
-          partial: historyResponse.top_rating_partial_count ?? 0,
-        });
-        setTotalMatchedCandidatesCount(historyResponse.total_matched_candidates ?? 0);
-        setAllMatchSessions(historyResponse.items || []);
-
-        // Keep route load summary-only.
-        // Candidate details are fetched lazily when the user opens a specific session.
-        const history: MatchHistory[] = Array.from(sessionsByJob.values()).map((session: AIMatchSessionResponse) => {
-          const job = transformedJobs.find(j => j.id === session.jd_id);
-
-          return {
-            id: session.id,
-            jobId: session.jd_id || '',
-            jobTitle: job?.title || session.jd_title || session.search_query || 'Unknown Job',
-            matchedAt: new Date(session.created_at),
-            totalMatches: session.total_matches,
-            matchedCandidates: [],
-            matchedByName: session.run_by_name || undefined,
-          };
-        });
-
-        // Runs made on this mount that the response doesn't carry yet keep
-        // their optimistic entry (see pendingMatchesRef). One that never shows
-        // up stops being merged after PENDING_MATCH_TTL_MS, so a run the
-        // backend didn't record can't linger for the rest of the visit.
-        pendingMatchesRef.current.forEach((pending, jobId) => {
-          const index = history.findIndex(h => h.jobId === jobId);
-          const caughtUp = index >= 0 && history[index].id !== pending.baselineId;
-          if (caughtUp || Date.now() - pending.savedAt > PENDING_MATCH_TTL_MS) {
-            pendingMatchesRef.current.delete(jobId);
-            return;
-          }
-          if (index >= 0) history[index] = pending.entry;
-          else history.push(pending.entry);
-        });
-
-        // Sort by most recent first
-        history.sort((a, b) => b.matchedAt.getTime() - a.matchedAt.getTime());
-
-        setMatchHistory(history);
-        setError(null);
-      } catch (err) {
-        if (isStale()) return;
-        console.error('Failed to fetch data:', err);
-        // A silent background refresh (after a match completes) failing
-        // shouldn't wipe out the good data already on screen — only the
-        // initial load clears state on error.
-        if (!opts?.silent) {
-          setError(err instanceof Error ? err.message : 'Failed to load data');
-          setJobs([]);
-          setMatchHistory([]);
-          setMatchSessionCounts({});
-          setRatingBandCounts(null);
-          setTotalMatchedCandidatesCount(null);
-          setAllMatchSessions([]);
-        }
-      } finally {
-        // A stale run leaves the loading state to the run that replaced it.
-        if (!isStale()) setIsLoading(false);
-      }
+  const requestJobs = useCallback(() => {
+    if (jobsRequestedRef.current) return;
+    jobsRequestedRef.current = true;
+    jdService.list({ page_size: 100, source: 'my-jds' })
+      .then(res => { if (mountedRef.current) setJobs((res.items || []).map(transformJDToJob)); })
+      .catch(err => {
+        console.error('[AITalentMatch] Failed to load jobs:', err);
+        toast.error('Failed to load your jobs. Refresh to try again.');
+      })
+      .finally(() => { if (mountedRef.current) setJobsLoaded(true); });
   }, []);
-
-  useEffect(() => {
-    fetchData();
-    // Invalidate the in-flight run on unmount.
-    return () => { fetchSeqRef.current += 1; };
-  }, [fetchData]);
-
-  /* Update matchHistory the INSTANT a match finishes, rather than waiting on
-     the silent server refetch (`onMatchComplete` below) to pick it up. The
-     refetch hits GET /ai-match/sessions right after the match completes —
-     if the backend writes that session record slightly after responding
-     with the match results (a plausible async/eventual-consistency gap),
-     the refetch can win the race and come back with the OLD list, so
-     "Matched Jobs" still reads its pre-match count even though the match
-     genuinely just ran. This optimistic update doesn't depend on that
-     timing at all — it uses the same MatchHistory object the child already
-     built locally. The silent refetch stays in place as a background
-     reconciliation (candidate counts, session de-dup) but is no longer the
-     only source for the stat the user is actually watching. */
-  const handleSaveMatch = useCallback((newMatch: MatchHistory) => {
-    setMatchHistory(prev => {
-      const existingIndex = prev.findIndex(h => h.jobId === newMatch.jobId);
-      // Remember the run until a refetch returns it. A second run before then
-      // keeps the first run's baseline — the session the server last had.
-      // (Idempotent, so a double-invoked updater records the same thing.)
-      const earlier = pendingMatchesRef.current.get(newMatch.jobId);
-      pendingMatchesRef.current.set(newMatch.jobId, {
-        entry: newMatch,
-        baselineId: earlier ? earlier.baselineId : existingIndex >= 0 ? prev[existingIndex].id : null,
-        savedAt: Date.now(),
-      });
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = newMatch;
-        return updated;
-      }
-      return [newMatch, ...prev];
-    });
-  }, []);
-
-  if (isLoading) {
-    return <AITalentMatchSkeleton />;
-  }
-
-  if (error) {
-    return (
-      <div className="tf-loader-page bg-slate-50 p-4">
-        <div className="text-center max-w-md">
-          <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 ring-1 ring-red-200 dark:ring-red-500/40 rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="text-red-600 dark:text-red-400 text-lg sm:text-xl">!</span>
-          </div>
-          <h2 className="tf-section-title sm:text-lg mb-2 tracking-tight">Failed to Load Jobs</h2>
-          <p className="tf-body-secondary mb-4">{error}</p>
-          <button
-            onClick={() => window.location.reload()}
-            className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0"
-          >
-            Retry
-          </button>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <FeatureGate feature="ai_talent_match">
       <div className="tf-page relative flex flex-col">
         <AITalentMatchPage
           jobs={jobs}
-          matchHistory={matchHistory}
-          matchSessionCounts={matchSessionCounts}
-          ratingBandCounts={ratingBandCounts}
-          totalMatchedCandidatesCount={totalMatchedCandidatesCount}
-          allMatchSessions={allMatchSessions}
-          onSaveMatch={handleSaveMatch}
-          onMatchComplete={() => fetchData({ silent: true })}
+          jobsLoaded={jobsLoaded}
+          onRequestJobs={requestJobs}
+          // A finished run is a write: the shared api client clears the list
+          // cache and the page's paged lists re-read themselves.
+          onMatchComplete={() => { /* lists refresh on the write */ }}
         />
       </div>
     </FeatureGate>

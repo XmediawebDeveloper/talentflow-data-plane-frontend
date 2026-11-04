@@ -3,7 +3,8 @@
 import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info } from 'lucide-react';
+import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info, FileText } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -41,6 +42,7 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { usePagedList } from '@/lib/hooks/usePagedList';
 
 interface SearchFilters {
   skills?: string[];
@@ -53,6 +55,118 @@ interface SearchFilters {
   uploadDateRange?: { start?: string; end?: string };
   uploadedBy?: string;
   sourceType?: string;
+}
+
+/** GET /resumes params for one page of the Shared Database. */
+type InternalDbQuery = ResumeSearchParams & { page: number; page_size: number; [k: string]: unknown };
+
+/** UI sort keys -> server sort_by (GET /resumes). */
+const INTERNAL_DB_SORT: Record<string, string> = {
+  latest: 'date-desc',
+  lastUpdated: 'updated-desc',
+  'name-asc': 'name-asc',
+  'name-desc': 'name-desc',
+  'experience-high': 'experience-desc',
+  'experience-low': 'experience-asc',
+};
+
+function buildInternalDbQuery(
+  filters: SearchFilters,
+  searchText: string,
+  sortBy: string,
+  page: number,
+  pageSize: number,
+): InternalDbQuery {
+  const q: InternalDbQuery = {
+    source: 'internal-db',
+    page,
+    page_size: pageSize,
+    sort_by: INTERNAL_DB_SORT[sortBy] || 'date-desc',
+  };
+  const text = searchText.trim();
+  if (text) {
+    q.search = text;
+    // The old client-side search matched a resume containing ANY keyword.
+    q.search_mode = 'any';
+  }
+  if (filters.skills && filters.skills.length > 0) q.skills = filters.skills.join(',');
+  if (filters.experienceRange?.min !== undefined) q.experience_min = filters.experienceRange.min;
+  if (filters.experienceRange?.max !== undefined) q.experience_max = filters.experienceRange.max;
+  if (filters.location) q.location = filters.location;
+  if (filters.education) q.education = filters.education;
+  if (filters.currentCompany) q.current_company = filters.currentCompany;
+  if (filters.previousCompany) q.previous_company = filters.previousCompany;
+  if (filters.noticePeriod) q.notice_period = filters.noticePeriod;
+  if (filters.uploadedBy) q.uploaded_by_name = filters.uploadedBy;
+  if (filters.uploadDateRange?.start) q.upload_date_from = filters.uploadDateRange.start;
+  if (filters.uploadDateRange?.end) q.upload_date_to = filters.uploadDateRange.end;
+  if (filters.sourceType) q.source_type = filters.sourceType;
+  return q;
+}
+
+/** Last whole-pool "including versions" figure seen (see fetchPage). */
+let lastTotalIncludingVersions: number | undefined;
+
+/** API resume -> table row for the Shared Database. */
+function toListRow(r: ApiResume): Resume {
+  return {
+    id: r.id,
+    name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
+    email: r.email || 'No email',
+    phone: r.phone || 'No phone',
+    title: r.current_title || 'N/A',
+    experience: formatCandidateExperience(r.experience_months, r.experience_years) || 'N/A',
+    education: r.education?.[0]?.degree || 'N/A',
+    location: r.location || 'N/A',
+    skills: r.skills || [],
+    source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
+    folderId: r.folder_id || '',
+    uploadDate: r.created_at,
+    attachments: r.version_count || 1, // Show version count as file count
+    uploadedBy: r.uploaded_by_name || 'System',
+    versionCount: r.version_count || 1,
+    version: r.version || 1,
+    is_archived: r.is_archived || false,
+    isArchived: r.is_archived || false,
+    is_tenant_user_email: r.is_tenant_user_email || false,
+    isTenantUserEmail: r.is_tenant_user_email || false,
+    currentCompany: r.current_company,
+    previousCompany: r.previous_company,
+    noticePeriod: r.notice_period,
+    lastUpdated: r.updated_at,
+    // Extended fields for detailed view
+    professionalSummary: r.professional_summary,
+    technicalSkills: r.technical_skills,
+    softSkills: r.soft_skills,
+    educationDetails: (r.education as any[])?.map((edu: any) => ({
+      degree: edu.degree || '',
+      school: edu.school || edu.institution || '',
+      location: edu.location || '',
+      year: edu.year || edu.graduation_year || '',
+      gpa: edu.gpa || '',
+      honors: edu.honors || '',
+    })),
+    experienceDetails: (r.experience as any[])?.map((exp: any) => ({
+      title: exp.title || exp.position || '',
+      company: exp.company || '',
+      location: exp.location || '',
+      startDate: exp.start_date || '',
+      endDate: exp.end_date || 'Present',
+      duration: exp.duration || '',
+      description: exp.description || '',
+      achievements: exp.achievements || exp.responsibilities || [],
+    })),
+    certifications: r.certifications?.map((cert: any) => ({
+      name: cert.name || cert.title || '',
+      issuer: cert.issuer || cert.organization || '',
+      date: cert.date || cert.issued_date || '',
+      credentialId: cert.credential_id || cert.credentialId || '',
+    })),
+    languages: r.languages?.map((lang: any) => ({
+      name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
+      proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
+    })),
+  };
 }
 
 /**
@@ -68,15 +182,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
   // never hidden — see usePlanLock.
   const { isPlanLocked } = usePlanLock();
-  const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<Folder[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [isDownloadingSelection, setIsDownloadingSelection] = useState(false);
   // ZIP download confirmation modal — shown when more than one resume is selected.
   const [isZipDownloadModalOpen, setIsZipDownloadModalOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  // Search + filters in the shared hook. `appliedQuery` is the settled value —
-  // it is what the API request and the row highlighting are built from.
+  // Search + filters in the shared hook. `appliedQuery` is the settled value
+  // (debounced ~300 ms) — it is what the API request and the row highlighting
+  // are built from.
   const search = useListSearch<Record<string, unknown>>({ initialFilters: {} });
   const searchQuery = search.query;
   const appliedSearchQuery = search.appliedQuery;
@@ -85,10 +198,49 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalResumes, setTotalResumes] = useState(0);
-  const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(undefined);
   const [pageSize] = useState(10);
+
+  /* Server-paged: one GET /resumes page (10 rows) for the current search,
+     filters, sort and page. Search/sort/filter all run on the server (it
+     searches the same fields the old client-side search did, with the same
+     "any keyword" rule via search_mode=any). This used to page through the
+     WHOLE database (fetchAllRows) and slice it in the browser. */
+  const listQuery = useMemo(
+    () => buildInternalDbQuery(filters, appliedSearchQuery, sortBy, currentPage, pageSize),
+    [filters, appliedSearchQuery, sortBy, currentPage, pageSize],
+  );
+  const [totalIncludingVersions, setTotalIncludingVersions] = useState<number | undefined>(
+    lastTotalIncludingVersions,
+  );
+  const paged = usePagedList<ApiResume, null, InternalDbQuery>({
+    name: 'resumes:internal-db',
+    query: listQuery,
+    fetchPage: async (q) => {
+      const res = await resumeService.list(q);
+      // A whole-pool figure (the server ignores search/filters for it), so one
+      // value is enough; kept at module level so a remount served from the
+      // list cache still has it.
+      if (typeof res.total_including_versions === 'number') {
+        lastTotalIncludingVersions = res.total_including_versions;
+        setTotalIncludingVersions(res.total_including_versions);
+      }
+      return { items: res.items, total: res.total };
+    },
+  });
+  const resumes: Resume[] = useMemo(() => paged.items.map(toListRow), [paged.items]);
+  const totalResumes = paged.total;
+  const loading = paged.loading || paged.refreshing;
+  const refreshList = paged.refresh;
+
+  /* Every row this view has shown, by id. Selection survives paging, so bulk
+     actions on a selection spanning pages read the ticked rows from here, not
+     from the 10 on screen. */
+  const seenRowsRef = useRef<Map<string, Resume>>(new Map());
+  resumes.forEach((r) => seenRowsRef.current.set(r.id, r));
+  const rowById = (id: string): Resume | undefined => seenRowsRef.current.get(id);
+  const selectedRows: Resume[] = selectedResumes
+    .map((id) => rowById(id))
+    .filter((r): r is Resume => !!r);
 
   // Track if initial load is done
   const initialLoadDone = useRef(false);
@@ -120,7 +272,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // Restore/persist the list's view state + scroll position so returning from a
   // resume detail page (route push to /recruitment/resume-view/:id) lands the
   // user exactly where they left off instead of on a reset list at the top.
-  const rootRef = useScrollRestoration<HTMLElement>('resume-database', !loading);
+  const rootRef = useScrollRestoration<HTMLElement>('resume-database', !paged.loading);
   useListStatePersistence(
     'resume-database',
     { searchQuery, appliedSearchQuery, filters, sortBy, currentPage },
@@ -134,190 +286,26 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     },
   );
 
-  // Build search params from filters
-  const buildSearchParams = useCallback((): ResumeSearchParams => {
-    const params: ResumeSearchParams = {
-      source: 'internal-db',
-      page: 1,
-    };
-
-    // NOTE: Search is done client-side to include phone and skills
-    // The API search param is NOT used here
-
-    // Add skills filter
-    if (filters.skills && filters.skills.length > 0) {
-      params.skills = filters.skills.join(',');
-    }
-
-    // Add experience range
-    if (filters.experienceRange) {
-      if (filters.experienceRange.min !== undefined) {
-        params.experience_min = filters.experienceRange.min;
-      }
-      if (filters.experienceRange.max !== undefined) {
-        params.experience_max = filters.experienceRange.max;
-      }
-    }
-
-    // Add location
-    if (filters.location) {
-      params.location = filters.location;
-    }
-
-    // Add education
-    if (filters.education) {
-      params.education = filters.education;
-    }
-
-    // Add company filters
-    if (filters.currentCompany) {
-      params.current_company = filters.currentCompany;
-    }
-    if (filters.previousCompany) {
-      params.previous_company = filters.previousCompany;
-    }
-
-    // Add notice period
-    if (filters.noticePeriod) {
-      params.notice_period = filters.noticePeriod;
-    }
-
-    // Add uploaded by (uploader name, partial match)
-    if (filters.uploadedBy) {
-      params.uploaded_by_name = filters.uploadedBy;
-    }
-
-    // Add upload date range
-    if (filters.uploadDateRange) {
-      if (filters.uploadDateRange.start) {
-        params.upload_date_from = filters.uploadDateRange.start;
-      }
-      if (filters.uploadDateRange.end) {
-        params.upload_date_to = filters.uploadDateRange.end;
-      }
-    }
-
-    // Add source type
-    if (filters.sourceType) {
-      params.source_type = filters.sourceType;
-    }
-
-    return params;
-  }, [filters]);
-
-  /* Bumped by every fetchData run and on unmount, so a response belonging to
-     an older run (e.g. one for filters the user has since changed) is dropped
-     instead of overwriting newer data. */
-  const fetchSeqRef = useRef(0);
-
-  // Fetch data with filters. Not keyed on the search text: search runs
-  // client-side over the full list (see filteredAndSortedResumes), so typing
-  // must not refetch the whole database on every debounced keystroke.
-  const fetchData = useCallback(async () => {
-    const seq = ++fetchSeqRef.current;
-    const isStale = () => seq !== fetchSeqRef.current;
-    setLoading(true);
-    try {
-      const params = buildSearchParams();
-      // Probe with the smallest possible window to learn the true total,
-      // then issue one full-size request so the UI shows every record.
-      const [resumeResponse, folderResponse] = await Promise.all([
-        fetchAllRows((page_size, page) => resumeService.list({ ...params, page_size, page })),
-        folderService.list().catch(() => []),
-      ]);
-      if (isStale()) return;
-
-      // Convert API Resume to component Resume type
-      const convertedResumes: Resume[] = resumeResponse.items.map((r: ApiResume) => ({
-        id: r.id,
-        name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
-        email: r.email || 'No email',
-        phone: r.phone || 'No phone',
-        title: r.current_title || 'N/A',
-        experience: formatCandidateExperience(r.experience_months, r.experience_years) || 'N/A',
-        education: r.education?.[0]?.degree || 'N/A',
-        location: r.location || 'N/A',
-        skills: r.skills || [],
-        source: (r.source === 'ai_match' ? 'TalentFlow' : 'Manual') as 'Manual' | 'TalentFlow',
-        folderId: r.folder_id || '',
-        uploadDate: r.created_at,
-        attachments: r.version_count || 1, // Show version count as file count
-        uploadedBy: r.uploaded_by_name || 'System',
-        versionCount: r.version_count || 1,
-        version: r.version || 1,
-        is_archived: r.is_archived || false,
-        isArchived: r.is_archived || false,
-        is_tenant_user_email: r.is_tenant_user_email || false,
-        isTenantUserEmail: r.is_tenant_user_email || false,
-        currentCompany: r.current_company,
-        previousCompany: r.previous_company,
-        noticePeriod: r.notice_period,
-        lastUpdated: r.updated_at,
-        // Extended fields for detailed view
-        professionalSummary: r.professional_summary,
-        technicalSkills: r.technical_skills,
-        softSkills: r.soft_skills,
-        educationDetails: (r.education as any[])?.map((edu: any) => ({
-          degree: edu.degree || '',
-          school: edu.school || edu.institution || '',
-          location: edu.location || '',
-          year: edu.year || edu.graduation_year || '',
-          gpa: edu.gpa || '',
-          honors: edu.honors || '',
-        })),
-        experienceDetails: (r.experience as any[])?.map((exp: any) => ({
-          title: exp.title || exp.position || '',
-          company: exp.company || '',
-          location: exp.location || '',
-          startDate: exp.start_date || '',
-          endDate: exp.end_date || 'Present',
-          duration: exp.duration || '',
-          description: exp.description || '',
-          achievements: exp.achievements || exp.responsibilities || [],
-        })),
-        certifications: r.certifications?.map((cert: any) => ({
-          name: cert.name || cert.title || '',
-          issuer: cert.issuer || cert.organization || '',
-          date: cert.date || cert.issued_date || '',
-          credentialId: cert.credential_id || cert.credentialId || '',
-        })),
-        languages: r.languages?.map((lang: any) => ({
-          name: typeof lang === 'string' ? lang : (lang.name || lang.language || ''),
-          proficiency: typeof lang === 'string' ? 'Fluent' : (lang.proficiency || lang.level || 'Fluent'),
-        })),
-      }));
-
-      // Convert API Folder to component Folder type
-      const convertApiFolder = (f: ApiFolder): Folder => ({
-        id: f.id,
-        name: f.name,
-        count: f.resume_count || 0,
-        parentId: f.parent_id,
-        children: f.children?.map(convertApiFolder),
-      });
-      const convertedFolders: Folder[] = (Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder);
-
-      setResumes(convertedResumes);
-      setFolders(convertedFolders);
-      setTotalPages(resumeResponse.total_pages || 1);
-      setTotalResumes(resumeResponse.total || 0);
-      setTotalIncludingVersions(resumeResponse.total_including_versions);
-    } catch (error) {
-      if (isStale()) return;
-      console.error('Failed to fetch data:', error);
-      toast.error('Failed to load resume database');
-    } finally {
-      // A stale run leaves the loading state to the run that replaced it.
-      if (!isStale()) setLoading(false);
-    }
-  }, [buildSearchParams]);
-
-  // Fetch data when search params change
+  /* Folders only feed the upload modal's folder picker — read them when it
+     opens rather than on every landing / filter change. */
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-  // Invalidate the in-flight run on unmount.
-  useEffect(() => () => { fetchSeqRef.current += 1; }, []);
+    if (!isUploadModalOpen) return;
+    let cancelled = false;
+    folderService.list()
+      .then((folderResponse) => {
+        if (cancelled) return;
+        const convertApiFolder = (f: ApiFolder): Folder => ({
+          id: f.id,
+          name: f.name,
+          count: f.resume_count || 0,
+          parentId: f.parent_id,
+          children: f.children?.map(convertApiFolder),
+        });
+        setFolders((Array.isArray(folderResponse) ? folderResponse : []).map(convertApiFolder));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isUploadModalOpen]);
 
   // Self-heal admin-API resume usage on page mount. Fire-and-forget — never
   // blocks rendering. The backend caps deltas at ±200 to keep this safe.
@@ -356,7 +344,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   };
 
   const handleSelectAll = (selected: boolean) => {
-    setSelectedResumes(selected ? resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id) : []);
+    // The header checkbox is "Select all resumes on this page": tick/untick
+    // the rows on screen, keeping picks made on other pages.
+    const pageIds = resumes.filter(r => !isTenantUserEmailResume(r)).map(r => r.id);
+    setSelectedResumes(prev =>
+      selected
+        ? Array.from(new Set([...prev, ...pageIds]))
+        : prev.filter(id => !pageIds.includes(id)),
+    );
   };
 
   const [deleteConfirm, setDeleteConfirm] = useState<{ ids: string[]; names: string[] } | null>(null);
@@ -364,7 +359,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   const executeDelete = async (ids: string[]) => {
     try {
       await Promise.all(ids.map(id => resumeService.delete(id)));
-      setResumes(prev => prev.filter(r => !ids.includes(r.id)));
       setSelectedResumes(prev => prev.filter(r => !ids.includes(r)));
       toast.success(ids.length === 1 ? 'Resume deleted' : `${ids.length} resume(s) deleted`);
     } catch (error) {
@@ -373,7 +367,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   };
 
   const resumeName = (id: string) => {
-    const r = resumes.find(r => r.id === id);
+    const r = rowById(id);
     return r?.candidate_name || r?.file_name || 'this resume';
   };
 
@@ -401,8 +395,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     if (files.length === 1) {
       try {
         const r = await resumeService.upload(files[0], folderId);
-        const converted = convertApiResume(r);
-        setResumes(prev => [converted, ...prev]);
+        void r; // the upload POST clears the list cache; the page re-reads itself
         toast.success('Resume uploaded successfully');
       } catch (error) {
         handleQuotaError(error, router, `Failed to upload ${files[0].name}`);
@@ -446,8 +439,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               );
             }
 
-            // Refresh the resume list
-            fetchData();
+            // Refresh the resume list (a status poll is a GET, so nothing
+            // invalidated the cache on its own).
+            refreshList();
           }
         } catch (pollError) {
           console.error('Error polling batch status:', pollError);
@@ -598,7 +592,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
   // Handle Apply to Job for bulk selected resumes
   const handleBulkApplyToJob = () => {
-    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    const selectedResumesList = selectedRows;
     if (selectedResumesList.length === 0) {
       toast.error('Please select at least one resume');
       return;
@@ -620,7 +614,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
   // Handle AI Talent Match for bulk selected resumes
   const handleBulkAITalentMatch = () => {
-    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    const selectedResumesList = selectedRows;
     if (selectedResumesList.length === 0) {
       toast.error('Please select at least one resume');
       return;
@@ -645,15 +639,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Please select at least one resume');
       return;
     }
-    const archivedCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const archivedCount = selectedRows
       .filter(isResumeArchived).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
-    const tenantUserCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const tenantUserCount = selectedRows
       .filter(isTenantUserEmailResume).length;
     if (tenantUserCount > 0) {
       toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an AI interview.`);
@@ -682,7 +674,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       return;
     }
 
-    const selected = resumes.filter(r => selectedResumes.includes(r.id));
+    const selected = selectedRows;
     const resume = selected[0];
     toast.loading('Downloading resume...', { id: 'db-download' });
     try {
@@ -708,7 +700,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   // confirmation modal's Continue button.
   const handleZipDownload = async () => {
     if (selectedResumes.length === 0) return;
-    const selected = resumes.filter(r => selectedResumes.includes(r.id));
+    const selected = selectedRows;
 
     setIsDownloadingSelection(true);
     toast.loading(`Preparing ${selected.length} resumes for download...`, { id: 'db-download' });
@@ -763,7 +755,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
   // ✅ NEW: Handle bulk Resume Scoring
   const handleBulkResumeScoring = () => {
-    const selectedResumesList = resumes.filter(r => selectedResumes.includes(r.id));
+    const selectedResumesList = selectedRows;
     if (selectedResumesList.length === 0) {
       toast.error('Please select at least one resume');
       return;
@@ -777,8 +769,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
      are still passed — the popup lists them as disabled "No email" rows.
      Rows carry "No email" / "No phone" placeholders, stripped back here. */
   const selectedInviteCandidates = (): InviteCandidate[] =>
-    resumes
-      .filter((r) => selectedResumes.includes(r.id))
+    selectedRows
       .map((r) => {
         const email = typeof r.email === 'string' && r.email.includes('@') ? r.email.trim() : '';
         const rawPhone = (r as any).phone;
@@ -802,15 +793,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       toast.error('Please select at least one resume');
       return;
     }
-    const archivedCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const archivedCount = selectedRows
       .filter(isResumeArchived).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
-    const tenantUserCount = resumes
-      .filter(r => selectedResumes.includes(r.id))
+    const tenantUserCount = selectedRows
       .filter(isTenantUserEmailResume).length;
     if (tenantUserCount > 0) {
       toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an assessment.`);
@@ -869,7 +858,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
       // Get candidate names for the selected resumes
       const resumeItems = resumeIds.map(id => {
-        const resume = resumes.find(r => r.id === id);
+        const resume = rowById(id);
         return {
           resumeId: id,
           candidateName: resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown',
@@ -918,80 +907,19 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     }
   };
 
-  // Client-side search helper - searches across all text fields including phone, skills, and resume content
-  const matchesSearch = useCallback((resume: Resume, query: string): boolean => {
-    if (!query) return true;
+  // Search, sort and paging all happen on the server (see listQuery); the
+  // table shows the page it returned.
+  const paginatedResumes = resumes;
+  const calculatedTotalPages = Math.max(1, Math.ceil(totalResumes / pageSize));
 
-    const searchTerms = query.toLowerCase().split(/\s+/).filter(term => term.length > 0);
-    if (searchTerms.length === 0) return true;
-
-    // Create searchable text from all relevant fields INCLUDING resume content
-    const searchableFields = [
-      resume.name,
-      resume.email,
-      resume.phone,
-      resume.title,
-      resume.location,
-      resume.currentCompany,
-      resume.previousCompany,
-      resume.professionalSummary, // Search inside resume summary
-      ...(resume.skills || []), // Skills from resume
-      ...(resume.technicalSkills || []), // Technical skills from resume content
-      ...(resume.softSkills || []), // Soft skills from resume content
-    ].filter(Boolean).map(field => field?.toLowerCase() || '');
-
-    const searchableText = searchableFields.join(' ');
-
-    // Check if any search term matches (partial matching)
-    return searchTerms.some(term => searchableText.includes(term));
-  }, []);
-
-  // Filter and sort resumes client-side
-  const filteredAndSortedResumes = useMemo(() => {
-    // Apply client-side search filtering for all fields including phone and skills
-    let filtered = resumes;
-    if (appliedSearchQuery) {
-      filtered = resumes.filter(resume => matchesSearch(resume, appliedSearchQuery));
+  /* A page restored from the last visit (or left behind by a delete) can sit
+     past the end of a smaller result: step back to the last page with rows. */
+  useEffect(() => {
+    if (paged.loading || paged.refreshing) return;
+    if (resumes.length === 0 && totalResumes > 0 && currentPage > calculatedTotalPages) {
+      setCurrentPage(calculatedTotalPages);
     }
-
-    const sorted = [...filtered];
-    switch (sortBy) {
-      case 'latest':
-        return sorted.sort((a, b) => new Date(b.uploadDate).getTime() - new Date(a.uploadDate).getTime());
-      case 'lastUpdated':
-        return sorted.sort((a, b) => new Date(b.lastUpdated || b.uploadDate).getTime() - new Date(a.lastUpdated || a.uploadDate).getTime());
-      case 'name-asc':
-        return sorted.sort((a, b) => a.name.localeCompare(b.name));
-      case 'name-desc':
-        return sorted.sort((a, b) => b.name.localeCompare(a.name));
-      case 'experience-high':
-        return sorted.sort((a, b) => {
-          const aExp = parseInt(a.experience as string) || 0;
-          const bExp = parseInt(b.experience as string) || 0;
-          return bExp - aExp;
-        });
-      case 'experience-low':
-        return sorted.sort((a, b) => {
-          const aExp = parseInt(a.experience as string) || 0;
-          const bExp = parseInt(b.experience as string) || 0;
-          return aExp - bExp;
-        });
-      default:
-        return sorted;
-    }
-  }, [resumes, sortBy, appliedSearchQuery, matchesSearch]);
-
-  // Client-side pagination
-  const paginatedResumes = useMemo(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = startIndex + pageSize;
-    return filteredAndSortedResumes.slice(startIndex, endIndex);
-  }, [filteredAndSortedResumes, currentPage, pageSize]);
-
-  // Calculate total pages based on filtered results
-  const calculatedTotalPages = useMemo(() => {
-    return Math.max(1, Math.ceil(filteredAndSortedResumes.length / pageSize));
-  }, [filteredAndSortedResumes.length, pageSize]);
+  }, [paged.loading, paged.refreshing, resumes.length, totalResumes, currentPage, calculatedTotalPages]);
 
   // Calculate active filter count
   const activeFilterCount = Object.entries(filters).filter(([key, value]) => {
@@ -1043,7 +971,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     }
   };
 
-  if (loading && resumes.length === 0) {
+  if (paged.loading && resumes.length === 0) {
     // Exact-match skeleton: the same page chrome (breadcrumb, header, search bar)
     // and a table skeleton that mirrors ResumeTable's real columns — so the
     // placeholder lines up with the content that replaces it, not a generic block.
@@ -1099,7 +1027,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 {/* The same rows the table lists (search applied). The
                     versions note is a server total for the whole list, so it
                     only shows while no search is narrowing it. */}
-                {filteredAndSortedResumes.length.toLocaleString()} Resumes
+                {totalResumes.toLocaleString()} Resumes
                 {!appliedSearchQuery && typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
                   <> ({totalIncludingVersions - totalResumes} versions)</>
                 )}
@@ -1181,7 +1109,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             <div className="flex items-center gap-2">
               <Search className="w-4 h-4 text-brand-blue" />
               <span className="tf-body">
-                Found <span className="font-semibold">{filteredAndSortedResumes.length.toLocaleString()}</span> matching resume{filteredAndSortedResumes.length !== 1 ? 's' : ''}
+                Found <span className="font-semibold">{totalResumes.toLocaleString()}</span> matching resume{totalResumes !== 1 ? 's' : ''}
                 {appliedSearchQuery && (
                   <span> for "<span className="font-medium text-brand-blue">{appliedSearchQuery}</span>"</span>
                 )}
@@ -1222,6 +1150,23 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           }}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
+          emptyState={
+            appliedSearchQuery || activeFilterCount > 0 ? (
+              <EmptyState
+                icon={FileText}
+                title="No matching resumes"
+                description={appliedSearchQuery
+                  ? `No resumes match "${appliedSearchQuery}"${activeFilterCount > 0 ? ' with the selected filters' : ''}. Try a different name, skill or keyword.`
+                  : 'No resumes match the selected filters. Try choosing different filters.'}
+              />
+            ) : (
+              <EmptyState
+                icon={FileText}
+                title="No resumes yet"
+                description="Resumes you upload are saved here, ready to search and score against your jobs."
+              />
+            )
+          }
         />
 
         {/* The Job Descriptions pager (shared ListPagination). This list
@@ -1229,7 +1174,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         <ListPagination
           currentPage={currentPage}
           itemsPerPage={pageSize}
-          totalItems={filteredAndSortedResumes.length}
+          totalItems={totalResumes}
           onPageChange={handlePageChange}
           onItemsPerPageChange={() => {}}
           itemLabel="resumes"

@@ -193,6 +193,95 @@ export interface BatchScoringStatus {
   items: BatchScoringItem[];
 }
 
+/** Filters shared by GET /scoring/all and GET /scoring/stats. */
+export interface ScoringListFilters {
+  score_min?: number;
+  score_max?: number;
+  search?: string;
+  jd_search?: string;
+  date_from?: string;
+  date_to?: string;
+  /** Comma-separated JD version ids. */
+  jd_ids?: string;
+}
+
+export interface ScoringStats {
+  total: number;
+  exact_match: number;
+  partial_match: number;
+  no_match: number;
+  excellent_count: number;
+  partial_count: number;
+  no_match_count: number;
+  /** Distinct candidates (email, else name) behind each card. */
+  candidates: { all: number; exact_match: number; partial_match: number; no_match: number };
+}
+
+export interface ScoredJdRow {
+  jd_id: string;
+  lineage_key: string;
+  jd_title: string;
+  jd_status: string;
+  jd_job_id?: string;
+  jd_creation_method?: string;
+  jd_current_version?: number;
+  jd_version_number?: number;
+  jd_department?: string;
+  jd_industry_type?: string;
+  jd_employment_type?: string;
+  jd_remote_type?: string;
+  jd_location?: string;
+  jd_published_at?: string | null;
+  jd_created_by_name?: string | null;
+  /** Every score event (all versions in lineage mode). */
+  scored_count: number;
+  exact_count: number;
+  partial_count: number;
+  no_match_count: number;
+  latest_scored_at: string | null;
+  latest_scored_by_name?: string;
+  lineage_max_version: number;
+  version_ids: string[];
+}
+
+export interface ScoredJdListParams {
+  group_by?: 'lineage' | 'version';
+  search?: string;
+  created_by?: string;
+  scored_from?: string;
+  scored_to?: string;
+  location?: string;
+  work_mode?: string;
+  job_type?: string;
+  industry?: string;
+  match_status?: 'exact_match' | 'partial_match' | 'no_match';
+  sort_by?: 'scored' | 'title' | 'jdId' | 'candidates' | 'exact' | 'partial' | 'none';
+  sort_dir?: 'asc' | 'desc';
+  include_facets?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface ScoredJdListResponse {
+  items: ScoredJdRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  facets?: { locations: string[]; industries: string[]; work_modes: string[]; job_types: string[]; creators: string[] };
+}
+
+/** Drop empty / undefined params so they never reach the query string. */
+function cleanParams<T extends object>(params?: T): Partial<T> | undefined {
+  if (!params) return undefined;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 export const scoringService = {
   /**
    * Check if resumes have already been scored against a JD
@@ -258,6 +347,10 @@ export const scoringService = {
       score_min?: number;
       score_max?: number;
       search?: string;
+      sort_by?: 'score' | 'created_at' | 'name';
+      sort_dir?: 'asc' | 'desc';
+      /** false: skip the three verdict counts (returned null). */
+      include_counts?: boolean;
       page?: number;
       page_size?: number;
     }
@@ -265,6 +358,31 @@ export const scoringService = {
     try {
       const response = await api.get<ScoredResumeListResponse>(`/scoring/jd/${jdId}`, { params });
       return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Scored-applicant count per JD id, for many JDs in ONE request (chunks of
+   * 200) — the batched form of getJDScoredResumes(id, { page_size: 1 }).
+   * `total` is that call's `total`; `top` is its `items[0]` scorer/time (null
+   * when nothing was scored). Ids the server did not answer for are absent.
+   */
+  async getJdScoredCounts(
+    jdIds: string[],
+  ): Promise<Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    const out: Record<string, { total: number; top: { scored_by_name: string; created_at: string | null } | null }> = {};
+    if (ids.length === 0) return out;
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const response = await api.get<{ counts: typeof out }>('/scoring/jd/counts', {
+          params: { ids: ids.slice(i, i + 200).join(',') },
+        });
+        Object.assign(out, response.data?.counts || {});
+      }
+      return out;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -305,6 +423,11 @@ export const scoringService = {
       jd_search?: string;
       date_from?: string;
       date_to?: string;
+      jd_ids?: string;
+      sort_by?: 'created_at' | 'score' | 'name' | 'jd_title';
+      sort_dir?: 'asc' | 'desc';
+      /** false: skip the three verdict counts (cards come from getScoringStats). */
+      include_counts?: boolean;
       page?: number;
       page_size?: number;
     }
@@ -312,6 +435,35 @@ export const scoringService = {
     try {
       const response = await api.get<ScoredResumeListResponse>('/scoring/all', { params });
       return response.data as ScoredResumeListResponse & { items: Array<ScoringResponse & { jd_title: string }> };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Resume Scoring cards (GET /scoring/stats): total + Exact / Partial / No
+   * Match + distinct candidates per card, over the same filters
+   * GET /scoring/all takes (one shared server filter, so a card's count equals
+   * that list's total).
+   */
+  async getScoringStats(params?: ScoringListFilters): Promise<ScoringStats> {
+    try {
+      const response = await api.get<ScoringStats>('/scoring/stats', { params: cleanParams(params) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Scored jobs with their counts (GET /scoring/jds), paged. `group_by:
+   * 'lineage'` (default) = one row per job (its most recently scored version,
+   * counts over every version); 'version' = one row per scored JD version.
+   */
+  async listScoredJds(params?: ScoredJdListParams): Promise<ScoredJdListResponse> {
+    try {
+      const response = await api.get<ScoredJdListResponse>('/scoring/jds', { params: cleanParams(params) });
+      return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
     }

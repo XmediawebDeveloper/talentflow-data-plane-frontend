@@ -289,6 +289,8 @@ export interface AIInterviewResponse {
   /** Position in the interview's lineage (V1, V2..), stored by the backend. Null on
    *  candidate sessions and on rows that predate it. */
   interview_version?: number | null;
+  /** GET /configs (server-paged): the Nth config of its job version, over every config. */
+  list_ordinal?: number | null;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;
@@ -442,6 +444,123 @@ export interface AIInterviewStatsResponse {
   candidates_interviewed?: number;
   /** Finished interviews (completed + terminated), repeats included. */
   interview_sessions?: number;
+  /** Distinct jobs (JD lineages) with a config, for the same filters. */
+  total_jobs?: number;
+  /** Configs with at least one invitation ("Invite Shared"). */
+  invited_configs?: number;
+  /** Configs in completed / cancelled status. */
+  completed_configs?: number;
+}
+
+/**
+ * GET /ai-interview/configs and /configs/stats filter params — ONE builder on
+ * the server reads them for both, so a card's count equals the list's total.
+ * Every field optional; absent = the endpoint's original behaviour.
+ */
+export interface AIConfigListFilters {
+  /** One status, a comma list, or 'all' (archived included). */
+  status?: string;
+  search?: string;
+  /** 'table' = job name / JD id / AI id; 'list' = + creator name and must-have skills. */
+  search_scope?: 'table' | 'list';
+  mode?: 'timed' | 'flexible';
+  job?: string;
+  jd_version?: number;
+  interview_version?: number;
+  created_by?: string;
+  created_from?: string;
+  created_to?: string;
+  invited_only?: boolean;
+}
+
+export interface AIConfigListQuery extends AIConfigListFilters {
+  page: number;
+  page_size: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  status_first?: 'published' | 'active' | 'draft';
+  collapse?: 'lineage';
+  [k: string]: unknown;
+}
+
+export interface AIConfigFilterOptions {
+  jobs: { value: string; label: string; count: number }[];
+  job_versions: number[];
+  interview_versions: number[];
+  creators: string[];
+}
+
+/**
+ * GET /ai-interview/candidate-results (Results tab) filters — ONE builder on
+ * the server reads them for the page, /stats and /ids, so a count equals the
+ * list's total. Every field optional.
+ */
+export interface AICandidateResultsFilters {
+  search?: string;
+  /** JD short id (JD-014). */
+  job?: string;
+  jd_version?: number;
+  interview_version?: number;
+  invite_source?: string;
+  /** completed | terminated (comma list); default both. */
+  status?: string;
+  result?: 'pass' | 'fail' | 'unscored';
+  risk?: 'High' | 'Medium' | 'Low' | 'None';
+  completed_from?: string;
+  completed_to?: string;
+}
+
+export interface AICandidateResultsQuery extends AICandidateResultsFilters {
+  page: number;
+  page_size: number;
+  sort_by?: 'newest' | 'oldest';
+  /** Session ids (comma list) — rows by id for select-all / export. */
+  ids?: string;
+}
+
+/** A light result row: the session plus the labels the tab joins on. */
+export type AICandidateResultRow = AIInterviewResponse & {
+  _config_id: string;
+  _config_title: string;
+  _job_id: string;
+  _job_version: number;
+  _interview_version: number;
+};
+
+export interface AICandidateResultsStats {
+  total: number;
+  completed: number;
+  terminated: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+}
+
+export interface AICandidateResultsFilterOptions {
+  jobs: { value: string; title: string }[];
+  job_versions: number[];
+  interview_versions: number[];
+}
+
+export interface AIInvitationOverview {
+  total: number;
+  invited: number;
+  completed: number;
+  in_progress: number;
+  terminated: number;
+  cancelled: number;
+  revoked: number;
+  expired: number;
+}
+
+/** Drop empty values so the request (and the list cache key) carries only set filters. */
+export function cleanAIConfigParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
 }
 
 export interface SendInviteRequest {
@@ -557,6 +676,8 @@ export const aiInterviewService = {
     search?: string;
     page?: number;
     page_size?: number;
+    /** Rows without transcript / timer / coverage payloads (lists only). */
+    compact?: boolean;
   }): Promise<AIInterviewListResponse> {
     try {
       // Trailing slash on purpose: the list route is registered at "/", so the
@@ -917,6 +1038,140 @@ export const aiInterviewService = {
       },
       listReadOptions(opts),
     );
+  },
+
+  /** One page of configs for the given filters / sort (server-side paging). */
+  async listConfigsPage(query: AIConfigListQuery): Promise<AIInterviewListResponse> {
+    try {
+      const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', {
+        params: { compact: true, ...cleanAIConfigParams(query) },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every config matching the filters — only for actions that need them all
+   *  (export of a whole filtered set), at click time, never on landing. */
+  async listAllMatchingConfigs(query: Omit<AIConfigListQuery, 'page' | 'page_size'>): Promise<AIInterviewResponse[]> {
+    const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigsPage({ ...query, page, page_size } as AIConfigListQuery));
+    return result.items || [];
+  },
+
+  /** Card counts for the same filters the list takes. */
+  async getConfigStatsFiltered(filters: AIConfigListFilters = {}): Promise<AIInterviewStatsResponse> {
+    try {
+      const response = await api.get<AIInterviewStatsResponse>('/ai-interview/configs/stats', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Ids of every config matching the filters — select-all across pages. */
+  async getConfigIds(filters: AIConfigListFilters = {}): Promise<string[]> {
+    try {
+      const response = await api.get<{ ids: string[] }>('/ai-interview/configs/ids', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data?.ids || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** The filter panel's option lists — fetched when the panel opens. */
+  async getConfigFilterOptions(status?: string): Promise<AIConfigFilterOptions> {
+    try {
+      const response = await api.get<AIConfigFilterOptions>('/ai-interview/configs/filter-options', {
+        params: status ? { status } : {},
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab: one page of finished candidate sessions across every interview. */
+  async listCandidateResults(query: AICandidateResultsQuery): Promise<{ items: AICandidateResultRow[]; total: number }> {
+    try {
+      const response = await api.get<{ items: AICandidateResultRow[]; total: number }>(
+        '/ai-interview/candidate-results',
+        { params: cleanAIConfigParams(query) },
+      );
+      return { items: response.data?.items || [], total: response.data?.total ?? 0 };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab counts for the same filters the page takes. */
+  async getCandidateResultsStats(filters: AICandidateResultsFilters = {}): Promise<AICandidateResultsStats> {
+    try {
+      const response = await api.get<AICandidateResultsStats>('/ai-interview/candidate-results/stats', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every result row matching the filters, as {id, config_id}, in list order. */
+  async getCandidateResultIds(
+    filters: AICandidateResultsFilters & { sort_by?: 'newest' | 'oldest' } = {},
+  ): Promise<{ id: string; config_id: string }[]> {
+    try {
+      const response = await api.get<{ items: { id: string; config_id: string }[] }>(
+        '/ai-interview/candidate-results/ids',
+        { params: cleanAIConfigParams(filters) },
+      );
+      return response.data?.items || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Result rows by session id, 200 per request (select-all / export). */
+  async getCandidateResultsByIds(ids: string[]): Promise<AICandidateResultRow[]> {
+    const out: AICandidateResultRow[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const res = await aiInterviewService.listCandidateResults({ page: 1, page_size: chunk.length, ids: chunk.join(',') });
+      out.push(...res.items);
+    }
+    return out;
+  },
+
+  /** Results tab filter panel options — fetched when the panel opens. */
+  async getCandidateResultsFilterOptions(): Promise<AICandidateResultsFilterOptions> {
+    try {
+      const response = await api.get<AICandidateResultsFilterOptions>('/ai-interview/candidate-results/filter-options');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Invitation overview cards for many configs in one request (≤200 ids per call). */
+  async getInvitationOverview(configIds: string[]): Promise<Record<string, AIInvitationOverview>> {
+    const ids = Array.from(new Set(configIds.filter(Boolean)));
+    const out: Record<string, AIInvitationOverview> = {};
+    for (let i = 0; i < ids.length; i += 200) {
+      try {
+        const response = await api.get<{ overview: Record<string, AIInvitationOverview> }>(
+          '/ai-interview/invitation-overview',
+          { params: { ids: ids.slice(i, i + 200).join(',') } },
+        );
+        Object.assign(out, response.data?.overview || {});
+      } catch (error) {
+        throw new Error(handleApiError(error));
+      }
+    }
+    return out;
   },
 
   /**

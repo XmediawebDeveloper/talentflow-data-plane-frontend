@@ -4,7 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useEffectEvent, useM
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { clearInviteUnitsHandoff, INVITE_UNITS_PARAM, readInviteUnitsHandoff, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
-import VersionInviteDialog from './VersionInviteDialog';
+import dynamic from 'next/dynamic';
+
+/* Loaded on demand. This provider sits in the dashboard layout, and a static
+   import pulled the whole invite popup tree — AI-interview details/results,
+   the evaluation report, recharts, jsPDF, AssessmentCreation (~300 modules) —
+   into the JS every dashboard page downloads before it can render. The chunk
+   is warmed once the page is idle (below), so the first open stays instant. */
+const loadVersionInviteDialog = () => import('./VersionInviteDialog');
+const VersionInviteDialog = dynamic(loadVersionInviteDialog, { ssr: false, loading: () => null });
 import type { InviteCandidate, InviteKind } from './inviteVersions';
 
 /** The job an invite is for. */
@@ -75,6 +83,16 @@ export function InviteDialogProvider({ children }: { children: ReactNode }) {
   // after each navigation — browser-only, so not in render.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { reopenFromUnits(); }, [pathname]);
+  // Warm the popup's chunk after the page has settled, off the critical path.
+  useEffect(() => {
+    const warm = () => { loadVersionInviteDialog().catch(() => { /* retried on open */ }); };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 8000 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const t = setTimeout(warm, 4000);
+    return () => clearTimeout(t);
+  }, []);
   const value = useMemo(() => ({ open }), [open]);
   return (
     <InviteDialogContext.Provider value={value}>

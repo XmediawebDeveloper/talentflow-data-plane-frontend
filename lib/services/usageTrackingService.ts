@@ -7,7 +7,7 @@
  * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
-import { dispatchUnitsConsumed, handleUnauthorized } from './api';
+import api, { dispatchUnitsConsumed, handleUnauthorized } from './api';
 
 // Use backend API - no direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -297,13 +297,10 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/usage/quota-status`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // Through the shared api client (was a raw fetch): it shares an identical
+    // in-flight / just-finished quota-status GET instead of another round trip.
+    // validateStatus keeps every status on the branches below, as before.
+    const response = await api.get('/usage/quota-status', { validateStatus: () => true });
 
     // Handle 401 - logout and redirect
     if (response.status === 401) {
@@ -311,9 +308,9 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
       return { status: 'error', error: 'Session expired' };
     }
 
-    const data = await response.json();
+    const data = response.data || {};
 
-    if (response.ok) {
+    if (response.status >= 200 && response.status < 300) {
       return {
         status: 'success',
         data: data.data || data,

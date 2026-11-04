@@ -25,7 +25,9 @@ import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
-import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, cleanAIConfigParams, type AIInterviewResponse, type AIConfigListQuery, type AIConfigFilterOptions } from '@/lib/services/aiInterviewService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { cachedList, listCacheKey, LIST_CACHE_TTL_MS } from '@/lib/utils/listCache';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { toast } from 'sonner';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
@@ -33,7 +35,6 @@ import JobStatusBadge, { jobLockBadgeFor, jobStatusBadgeKind, type JobStatusBadg
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useDebounce } from '@/lib/hooks/useDebounce';
-import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
 import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftResume';
@@ -108,50 +109,33 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 /* An interview config carries no stored version number of its own — the
-   ordinal here is derived exactly the way AIInterview.tsx's own version
-   history panel derives it: the Nth config created against a given job
-   version (`jd_id`), oldest first. Computed once over the WHOLE loaded set
-   (draft + published + archived), because a version's number must not shift
-   depending on which statuses happen to be visible. */
-function withInterviewVersions(items: AIInterviewResponse[]): InterviewRow[] {
-  const byJobVersion = new Map<string, AIInterviewResponse[]>();
-  for (const config of items) {
-    if (!config.jd_id) continue;
-    const bucket = byJobVersion.get(config.jd_id);
-    if (bucket) bucket.push(config);
-    else byJobVersion.set(config.jd_id, [config]);
-  }
-  const ordinalById = new Map<string, number>();
-  for (const bucket of byJobVersion.values()) {
-    bucket
-      .slice()
-      .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
-      .forEach((config, index) => ordinalById.set(config.id, index + 1));
-  }
-
-  return items.map((config) => {
-    const raw = normalizeStatus(String(config.status || 'draft').toLowerCase());
-    return {
-      id: config.id,
-      interviewId: config.display_id || '',
-      jobId: config.jd_short_id || '',
-      jobName: config.jd_title || config.position || 'General Interview',
-      jobVersion: config.jd_version ?? 1,
-      interviewVersion: ordinalById.get(config.id) ?? 1,
-      jdId: config.jd_id,
-      rawStatus: raw,
-      status: STATUS_LABEL[raw] || 'Draft',
-      rounds: (config.rounds_config || [])
-        .filter((round) => round.enabled !== false)
-        .map((round) => round.type),
-      invitations: config.invitations_count ?? 0,
-      completed: 0,
-      createdAt: config.created_at,
-      createdSort: parseIST(config.created_at).getTime() || 0,
-      createdBy: config.created_by_name || 'System',
-      config,
-    };
-  });
+   ordinal (the Nth config created against a given job version, oldest first,
+   over EVERY config, archived included) is computed by the server now
+   (`list_ordinal` on GET /ai-interview/configs) — the same rule this table
+   used to apply in the browser over the whole downloaded set. Completed comes
+   with the row too (`completed_count`), so no second request. */
+function toInterviewRow(config: AIInterviewResponse): InterviewRow {
+  const raw = normalizeStatus(String(config.status || 'draft').toLowerCase());
+  return {
+    id: config.id,
+    interviewId: config.display_id || '',
+    jobId: config.jd_short_id || '',
+    jobName: config.jd_title || config.position || 'General Interview',
+    jobVersion: config.jd_version ?? 1,
+    interviewVersion: config.list_ordinal ?? 1,
+    jdId: config.jd_id,
+    rawStatus: raw,
+    status: STATUS_LABEL[raw] || 'Draft',
+    rounds: (config.rounds_config || [])
+      .filter((round) => round.enabled !== false)
+      .map((round) => round.type),
+    invitations: config.invitations_count ?? 0,
+    completed: config.completed_count ?? 0,
+    createdAt: config.created_at,
+    createdSort: parseIST(config.created_at).getTime() || 0,
+    createdBy: config.created_by_name || 'System',
+    config,
+  };
 }
 
 const STATUS_BADGE: Record<string, string> = {
@@ -305,12 +289,8 @@ export interface AllInterviewsTableProps {
   sortActionSlot?: HTMLElement | null;
   /** The host's Sort by dropdown; orders the rows until a column header is clicked. */
   defaultSort?: 'newest' | 'oldest' | 'active' | 'draft';
-  /**
-   * Every interview (live + archived) the host has ALREADY loaded. Used to draw
-   * the table at once on a first visit instead of asking the server for the
-   * same list again; the table still refetches in the background and swaps the
-   * fresh rows in. Leave unset until the host's own load has finished.
-   */
+  /** @deprecated Ignored: the table pages from the server now (usePagedList)
+   *  and no longer seeds from a full list held by the host. */
   seedConfigs?: AIInterviewResponse[];
   /**
    * Bumped by the host's Refresh button (AIInterview.tsx) to force a
@@ -355,6 +335,9 @@ export interface AllInterviewsTableProps {
   canExport?: boolean;
   /** Called after an export file is handed to the browser — the host audits it. */
   onExported?: (info: { format: 'csv' | 'xls'; recordCount: number; tab: string; ids: string[] }) => void;
+  /** Told the configs on screen each time a page lands — the host reads the
+   *  versions of THESE jobs for its row menus instead of every config. */
+  onVisibleRowsChange?: (rows: AIInterviewResponse[]) => void;
 }
 
 export type BulkActionKind = 'archive' | 'unarchive' | 'delete';
@@ -391,100 +374,32 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   return null;
 }
 
-/**
- * Every interview as table rows: the list first (handed to `onList` as soon as
- * it is ready), then each row's Completed count. Module level so the page can
- * warm the tab (`prefetchInterviewRows`) through the same code the table uses.
- */
-async function loadInterviewRows(onList: (rows: InterviewRow[]) => void, fresh = false): Promise<InterviewRow[]> {
-  const startedAt = performance.now();
-  /* The config lists come through the shared list cache (lib/utils/listCache);
-     `fresh` (every reload after the table's first load) always asks the
-     server. The Completed counts below are always read fresh. */
-  const { live, archived } = await aiInterviewService.listAllConfigsSplit(fresh ? { fresh } : { reuseRecent: true });
+/** The list-cache namespace this table pages under (usePagedList). */
+const TABLE_CACHE_NAME = 'ai-configs-table';
 
-  const seen = new Set<string>();
-  const merged: AIInterviewResponse[] = [];
-  for (const config of [...live, ...archived]) {
-    if (seen.has(config.id)) continue;
-    seen.add(config.id);
-    merged.push(config);
-  }
-  const rows = withInterviewVersions(merged);
+/** One server page of configs for the table's query. */
+const fetchInterviewPage = (q: AIConfigListQuery) =>
+  aiInterviewService.listConfigsPage(q).then((res) => ({ items: res.items || [], total: res.total ?? 0 }));
 
-  /* The list response carries no finished-sessions count, so it is read off
-     the batched `/invitation-counts` endpoint — a SECOND request. The rows
-     are handed to the table first, with Completed marked pending (carrying
-     over the last known figure meanwhile), so the list is on screen as soon
-     as the first request answers instead of after both. */
-  const withInvites = rows.filter((row) => row.invitations > 0);
-  const known = new Map((readListSnapshot<InterviewRow[]>('ai-interviews:rows') ?? []).map((r) => [r.id, r.completed]));
-  for (const row of withInvites) {
-    row.completed = known.get(row.id) ?? 0;
-    row.completedPending = true;
-  }
-  onList([...rows]);
-  perfNote('All Interviews — rows ready', startedAt);
+/** The query a tab opens on (page 1, no search / filters, default order). */
+const defaultTableQuery = (fixedStatus?: 'published' | 'draft' | 'archived'): AIConfigListQuery => ({
+  page: 1,
+  page_size: 10,
+  ...cleanAIConfigParams({ status: fixedStatus ?? 'all', search_scope: 'table' as const }),
+  sort_by: 'newest',
+});
 
-  const COUNTS_BATCH = 200; // backend cap on ids per request
-  for (let start = 0; start < withInvites.length; start += COUNTS_BATCH) {
-    const batch = withInvites.slice(start, start + COUNTS_BATCH);
-    try {
-      const counts = await aiInterviewService.getInvitationCounts(batch.map((row) => row.id));
-      for (const row of batch) row.completed = counts[row.id]?.completed || 0;
-    } catch {
-      /* Older backend / transient error: fall back to the per-config probe
-         for this batch, ten at a time. A failed probe leaves that row at 0. */
-      for (let i = 0; i < batch.length; i += 10) {
-        await Promise.all(
-          batch.slice(i, i + 10).map(async (row) => {
-            try {
-              const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
-              row.completed = res.completed || 0;
-            } catch {
-              /* leave at 0 */
-            }
-          }),
-        );
-      }
-    }
-    for (const row of batch) row.completedPending = false;
-  }
-  perfNote('All Interviews — counts complete', startedAt);
-  return rows;
+/** Warms a tab's first page in the shared list cache, so opening it draws at once. */
+export async function prefetchInterviewRows(fixedStatus?: 'published' | 'draft' | 'archived'): Promise<void> {
+  const q = defaultTableQuery(fixedStatus);
+  await cachedList(listCacheKey(`${TABLE_CACHE_NAME}:page`, q), () => fetchInterviewPage(q), { ttlMs: LIST_CACHE_TTL_MS });
 }
 
-/** Loads the rows (counts included) and remembers them, so the tab draws complete at once. */
-export async function prefetchInterviewRows(): Promise<void> {
-  const rows = await loadInterviewRows(() => {});
-  writeListSnapshot('ai-interviews:rows', rows.map((row) => ({ ...row })));
-}
-
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', seedConfigs, refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported, onVisibleRowsChange }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
-
-  /* First paint, best source first: what this table last loaded (any tab of it
-     shares one remembered set), else what the host page already holds. Either
-     way the skeleton is skipped and the background fetch below corrects it. */
-  const [initial] = useState(() => {
-    const remembered = readListSnapshot<InterviewRow[]>('ai-interviews:rows');
-    const seeded = !remembered && seedConfigs && seedConfigs.length > 0
-      ? withInterviewVersions(seedConfigs).map((row) => (row.invitations > 0 ? { ...row, completedPending: true } : row))
-      : null;
-    const start = remembered ?? seeded;
-    return {
-      rows: start ? (fixedStatus ? start.filter((r) => r.rawStatus === fixedStatus) : start) : ([] as InterviewRow[]),
-      hasRows: !!start,
-    };
-  });
-  const hasLoadedOnce = useRef(false);
-  const [rows, setRows] = useState<InterviewRow[]>(initial.rows);
-  const [isLoading, setIsLoading] = useState(!initial.hasRows);
-  const [error, setError] = useState<string | null>(null);
-  const [reloadToken, setReloadToken] = useState(0);
 
   const [search, setSearch] = useState('');
   const appliedSearch = useDebounce(search, 300);
@@ -511,74 +426,53 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   const highlightHandledRef = useRef(false);
   const [flashedRowId, setFlashedRowId] = useState<string | null>(null);
 
-  /* Two requests, not one: `listConfigs` with no status filter excludes
-     archived configs (AIInterview.tsx loads them separately for the same
-     reason), and "All Interviews" means every version regardless of status. */
-  const fetchAll = loadInterviewRows;
-
-  /* Set by the job-status refresh below: that re-read is quiet. */
-  const quietReloadRef = useRef(false);
+  /* ── Load ── ONE page from the server for the current search / filters /
+     sort (usePagedList): GET /ai-interview/configs?page&page_size&sort_by&...
+     The filtering and sorting this table used to do in the browser over every
+     config now run in that query (app/services/ai_interview_list_query). */
+  const listFilters = useMemo(() => cleanAIConfigParams({
+    // All Interviews spans every status, archived included (it used to merge
+    // the live and the archived list); a status tab is pinned to its own.
+    status: fixedStatus ?? (filters.status || 'all'),
+    search: appliedSearch.trim(),
+    search_scope: 'table' as const,
+    job: filters.job,
+    jd_version: filters.jobVersion ? Number(filters.jobVersion) : undefined,
+    interview_version: filters.interviewVersion ? Number(filters.interviewVersion) : undefined,
+    created_from: filters.createdFrom,
+    created_to: filters.createdTo,
+  }), [fixedStatus, filters, appliedSearch]);
+  const sortQuery = sortKey
+    ? { sort_by: sortKey as string, sort_dir: sortDir }
+    : {
+        sort_by: defaultSort === 'oldest' ? 'oldest' : 'newest',
+        ...(defaultSort === 'active' ? { status_first: 'active' as const } : defaultSort === 'draft' ? { status_first: 'draft' as const } : {}),
+      };
+  const query: AIConfigListQuery = { page, page_size: pageSize, ...listFilters, ...sortQuery };
+  const paged = usePagedList<AIInterviewResponse, null, AIConfigListQuery>({
+    name: TABLE_CACHE_NAME,
+    query,
+    fetchPage: fetchInterviewPage,
+  });
+  const rows = useMemo(() => paged.items.map(toInterviewRow), [paged.items]);
   useEffect(() => {
-    let alive = true;
-    // A load after the first follows a change (reload, Retry): drop what other
-    // tabs remembered rather than show it stale.
-    const isRefresh = hasLoadedOnce.current;
-    hasLoadedOnce.current = true;
-    const show = (next: InterviewRow[]) => {
-      if (!alive) return;
-      // Ordinals are computed over the WHOLE set before this filter runs, so a
-      // version's number still reflects its true position in the lineage rather
-      // than shifting once other statuses are hidden.
-      setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
-      setError(null);
-      setIsLoading(false);
-    };
-    // A refresh always asks the server; the first load may share a recent read.
-    fetchAll(show, isRefresh)
-      .then((next) => {
-        if (!alive) return;
-        // Fresh objects, so the rows whose Completed just landed re-render.
-        const settled = next.map((row) => ({ ...row }));
-        if (isRefresh) clearListSnapshots();
-        writeListSnapshot('ai-interviews:rows', settled);
-        show(settled);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        console.error('[TalentFlow] Failed to load interviews:', err);
-        // A quiet background re-read that fails keeps the rows on screen.
-        if (quietReloadRef.current) return;
-        setError(err instanceof Error ? err.message : 'Failed to load interviews');
-        setRows([]);
-      })
-      .finally(() => {
-        quietReloadRef.current = false;
-        if (alive) setIsLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [fetchAll, reloadToken, fixedStatus]);
+    if (paged.items.length) onVisibleRowsChange?.(paged.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paged.items]);
+  const total = paged.total;
+  const isLoading = paged.loading;
+  const error = paged.error ? (paged.error instanceof Error ? paged.error.message : 'Failed to load interviews') : null;
+  const refreshList = paged.refresh;
 
   /* Each row's job badge comes from its config's `jd_status`, which only
      arrives with the rows — so a job disabled / archived / re-enabled anywhere
-     (this tab or another tab: at once; tab visible again or another user's
-     change: throttled, see useJobStatusRefresh) re-reads them quietly: no
-     skeleton, rows kept on a failure. */
-  useJobStatusRefresh(() => {
-    if (!hasLoadedOnce.current) return;
-    quietReloadRef.current = true;
-    setReloadToken((t) => t + 1);
-  });
+     re-reads the page quietly (rows stay on screen meanwhile). */
+  useJobStatusRefresh(() => refreshList());
 
-  const retry = () => {
-    setIsLoading(true);
-    setError(null);
-    setReloadToken((t) => t + 1);
-  };
+  const retry = () => refreshList();
 
   /* Host's Refresh button — skips the mount value (undefined -> 0) so this
-     doesn't double-fetch alongside the initial load effect above. */
+     doesn't double-fetch alongside the initial load. */
   const skippedFirstRefreshSignal = useRef(false);
   useEffect(() => {
     if (refreshSignal === undefined) return;
@@ -590,96 +484,50 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
-  const jobOptions: SearchableSelectOption[] = useMemo(() => {
-    const byId = new Map<string, { label: string; count: number }>();
-    for (const row of rows) {
-      if (!row.jobId) continue;
-      const entry = byId.get(row.jobId) ?? { label: row.jobName, count: 0 };
-      entry.count += 1;
-      byId.set(row.jobId, entry);
-    }
-    return [...byId.entries()]
-      .sort((a, b) => text(a[1].label, b[1].label))
-      .map(([id, { label, count }]) => ({
-        value: id,
-        label: `${label} (${id})`,
-        hint: String(count),
-      }));
-  }, [rows]);
+  /* Filter option lists — from GET /configs/filter-options when the panel
+     first opens (they used to be derived from the whole downloaded list). */
+  const [filterOptions, setFilterOptions] = useState<AIConfigFilterOptions | null>(null);
+  useEffect(() => {
+    if (!filtersOpen || filterOptions) return;
+    let alive = true;
+    aiInterviewService.getConfigFilterOptions(fixedStatus ?? 'all')
+      .then((opts) => { if (alive) setFilterOptions(opts); })
+      .catch(() => { /* the panel still works; only its option lists are empty */ });
+    return () => { alive = false; };
+  }, [filtersOpen, filterOptions, fixedStatus]);
 
-  const versionOptions = useCallback(
-    (pick: (row: InterviewRow) => number): SearchableSelectOption[] => {
-      const seen = new Set<number>();
-      for (const row of rows) seen.add(pick(row));
-      return [...seen]
-        .sort((a, b) => a - b)
-        .map((v) => ({ value: String(v), label: `V${v}` }));
-    },
-    [rows],
+  const jobOptions: SearchableSelectOption[] = useMemo(() => (filterOptions?.jobs ?? []).map((job) => ({
+    value: job.value,
+    label: `${job.label} (${job.value})`,
+    hint: String(job.count),
+  })), [filterOptions]);
+  const jobVersionOptions: SearchableSelectOption[] = useMemo(
+    () => (filterOptions?.job_versions ?? []).map((v) => ({ value: String(v), label: `V${v}` })),
+    [filterOptions],
+  );
+  const interviewVersionOptions: SearchableSelectOption[] = useMemo(
+    () => (filterOptions?.interview_versions ?? []).map((v) => ({ value: String(v), label: `V${v}` })),
+    [filterOptions],
   );
 
-  const jobVersionOptions = useMemo(() => versionOptions((r) => r.jobVersion), [versionOptions]);
-  const interviewVersionOptions = useMemo(() => versionOptions((r) => r.interviewVersion), [versionOptions]);
-
-  const filtered = useMemo(() => {
-    const q = appliedSearch.trim().toLowerCase();
-
-    const dayOf = (row: InterviewRow) => {
-      const d = parseIST(row.createdAt);
-      if (isNaN(d.getTime())) return '';
-      return new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-      }).format(d);
-    };
-
-    return rows.filter((row) => {
-      if (q) {
-        const haystack = `${row.jobName} ${row.jobId} ${row.interviewId}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (filters.job && row.jobId !== filters.job) return false;
-      if (filters.jobVersion && String(row.jobVersion) !== filters.jobVersion) return false;
-      if (filters.interviewVersion && String(row.interviewVersion) !== filters.interviewVersion) return false;
-      if (filters.status && row.rawStatus !== filters.status) return false;
-      if (filters.createdFrom || filters.createdTo) {
-        const day = dayOf(row);
-        if (!day) return false;
-        if (filters.createdFrom && day < filters.createdFrom) return false;
-        if (filters.createdTo && day > filters.createdTo) return false;
-      }
-      return true;
-    });
-  }, [rows, appliedSearch, filters]);
-
-  const sorted = useMemo(() => {
-    if (!sortKey) {
-      const first = defaultSort === 'active' ? 'Active' : defaultSort === 'draft' ? 'Draft' : null;
-      return [...filtered].sort((a, b) => {
-        if (first) {
-          const aw = a.status === first ? 0 : 1;
-          const bw = b.status === first ? 0 : 1;
-          if (aw !== bw) return aw - bw;
-        }
-        return defaultSort === 'oldest' ? a.createdSort - b.createdSort : b.createdSort - a.createdSort;
-      });
-    }
-    const compare = COMPARATORS[sortKey];
-    return [...filtered].sort((a, b) => {
-      const primary = compare(a, b);
-      const result = primary !== 0 ? primary : b.createdSort - a.createdSort;
-      return sortDir === 'asc' ? result : -result;
-    });
-  }, [filtered, sortKey, sortDir, defaultSort]);
+  /* A narrower filter can leave the page past the end: back to page 1. */
+  useEffect(() => {
+    if (!paged.refreshing && page > 1 && rows.length === 0 && total > 0) setPage(1);
+  }, [paged.refreshing, page, rows.length, total]);
 
   /* The details page's Prev / Next walk THIS table — its rows, sort and
      filters — so "X / N" matches the count shown here. The order is handed
      over on every change; the row link carries which list it is. */
   const pagerList: AIInterviewPagerList =
     fixedStatus === 'published' ? 'active' : fixedStatus ?? 'all-interviews';
+  /* Only the current page is in the browser now: hand it over when it IS the
+     whole list; otherwise hand over nothing usable, so the details page
+     rebuilds the list itself (its existing fallback) rather than walking ten
+     rows. */
   useEffect(() => {
     if (isLoading) return;
-    rememberAIInterviewPagerOrder(pagerList, sorted.map((r) => r.id));
-  }, [sorted, pagerList, isLoading]);
+    rememberAIInterviewPagerOrder(pagerList, total <= rows.length ? rows.map((r) => r.id) : []);
+  }, [rows, total, pagerList, isLoading]);
   const detailsHref = (id: string) => `/recruitment/ai-interviews/${id}?list=${pagerList}`;
   /* Row click: an editable DRAFT reopens its editor at the step it was left
      on; everything else opens its details page as before. */
@@ -691,9 +539,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
     router.push(detailsHref(row.id));
   };
 
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+  const safePage = page;
+  const pageRows = rows;
 
   /* Every version's status for the rows on this page whose job reads Disabled,
      Archived or Draft — the job badge is judged on the whole job (jobLockBadgeFor). */
@@ -708,17 +555,48 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   }, [pageRows, ensureFilterLineages]);
 
   // Row selection — the CheckSquare / Square column the Candidate Results tab
-  // opens with. Selection survives paging; it is pruned to the rows that
-  // still exist after a reload or a narrower filter.
+  // opens with. Selection survives paging (rows are server pages now, so each
+  // ticked row is remembered as it was seen); a new search / filter clears it.
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [knownRows, setKnownRows] = useState<Record<string, InterviewRow>>({});
   useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visible = new Set(sorted.map((row) => row.id));
-      const next = new Set([...prev].filter((id) => visible.has(id)));
-      return next.size === prev.size ? prev : next;
+    if (rows.length === 0) return;
+    setKnownRows((prev) => {
+      const next = { ...prev };
+      for (const row of rows) next[row.id] = row;
+      return next;
     });
-  }, [sorted]);
+  }, [rows]);
+  const filterKey = JSON.stringify(listFilters);
+  const lastFilterKey = useRef(filterKey);
+  useEffect(() => {
+    if (lastFilterKey.current === filterKey) return;
+    lastFilterKey.current = filterKey;
+    setSelectedIds(new Set());
+  }, [filterKey]);
+  /* "Select all N" — every config matching the search / filters, across
+     pages: their ids from GET /configs/ids, and the rows the browser has not
+     seen yet in pages of 100 by id (bulk actions and export need the rows). */
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    try {
+      const ids = await aiInterviewService.getConfigIds(listFilters);
+      const missing = ids.filter((id) => !knownRows[id]);
+      const fetched: Record<string, InterviewRow> = {};
+      for (let i = 0; i < missing.length; i += 100) {
+        const chunk = missing.slice(i, i + 100);
+        const res = await aiInterviewService.listConfigsPage({ page: 1, page_size: chunk.length, status: 'all', ids: chunk.join(',') });
+        for (const config of res.items || []) fetched[config.id] = toInterviewRow(config);
+      }
+      setKnownRows((prev) => ({ ...prev, ...fetched }));
+      setSelectedIds(new Set(ids));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not select every interview');
+    } finally {
+      setSelectingAll(false);
+    }
+  };
   const toggleSelected = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -738,7 +616,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   /* ── Bulk actions on the ticked rows ── Actions (N) + Clear, the Candidate
      Results pattern. Items per tab: All → Export / Archive / Unarchive /
      Delete; Active and Draft drop Unarchive; Archived drops Archive. */
-  const selectedRows = useMemo(() => sorted.filter((row) => selectedIds.has(row.id)), [sorted, selectedIds]);
+  const selectedRows = useMemo(
+    () => [...selectedIds].map((id) => knownRows[id]).filter((row): row is InterviewRow => !!row),
+    [selectedIds, knownRows],
+  );
   const bulkKinds: BulkActionKind[] = fixedStatus === 'archived'
     ? ['unarchive', 'delete']
     : fixedStatus
@@ -827,18 +708,12 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   useEffect(() => {
     if (!highlightId || highlightHandledRef.current || isLoading) return;
 
-    const index = sorted.findIndex((row) => row.id === highlightId);
-    if (index === -1) {
-      // Not in the loaded set under the current (empty, on arrival) filters —
-      // nothing to scroll to. Stop looking so this doesn't re-check forever.
+    /* Only the page on screen is loaded now. A just-published interview is
+       the newest, so it is on page 1 in the default order; anywhere else
+       there is nothing to scroll to. */
+    if (!rows.some((row) => row.id === highlightId)) {
       highlightHandledRef.current = true;
       return;
-    }
-
-    const targetPage = Math.floor(index / pageSize) + 1;
-    if (targetPage !== safePage) {
-      setPage(targetPage);
-      return; // effect re-runs once `page`/`safePage` catch up
     }
 
     highlightHandledRef.current = true;
@@ -855,7 +730,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       window.cancelAnimationFrame(frame);
       window.clearTimeout(clearFlash);
     };
-  }, [highlightId, isLoading, sorted, pageSize, safePage, router]);
+  }, [highlightId, isLoading, rows, router]);
 
   const isNarrowed = !!appliedSearch.trim() || hasAnyFilter(filters);
 
@@ -886,11 +761,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   const chips: FilterChip[] = useMemo(() => {
     const out: FilterChip[] = [];
     if (filters.job) {
-      const job = rows.find((r) => r.jobId === filters.job);
+      const job = filterOptions?.jobs.find((j) => j.value === filters.job);
       out.push({
         key: 'job',
         label: 'Job',
-        value: job ? `${job.jobName} (${job.jobId})` : filters.job,
+        value: job ? `${job.label} (${job.value})` : filters.job,
         onRemove: () => clearOne({ job: '' }),
       });
     }
@@ -924,7 +799,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       });
     }
     return out;
-  }, [filters, rows]);
+  }, [filters, filterOptions]);
 
   const activeFilterCount = chips.length;
 
@@ -1251,8 +1126,18 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                    {selectedRows.length.toLocaleString()} selected
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500 flex items-center justify-between gap-2">
+                    <span>{selectedRows.length.toLocaleString()} selected</span>
+                    {selectedIds.size < total && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.preventDefault(); void selectAllMatching(); }}
+                        disabled={selectingAll}
+                        className="normal-case font-medium text-brand-blue hover:underline disabled:opacity-50"
+                      >
+                        {selectingAll ? 'Selecting…' : `Select all ${total.toLocaleString()}`}
+                      </button>
+                    )}
                   </div>
                   <DropdownMenuItem
                     aria-disabled={!canExport || undefined}
@@ -1755,9 +1640,9 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
         <ListPagination
           currentPage={safePage}
           itemsPerPage={pageSize}
-          totalItems={sorted.length}
+          totalItems={total}
           onPageChange={setPage}
-          onItemsPerPageChange={setPageSize}
+          onItemsPerPageChange={(size) => { setPageSize(size); setPage(1); }}
           itemLabel="interviews"
           pageSizeOptions={PAGE_SIZE_OPTIONS}
           scrollContainerRef={scrollRef}

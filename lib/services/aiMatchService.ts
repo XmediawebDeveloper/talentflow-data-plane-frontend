@@ -52,6 +52,9 @@ export interface AIMatchResultItem {
   resume_version?: number | null;
   version_count?: number | null;
   is_archived?: boolean;
+  /** True when the candidate's email matches an existing team member's login —
+   *  same "existing team member" lockout Resume Database enforces. */
+  is_tenant_user_email?: boolean;
 }
 
 /** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
@@ -122,6 +125,146 @@ export interface AIMatchSessionListResponse {
   total_matched_candidates?: number;
 }
 
+/* ---- Landing page: GET /ai-match/stats, /ai-match/jobs, /ai-match/candidates ---- */
+
+export type AIMatchBand = 'exact' | 'partial' | 'no_match';
+
+/** View by Job filters — the same set drives the jobs list AND the stats. */
+export interface AIMatchJobFilters {
+  search?: string;
+  date_from?: string;
+  date_to?: string;
+  min_matches?: number;
+  job_location?: string;
+  industry?: string;
+  matched_by?: string;
+  work_mode?: string;
+  job_type?: string;
+  cand_phone?: string;
+  cand_location?: string;
+  exp_min?: number;
+  exp_max?: number;
+  band?: AIMatchBand;
+  jd_id?: string;
+}
+
+export interface AIMatchPageParams {
+  page?: number;
+  page_size?: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+}
+
+export interface AIMatchCandidateFilters {
+  search?: string;
+  location?: string;
+  job?: string;
+  min_score?: number;
+  multi_job?: boolean;
+  phone?: string;
+  exp_min?: number;
+  exp_max?: number;
+  date_from?: string;
+  date_to?: string;
+  band?: AIMatchBand;
+}
+
+export interface AIMatchFacets {
+  job_locations: string[];
+  industries: string[];
+  work_modes: string[];
+  job_types: string[];
+  matched_by: string[];
+  job_titles: string[];
+  candidate_locations: string[];
+}
+
+export interface AIMatchStats {
+  matched_jobs: number;
+  all_matches: number;
+  rating_exact: number;
+  rating_partial: number;
+  rating_no_match: number;
+  total_candidates: number;
+  candidates_by_band: Record<AIMatchBand, number>;
+  jobs_by_band: Record<AIMatchBand, number>;
+  facets?: AIMatchFacets;
+}
+
+/** One matched job: its latest session + JD record + tallies. */
+export interface AIMatchJobItem extends Omit<AIMatchSessionResponse, 'results'> {
+  job_title: string;
+  result_count: number;
+  exact_count: number;
+  partial_count: number;
+  no_match_count: number;
+  /** Match runs across the job's whole lineage (same JD code). */
+  lineage_session_count: number;
+  /** resume_id -> latest score id, for this job's candidates scored against its JD. */
+  scored: Record<string, string>;
+  scored_count: number;
+  /** The JD in `GET /jd`'s shape (null for a JD-less run or a deleted JD). */
+  jd: Record<string, any> | null;
+}
+
+export interface AIMatchJobListResponse {
+  items: AIMatchJobItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AIMatchCandidateJob {
+  history_id: string;
+  jd_id: string | null;
+  job_title: string;
+  jd_job_id?: string | null;
+  jd_version_number?: number | null;
+  jd_status?: string | null;
+  score: number;
+  matched_at: string | null;
+  matched_by_name?: string | null;
+  total_matches: number;
+  resume_version?: number | null;
+  resume_id?: string | null;
+  candidate_id: string;
+  score_id?: string | null;
+}
+
+export interface AIMatchCandidateItem {
+  key: string;
+  name?: string | null;
+  title?: string | null;
+  email: string;
+  phone: string;
+  location: string;
+  experience_years?: number | null;
+  resume_id?: string | null;
+  best_score: number;
+  jobs_count: number;
+  last_matched_at?: string | null;
+  is_scored: boolean;
+  best: AIMatchResultItem;
+  jobs: AIMatchCandidateJob[];
+}
+
+export interface AIMatchCandidateListResponse {
+  items: AIMatchCandidateItem[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+/** Drop empty filter values so an unset filter never reaches the query string. */
+function cleanParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 // Frontend-friendly candidate format (for UI components)
 export interface MatchedCandidate {
   id: string;
@@ -153,6 +296,10 @@ export interface MatchedCandidate {
   /** True once the underlying resume has been archived from Resume Database —
    *  same flag ScoredResumesTable reads to show its "Resume Archived" badge. */
   isArchived?: boolean;
+  /** True when this candidate's email matches an existing team member's login —
+   *  same lockout Resume Database shows via its "Existing Team Member" badge.
+   *  Every action except View Scorecard must be disabled for this candidate. */
+  isTenantUserEmail?: boolean;
 }
 
 // Vector-based matching interfaces for client-side similarity computation
@@ -209,6 +356,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     attachmentCount: 1,
     rank: result.rank,  // Rating (1-10 scale) from backend
     isArchived: !!result.is_archived,
+    isTenantUserEmail: !!result.is_tenant_user_email,
   };
 }
 
@@ -268,6 +416,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             attachmentCount: resume.version_count || 1,
             resumeVersion: resume.version || 1,
             isArchived: !!resume.is_archived,
+            isTenantUserEmail: !!resume.is_tenant_user_email,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);
@@ -409,6 +558,50 @@ export const aiMatchService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Landing-page card counts (GET /ai-match/stats) for the same job filters as
+   * `listMatchedJobs`. `matched_jobs` equals the jobs list `total` (no band).
+   */
+  async getStats(filters: AIMatchJobFilters = {}): Promise<AIMatchStats> {
+    try {
+      const response = await api.get<AIMatchStats>('/ai-match/stats', { params: cleanParams(filters) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * One page of matched jobs (latest session per job), server-filtered/sorted
+   * (GET /ai-match/jobs).
+   */
+  async listMatchedJobs(params: AIMatchJobFilters & AIMatchPageParams = {}): Promise<AIMatchJobListResponse> {
+    try {
+      const response = await api.get<AIMatchJobListResponse>('/ai-match/jobs', { params: cleanParams(params) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * One page of the "View by Candidates" roll-up (GET /ai-match/candidates):
+   * each person once, every job they matched, scored flags included.
+   */
+  async listMatchedCandidates(params: AIMatchCandidateFilters & AIMatchPageParams = {}): Promise<AIMatchCandidateListResponse> {
+    try {
+      const response = await api.get<AIMatchCandidateListResponse>('/ai-match/candidates', { params: cleanParams(params) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** A server candidate-roll-up best row as the UI's MatchedCandidate. */
+  toMatchedCandidate(item: AIMatchResultItem): MatchedCandidate {
+    return transformJDCandidate(item);
   },
 
   /**

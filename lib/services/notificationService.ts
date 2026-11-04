@@ -34,6 +34,8 @@ export interface NotificationCountResponse {
   total: number;
   unread: number;
   by_category: Record<string, number>;
+  /** true when the server honoured `exclude_chat` (absent on older backends). */
+  excludes_chat?: boolean | null;
 }
 
 export interface MarkReadResponse {
@@ -74,11 +76,13 @@ class NotificationService {
   }
 
   /**
-   * Get notification counts
+   * Get notification counts. `excludeChat` leaves chat rows out (check
+   * `excludes_chat` on the result: older backends ignore the flag).
    */
-  async getNotificationCounts(): Promise<NotificationCountResponse> {
+  async getNotificationCounts(options?: { excludeChat?: boolean }): Promise<NotificationCountResponse> {
     try {
-      const response = await api.get('/notifications/count');
+      const response = await api.get('/notifications/count',
+        options?.excludeChat ? { params: { exclude_chat: true } } : undefined);
       return response.data;
     } catch (error) {
       /* warn, not error: the badge count is polled and fails soft to zeros —
@@ -127,7 +131,8 @@ class NotificationService {
     billing_period?: string;
   }): Promise<{ status: 'created' | 'already_exists' }> {
     try {
-      const response = await api.post('/notifications/welcome', params);
+      // Notifications only — no listed data changes (see `invalidatesLists`).
+      const response = await api.post('/notifications/welcome', params, { invalidatesLists: false });
       return response.data;
     } catch (error) {
       console.error('Error ensuring welcome notification:', error);
@@ -147,7 +152,7 @@ class NotificationService {
     quotas?: Record<string, { total_remaining: number; total_limit: number; is_unlimited: boolean }>;
   }): Promise<{ status: string; created: any[]; count: number }> {
     try {
-      const response = await api.post('/notifications/check-status', params);
+      const response = await api.post('/notifications/check-status', params, { invalidatesLists: false });
       return response.data;
     } catch (error: any) {
       console.error('Error checking status notifications:', error?.response?.status, error?.response?.data?.detail || error?.response?.data, 'payload:', JSON.stringify(params));

@@ -15,7 +15,7 @@ import {
   Languages, Star, Edit2, Trash2, Send, Building2, GraduationCap, Code,
   ChevronRight, ExternalLink, Globe, FileText, Clock, History,
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
-  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Database, Paperclip, ClipboardList, Video, Archive
+  AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Database, Paperclip, ClipboardList, Video, Archive, UserX
 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -421,20 +421,31 @@ export default function ResumeViewPage() {
   const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
   const [versionPreviewLabel, setVersionPreviewLabel] = useState<string>('');
 
+  // A resume whose email matches an existing team member is locked out of
+  // EVERY action on this page, including Share and Delete — unlike archived,
+  // which still allows those two. Same rule the Resume Database list enforces
+  // (ResumeTable.tsx / MyResumesView.tsx / InternalDatabaseView.tsx), now
+  // applied here too so opening the resume directly (or via Previous/Next)
+  // doesn't bypass it. Declared before canShareResume/canDeleteResume below,
+  // which read it immediately (unlike a handler function, there's no TDZ
+  // slack here — this has to come first).
+  const isTenantUserEmailResume = !!(resume?.is_tenant_user_email ?? resume?.isTenantUserEmail);
+  const TEAM_MEMBER_EMAIL_MESSAGE = 'This email belongs to an existing team member — no actions are available.';
+
   // Source-aware, same as hasAITalentMatchSourcePermission below: a resume
   // opened from Internal Database must be gated by internal_db:* codes, not
   // my_resumes:* — otherwise disabling Internal Database's own Delete/Share
   // has no effect as long as My Resumes' Delete/Share stays enabled.
-  const canShareResume = isTenantAdmin || (
+  const canShareResume = !isTenantUserEmailResume && (isTenantAdmin || (
     viewSource === 'resume-database'
       ? hasPermissionCode('internal_db:share')
       : hasPermissionCode('my_resumes:share')
-  );
-  const canDeleteResume = isTenantAdmin || (
+  ));
+  const canDeleteResume = !isTenantUserEmailResume && (isTenantAdmin || (
     viewSource === 'resume-database'
       ? hasPermissionCode('internal_db:delete')
       : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
-  );
+  ));
   // An archived resume is off-limits for every action below (Score, AI Talent
   // Match, Invite) — it can still be viewed, downloaded, shared and deleted,
   // same as the Resume Database list's own rule (ResumeTable.tsx / MyResumesView.tsx).
@@ -470,6 +481,7 @@ export default function ResumeViewPage() {
   // whether a control is shown, the plan only whether it is clickable.
   const canApplyResumeToJob =
     !isArchived &&
+    !isTenantUserEmailResume &&
     !contextJobLock &&
     (isTenantAdmin ||
     (hasPermission('canRunScoring') &&
@@ -483,6 +495,7 @@ export default function ResumeViewPage() {
         : true;
   const canRunAITalentMatch =
     !isArchived &&
+    !isTenantUserEmailResume &&
     (isTenantAdmin || (hasPermission('canRunAiMatch') && hasAITalentMatchSourcePermission));
   const aiMatchPlanLocked = isPlanLocked('ai_talent_match');
 
@@ -491,6 +504,7 @@ export default function ResumeViewPage() {
   // job context here, so the user picks the JD first.
   const canInviteAssessment =
     !isArchived &&
+    !isTenantUserEmailResume &&
     !contextJobLock &&
     (isTenantAdmin || (
       hasPermission('canCreateAssessments') && hasPermissionCode(
@@ -501,6 +515,7 @@ export default function ResumeViewPage() {
   // Resumes / Shared Database), plus AI Interview's own Invite.
   const canInviteAIInterview =
     !isArchived &&
+    !isTenantUserEmailResume &&
     !contextJobLock &&
     (isTenantAdmin ||
     (hasPermission('canInviteAIInterviews') &&
@@ -764,6 +779,7 @@ export default function ResumeViewPage() {
   const convertApiResume = (r: ApiResume, versionsData: any[] = []): Resume => ({
     id: r.id,
     is_archived: r.is_archived,
+    is_tenant_user_email: r.is_tenant_user_email ?? r.isTenantUserEmail ?? false,
     name: r.candidate_name || r.file_name?.replace(/\.[^/.]+$/, '') || 'Unknown',
     email: r.email || 'No email',
     phone: r.phone || 'No phone',
@@ -1465,6 +1481,20 @@ Best regards`);
                               Resume Archived
                             </span>
                           )}
+                          {/* Same badge the Resume Database list uses
+                              (ResumeTable.tsx's TeamMemberEmailBadge) — without
+                              it, opening this resume directly or via
+                              Previous/Next gave no indication every action
+                              below is locked. */}
+                          {isTenantUserEmailResume && (
+                            <span
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200 flex-shrink-0"
+                              title={TEAM_MEMBER_EMAIL_MESSAGE}
+                            >
+                              <UserX className="w-3 h-3" />
+                              Existing Team Member
+                            </span>
+                          )}
                         </div>
                         {title && (
                           <p className="tf-body-secondary sm:text-base break-words sm:truncate">{title}</p>
@@ -1493,7 +1523,7 @@ Best regards`);
 
                     {/* Phones: one white panel, a row per detail, thin dividers. */}
                     {(facts.length > 0 || contacts.length > 0) && (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3 max-sm:col-span-2 max-sm:mt-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-0 max-sm:rounded-xl max-sm:bg-white/80 max-sm:ring-1 max-sm:ring-brand-blue/10 max-sm:divide-y max-sm:divide-brand-blue/10 max-sm:overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3 max-sm:col-span-2 max-sm:mt-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-0 max-sm:rounded-xl max-sm:bg-white/80 max-sm:ring-1 max-sm:ring-brand-blue/10 max-sm:divide-y max-sm:divide-brand-blue/10 max-sm:overflow-hidden dark:max-sm:bg-slate-900/70 dark:max-sm:ring-slate-700 dark:max-sm:divide-slate-700">
                         {facts.map(({ icon: Icon, text }, index) => (
                           <span
                             key={index}
@@ -1525,14 +1555,16 @@ Best regards`);
                     on narrow screens. Same buttons, handlers and conditions
                     the action bar above the card had. */}
                 {/* Phones: every action is one full-width, equal-height, centred
-                    button, stacked — the primary last — instead of mixed widths. */}
-                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11">
-                  <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
+                    button, stacked — the primary last — instead of mixed widths.
+                    From sm: the primary keeps its place at the right end of the row;
+                    the secondary buttons wrap among themselves first. */}
+                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 sm:[&>button]:shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-1 sm:min-w-0 sm:max-lg:[&>button]:!px-3 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
                     {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
                         onClick={() => { if (!canShareResume) return; handleShare(); }}
                         aria-disabled={!canShareResume}
-                        title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
+                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canShareResume ? 'You do not have permission to share resumes' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg transition-colors text-sm ${
                           canShareResume
                             ? 'text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -1551,7 +1583,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAssessment) return; openCreateSend('assessment'); }}
                         disabled={!jobForInvite || assessmentPlanLocked}
                         aria-disabled={!canInviteAssessment}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                         className={canInviteAssessment ? CREATE_SEND_BUTTON_CLASS.assessment : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <ClipboardList className="w-4 h-4" />
@@ -1563,7 +1595,7 @@ Best regards`);
                         onClick={() => { if (!canInviteAIInterview) return; openCreateSend('interview'); }}
                         disabled={!jobForInvite || aiInterviewPlanLocked}
                         aria-disabled={!canInviteAIInterview}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                         className={canInviteAIInterview ? CREATE_SEND_BUTTON_CLASS.interview : PERMISSION_LOCKED_BUTTON_CLASS}
                       >
                         <Video className="w-4 h-4" />
@@ -1607,7 +1639,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAssessment) return; startInvite('assessment'); }}
                               disabled={assessmentPlanLocked}
                               aria-disabled={!canInviteAssessment}
-                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 assessmentPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAssessment ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1622,7 +1654,7 @@ Best regards`);
                               onClick={() => { if (!canInviteAIInterview) return; startInvite('ai-interview'); }}
                               disabled={aiInterviewPlanLocked}
                               aria-disabled={!canInviteAIInterview}
-                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
+                              title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : undefined}
                               className={`w-full flex items-center gap-3 px-3 py-2 text-left transition-colors ${
                                 aiInterviewPlanLocked ? 'opacity-50 cursor-not-allowed' : !canInviteAIInterview ? 'text-gray-400 cursor-not-allowed opacity-60' : 'hover:bg-brand-blue/5'
                               }`}
@@ -1644,7 +1676,7 @@ Best regards`);
                         onClick={() => { if (!canRunAITalentMatch) return; handleAITalentMatch(); }}
                         disabled={aiMatchPlanLocked}
                         aria-disabled={!canRunAITalentMatch}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : aiMatchPlanLocked ? PLAN_LOCKED_MESSAGE : !canRunAITalentMatch ? 'You do not have permission to run AI Talent Match' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
                           aiMatchPlanLocked || !canRunAITalentMatch
                             ? `bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed${!canRunAITalentMatch ? ' opacity-60' : ''}`
@@ -1661,7 +1693,7 @@ Best regards`);
                       <button
                         onClick={() => { if (!canDeleteResume) return; handleDelete(); }}
                         aria-disabled={!canDeleteResume}
-                        title={!canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
+                        title={isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : !canDeleteResume ? 'You do not have permission to delete resumes' : undefined}
                         className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm ${
                           canDeleteResume
                             ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300'
@@ -1691,7 +1723,7 @@ Best regards`);
                         onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                         disabled={applyPlanLocked || jobScoreStatus === 'checking'}
                         aria-disabled={!canApplyResumeToJob}
-                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
+                        title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : jobScoreStatus === 'checking' ? 'Checking whether this resume is already scored…' : undefined}
                         className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                           applyPlanLocked || jobScoreStatus === 'checking' || !canApplyResumeToJob
                             ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
@@ -1715,7 +1747,7 @@ Best regards`);
                       onClick={() => { if (!canApplyResumeToJob) return; handleApplyToJob(); }}
                       disabled={applyPlanLocked}
                       aria-disabled={!canApplyResumeToJob}
-                      title={isArchived ? ARCHIVED_ACTION_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
+                      title={isArchived ? ARCHIVED_ACTION_MESSAGE : isTenantUserEmailResume ? TEAM_MEMBER_EMAIL_MESSAGE : contextJobLock ? contextJobLock : applyPlanLocked ? PLAN_LOCKED_MESSAGE : !canApplyResumeToJob ? 'You do not have permission to score resumes' : undefined}
                       className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all text-sm ${
                         applyPlanLocked || !canApplyResumeToJob
                           ? `bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed${!canApplyResumeToJob ? ' opacity-60' : ''}`
@@ -1732,6 +1764,14 @@ Best regards`);
             );
           })()}
 
+          {/* Resume details — greyed out and inert for a resume whose email
+              belongs to an existing team member, so Previous/Next (and a
+              direct open) can't land on a fully-usable view of one just
+              because it skips the Resume Database list's own disabling. */}
+          <div
+            className={`space-y-4 sm:space-y-6 ${isTenantUserEmailResume ? 'opacity-50 grayscale-[0.3] pointer-events-none select-none' : ''}`}
+            aria-hidden={isTenantUserEmailResume || undefined}
+          >
           {/* Professional Summary */}
           {detailedResume.summary && (
             <div className="tf-card-soft p-4 sm:p-6">
@@ -2352,6 +2392,7 @@ Best regards`);
               </div>
             </div>
           )}
+          </div>
 
           {/* Candidate Activity — the page's last section: scores, AI Talent
               Match, AI Assessment and AI Interview history for this
