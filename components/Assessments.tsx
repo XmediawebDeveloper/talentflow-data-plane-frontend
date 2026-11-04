@@ -4485,6 +4485,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `/assessments/${assessmentId}/invitations/${invitation.id}/resend`
       );
       toast.success('New invitation link generated and emailed!');
+      setTrackingSelectedIds(new Set());
       await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
@@ -11001,7 +11002,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         target={revokeInviteTarget}
         onClose={() => setRevokeInviteTarget(null)}
         getAssessmentId={getInviteAssessmentId}
-        onRevoked={refreshInviteSurfaces}
+        onRevoked={() => { setTrackingSelectedIds(new Set()); refreshInviteSurfaces(); }}
       />
       {archiveConfirmModal}
       {deleteConfirmModal}

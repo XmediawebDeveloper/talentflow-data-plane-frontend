@@ -65,6 +65,7 @@ import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
+import { TeamMemberEmailBadge } from '@/components/ui/team-member-badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
@@ -184,6 +185,9 @@ interface MatchInviteRow {
   resumeId?: string;
   /** An archived resume can't be invited to anything until it's unarchived. */
   isArchived?: boolean;
+  /** An existing team member's resume can't be invited to anything — same
+   *  lockout Resume Database enforces. */
+  isTenantUserEmail?: boolean;
 }
 
 /* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
@@ -484,6 +488,7 @@ export default function AITalentMatchPage({
   const AI_INTERVIEW_INVITE_DENIED =
     "You do not have permission to invite to an AI interview from AI Talent Match (needs 'Invite to AI Interview' under AI Talent Match and 'Invite Candidates' under AI Interview)";
   const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
+  const TEAM_MEMBER_ACTION_MESSAGE = 'This email belongs to an existing team member. It cannot be used for any action.';
 
 
   /* 'details' used to be its own viewMode (the "Match Details" page) — it and
@@ -2409,6 +2414,7 @@ export default function AITalentMatchPage({
     title: c.title,
     resumeId: c.resumeId,
     isArchived: c.isArchived,
+    isTenantUserEmail: c.isTenantUserEmail,
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
@@ -2434,8 +2440,11 @@ export default function AITalentMatchPage({
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
     const rowJobLock = jobLockFor(row.jobId, jobTitle);
-    // An archived resume blocks every invite, same as the resume detail page.
-    const rowLock = row.isArchived ? ARCHIVED_ACTION_MESSAGE : rowJobLock;
+    // An archived resume, or an existing team member's, blocks every invite —
+    // same as the resume detail page / Resume Database.
+    const rowLock = row.isTenantUserEmail
+      ? TEAM_MEMBER_ACTION_MESSAGE
+      : row.isArchived ? ARCHIVED_ACTION_MESSAGE : rowJobLock;
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -3391,11 +3400,16 @@ export default function AITalentMatchPage({
       job: CandidateMatchRow['jobs'][number],
       jobScoreId: string | undefined,
       candScoreNav: ScoreRef[],
-    ) => (
+    ) => {
+      // An existing team member's resume: every action is disabled except
+      // View Scorecard, same as Resume Database.
+      const teamLocked = !!row.best?.isTenantUserEmail;
+      return (
       <>
         <DropdownMenuItem
-          className={actionsMenuItemClass}
-          disabled={!job.resumeId}
+          className={`${actionsMenuItemClass} ${teamLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={!job.resumeId || teamLocked}
+          title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
           onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
         >
           <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -3412,13 +3426,13 @@ export default function AITalentMatchPage({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            // A Disabled / Archived JD can't be scored against.
-            disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
+            className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
+            disabled={!job.resumeId || teamLocked || (canRunScoring && !!jobLockFor(job.jobId))}
             aria-disabled={!canRunScoring || undefined}
-            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+            title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
             onSelect={(e) => {
-              if (!canRunScoring || jobLockFor(job.jobId)) {
+              if (!canRunScoring || teamLocked || jobLockFor(job.jobId)) {
                 e.preventDefault();
                 return;
               }
@@ -3441,12 +3455,14 @@ export default function AITalentMatchPage({
             title: row.title,
             resumeId: job.resumeId,
             isArchived: row.best?.isArchived,
+            isTenantUserEmail: row.best?.isTenantUserEmail,
           },
           'candidates',
           job.jobTitle,
         )}
       </>
-    );
+      );
+    };
 
     const candRowsOf = (row: CandidateMatchRow, only?: Set<string>): MatchInviteRow[] =>
       bandJobsOf(row.jobs)
@@ -3461,6 +3477,7 @@ export default function AITalentMatchPage({
           title: row.title,
           resumeId: j.resumeId,
           isArchived: row.best?.isArchived,
+          isTenantUserEmail: row.best?.isTenantUserEmail,
         }));
     /* Job Titles cell: the first two titles and a "+N more" chip; a click
        opens a small popup listing every title under "All (N)", each with how
@@ -4331,6 +4348,7 @@ export default function AITalentMatchPage({
                                           {row.name || 'Candidate'}
                                         </button>
                                         {row.best?.isArchived && <ResumeArchivedBadge />}
+                                        {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                                       </div>
                                       {row.email && <div className="tf-meta truncate">{row.email}</div>}
                                     </div>
@@ -4613,7 +4631,12 @@ export default function AITalentMatchPage({
                               {row.name || 'Candidate'}
                             </button>
                             );
-                          const nameBadge = row.best?.isArchived ? <ResumeArchivedBadge /> : null;
+                          const nameBadge = (row.best?.isArchived || row.best?.isTenantUserEmail) ? (
+                            <>
+                              {row.best?.isArchived && <ResumeArchivedBadge />}
+                              {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
+                            </>
+                          ) : null;
                           const chevronBtn = (
                           <button
                             type="button"
@@ -5230,6 +5253,7 @@ export default function AITalentMatchPage({
                           <div className="flex items-center gap-2 min-w-0">
                             <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
                             {row.best?.isArchived && <ResumeArchivedBadge />}
+                            {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                           </div>
                           <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
@@ -5376,6 +5400,7 @@ export default function AITalentMatchPage({
                                 {row.name || 'Unknown'}
                               </span>
                               {row.best?.isArchived && <ResumeArchivedBadge />}
+                              {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                             </div>
                           </td>
                           <td className="tf-td whitespace-nowrap tf-body">
@@ -5494,21 +5519,22 @@ export default function AITalentMatchPage({
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                 <DropdownMenuItem
-                                  className={actionsMenuItemClass}
-                                  disabled={!job.resumeId}
+                                  className={`${actionsMenuItemClass} ${row.best?.isTenantUserEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!job.resumeId || row.best?.isTenantUserEmail}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                                   onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
                                 >
                                   <Eye className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  // A Disabled / Archived JD can't be scored against.
-                                  disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
+                                  className={`${actionsMenuItemClass} ${!canRunScoring || row.best?.isTenantUserEmail || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
+                                  disabled={!job.resumeId || row.best?.isTenantUserEmail || (canRunScoring && !!jobLockFor(job.jobId))}
                                   aria-disabled={!canRunScoring || undefined}
-                                  title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
                                   onSelect={(e) => {
-                                    if (!canRunScoring || jobLockFor(job.jobId)) {
+                                    if (!canRunScoring || row.best?.isTenantUserEmail || jobLockFor(job.jobId)) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5520,12 +5546,12 @@ export default function AITalentMatchPage({
                                 </DropdownMenuItem>
                                 {/* Same two invites as View by Candidates' per-job menu. */}
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email || row.best?.isArchived}
+                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch || row.best?.isTenantUserEmail || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isTenantUserEmail || row.best?.isArchived}
                                   aria-disabled={!canInviteAssessmentFromMatch || undefined}
-                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={(e) => {
-                                    if (row.best?.isArchived) {
+                                    if (row.best?.isTenantUserEmail || row.best?.isArchived) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5536,12 +5562,12 @@ export default function AITalentMatchPage({
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email || row.best?.isArchived}
+                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch || row.best?.isTenantUserEmail || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isTenantUserEmail || row.best?.isArchived}
                                   aria-disabled={!canInviteAIInterviewFromMatch || undefined}
-                                  title={row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
                                   onSelect={(e) => {
-                                    if (row.best?.isArchived) {
+                                    if (row.best?.isTenantUserEmail || row.best?.isArchived) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5580,7 +5606,7 @@ export default function AITalentMatchPage({
                           className="flex-shrink-0"
                         />
                       }
-                      title={<span className="flex items-center gap-2 min-w-0"><span className="text-blue-600 truncate">{row.name}</span>{row.best?.isArchived && <ResumeArchivedBadge />}</span>}
+                      title={<span className="flex items-center gap-2 min-w-0"><span className="text-blue-600 truncate">{row.name}</span>{row.best?.isArchived && <ResumeArchivedBadge />}{row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}</span>}
                       meta={[
                         { icon: <Briefcase />, label: job.jobTitle || null },
                         { icon: <Mail />, label: row.email ? <span className="break-all">{row.email}</span> : null },
@@ -6011,6 +6037,9 @@ export default function AITalentMatchPage({
                  inline) — the row's Actions cell and the card's footer. */
               const renderCandActions = (c: (typeof pagedCandidates)[number]) => {
                 const { inviteRow, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
+                // An existing team member's resume: every action is disabled
+                // except View Scorecard, same as Resume Database.
+                const teamLocked = !!c.isTenantUserEmail;
                 return (
                 <div className="inline-flex items-center gap-1.5">
                 <DropdownMenu>
@@ -6026,8 +6055,9 @@ export default function AITalentMatchPage({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                     <DropdownMenuItem
-                      className={actionsMenuItemClass}
-                      disabled={!c.resumeId}
+                      className={`${actionsMenuItemClass} ${teamLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!c.resumeId || teamLocked}
+                      title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                       onSelect={() => c.resumeId && setPreviewResume({ id: c.resumeId, name: c.name || 'Resume' })}
                     >
                       <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -6045,13 +6075,13 @@ export default function AITalentMatchPage({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
-                        className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        // A Disabled / Archived JD can't be scored against.
-                        disabled={!c.resumeId || (canRunScoring && !!jobLockFor(item.jobId))}
+                        className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
+                        disabled={!c.resumeId || teamLocked || (canRunScoring && !!jobLockFor(item.jobId))}
                         aria-disabled={!canRunScoring || undefined}
-                        title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
+                        title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
                         onSelect={(e) => {
-                          if (!canRunScoring || jobLockFor(item.jobId)) {
+                          if (!canRunScoring || teamLocked || jobLockFor(item.jobId)) {
                             e.preventDefault();
                             return;
                           }
@@ -6161,6 +6191,7 @@ export default function AITalentMatchPage({
                                           {c.name || 'Candidate'}
                                         </button>
                                         {c.isArchived && <ResumeArchivedBadge />}
+                                        {c.isTenantUserEmail && <TeamMemberEmailBadge />}
                                       </div>
                                       {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
@@ -6376,6 +6407,7 @@ export default function AITalentMatchPage({
                                               {c.name || 'Candidate'}
                                             </button>
                                             {c.isArchived && <ResumeArchivedBadge />}
+                                            {c.isTenantUserEmail && <TeamMemberEmailBadge />}
                                           </div>
                                           {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
@@ -8583,20 +8615,22 @@ export default function AITalentMatchPage({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                           <DropdownMenuItem
-                            className={actionsMenuItemClass}
+                            className={`${actionsMenuItemClass} ${candidate.isTenantUserEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={candidate.isTenantUserEmail}
+                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                             onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
                           >
                             <Eye className="w-4 h-4 text-menu-icon-view" />
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            // A Disabled / Archived JD can't be scored against.
-                            disabled={!candidate.resumeId || (canRunScoring && !!jobLockFor(selectedJob))}
+                            className={`${actionsMenuItemClass} ${!canRunScoring || candidate.isTenantUserEmail || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
+                            disabled={!candidate.resumeId || candidate.isTenantUserEmail || (canRunScoring && !!jobLockFor(selectedJob))}
                             aria-disabled={!canRunScoring || undefined}
-                            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
+                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
                             onSelect={(e) => {
-                              if (!canRunScoring || jobLockFor(selectedJob)) {
+                              if (!canRunScoring || candidate.isTenantUserEmail || jobLockFor(selectedJob)) {
                                 e.preventDefault();
                                 return;
                               }

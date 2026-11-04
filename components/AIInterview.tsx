@@ -5486,6 +5486,7 @@ export default function AIInterview() {
           try {
             await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
             toast.success(`New invitation link sent to ${inv.candidate_email}`);
+            setSelectedInviteIds(new Set());
             // refresh invitations list so the new expires_at/status is reflected
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
@@ -5563,6 +5564,7 @@ export default function AIInterview() {
           try {
             await aiInterviewService.revokeInvitation(inv.id);
             toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+            setSelectedInviteIds(new Set());
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
             toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
