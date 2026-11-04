@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
 // hero + 3-col grid (Roles list, then the module permissions panel).
@@ -269,6 +270,8 @@ export default function PermissionsPage() {
       }
 
       const updatedRole = await res.json();
+      // This save bypasses the api client, so drop the role-count cache here.
+      clearRbacSessionCache();
       setSelectedRole(updatedRole);
 
       // Update role in list

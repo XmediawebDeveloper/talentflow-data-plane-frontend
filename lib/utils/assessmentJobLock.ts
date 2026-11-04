@@ -1,4 +1,5 @@
 import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
+import { onListCacheInvalidate } from '@/lib/utils/listCache';
 
 /**
  * Create and Duplicate Assessment follow the job version they are linked to:
@@ -50,7 +51,54 @@ export const assessmentJobLockMessage = (status?: string | null): string | null 
 export async function loadJobVersionLineages(jdIds: string[], opts?: { fresh?: boolean }): Promise<Record<string, JDLineageVersion[]>> {
   const ids = Array.from(new Set(jdIds.filter(Boolean)));
   if (ids.length === 0) return {};
+  if (opts?.fresh) return loadFreshLineagesShared(ids);
   return jdService.getLineagesBatch(ids, opts);
+}
+
+/* Fresh lineage reads, shared. One job status change makes every surface on
+   the Assessments page (the page itself and its All Assessments table) re-read
+   the lineages of overlapping job ids at the same moment. A fresh read started
+   within the last FRESH_SHARE_MS is reused for the ids it asked about; only
+   the ids none covers are asked for, in one batch. A failed read is dropped at
+   once, and every write / job status change clears the lot (listCache), so a
+   read that began before a change is never handed to a caller after it. */
+const FRESH_SHARE_MS = 2000;
+type FreshLineageRead = { ids: Set<string>; startedAt: number; promise: Promise<Record<string, JDLineageVersion[]>> };
+let freshLineageReads: FreshLineageRead[] = [];
+onListCacheInvalidate(() => {
+  freshLineageReads = [];
+});
+
+async function loadFreshLineagesShared(ids: string[]): Promise<Record<string, JDLineageVersion[]>> {
+  const now = Date.now();
+  freshLineageReads = freshLineageReads.filter((read) => now - read.startedAt < FRESH_SHARE_MS);
+  const used = new Set<FreshLineageRead>();
+  const missing: string[] = [];
+  for (const id of ids) {
+    const read = freshLineageReads.find((r) => r.ids.has(id));
+    if (read) used.add(read);
+    else missing.push(id);
+  }
+  if (missing.length > 0) {
+    const read: FreshLineageRead = {
+      ids: new Set(missing),
+      startedAt: now,
+      promise: jdService.getLineagesBatch(missing, { fresh: true }),
+    };
+    read.promise.catch(() => {
+      freshLineageReads = freshLineageReads.filter((r) => r !== read);
+    });
+    freshLineageReads.push(read);
+    used.add(read);
+  }
+  const results = await Promise.all(Array.from(used, (read) => read.promise));
+  const out: Record<string, JDLineageVersion[]> = {};
+  for (const result of results) {
+    for (const id of ids) {
+      if (id in result && !(id in out)) out[id] = structuredClone(result[id]);
+    }
+  }
+  return out;
 }
 
 /** Each job version's live status, keyed by its own JD id, from loaded lineages. */

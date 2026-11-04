@@ -198,12 +198,12 @@ export default function RoleManagement() {
     try {
       const [rolesData, permissionsData] = await Promise.all([
         rbacService.getRoles(),
-        rbacService.getPermissions(),
+        rbacService.getPermissionsCached(),
       ]);
       setRoles(rolesData.roles);
       setPermissions(permissionsData.permissions);
       // Fill in the popup-matching counts (failures fall back to the raw total).
-      setRoleShownCounts(await fetchRoleShownCounts(rolesData.roles.map((r) => r.id)));
+      setRoleShownCounts(await fetchRoleShownCounts(rolesData.roles));
     } catch (error) {
       console.error('Failed to load roles and permissions:', error);
       toast.error('Failed to load roles and permissions');

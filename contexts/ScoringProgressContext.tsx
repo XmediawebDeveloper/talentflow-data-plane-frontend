@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 
 export interface ScoringProgressItem {
   id: string;
@@ -278,23 +278,40 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     setOnRestorePanelState(() => callback);
   }, []);
 
+  const contextValue = useMemo<ScoringProgressContextType>(() => ({
+    activeScoringJobs,
+    isMinimized,
+    hasActiveScoring,
+    isMainPanelOpen,
+    startScoringJob,
+    syncScoringJob,
+    updateItemStatus,
+    clearCompletedJobs,
+    clearJob,
+    setMinimized,
+    setPanelVisibility,
+    getJobProgress,
+    onRestorePanel,
+    setOnRestorePanel
+  }), [
+    activeScoringJobs,
+    isMinimized,
+    hasActiveScoring,
+    isMainPanelOpen,
+    startScoringJob,
+    syncScoringJob,
+    updateItemStatus,
+    clearCompletedJobs,
+    clearJob,
+    setMinimized,
+    setPanelVisibility,
+    getJobProgress,
+    onRestorePanel,
+    setOnRestorePanel
+  ]);
+
   return (
-    <ScoringProgressContext.Provider value={{
-      activeScoringJobs,
-      isMinimized,
-      hasActiveScoring,
-      isMainPanelOpen,
-      startScoringJob,
-      syncScoringJob,
-      updateItemStatus,
-      clearCompletedJobs,
-      clearJob,
-      setMinimized,
-      setPanelVisibility,
-      getJobProgress,
-      onRestorePanel,
-      setOnRestorePanel
-    }}>
+    <ScoringProgressContext.Provider value={contextValue}>
       {children}
     </ScoringProgressContext.Provider>
   );

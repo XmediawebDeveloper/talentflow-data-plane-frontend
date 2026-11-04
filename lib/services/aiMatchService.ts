@@ -372,7 +372,12 @@ export const aiMatchService = {
    */
   async getSessionsBatch(sessionIds: string[]): Promise<Map<string, { session: AIMatchSessionResponse; candidates: MatchedCandidate[] }>> {
     try {
-      const response = await api.post<{ items: AIMatchSessionResponse[] }>('/ai-match/sessions/batch', { session_ids: sessionIds });
+      // Read-only lookup sent as POST for its body size: keep shared GETs.
+      const response = await api.post<{ items: AIMatchSessionResponse[] }>(
+        '/ai-match/sessions/batch',
+        { session_ids: sessionIds },
+        { invalidatesCache: false },
+      );
       const out = new Map<string, { session: AIMatchSessionResponse; candidates: MatchedCandidate[] }>();
       for (const session of response.data?.items || []) {
         out.set(session.id, { session, candidates: await resultsToCandidates(session.results) });
