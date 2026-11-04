@@ -3,7 +3,8 @@
 import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info } from 'lucide-react';
+import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info, FileText } from 'lucide-react';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -1149,6 +1150,23 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           }}
           onVersion={handleShowVersionHistory}
           highlightQuery={appliedSearchQuery}
+          emptyState={
+            appliedSearchQuery || activeFilterCount > 0 ? (
+              <EmptyState
+                icon={FileText}
+                title="No matching resumes"
+                description={appliedSearchQuery
+                  ? `No resumes match "${appliedSearchQuery}"${activeFilterCount > 0 ? ' with the selected filters' : ''}. Try a different name, skill or keyword.`
+                  : 'No resumes match the selected filters. Try choosing different filters.'}
+              />
+            ) : (
+              <EmptyState
+                icon={FileText}
+                title="No resumes yet"
+                description="Resumes you upload are saved here, ready to search and score against your jobs."
+              />
+            )
+          }
         />
 
         {/* The Job Descriptions pager (shared ListPagination). This list

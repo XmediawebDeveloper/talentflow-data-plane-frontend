@@ -5009,7 +5009,7 @@ export default function ResumeScoringPage({
             <EmptyState
               icon={History}
               title="No Scoring History Yet"
-              description="Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit."
+              description="Start scoring resumes against job descriptions to see your results here."
               action={{
                 label: 'Score Resumes Now',
                 disabledReason: !canRunScoring ? 'You do not have permission to score resumes' : undefined,
