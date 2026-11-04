@@ -260,6 +260,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       await assessmentService.resendInvitation(invitation.assessment_id, invitation.id);
       await loadInvitations(true);
       toast.success('New invitation link generated and emailed!');
+      setSelectedIds(new Set());
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't resend invitation. Please try again."));
@@ -270,6 +271,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
   // A revoke / edit changed the rows: reload this list, then tell the host.
   const handleInvitesChanged = async () => {
+    setSelectedIds(new Set());
     await loadInvitations(true);
     await onChanged?.();
   };

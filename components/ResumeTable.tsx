@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2, UserX } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,7 @@ import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import { EmptyState } from './ui/empty-state';
 import { ResumeArchivedBadge } from './ui/resume-archived-badge';
+import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
 import { usePagination } from '@/lib/hooks/usePagination';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -286,19 +287,6 @@ interface ResumeTableProps {
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
 }
-
-/** Shown on a resume whose candidate_email matches an existing team member's
- *  login — uploads are blocked at the source now, but rows stored before that
- *  restriction existed still need to flag themselves as locked out. */
-const TeamMemberEmailBadge = () => (
-  <span
-    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs bg-red-50 text-red-700 ring-1 ring-red-200 flex-shrink-0"
-    title="This email belongs to an existing team member. It cannot be selected or used for any action."
-  >
-    <UserX className="w-3 h-3" />
-    Existing Team Member
-  </span>
-);
 
 // Helper function to highlight matching text
 const highlightText = (text: string, query: string): React.ReactNode => {
