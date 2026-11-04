@@ -309,22 +309,48 @@ const computeLoginUrl = (): string => {
   return loginUrl;
 };
 
-// Handle 401 Unauthorized - dispatch session-expired event so the modal can show.
+// Show the session-expired modal (once per page load). Only for a session that
+// is really gone — the refresh token was missing or refused.
+const showSessionExpired = () => {
+  if (typeof window === 'undefined') return;
+  if (sessionExpiredDispatched) return;
+  // Signed-out pages have no session to expire; a stray background 401 there
+  // must not raise the modal (its "Log In Again" would just reload the page).
+  if (/^\/(login|signup|reset-password|set-password)(\/|$)/.test(window.location.pathname)) return;
+  sessionExpiredDispatched = true;
+  console.log('[API] Session cannot be refreshed - dispatching session-expired event');
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+};
+
+// Handle a 401 from a raw fetch call. A 401 usually only means the short-lived
+// access token ran out, so try the refresh token first (the axios interceptor
+// does the same) and show the modal only when that fails. Without this, every
+// page that uses fetch() raised "Session Expired" again each time the access
+// token lapsed, though the session was still valid.
 // The actual logout happens only when the user clicks OK on the modal.
 export const handleUnauthorized = () => {
-  console.log('[API] 401 Unauthorized - dispatching session-expired event');
   if (typeof window === 'undefined') return;
-
   if (sessionExpiredDispatched) return;
-  sessionExpiredDispatched = true;
-
-  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+  const { refreshToken: currentRefreshToken } = getTokens();
+  if (!currentRefreshToken) {
+    showSessionExpired();
+    return;
+  }
+  refreshAccessToken(currentRefreshToken).catch(showSessionExpired);
 };
 
 // Called by the SessionExpiredModal when the user clicks "OK".
 // Performs the real cleanup and redirects to the login page.
 export const performSessionLogout = () => {
   if (typeof window === 'undefined') return;
+  // The user already signed in again in another tab: this tab only holds the
+  // old token. Clearing here would wipe the NEW session and raise the modal
+  // in that tab too — a loop. Reload onto the new session instead.
+  const storedAccess = localStorage.getItem('accessToken');
+  if (storedAccess && storedAccess !== accessToken) {
+    forceNavigate(window.location.href);
+    return;
+  }
   const loginUrl = computeLoginUrl();
   clearTokens();
   localStorage.removeItem('user');
@@ -358,13 +384,27 @@ export const authFetch = async (
 
   const isWrite = (options.method || 'GET').toUpperCase() !== 'GET';
   if (isWrite) sharedGets.clear();
-  const response = await fetch(url, {
+  let response = await fetch(url, {
     ...options,
     headers,
   });
   if (isWrite) sharedGets.clear();
 
-  // Handle 401 - logout and redirect
+  // 401 — the access token may just have lapsed: refresh it and retry once.
+  const { refreshToken: currentRefreshToken } = getTokens();
+  if (response.status === 401 && currentRefreshToken) {
+    try {
+      const fresh = await refreshAccessToken(currentRefreshToken);
+      response = await fetch(url, {
+        ...options,
+        headers: { ...headers, Authorization: `Bearer ${fresh}` },
+      });
+    } catch {
+      // Refresh refused — fall through to the session-expired modal.
+    }
+  }
+
+  // Still 401 - the session is gone
   if (response.status === 401) {
     handleUnauthorized();
     throw new Error('Session expired. Please log in again.');
@@ -797,11 +837,11 @@ api.interceptors.response.use(
           return api(originalRequest);
         } else {
           // No refresh token available - logout immediately
-          handleUnauthorized();
+          showSessionExpired();
         }
       } catch (refreshError) {
         // Token refresh failed - logout immediately
-        handleUnauthorized();
+        showSessionExpired();
       }
     }
 

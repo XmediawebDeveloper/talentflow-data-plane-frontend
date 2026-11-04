@@ -183,7 +183,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
     return (
       <div
         aria-busy="true"
-        className="group relative flex cursor-default items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+        className="group relative flex h-full cursor-default items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         <span className="h-10 w-10 shrink-0 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700 sm:h-11 sm:w-11" />
         <div className="min-w-0 flex-1">
@@ -204,7 +204,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
         aria-disabled="true"
         title={message}
         onClick={() => toast.info(message)}
-        className="group relative flex w-full cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+        className="group relative flex h-full w-full cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         {inner}
       </button>
@@ -214,7 +214,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   return (
     <Link
       href={href}
-      className={`group relative flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
+      className={`group relative flex h-full items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
     >
       {inner}
     </Link>
@@ -304,10 +304,14 @@ export default function DashboardQuickAccess() {
 
       {/* Tiles — single continuous grid across all categories */}
       {totalItems > 0 && (
-      <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
+      <div className="@container px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         {/* Flattened first so the colour run counts tiles as they appear on
-            screen, not as they are grouped by section. */}
-        <ul className="tf-grid-tiles">
+            screen, not as they are grouped by section.
+            Columns follow the card's own width (the sidebar takes a share of
+            the screen), 1 → 2 → 4: a tile never gets so narrow that a label
+            breaks mid-word ("User Manageme/nt") and lifts its icon out of line
+            with the row, and the usual 8 tiles always fill whole rows. */}
+        <ul className="grid grid-cols-1 gap-3 sm:gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
           {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneForTool(item.id, index)} />

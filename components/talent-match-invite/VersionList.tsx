@@ -54,8 +54,8 @@ const ACTION_ICON: Record<VersionAction, { Icon: typeof Eye; tone: string }> = {
  * A version's title, as the version cards and the picked-version strip both
  * show it. An assessment names its job, then the version of each — "JD-245
  * Junior Software Test Engineer V2 - Assessment V1" — with the JD ID chip and
- * the job / assessment version pills in their usual colours. Anything else
- * (an AI interview, an assessment with no job) keeps its own name. Pieces are
+ * the job / assessment version pills in their usual colours; an AI interview
+ * reads the same with "- AI Interview". One with no job keeps its own name. Pieces are
  * returned bare, to sit in the caller's wrapping flex row. `compact` is the
  * strip's smaller type.
  */
@@ -67,14 +67,23 @@ export function VersionTitle({ version: v, spansJobVersions = false, compact = f
   const tone = `${compact ? 'text-sm font-medium' : 'text-sm sm:text-base font-semibold'} ${
     v.sendable ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-400'
   }`;
-  if (v.kind === 'assessment' && v.raw?.jd_title) {
+  /* An AI interview names its job the same way — "JD-245 Junior Software Test
+     Engineer V2 - AI Interview V1" — with its linked job's Disabled /
+     Archived / Draft badge after it (assessments carry theirs in the header). */
+  const job = v.kind === 'assessment'
+    ? (v.raw?.jd_title ? { code: v.raw.jd_short_id, title: v.raw.jd_title } : null)
+    : (v.config?.jd_title ? { code: v.config.jd_short_id, title: v.config.jd_title } : null);
+  const jdKind = v.kind === 'interview' ? jobStatusBadgeKind(v.config?.jd_status) : null;
+  const jdBadge = jdKind ? <JobStatusBadge kind={jdKind} title={jdActionLockReason(v.config?.jd_status) ?? undefined} /> : null;
+  if (job) {
     return (
       <>
-        {v.raw.jd_short_id && <JobIdBadge className="flex-shrink-0">{v.raw.jd_short_id}</JobIdBadge>}
-        <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.raw.jd_title}</span>
+        {job.code && <JobIdBadge className="flex-shrink-0">{job.code}</JobIdBadge>}
+        <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{job.title}</span>
         {v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} /> : null}
-        <span className={`whitespace-nowrap ${tone}`}>- Assessment</span>
+        <span className={`whitespace-nowrap ${tone}`}>- {KIND_LABEL[v.kind].singular}</span>
         <VersionPill kind="assessment" version={v.version} />
+        {jdBadge}
       </>
     );
   }
@@ -83,13 +92,7 @@ export function VersionTitle({ version: v, spansJobVersions = false, compact = f
       <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.name}</span>
       {spansJobVersions && v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} label="Job" /> : null}
       <VersionPill kind="assessment" version={v.version} />
-      {/* An AI interview's linked job version Disabled / Archived / Draft —
-          the AI Interview list's badge. (Assessments carry theirs in the
-          popup header.) */}
-      {(() => {
-        const jdKind = v.kind === 'interview' ? jobStatusBadgeKind(v.config?.jd_status) : null;
-        return jdKind ? <JobStatusBadge kind={jdKind} title={jdActionLockReason(v.config?.jd_status) ?? undefined} /> : null;
-      })()}
+      {jdBadge}
     </>
   );
 }

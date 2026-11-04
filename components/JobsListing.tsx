@@ -51,6 +51,9 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
 import { Tooltip } from '@/components/ui/tooltip';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteKind } from '@/components/talent-match-invite/inviteVersions';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -257,7 +260,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     }
   };
   const router = useRouter();
-  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode, hasPermission, tenant } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
   // real, populated fields — AuthProvider never sets the deprecated lowercase
   // canUpdateJd/etc. aliases, so checking those left every non-admin's Edit/
@@ -267,6 +270,35 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJD ?? false);
   const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJD ?? false);
   const canExportJd = isTenantAdmin || hasPermissionCode('jd:export');
+  /* Create / Send Assessment | AI Interview on a Published (or Republished)
+     job's ⋮ menu — Job Details' Create / Send tiles: THE invite popup for
+     that job version, which creates, publishes and sends versions in place.
+     Same gates as the tiles: permission, tenant feature, plan. */
+  const { open: openInvite } = useInviteDialog();
+  const { hasPlanFeature } = usePlanFeatures();
+  const featureOn = (f: 'assessment' | 'ai_interview') =>
+    !tenant?.features || (tenant.features as Record<string, unknown>)[f] === true;
+  const createSendDenied = (kind: InviteKind): string | null => {
+    if (kind === 'assessment') {
+      if (!(isTenantAdmin || hasPermission('canCreateAssessments'))) return 'You do not have permission to create or send assessments';
+      if (!featureOn('assessment')) return 'Assessments not enabled';
+      return hasPlanFeature('assessment') ? null : PLAN_LOCKED_MESSAGE;
+    }
+    if (!(isTenantAdmin || hasPermission('canCreateAIInterviews') || hasPermission('canInviteAIInterviews'))) return 'You do not have permission to create or send AI interviews';
+    if (!featureOn('ai_interview')) return 'AI Interviews not enabled';
+    return hasPlanFeature('ai_interview') ? null : PLAN_LOCKED_MESSAGE;
+  };
+  const openCreateSend = (job: Job, kind: InviteKind) =>
+    openInvite({
+      kind,
+      job: { jdId: job.id, jdTitle: job.title, jdCode: job.job_id, versionNumber: job.versionNumber, status: job.status },
+      candidates: [],
+      preselect: false,
+    });
+  const CREATE_SEND_ITEMS: { kind: InviteKind; label: string; Icon: typeof Video; tone: string }[] = [
+    { kind: 'assessment', label: 'Invite Assessment', Icon: ClipboardList, tone: 'text-menu-icon-view' },
+    { kind: 'interview', label: 'Invite AI Interview', Icon: Video, tone: 'text-menu-icon-ai' },
+  ];
   // Search + all eleven filters, in the shared hook. The controls commit as they
   // change, so this uses `setFilter` and leaves the draft pair alone.
   const search = useListSearch({
@@ -1969,6 +2001,31 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                               <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                             </button>
                           )}
+                          {/* Create / Send — Published and Republished jobs. */}
+                          {job.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                            const denied = createSendDenied(kind);
+                            return (
+                              <button
+                                key={kind}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (denied) {
+                                    // Permission lock: tooltip only. Plan lock keeps its toast.
+                                    if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                    return;
+                                  }
+                                  setActiveDropdown(null);
+                                  openCreateSend(job, kind);
+                                }}
+                                aria-disabled={!!denied}
+                                title={denied ?? ''}
+                                className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${denied ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                              >
+                                <Icon className={`w-4 h-4 ${denied ? 'text-gray-400' : tone}`} />
+                                <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                              </button>
+                            );
+                          })}
                           {/* Disable Job for Published */}
                           {job.status === 'Published' && onDisableJob && (
                             <button
@@ -2423,6 +2480,30 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}
+                                {/* Create / Send — same gates as the latest-version menu */}
+                                {versionJob.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                                  const denied = createSendDenied(kind);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={kind}
+                                      onSelect={(e) => {
+                                        if (denied) {
+                                          e.preventDefault();
+                                          // Permission lock: tooltip only. Plan lock keeps its toast.
+                                          if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                          return;
+                                        }
+                                        openCreateSend(versionJob, kind);
+                                      }}
+                                      aria-disabled={!!denied}
+                                      title={denied ?? undefined}
+                                      className={denied ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
+                                    >
+                                      <Icon className={`w-4 h-4 ${tone}`} />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                                    </DropdownMenuItem>
+                                  );
+                                })}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
                                   <DropdownMenuItem
