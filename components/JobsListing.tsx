@@ -109,7 +109,7 @@ interface JobsListingProps {
   onScoreResumes?: (job: Job) => void;
   onScoreResumesDisabled?: boolean;
   onScoreResumesDisabledReason?: string;
-  onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
+  onUpdateJobStatus?: (jobId: string, status: Job['status'], job?: Job) => void;
   onEditJob?: (job: Job) => void;
   /**
    * Statuses the host has successfully written since the version lineage was
@@ -405,7 +405,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   // Persist this list's view state (filters / search / sort / pagination / view
   // toggles) so returning from a job-details page restores it. Declared after the
   // useState + URL-sync effects above so restore wins over the mount-time resets.
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'job-openings-list',
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
@@ -494,6 +494,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const paged = usePagedList<JobRow, JobOpeningsStats, typeof listQuery>({
     name: 'job-openings',
     query: listQuery,
+    // Wait for the saved filters/page, or landing fetches twice.
+    enabled: listStateRestored,
     fetchPage: async (q) => {
       const res = await jdService.listJobs(q);
       const meta = res.versions_meta ?? {};

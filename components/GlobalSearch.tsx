@@ -66,7 +66,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
         folderService.list(),
         jdService.list({ search: searchQuery, page_size: 5 }),
         assessmentService.list({ search: searchQuery, page_size: 5 }),
-        aiInterviewService.list({ search: searchQuery, page_size: 5 }),
+        aiInterviewService.list({ search: searchQuery, page_size: 5, compact: true }),
       ]);
 
       setResumes(resumeRes.status === 'fulfilled' ? resumeRes.value.items : []);

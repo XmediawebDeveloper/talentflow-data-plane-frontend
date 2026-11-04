@@ -58,8 +58,7 @@ import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
-import { useJobRecords } from '@/lib/hooks/useJobRecords';
+import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig, mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
   DropdownMenu,
@@ -416,6 +415,10 @@ interface BatchProgress {
 
 interface ResumeScoringPageProps {
   jobs?: Job[];
+  /** `jobs` has its final value. The route only loads the one JD the
+   *  JD-first flow (?mode=new&jd_id) names, so an empty `jobs` alone can't
+   *  tell "still loading" from "not a published JD". */
+  jobsLoaded?: boolean;
   resumes?: Resume[];
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
@@ -449,6 +452,7 @@ interface ResumeScoringPageProps {
 
 export default function ResumeScoringPage({
   jobs: propJobs = [],
+  jobsLoaded = false,
   resumes: propResumes = [],
   scoredHistory = [],
   historyLoading = false,
@@ -696,10 +700,19 @@ export default function ResumeScoringPage({
   // `historyModalFilter`: one object, updated directly on every change, no
   // separate Apply step.
   const [historyModalFilter, setHistoryModalFilter] = useState<ScoringHistoryModalFilters>(EMPTY_SCORING_HISTORY_FILTERS);
-  // Full JD records by id — so the job list rows print the Job Descriptions
-  // cards' tags (experience, salary, AI/Manual…), which the scoring records
-  // themselves don't carry.
-  const jobRecordsById = useJobRecords();
+  // Each scored JD version's live status / republish counter / JD code, by id.
+  // Read off the scored index rows (GET /scoring/jds joins the JD table, so
+  // these are the JD's own current values) — this used to be useJobRecords(),
+  // a walk of EVERY JD the user owns (GET /jd, pages of 100) on every landing,
+  // for the same three fields of the rows already in hand.
+  const jobRecordsById = useMemo(
+    () => new Map(scoredHistory.map(h => [h.jobId, {
+      status: mapJDStatus(h.jdStatus || 'published'),
+      currentVersion: h.jdCurrentVersion,
+      job_id: h.jdJobId,
+    }])),
+    [scoredHistory],
+  );
   /** A JD version's status, capitalised ('Published', 'Disabled', 'Archived', …),
    *  for every badge and Disabled/Archived lock on this page. `jobRecordsById`
    *  only holds the user's OWN JDs (my-jds), so in a tenant where someone else
@@ -1569,7 +1582,7 @@ export default function ResumeScoringPage({
           setTimeout(() => {
             setShowResumeSelectionModal(true);
           }, 300);
-        } else if (jobs.length === 0) {
+        } else if (jobs.length === 0 && !jobsLoaded) {
           // Jobs not loaded yet - wait
           console.log('[ResumeScoringPage] JD-first flow: waiting for jobs to load');
           return;
@@ -1659,7 +1672,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, initialOpenedFrom, globalSettled, globalScoredResumes]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, jobsLoaded, initialOpenedFrom, globalSettled, globalScoredResumes]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -4108,7 +4121,6 @@ export default function ResumeScoringPage({
           const pageItems = displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
           const rowNodes = pageItems.map((item) => {
 
-              const jobDetails = jobs.find(j => j.id === item.jobId);
 
               // This item's own entry in its (prefetched) lineage — the
               // authoritative version_number for the badge below, since

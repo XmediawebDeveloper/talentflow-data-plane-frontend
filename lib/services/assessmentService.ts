@@ -186,6 +186,43 @@ export interface InvitationResponse {
   created_at: string;
 }
 
+/** GET /assessments/results-page (Results tab) filters — ONE builder on the
+ *  server reads them for the page, /stats and /ids. */
+export interface AssessmentResultsPageFilters {
+  search?: string;
+  /** The JD title the row shows. */
+  job?: string;
+  outcome?: 'all' | 'pass' | 'fail';
+  completed_from?: string;
+  completed_to?: string;
+}
+
+export interface AssessmentResultsPageQuery extends AssessmentResultsPageFilters {
+  page: number;
+  page_size: number;
+  sort_by?: 'newest' | 'oldest';
+  /** Invitation ids (comma list) — rows by id for select-all / export. */
+  ids?: string;
+}
+
+export interface AssessmentResultsPageStats {
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+}
+
+/** Drop empty values (and outcome 'all') so the request carries only set filters. */
+function cleanResultsPageParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    if (k === 'outcome' && v === 'all') continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 export interface AssessmentAttemptResponse {
   id?: string;  // Optional for pending candidates (no attempt yet)
   invitation_id: string;
@@ -948,6 +985,69 @@ export const assessmentService = {
     try {
       const response = await api.get<{ items: any[]; total: number }>('/assessments/all-results');
       return response.data?.items ?? [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Results tab: ONE page of completed results across every assessment,
+   * filtered / sorted on the server (GET /assessments/results-page). Each row
+   * is a listResults() row plus `_assessment_*` / `_jd_*` labels.
+   */
+  async listResultsPage(query: AssessmentResultsPageQuery): Promise<{ items: any[]; total: number }> {
+    try {
+      const response = await api.get<{ items: any[]; total: number }>('/assessments/results-page', {
+        params: cleanResultsPageParams(query),
+      });
+      return { items: response.data?.items || [], total: response.data?.total ?? 0 };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab counts for the same filters the page takes. */
+  async getResultsPageStats(filters: AssessmentResultsPageFilters = {}): Promise<AssessmentResultsPageStats> {
+    try {
+      const response = await api.get<AssessmentResultsPageStats>('/assessments/results-page/stats', {
+        params: cleanResultsPageParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every result row matching the filters (ids only), in list order. */
+  async getResultsPageIds(
+    filters: AssessmentResultsPageFilters & { sort_by?: 'newest' | 'oldest' } = {},
+  ): Promise<{ id: string; invitation_id: string; assessment_id: string; candidate_display_id?: string | null }[]> {
+    try {
+      const response = await api.get<{ items: any[] }>('/assessments/results-page/ids', {
+        params: cleanResultsPageParams(filters),
+      });
+      return response.data?.items || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Result rows by invitation id, 200 per request (select-all / export). */
+  async getResultsPageByInvitationIds(invitationIds: string[]): Promise<any[]> {
+    const out: any[] = [];
+    for (let i = 0; i < invitationIds.length; i += 200) {
+      const chunk = invitationIds.slice(i, i + 200);
+      const res = await assessmentService.listResultsPage({ page: 1, page_size: chunk.length, ids: chunk.join(',') });
+      out.push(...res.items);
+    }
+    return out;
+  },
+
+  /** Results tab Job filter options — fetched when the panel opens. */
+  async getResultsPageFilterOptions(): Promise<{ jobs: string[] }> {
+    try {
+      const response = await api.get<{ jobs: string[] }>('/assessments/results-page/filter-options');
+      return response.data || { jobs: [] };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

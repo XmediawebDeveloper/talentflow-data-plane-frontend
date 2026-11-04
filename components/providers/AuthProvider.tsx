@@ -331,12 +331,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user?.id || user.userDisplayId) return;
     if (displayIdFetchedForRef.current === user.id) return;
     displayIdFetchedForRef.current = user.id;
+    /* Some accounts (e.g. the tenant owner) have no display id at all, so the
+       ref above only spared re-renders — every hard load asked again. A "none"
+       answer is remembered for the tab session. */
+    const missKey = `displayIdMiss:${user.id}`;
+    try { if (sessionStorage.getItem(missKey)) return; } catch { /* storage unavailable */ }
 
     let cancelled = false;
     (async () => {
       try {
         const { userService } = await import('@/lib/services/userService');
         const record = await userService.getUser(user.id, { silent: true });
+        if (!record?.user_display_id) {
+          try { sessionStorage.setItem(missKey, '1'); } catch { /* storage unavailable */ }
+        }
         if (cancelled || !record?.user_display_id) return;
         /* Patched onto whatever the user object is by the time this lands, not
            onto the one captured when the fetch started — `refreshUser` may have
