@@ -11,10 +11,10 @@ import {
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
   BarChart3, Brain, FileText, Layers,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
-  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
+  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase, AudioLines,
 } from 'lucide-react';
 import { jdService, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
@@ -39,6 +39,7 @@ import { EvalReportCombined, MHS_THRESHOLD } from './evaluation-dashboard/EvalRe
 // EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
 // import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
 import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
+import EnvVerificationStudio from './tabs/EnvVerificationStudio';
 import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
@@ -1450,13 +1451,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // blob fetch since a plain <video src> can't carry the Authorization
   // header that endpoint requires.
   const [envVideoBlobUrls, setEnvVideoBlobUrls] = useState<Record<string, string>>({});
-  // Rounded playback duration per verification_id, read directly from the
-  // browser's own <video>.duration once metadata loads. The native <video
-  // controls> time display FLOORS duration (a genuine ~10.0s recording can
-  // measure ~9.98s in its WebM container from ordinary encoder overhead,
-  // showing "0:09") — this shows the correctly ROUNDED whole-second value
-  // alongside it instead, without touching the actual recording/upload.
-  const [envVideoDurations, setEnvVideoDurations] = useState<Record<string, number>>({});
   // One <video> element ref per verification card, keyed by verification_id —
   // lets a flagged item's timestamp jump straight to that point in THIS clip
   // (as opposed to the header's jump-to-recording link, which seeks the main
@@ -3662,482 +3656,24 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {envVerifications.map((v) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
-                    const envFramesForVerification = envFrames[v.verification_id];
-                    const envAvailableFrames = envFramesForVerification ? envFramesForVerification.filter(f => f.url) : [];
-                    const openAllFramesViewer = () => {
-                      if (envAvailableFrames.length === 0) return;
-                      setEnvFrameViewer({ urls: envAvailableFrames.map(f => f.url as string), index: 0 });
-                    };
                     return (
-                      <div key={v.verification_id} className="tf-card-soft overflow-hidden">
-                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                            <span className="tf-row-title">Environment Verification</span>
-                            <button
-                              type="button"
-                              disabled={envAvailableFrames.length === 0}
-                              onClick={openAllFramesViewer}
-                              title={envAvailableFrames.length > 0 ? `View ${envAvailableFrames.length} analyzed frames` : 'No stored frames for this attempt'}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
-                            >
-                              <Camera className="w-3.5 h-3.5" />
-                              Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
-                            </button>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="tf-micro-hint font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {v.color_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                Color {v.color_match ? 'matched' : 'mismatch'}
-                              </span>
-                            )}
-                            {v.id_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                ID {v.id_match ? 'matched' : 'mismatch'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="p-4 sm:p-5 space-y-4">
-                          <div>
-                            <p className="tf-eyebrow tracking-wide mb-1.5">Candidate Verification Video</p>
-                            {!v.video_uploaded ? (
-                              <p className="text-sm text-destructive italic">Video upload failed.</p>
-                            ) : videoStillLoading ? (
-                              <p className="tf-body-muted italic">Loading video…</p>
-                            ) : !videoSrc ? (
-                              <p className="text-sm text-destructive italic">Video unavailable.</p>
-                            ) : (
-                              <>
-                                <video
-                                  ref={(el) => { envVideoRefs.current[v.verification_id] = el; }}
-                                  controls
-                                  preload="metadata"
-                                  className="w-full max-w-lg rounded-lg bg-black"
-                                  onLoadedMetadata={(e) => {
-                                    const d = e.currentTarget.duration;
-                                    if (Number.isFinite(d) && d > 0) {
-                                      setEnvVideoDurations(prev => ({ ...prev, [v.verification_id]: Math.round(d) }));
-                                    }
-                                  }}
-                                >
-                                  <source src={videoSrc} type={v.video_mime_type || 'video/webm'} />
-                                </video>
-                                <p className="text-xs text-success font-medium mt-1.5">
-                                  Status: {v.status === 'completed' ? 'Uploaded' : v.status === 'submitted' ? 'Uploaded' : v.status}
-                                  {envVideoDurations[v.verification_id] ? ` · ${envVideoDurations[v.verification_id]}s` : ''}
-                                  {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
-                                </p>
-                                {v.download_url && (
-                                  <a
-                                    href={v.download_url}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-brand-blue hover:underline underline-offset-2"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Download verification video
-                                  </a>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          {v.rgb_sequence_results && v.rgb_sequence_results.length > 0 && (
-                            <div>
-                              <p className="tf-eyebrow tracking-wide mb-1.5">
-                                RGB Challenge Sequence — deterministic per-second check
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {v.rgb_sequence_results.map((r) => (
-                                  <div
-                                    key={r.second}
-                                    className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-lg ring-1 text-xs font-medium ${r.match ? 'bg-success-subtle ring-success-line text-success' : 'bg-destructive-subtle ring-destructive-line text-destructive'}`}
-                                    title={r.detected_rgb ? `Expected ${r.expected_rgb}, detected ${r.detected_rgb} (distance ${r.distance ?? '—'})` : `Expected ${r.expected_rgb} — no frame detected`}
-                                  >
-                                    <span
-                                      className="w-4 h-4 rounded ring-1 ring-black/10 flex-shrink-0"
-                                      style={{ backgroundColor: r.expected_rgb }}
-                                    />
-                                    Sec {r.second}: {r.match ? 'MATCH' : 'MISMATCH'}
-                                  </div>
-                                ))}
-                              </div>
-                              <p className="tf-micro-hint mt-1.5">
-                                Overall RGB_CHALLENGE = {v.rgb_sequence_results.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
-                              </p>
-                            </div>
-                          )}
-                          {/* AI Analysis status banner — the explicit "did the LLM find anything"
-                              verdict (result_severity), separate from the color/ID anti-replay
-                              check above. Matches the spec's "LLM compares frames... records a
-                              violation with a summary... added to the interview report." */}
-                          {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
-                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
-                              <p className="tf-meta">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
-                            </div>
-                          ) : v.analysis_status === 'error' ? (
-                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
-                              <p className="tf-meta">AI analysis could not be completed for this recording — the video itself is still available above.</p>
-                            </div>
-                          ) : v.analysis_status === 'done' ? (
-                            <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-destructive-subtle ring-destructive-line' : 'bg-success-subtle ring-success-line'}`}>
-                              <p className={`text-xs font-semibold ${v.result_severity === 'flagged' ? 'text-destructive' : 'text-success'}`}>
-                                {v.result_severity === 'flagged' ? '⚠ Suspicious activity detected' : '✓ No suspicious activity detected'}
-                              </p>
-                            </div>
-                          ) : null}
-                          {v.ai_summary && (
-                            <div>
-                              <p className="tf-eyebrow tracking-wide mb-1">AI Summary</p>
-                              <p className="tf-body leading-relaxed">{v.ai_summary}</p>
-                            </div>
-                          )}
-                          {((v.flagged_items && v.flagged_items.length > 0) || (v.voice_activity_offsets_ms && v.voice_activity_offsets_ms.length > 0)) && (() => {
-                            // Voice-activity offsets are a deterministic client-side VAD signal
-                            // (energy + zero-crossing-rate, not vision-LLM judged). The backend now
-                            // writes these into the row's own `flagged_items` (and factors them into
-                            // result_severity) at analysis time — see
-                            // `_voice_activity_to_flagged_items` in environment_verification_tasks.py.
-                            // This client-side synthesis is now only a FALLBACK for verifications
-                            // analyzed before that backend change shipped (their stored flagged_items
-                            // has no voice entries even though voice_activity_offsets_ms is present) —
-                            // skip it whenever the backend has already included a voice entry, to avoid
-                            // rendering the same detected speech as two separate rows.
-                            const backendAlreadyHasVoiceItems = (v.flagged_items || []).some(
-                              (it) => typeof it?.label === 'string' && it.label.toLowerCase().includes('voice')
-                            );
-                            const voiceItems = backendAlreadyHasVoiceItems ? [] : (v.voice_activity_offsets_ms || []).map((ms) => ({
-                              label: 'Voice/speech detected',
-                              confidence: 'medium',
-                              location: null,
-                              approx_timestamp: `~${(ms / 1000).toFixed(1)}s`,
-                              phase: ms < 5000 ? 'display' : 'pan',
-                              reason: null,
-                            }));
-                            const items = [...(v.flagged_items || []), ...voiceItems];
-                            // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
-                            // "frame 12 only") — same regex approach as the backend's own
-                            // phase-derivation fallback — to make it clickable.
-                            const parseApproxSeconds = (ts: string | null): number | null => {
-                              if (!ts) return null;
-                              const match = ts.match(/(\d+(?:\.\d+)?)/);
-                              return match ? parseFloat(match[1]) : null;
-                            };
-                            const seekEnvVideo = (seconds: number) => {
-                              const el = envVideoRefs.current[v.verification_id];
-                              if (el) {
-                                el.currentTime = seconds;
-                                el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
-                              }
-                            };
-                            // Parse BOTH numbers out of a range like "~6.2s-8.1s" (start+end); a
-                            // single-point timestamp like "frame 12 only" or "~2.0s" yields the
-                            // same number twice, widened below by _FRAME_MATCH_PAD.
-                            const parseApproxRange = (ts: string | null): [number, number] | null => {
-                              if (!ts) return null;
-                              const nums = ts.match(/\d+(?:\.\d+)?/g);
-                              if (!nums || nums.length === 0) return null;
-                              const a = parseFloat(nums[0]);
-                              const b = nums.length > 1 ? parseFloat(nums[1]) : a;
-                              return [Math.min(a, b), Math.max(a, b)];
-                            };
-                            const _FRAME_MATCH_PAD = 0.4; // seconds — frames are ~0.5s apart at 2fps
-                            // Which stored frames (2fps, index*0.5s ≈ that frame's timestamp) fall
-                            // inside this flagged item's approx_timestamp range — lets a recruiter
-                            // click straight to the exact evidence frame(s) instead of just seeking
-                            // the video and hunting for it themselves.
-                            const framesForRange = (range: [number, number] | null) => {
-                              const frames = envFrames[v.verification_id];
-                              if (!frames || frames.length === 0 || !range) return [];
-                              const [start, end] = range;
-                              const inRange = frames.filter(f => {
-                                const t = f.index * 0.5;
-                                return t >= start - _FRAME_MATCH_PAD && t <= end + _FRAME_MATCH_PAD;
-                              });
-                              return inRange.length > 0 ? inRange : frames.filter(f => Math.abs(f.index * 0.5 - start) < 0.5);
-                            };
-                            const openFrameViewer = (frames: EnvFrame[], startIndex: number) => {
-                              const urls = frames.filter(f => f.url).map(f => f.url as string);
-                              if (urls.length === 0) return;
-                              setEnvFrameViewer({ urls, index: Math.min(startIndex, urls.length - 1) });
-                            };
-                            // Legacy rows analyzed before the 2-column merge may still carry
-                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "pan" here.
-                            const normalizedPhase = (item: Record<string, unknown>): string => {
-                              const p = String(item.phase ?? '');
-                              return p === 'pan_left_to_right' || p === 'pan_right_to_left' ? 'pan' : p;
-                            };
-                            const segmentLabel = (phase: string) =>
-                              phase === 'display' ? 'Display' : phase === 'pan' ? 'Pan' : '—';
-                            const iconForLabel = (label: string) => {
-                              const l = label.toLowerCase();
-                              if (l.includes('voice') || l.includes('speech')) return <Mic className="w-3.5 h-3.5" />;
-                              if (l.includes('person')) return <Users className="w-3.5 h-3.5" />;
-                              if (l.includes('phone') || l.includes('tablet')) return <Smartphone className="w-3.5 h-3.5" />;
-                              if (l.includes('laptop') || l.includes('monitor') || l.includes('screen') || l.includes('display')) return <Monitor className="w-3.5 h-3.5" />;
-                              return <AlertTriangle className="w-3.5 h-3.5" />;
-                            };
-                            const severityForConfidence = (confidence: string) => {
-                              if (confidence === 'high') return { label: 'Serious', cls: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' };
-                              if (confidence === 'medium') return { label: 'Moderate', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
-                              return { label: 'Minor', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
-                            };
-                            const rows = items.map((item, i) => {
-                              const label = String(item.label ?? 'Unknown');
-                              const confidence = typeof item.confidence === 'string' ? item.confidence : 'low';
-                              const location = typeof item.location === 'string' ? item.location : null;
-                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                              const phase = normalizedPhase(item);
-                              const seekSeconds = parseApproxSeconds(approxTimestamp);
-                              // Best-effort absolute wall-clock moment: this verification's own
-                              // trigger/submit time + the parsed offset into the 10s clip — same
-                              // "offset + absolute clock underneath" convention used everywhere
-                              // else in this file (Integrity Check, Question Analysis, the card
-                              // header above).
-                              const baseTs = v.submitted_at || v.triggered_at || '';
-                              const absoluteTs = baseTs && seekSeconds != null
-                                ? new Date(new Date(baseTs).getTime() + seekSeconds * 1000).toISOString()
-                                : null;
-                              const phaseDescription = phase === 'display'
-                                ? 'during the display phase (first 5s)'
-                                : phase === 'pan'
-                                ? 'during the panning phase (5s-10s)'
-                                : '';
-                              // Prefer the AI's own per-item reason (added so each violation
-                              // carries its own specific explanation, not just the one shared
-                              // overall ai_summary) — fall back to a synthesized sentence for
-                              // records analyzed before this field existed, or for the
-                              // synthetic voice/corner-check entries that don't set it.
-                              const reason = typeof item.reason === 'string' && item.reason.trim()
-                                ? item.reason.trim()
-                                : null;
-                              const description = reason
-                                ?? `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
-                              const severity = severityForConfidence(confidence);
-                              const matchedFrames = framesForRange(parseApproxRange(approxTimestamp));
-                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity, matchedFrames };
-                            });
-                            return (
-                              <div>
-                                <p className="tf-eyebrow tracking-wide mb-2">Flagged Items</p>
-                                <div className={`overflow-x-auto rounded-lg ring-1 ring-gray-100 ${DESKTOP_TABLE_ONLY}`}>
-                                  <table className="min-w-full text-left">
-                                    <thead>
-                                      <tr className="bg-white border-b border-gray-100">
-                                        <th className="tf-th-cell tf-th">What happened</th>
-                                        <th className="tf-th-cell tf-th">What we saw</th>
-                                        <th className="tf-th-cell tf-th">Segment</th>
-                                        <th className="tf-th-cell tf-th">When</th>
-                                        <th className="tf-th-cell tf-th">Frame</th>
-                                        <th className="tf-th-cell tf-th">Severity</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                      {rows.map((r) => (
-                                        <tr key={r.i} className="align-top">
-                                          <td className="tf-td">
-                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line/60">
-                                              {iconForLabel(r.label)}
-                                              {r.label}
-                                            </div>
-                                            <div className="mt-1">
-                                              {r.confidence === 'high' ? (
-                                                <span className="tf-badge text-2xs tracking-wide bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
-                                              ) : (
-                                                <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
-                                              )}
-                                            </div>
-                                          </td>
-                                          <td className="tf-td tf-meta max-w-[34ch] whitespace-normal break-words">
-                                            {r.description}
-                                          </td>
-                                          <td className="tf-td tf-meta">{segmentLabel(r.phase)}</td>
-                                          <td className="tf-td">
-                                            {r.seekSeconds != null ? (
-                                              <button
-                                                type="button"
-                                                onClick={() => seekEnvVideo(r.seekSeconds as number)}
-                                                title="Jump to this moment in the verification video"
-                                                className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
-                                              >
-                                                <Play className="w-3 h-3" />{r.approxTimestamp}
-                                              </button>
-                                            ) : (
-                                              <span className="tf-hint font-mono">{r.approxTimestamp ?? '—'}</span>
-                                            )}
-                                            {r.absoluteTs && (
-                                              <div className="tf-micro-hint font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
-                                            )}
-                                          </td>
-                                          <td className="tf-td">
-                                            {r.matchedFrames.length > 0 ? (
-                                              <button
-                                                type="button"
-                                                onClick={() => openFrameViewer(r.matchedFrames, 0)}
-                                                title={`View ${r.matchedFrames.length} matching frame${r.matchedFrames.length > 1 ? 's' : ''}`}
-                                                className="relative w-14 h-9 rounded overflow-hidden ring-1 ring-gray-200 bg-gray-100 group flex-shrink-0"
-                                              >
-                                                {r.matchedFrames[0].url ? (
-                                                  <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                                ) : (
-                                                  <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">N/A</span>
-                                                )}
-                                                {r.matchedFrames.length > 1 && (
-                                                  <span className="absolute bottom-0 right-0 text-2xs font-mono text-white bg-black/60 px-1">
-                                                    {r.matchedFrames.length}
-                                                  </span>
-                                                )}
-                                              </button>
-                                            ) : (
-                                              <span className="text-xs text-gray-300">—</span>
-                                            )}
-                                          </td>
-                                          <td className="tf-td">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
-                                              {r.severity.label}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                                <MobileRecordList>
-                                  {rows.map((r) => (
-                                    <MobileRecordCard
-                                      key={r.i}
-                                      badges={
-                                        <>
-                                          {r.confidence === 'high' ? (
-                                            <span className="tf-badge text-2xs tracking-wide bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
-                                          ) : (
-                                            <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
-                                          )}
-                                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
-                                            {r.severity.label}
-                                          </span>
-                                        </>
-                                      }
-                                      title={
-                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line/60">
-                                          {iconForLabel(r.label)}
-                                          {r.label}
-                                        </span>
-                                      }
-                                      fields={[
-                                        { label: 'What we saw', value: r.description },
-                                        { label: 'Segment', value: segmentLabel(r.phase) },
-                                        {
-                                          label: 'When',
-                                          value: (
-                                            <>
-                                              {r.seekSeconds != null ? (
-                                                <button
-                                                  type="button"
-                                                  onClick={() => seekEnvVideo(r.seekSeconds as number)}
-                                                  title="Jump to this moment in the verification video"
-                                                  className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
-                                                >
-                                                  <Play className="w-3 h-3" />{r.approxTimestamp}
-                                                </button>
-                                              ) : (
-                                                <span className="tf-hint font-mono">{r.approxTimestamp ?? '—'}</span>
-                                              )}
-                                              {r.absoluteTs && (
-                                                <span className="tf-micro-hint font-mono ml-1">{formatTs(r.absoluteTs)}</span>
-                                              )}
-                                            </>
-                                          ),
-                                        },
-                                        {
-                                          label: 'Frame',
-                                          value: r.matchedFrames.length > 0 ? (
-                                            <button
-                                              type="button"
-                                              onClick={() => openFrameViewer(r.matchedFrames, 0)}
-                                              title={`View ${r.matchedFrames.length} matching frame${r.matchedFrames.length > 1 ? 's' : ''}`}
-                                              className="relative inline-block align-middle w-14 h-9 rounded overflow-hidden ring-1 ring-gray-200 bg-gray-100 group flex-shrink-0"
-                                            >
-                                              {r.matchedFrames[0].url ? (
-                                                <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                              ) : (
-                                                <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">N/A</span>
-                                              )}
-                                              {r.matchedFrames.length > 1 && (
-                                                <span className="absolute bottom-0 right-0 text-2xs font-mono text-white bg-black/60 px-1">
-                                                  {r.matchedFrames.length}
-                                                </span>
-                                              )}
-                                            </button>
-                                          ) : '—',
-                                        },
-                                      ]}
-                                    />
-                                  ))}
-                                </MobileRecordList>
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const frames = envFrames[v.verification_id];
-                            const loading = envFramesLoading[v.verification_id];
-                            const error = envFramesError[v.verification_id];
-                            if (!frames || frames.length === 0) {
-                              if (!loading && !error) return null;
-                            }
-                            return (
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="tf-eyebrow tracking-wide flex items-center gap-1.5">
-                                    <Camera className="w-3.5 h-3.5" /> Analyzed Frames
-                                  </p>
-                                  {frames && frames.length > 0 && (
-                                    <span className="tf-meta">{frames.length} frames</span>
-                                  )}
-                                </div>
-                                {loading || (!frames && !error) ? (
-                                  <p className="tf-body-muted italic">Loading frames…</p>
-                                ) : error ? (
-                                  <p className="text-sm text-destructive italic">Could not load frames.</p>
-                                ) : !frames || frames.length === 0 ? (
-                                  <p className="tf-body-muted italic">
-                                    No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
-                                  </p>
-                                ) : (
-                                  <div className="tf-grid-stats-5">
-                                    {frames.map((f) => (
-                                      <button
-                                        key={f.index}
-                                        type="button"
-                                        disabled={!f.url}
-                                        onClick={() => {
-                                          const available = frames.filter(fr => fr.url);
-                                          const startIndex = available.findIndex(fr => fr.index === f.index);
-                                          if (startIndex >= 0) setEnvFrameViewer({ urls: available.map(fr => fr.url as string), index: startIndex });
-                                        }}
-                                        className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
-                                      >
-                                        {f.url ? (
-                                          <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                        ) : (
-                                          <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">unavailable</span>
-                                        )}
-                                        <span className="absolute bottom-0.5 right-1 text-2xs font-mono text-white bg-black/50 px-1 rounded">
-                                          {f.index + 1}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
+                      <EnvVerificationStudio
+                        key={v.verification_id}
+                        v={v}
+                        videoSrc={videoSrc}
+                        videoStillLoading={videoStillLoading}
+                        frames={envFrames[v.verification_id]}
+                        framesLoading={!!envFramesLoading[v.verification_id]}
+                        framesError={!!envFramesError[v.verification_id]}
+                        openViewer={(urls, index) => setEnvFrameViewer({ urls, index })}
+                        registerVideo={(el) => { envVideoRefs.current[v.verification_id] = el; }}
+                        formatTs={formatTs}
+                        interviewRef={{
+                          candidate: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                          role: (interview as any).job_title || (interview as any).role || interview.position || '',
+                          sessionId: liveSession.id,
+                        }}
+                      />
                     );
                   })}
                 </div>
@@ -4652,8 +4188,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     {/* Original (raw ASR) — ALWAYS shown, even when the
                                         enhancer made no change, so the recruiter can always
                                         see exactly what the ASR engine produced. */}
-                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-100/60 text-sky-900">
-                                      <div className="text-2xs font-semibold text-sky-700 mb-1 uppercase tracking-wide">Original (ASR)</div>
+                                    <div className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-50 border border-sky-200 text-gray-800">
+                                      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-sky-700 uppercase tracking-wide">
+                                        <AudioLines className="w-4 h-4" /> Original (ASR)
+                                      </div>
                                       {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.raw} tone="raw" />
                                         : <span>{rawContent || content}</span>}
@@ -4662,8 +4200,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         raw ASR it simply repeats the same text (no correction).
                                         For a non-English discard there is no scorable English,
                                         so it shows a muted "not scored" marker instead of text. */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-success-subtle/60 text-success-strong">
-                                      <div className="text-2xs font-semibold text-success mb-1 uppercase tracking-wide">Corrected</div>
+                                    <div className="mt-2 px-4 py-3 rounded-2xl text-sm leading-relaxed bg-success-subtle/70 border border-success-line text-gray-800">
+                                      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-success uppercase tracking-wide">
+                                        <span className="grid place-items-center w-4 h-4 rounded-full bg-success text-white">
+                                          <Check className="w-2.5 h-2.5" strokeWidth={3.5} />
+                                        </span>
+                                        Corrected
+                                      </div>
                                       {noScorableEnglish
                                         ? <span className="italic text-gray-500">— no scorable English (not scored)</span>
                                         : hasCorrection && diff && diff.mode === 'word'
