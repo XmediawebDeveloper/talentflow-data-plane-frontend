@@ -13,8 +13,13 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
-import TrackInvitesModal from '@/components/TrackInvitesModal';
-import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
+import { usePermissions } from '@/lib/hooks/usePermissions';
+import dynamic from 'next/dynamic';
+
+/* On demand: this panel is mounted from the dashboard layout, and both track
+   modals (with their invite tables and version panels) only open on a click. */
+const TrackInvitesModal = dynamic(() => import('@/components/TrackInvitesModal'), { ssr: false, loading: () => null });
+const AIInterviewTrackInvitesModal = dynamic(() => import('@/components/AIInterviewTrackInvitesModal'), { ssr: false, loading: () => null });
 
 const POLL_MS = 2000;
 const PAGE_SIZE = 50;
@@ -73,6 +78,12 @@ export default function BulkInviteProgressPanel({
   compact?: boolean;
 }) {
   const tracker = useOptionalBulkInviteProgress();
+  /* Revoke / Edit on the "Track status" popup's own tracker — same gate the
+     Assessments page's Track Invites popup trusts implicitly (reaching that
+     page already requires this permission). This widget can surface anywhere,
+     so it checks explicitly rather than assuming the host page already did. */
+  const { hasPermission, isTenantAdmin } = usePermissions();
+  const canModifyAssessmentInvites = isTenantAdmin || hasPermission('canUpdateAssessments') || hasPermission('canCreateAssessments');
   const [job, setJob] = useState<BulkInviteJob | null>(initialJob ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('all');
@@ -488,6 +499,7 @@ export default function BulkInviteProgressPanel({
               jdId={job.jd_id}
               jdTitle={job.version_label || 'Assessment'}
               initialSearch={trackRow.email || trackRow.name || undefined}
+              canModifyInvites={canModifyAssessmentInvites}
             />
           )}
         </div>,

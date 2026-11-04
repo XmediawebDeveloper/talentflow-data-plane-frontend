@@ -6,6 +6,7 @@ import { CheckIcon, ChevronRightIcon, CircleIcon } from "lucide-react";
 
 import { cn } from "./utils";
 import { useMobileRecordCardVariant } from "./mobile-record-card";
+import { phoneCentredLeft } from "@/lib/hooks/useCenteredMenuOnPhone";
 
 function DropdownMenu({
   ...props
@@ -75,8 +76,8 @@ function DropdownMenuContent({
       // align="start" + this offset puts the menu's left edge where a centred menu starts
       // (Radix ignores alignOffset for align="center").
       const t = trigger.getBoundingClientRect();
-      const viewport = document.documentElement.clientWidth;
-      const centredLeft = (viewport - contentEl.offsetWidth) / 2;
+      // Centred on the visible page content (scrollbar excluded), not the raw viewport.
+      const centredLeft = phoneCentredLeft(trigger, contentEl.offsetWidth);
       setPhoneOffset(Math.round(centredLeft - t.left));
     };
     measure();

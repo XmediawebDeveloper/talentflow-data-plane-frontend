@@ -232,8 +232,16 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     if (!user) return;
 
     try {
-      // Not /notifications/count — its totals include chat rows, which the
-      // popup hides. Count from the list instead, minus the chat rows.
+      // /notifications/count?exclude_chat=true: chat rows (hidden by the popup)
+      // are left out server-side, so the badge needs no list fetch.
+      const counts = await notificationService.getNotificationCounts({ excludeChat: true });
+      if (counts.excludes_chat === true) {
+        setUnreadCount(Math.max(0, counts.unread));
+        setTotalCount(Math.max(0, counts.total));
+        return;
+      }
+      // Older backend (flag ignored → totals include chat): count from the
+      // list instead, minus the chat rows.
       const response = await notificationService.getNotifications(NOTIFICATION_FETCH_LIMIT, 0, false);
       const chat = response.notifications.filter(isChatNotification);
       setUnreadCount(Math.max(0, response.unread_count - chat.filter((n) => !n.is_read).length));

@@ -14,7 +14,7 @@ import api, { handleApiError, dispatchUnitsConsumed, getTokens } from './api';
    `{ force: true }` to skip the throttle (e.g. right after a write). */
 const RECONCILE_THROTTLE_MS = 15 * 60 * 1000;
 const RECONCILE_STORAGE_PREFIX = 'tf-usage-reconcile-at:';
-let reconcileInFlight: Promise<void> | null = null;
+let reconcileInFlight: Promise<boolean> | null = null;
 
 function reconcileStorageKey(): string {
   // Key by account so a different login in the same tab is not throttled by
@@ -416,9 +416,42 @@ export interface ResumeSearchParams {
   page_size?: number;
   sort_by?: string;
   include_archived?: boolean;
+  /** Multi-keyword search: 'all' keywords must match (server default) or 'any'. */
+  search_mode?: 'all' | 'any';
+}
+
+/** GET /resumes/stats — counts built from the same filters as GET /resumes. */
+export interface ResumeStatsParams extends Omit<ResumeSearchParams, 'folder_id' | 'page' | 'page_size' | 'sort_by'> {
+  /** false skips the per-folder GROUP BY (tab badges only). */
+  include_folders?: boolean;
+}
+
+export interface ResumeStats {
+  source: 'my-resumes' | 'internal-db' | null;
+  /** = GET /resumes?source=<source> total (no folder). Null when not readable. */
+  all_total: number | null;
+  /** Tab badges; a pool the user may not read is null. */
+  sources: { 'my-resumes': number | null; 'internal-db': number | null };
+  /** = GET /resumes?source=<source>&folder_id=uncategorized total. */
+  uncategorized: number | null;
+  /** folder_id -> GET /resumes?source=<source>&folder_id=<id> total (archived rows included). */
+  folders: Record<string, number>;
 }
 
 export const resumeService = {
+  /**
+   * Card / badge counts for the Resume Database in one call (replaces the
+   * per-tab and per-folder page_size=1 probes).
+   */
+  async stats(params?: ResumeStatsParams): Promise<ResumeStats> {
+    try {
+      const response = await api.get<ResumeStats>('/resumes/stats', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   /**
    * List resumes with filters
    */
@@ -437,23 +470,30 @@ export const resumeService = {
    * the endpoint is idempotent and returns delta=0 when already in sync.
    * Throttled to once per 15 minutes per tab session (see
    * RECONCILE_THROTTLE_MS above); `force` bypasses the throttle.
+   * Resolves true only when a reconcile actually ran and succeeded, so a
+   * caller refreshes quota only when the counter may have moved.
    */
-  async reconcileUsage(options?: { force?: boolean }): Promise<void> {
+  async reconcileUsage(options?: { force?: boolean }): Promise<boolean> {
     if (reconcileInFlight) return reconcileInFlight;
     const key = typeof window !== 'undefined' ? reconcileStorageKey() : null;
     if (key && !options?.force) {
       const last = readReconcileStamp(key);
       const now = Date.now();
-      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return;
+      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return false;
     }
     if (key) writeReconcileStamp(key, Date.now());
     reconcileInFlight = (async () => {
       try {
-        await api.post('/resumes/usage/reconcile');
+        // Adjusts a usage counter only — no listed data changes, so keep the
+        // list caches (see `invalidatesLists`); the layout refetches quota
+        // itself after a reconcile that ran.
+        await api.post('/resumes/usage/reconcile', undefined, { invalidatesLists: false });
+        return true;
       } catch {
         // Reconciliation is best-effort; never block the page on it. Drop the
         // stamp so the next mount retries, as it did before the throttle.
         if (key) writeReconcileStamp(key, null);
+        return false;
       } finally {
         reconcileInFlight = null;
       }

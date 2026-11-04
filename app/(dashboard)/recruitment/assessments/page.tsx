@@ -84,6 +84,15 @@ export default function AssessmentsRoute() {
   }, [autoCreate, listTabFromUrl, router]);
 
   useEffect(() => {
+    /* Every JD of the tenant is read ONLY for the auto-opened Create view,
+       which seeds its picker with them. The list landing does not need them:
+       the Create picker fetches its own job list when it opens, and the LATEST
+       pill reads the job lineages of the rows on screen (/jd/lineages). On
+       staging this read alone was ~2 s of the landing. */
+    if (!opensOnCreate) {
+      setIsLoading(false);
+      return;
+    }
     const fetchJobs = async () => {
       try {
         // Probe for total then pull all. NO status filter, deliberately: this list
@@ -138,7 +147,7 @@ export default function AssessmentsRoute() {
     };
 
     fetchJobs();
-  }, []);
+  }, [opensOnCreate]);
 
   // Only the auto-opened Create view needs the job list before it can render.
   // The list view fetches its own data (stats, assessments, lineages) and

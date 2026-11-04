@@ -29,6 +29,9 @@ export function StickyBulkBar({ children, className }: { children: React.ReactNo
   /* How far below the scroller's top the pinned bar sits: the sticky
      breadcrumb's height (0 without one). */
   const [offset, setOffset] = React.useState(0);
+  /* The controls' width while they still sit in the row — once pinned the row is
+     empty (it only keeps its height), so later re-measures read it from here. */
+  const contentWidthRef = React.useRef(0);
 
   React.useLayoutEffect(() => {
     const el = anchorRef.current;
@@ -71,11 +74,16 @@ export function StickyBulkBar({ children, className }: { children: React.ReactNo
       const a = el.getBoundingClientRect();
       const crumb = stickyCrumb(scroller)?.getBoundingClientRect();
       const left = crumb ? crumb.left : s.left;
+      const width = crumb ? crumb.width : scroller.clientWidth;
+      if (el.childElementCount > 0) contentWidthRef.current = a.width;
       setFrame({
         top: s.top + (crumb ? crumb.height : 0),
         left,
-        width: crumb ? crumb.width : scroller.clientWidth,
-        inset: Math.max(0, a.left - left),
+        width,
+        /* Line the controls up with the row — unless that would push them past the
+           bar's right edge (a right-aligned row, e.g. the Job Openings module's phone
+           selection bar): then they start at the bar's left instead, on one line. */
+        inset: a.left - left + contentWidthRef.current + 12 <= width ? Math.max(0, a.left - left) : 0,
         height: a.height,
       });
     };

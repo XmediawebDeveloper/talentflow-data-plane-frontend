@@ -324,15 +324,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      missing badge is not worth a console error or a toast on every load. */
   const displayIdFetchedForRef = useRef<string | null>(null);
   useEffect(() => {
+    // Wait for /auth/me (restoreSession) to answer first: it normally carries
+    // user_display_id, so a cached user missing it no longer costs an extra
+    // /users/{id} on every hard load.
+    if (!permissionsVerified) return;
     if (!user?.id || user.userDisplayId) return;
     if (displayIdFetchedForRef.current === user.id) return;
     displayIdFetchedForRef.current = user.id;
+    /* Some accounts (e.g. the tenant owner) have no display id at all, so the
+       ref above only spared re-renders — every hard load asked again. A "none"
+       answer is remembered for the tab session. */
+    const missKey = `displayIdMiss:${user.id}`;
+    try { if (sessionStorage.getItem(missKey)) return; } catch { /* storage unavailable */ }
 
     let cancelled = false;
     (async () => {
       try {
         const { userService } = await import('@/lib/services/userService');
         const record = await userService.getUser(user.id, { silent: true });
+        if (!record?.user_display_id) {
+          try { sessionStorage.setItem(missKey, '1'); } catch { /* storage unavailable */ }
+        }
         if (cancelled || !record?.user_display_id) return;
         /* Patched onto whatever the user object is by the time this lands, not
            onto the one captured when the fetch started — `refreshUser` may have
@@ -346,7 +358,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  }, [user?.id, user?.userDisplayId]);
+  }, [user?.id, user?.userDisplayId, permissionsVerified]);
 
   // RBAC01-07: Role-based helpers
   const isTenantAdmin = user ? isTenantAdminRole(user.role) : false;

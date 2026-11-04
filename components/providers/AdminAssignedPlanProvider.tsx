@@ -6,6 +6,7 @@ import {
   type AdminAssignedPlan,
 } from '@/lib/services/adminAssignedPlanService';
 import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 
 const DISMISS_KEY = 'tf_admin_assigned_plan_banner_dismissed';
 
@@ -60,7 +61,11 @@ export function AdminAssignedPlanProvider({ children }: { children: React.ReactN
     }
 
     try {
-      const plan = await withNetworkRetry(() => adminAssignedPlanService.getPendingPlan());
+      // First load: the app-shell /bootstrap response, if it carried this part.
+      const boot = await takeBootstrapPart<{ data?: AdminAssignedPlan | null }>('admin_assigned_plan');
+      const plan = boot.hit
+        ? ((boot.data?.data as AdminAssignedPlan | null) ?? null)
+        : await withNetworkRetry(() => adminAssignedPlanService.getPendingPlan());
       setPendingPlan(plan);
     } catch (err) {
       if (isTransientNetworkError(err)) {

@@ -40,7 +40,6 @@ import { ArrowLeft,
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { handleUnauthorized } from '@/lib/services/api';
-import authService from '@/lib/services/authService';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem, Permission } from '@/lib/types/rbac';
@@ -665,7 +664,7 @@ function resetUserSyncThrottle(): void {
 
 export default function UserManagement() {
   const router = useRouter();
-  const { user: currentUser, refreshUser } = useAuth();
+  const { user: currentUser, refreshUser, isLoading: authLoading, canManageUsers: authCanManageUsers } = useAuth();
   const dialog = useGlobalDialog();
 
   // Shared by every permission toggle below: instead of silently blocking a
@@ -974,37 +973,23 @@ export default function UserManagement() {
     },
   );
 
-  // Permission guard - check if user has access to User Management
+  // Permission guard - check if user has access to User Management.
+  // Reads the AuthProvider's user (already loaded from /auth/me by the app
+  // shell, and refreshed there on permission changes) instead of a second
+  // /auth/me round trip. Mirrors the canManageUsers mapping in AuthProvider
+  // (which the route guard/menu use): view-only users (can_view_users) may
+  // land here too, with reduced capabilities gated further down.
   useEffect(() => {
-    const checkPermission = async () => {
-      try {
-        const currentUser = await authService.getCurrentUser();
-
-        // Store current user ID for hiding Edit/Delete buttons on self
-        setCurrentUserId(currentUser.id);
-
-        // Check if user has permission to access User Management. Mirrors the
-        // canManageUsers mapping in AuthProvider (which the route guard/menu use):
-        // view-only users (can_view_users) are allowed to land on this page too,
-        // just with reduced capabilities gated further down (canDisableUser, etc).
-        const hasPermission =
-          currentUser.role === 'tenant_admin' ||
-          !!currentUser.permissions?.can_manage_users ||
-          !!(currentUser.permissions as any)?.can_view_users;
-
-        if (!hasPermission) {
-          toast.error('You do not have permission to access User Management');
-          router.push('/dashboard');
-          return;
-        }
-      } catch (error) {
-        console.error('Permission check failed:', error);
-        router.push('/dashboard');
-      }
-    };
-
-    checkPermission();
-  }, [router]);
+    // No user once auth settles = signed out; the dashboard layout handles that redirect.
+    if (authLoading || !currentUser) return;
+    // Store current user ID for hiding Edit/Delete buttons on self
+    setCurrentUserId(String(currentUser.id));
+    const hasPermission = currentUser.role === 'tenant_admin' || !!authCanManageUsers;
+    if (!hasPermission) {
+      toast.error('You do not have permission to access User Management');
+      router.push('/dashboard');
+    }
+  }, [authLoading, currentUser?.id, currentUser?.role, authCanManageUsers, router]);
 
   // Load users, roles, and permissions
   useEffect(() => {
@@ -1612,7 +1597,7 @@ export default function UserManagement() {
     // until a manual page refresh. Fired in parallel and independent of the
     // list fetch so it still updates even if the list request fails.
     const countsSeq = ++userCountsSeqRef.current;
-    userService.getUserCounts().then((counts) => {
+    userService.getUserCounts({ fresh: !fromMount }).then((counts) => {
       if (countsSeq !== userCountsSeqRef.current) return;
       setUserCounts(counts);
       setUserCountsFailed(false);
@@ -1622,30 +1607,37 @@ export default function UserManagement() {
       setUserCountsFailed(true);
     });
     try {
-      const response = await fetch(`${API_URL}/users`, {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-        },
-      });
-
-      // Handle 401 - logout and redirect
-      if (response.status === 401) {
-        handleUnauthorized();
-        return;
-      }
-
-      if (!response.ok) {
-        // Check for permission denied (403 Forbidden)
-        if (response.status === 403) {
-          throw new Error('Permission Denied: You do not have access to view users');
+      // One GET /users/paged call through the shared api client (page_size up
+      // to 1000, with the matching total) instead of walking GET /users 100 at
+      // a time with raw fetch. Search / filters / sort / pagination on this
+      // page run client-side over `users` (role-label + permission-pill sorts,
+      // excess-seat deactivation and the edit existence check all need every
+      // account), so all users are still loaded — seat limits keep this small.
+      // Older backend without /users/paged: fall back to the legacy walk.
+      const USERS_PAGE_SIZE = 1000;
+      const rawUsers: any[] = [];
+      try {
+        for (let page = 1; page <= 20; page++) {
+          const res = await userService.listUsersPaged(
+            { page, page_size: USERS_PAGE_SIZE },
+            { fresh: !fromMount },
+          );
+          const pageUsers: any[] = res.items || [];
+          rawUsers.push(...pageUsers);
+          if (rawUsers.length >= (res.total ?? 0) || pageUsers.length < USERS_PAGE_SIZE) break;
         }
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || 'Failed to fetch users');
+      } catch (pagedError: any) {
+        // Old backend: /users/paged falls into /users/{user_id} -> 422 (not a UUID) or 404.
+        if (pagedError?.status !== 404 && pagedError?.status !== 422) throw pagedError;
+        rawUsers.length = 0;
+        for (let page = 1; page <= 50; page++) {
+          const pageUsers: any[] = await userService.listUsers({ page, page_size: 100 });
+          rawUsers.push(...pageUsers);
+          if (pageUsers.length < 100) break;
+        }
       }
 
-      const data = await response.json();
-      console.log('[LOAD USERS] Raw data from API:', data.users?.slice(0, 2) || data.slice(0, 2));
-      const mappedUsers: ApiUser[] = (data.users || data).map((user: any) => ({
+      const mappedUsers: ApiUser[] = rawUsers.map((user: any) => ({
         id: user.id.toString(),
         user_display_id: user.user_display_id,
         name: user.name || user.full_name,
@@ -1658,10 +1650,6 @@ export default function UserManagement() {
         created_at: user.created_at,
         permission_ids: Array.isArray(user.permission_ids) ? user.permission_ids : undefined,
       }));
-
-      // DEBUG: Log loaded users
-      console.log('[LOAD USERS] Loaded', mappedUsers.length, 'users');
-      console.log('[LOAD USERS] User IDs:', mappedUsers.map(u => `${u.email}: ${u.id}`).join(', '));
 
       setUsers(mappedUsers);
     } catch (error: any) {

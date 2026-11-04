@@ -6,6 +6,29 @@ import { useLayoutEffect, type RefObject } from 'react';
 const PHONE_MAX_WIDTH = 640;
 
 /**
+ * The left edge a menu `menuWidth` wide must have to sit centred on the page's
+ * visible content: the nearest scrolling ancestor of `from`, minus its scrollbar.
+ * Centring on the raw viewport instead put the menu off-centre whenever a
+ * classic (mouse) scrollbar narrowed the page — the content shifted left by the
+ * scrollbar's width and the menu stuck out past the field on the right.
+ */
+export function phoneCentredLeft(from: Element, menuWidth: number): number {
+  const { left, width } = phoneContentBox(from);
+  return left + (width - menuWidth) / 2;
+}
+
+/** The visible page content box around `from` (nearest scrolling ancestor, scrollbar excluded). */
+export function phoneContentBox(from: Element): { left: number; width: number } {
+  for (let el = from.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) {
+      return { left: el.getBoundingClientRect().left + el.clientLeft, width: el.clientWidth };
+    }
+  }
+  return { left: 0, width: document.documentElement.clientWidth };
+}
+
+/**
  * Centres an absolutely positioned dropdown horizontally on the screen on phones.
  *
  * A menu anchored to its trigger's left / right edge (`absolute left-0` /
@@ -32,8 +55,7 @@ export function useCenteredMenuOnPhone(
         menu.style.right = '';
         return;
       }
-      const viewport = document.documentElement.clientWidth;
-      const left = (viewport - menu.offsetWidth) / 2 - anchor.getBoundingClientRect().left;
+      const left = phoneCentredLeft(anchor, menu.offsetWidth) - anchor.getBoundingClientRect().left;
       menu.style.left = `${Math.round(left)}px`;
       menu.style.right = 'auto';
     };
@@ -52,7 +74,6 @@ export function centerMenuOnPhoneRef(menu: HTMLElement | null) {
   if (!menu || typeof window === 'undefined' || window.innerWidth >= PHONE_MAX_WIDTH) return;
   const anchor = menu.offsetParent as HTMLElement | null;
   if (!anchor) return;
-  const viewport = document.documentElement.clientWidth;
-  menu.style.left = `${Math.round((viewport - menu.offsetWidth) / 2 - anchor.getBoundingClientRect().left)}px`;
+  menu.style.left = `${Math.round(phoneCentredLeft(anchor, menu.offsetWidth) - anchor.getBoundingClientRect().left)}px`;
   menu.style.right = 'auto';
 }

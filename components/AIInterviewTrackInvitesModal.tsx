@@ -557,7 +557,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
-          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+          gridClassName="tf-tracker-stats"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -726,6 +726,7 @@ export default function AIInterviewTrackInvitesModal({
             try {
               await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
               toast.success(`New invitation link sent to ${inv.candidate_email}`);
+              setSelectedIds(new Set());
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
@@ -768,6 +769,7 @@ export default function AIInterviewTrackInvitesModal({
             try {
               await aiInterviewService.revokeInvitation(inv.id);
               toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+              setSelectedIds(new Set());
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
