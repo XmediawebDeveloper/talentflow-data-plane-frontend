@@ -241,14 +241,14 @@ export default function ReportsExports() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <h1 className="text-gray-900 mb-2">Reports & Exports</h1>
-          <p className="tf-card-desc">
+          <h1 className="tf-page-title mb-2">Reports & Exports</h1>
+          <p className="tf-body-secondary">
             Generate and download comprehensive reports across all recruitment activities
           </p>
         </div>
 
         {/* Top Controls */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+        <div className="tf-card-soft p-6 mb-6">
           <div className="grid grid-cols-4 gap-4 mb-4">
             {/* Date Range */}
             <div>
@@ -339,7 +339,7 @@ export default function ReportsExports() {
             const categorySelectedCount = category.reports.filter(r => selectedReports.includes(r.id)).length;
 
             return (
-              <div key={category.id} className="bg-white rounded-lg shadow-sm border border-gray-200">
+              <div key={category.id} className="tf-card-soft">
                 {/* Category Header */}
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-center justify-between">
@@ -349,14 +349,14 @@ export default function ReportsExports() {
                       </div>
                       <div>
                         <h2 className="text-gray-900">{category.name}</h2>
-                        <p className="tf-card-desc">
+                        <p className="tf-body-secondary">
                           {category.reports.length} report{category.reports.length !== 1 ? 's' : ''} available
                         </p>
                       </div>
                     </div>
 
                     {categorySelectedCount > 0 && (
-                      <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-sm">
+                      <span className="px-3 py-1 bg-gray-100 tf-body rounded-full">
                         {categorySelectedCount} selected
                       </span>
                     )}
@@ -403,7 +403,7 @@ export default function ReportsExports() {
                             <h3 className={`text-sm mb-1 ${isSelected ? 'text-gray-800' : 'text-gray-900'}`}>
                               {report.name}
                             </h3>
-                            <p className="tf-card-desc mb-3">
+                            <p className="tf-body-secondary mb-3">
                               {report.description}
                             </p>
                             <div className="flex items-center gap-4 tf-meta">
@@ -441,11 +441,11 @@ export default function ReportsExports() {
         </div>
 
         {/* Scheduled Reports Section */}
-        <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="tf-card-soft mt-6 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-gray-900 mb-1">Scheduled Reports</h2>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 Automated report generation and email delivery
               </p>
             </div>
@@ -465,7 +465,7 @@ export default function ReportsExports() {
                 <div className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-gray-800" />
                   <div>
-                    <div className="text-sm text-gray-900">Weekly Recruitment Summary</div>
+                    <div className="tf-body">Weekly Recruitment Summary</div>
                     <div className="tf-meta">Every Monday at 9:00 AM • Excel format</div>
                   </div>
                 </div>
@@ -478,7 +478,7 @@ export default function ReportsExports() {
                 <div className="flex items-center gap-3">
                   <Mail className="w-5 h-5 text-gray-800" />
                   <div>
-                    <div className="text-sm text-gray-900">Monthly Assessment Analytics</div>
+                    <div className="tf-body">Monthly Assessment Analytics</div>
                     <div className="tf-meta">1st of every month • PDF format</div>
                   </div>
                 </div>
@@ -492,7 +492,7 @@ export default function ReportsExports() {
         <div className="mt-6 bg-gray-50 border border-gray-200 rounded-lg p-4">
           <div className="flex gap-3">
             <FileDown className="w-5 h-5 text-gray-800 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-gray-800">
+            <div className="tf-body">
               <p className="mb-2">
                 <strong>Pro Tips for Reports:</strong>
               </p>

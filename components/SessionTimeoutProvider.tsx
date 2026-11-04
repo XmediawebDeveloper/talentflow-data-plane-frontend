@@ -299,7 +299,7 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
               <button
                 onClick={continueSession}
                 autoFocus
-                className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                className="tf-btn tf-btn-primary mt-6 w-full flex px-4 py-3.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal"
               >
                 Continue Session
                 <ArrowRight className="w-4 h-4" strokeWidth={2} />

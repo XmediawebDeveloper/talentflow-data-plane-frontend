@@ -143,7 +143,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             <NameAvatar name={user?.name} fallback={user?.email} size="xl" className="relative bg-white dark:bg-white dark:text-brand-blue" />
           </div>
           <div className="mt-3 sm:mt-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight capitalize">
+            <h1 className="tf-page-title capitalize">
               {greeting},{' '}
               <span className="inline-flex items-baseline" aria-label={firstName}>
                 <span className="text-white">{typedName}</span>

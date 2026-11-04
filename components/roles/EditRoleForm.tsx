@@ -111,13 +111,13 @@ const hasAnyActionSelected = (selectedCodes: Set<string>, category: CustomPermis
 };
 
 const fieldClassName =
-  'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full tf-panel px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
 // Same field, in its invalid state — a full replacement rather than extra classes
 // appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
 // specificity tie against the gray/blue ones it replaces.
 const fieldErrorClassName =
-  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm max-sm:text-[13px] text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
 const getErrorStatus = (error: unknown): number | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -427,7 +427,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     return (
       <div>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <label className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-gray-600 dark:text-slate-400">
+          <label className="flex items-center gap-1.5 tf-caption uppercase tracking-wider">
             <Shield className="h-3.5 w-3.5 text-brand-blue" />
             Permissions
           </label>
@@ -435,7 +435,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
             <Button type="button" variant="secondary" size="sm" onClick={handleSelectAll} className="min-w-[96px]">
               {allSelected ? 'Deselect all' : 'Select all'}
             </Button>
-            <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/20">
+            <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
               {activeCount} active
             </span>
           </div>
@@ -467,7 +467,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           title="Edit Role"
           subtitle={role?.name}
           headerExtra={role?.is_system ? (
-            <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2.5 py-1 text-xs font-medium text-white ring-1 ring-white/25">
+            <span className="tf-badge bg-white/15 text-white ring-1 ring-white/25">
               <Lock className="h-3 w-3" /> System role
             </span>
           ) : undefined}
@@ -490,9 +490,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
             <PermissionSectionsSkeleton sections={3} Skeleton={Skeleton} />
           ) : (
             <div className="space-y-4 sm:space-y-5">
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="tf-grid-2">
                 <div>
-                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Role Name</label>
+                  <label className="block tf-label mb-1.5">Role Name</label>
                   <Input
                     value={role.name}
                     onChange={(e) => setRole({ ...role, name: e.target.value.toUpperCase() })}
@@ -503,13 +503,13 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   {showNameError && <span className="mt-1.5 block text-xs font-medium text-destructive">{nameError}</span>}
                 </div>
                 <div>
-                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Role Code</label>
+                  <label className="block tf-label mb-1.5">Role Code</label>
                   <Input value={role.code} disabled />
                 </div>
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+              <div className="tf-grid-2">
                 <div>
-                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Description</label>
+                  <label className="block tf-label mb-1.5">Description</label>
                   <Input
                     value={role.description || ''}
                     onChange={(e) => setRole({ ...role, description: e.target.value })}
@@ -517,7 +517,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   />
                 </div>
                 <div>
-                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Copy permissions from</label>
+                  <label className="block tf-label mb-1.5">Copy permissions from</label>
                   <FilterSelect
                     value={String(role.parent_role_id || '')}
                     onChange={(v) => handleParentRoleChange(v)}
@@ -526,7 +526,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                       { value: '', label: 'None' },
                       ...roles.filter((r) => r.id !== role.id).map((r) => ({ value: String(r.id), label: r.name })),
                     ]}
-                    className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 w-full sm:w-full rounded-lg sm:rounded-lg px-3 sm:px-3 text-sm max-sm:text-[13px]"
+                    className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 w-full sm:w-full rounded-lg sm:rounded-lg px-3 sm:px-3 text-sm"
                   />
                 </div>
               </div>
@@ -543,9 +543,9 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     // card (Name/Code, Description, Copy permissions from, Permissions) and the
     // right-hand summary sidebar.
     return (
-      <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+      <main className={embedded ? '' : 'tf-page'}>
         <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-          <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+          <div className={embedded ? 'w-full' : 'tf-page-sheet'}>
             <div className="mb-5 flex items-start gap-3">
               <Skeleton className="h-10 w-10 rounded-xl" />
               <div className="space-y-2">
@@ -554,7 +554,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               </div>
             </div>
             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-              <div className="rounded-xl border border-gray-100 bg-white">
+              <div className="tf-panel">
                 <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 space-y-2">
                   <Skeleton className="h-5 w-32" />
                   <Skeleton className="h-3.5 w-72 max-w-full" />
@@ -577,7 +577,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   </div>
                 </div>
               </div>
-              <div className="rounded-xl border border-gray-100 bg-white p-5 space-y-4 xl:sticky xl:top-6 xl:self-start">
+              <div className="tf-panel p-5 space-y-4 xl:sticky xl:top-6 xl:self-start">
                 <Skeleton className="h-5 w-32" />
                 {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} className="h-14 w-full rounded-xl" />))}
               </div>
@@ -589,17 +589,17 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
   }
 
   return (
-    <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <main className={embedded ? '' : 'tf-page'}>
       {dialog}
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-      <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+      <div className={embedded ? 'w-full' : 'tf-page-sheet'}>
         {!embedded && (
           <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Role Management', href: '/organization/role-management' }, { label: 'Edit Role' }]} />
         )}
         {!embedded && (
           <button
             onClick={handleClose}
-            className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm max-sm:text-[13px] font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
+            className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
           >
             <ArrowLeft className="h-4 w-4" />
             Back to Role Management
@@ -613,17 +613,17 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           actions={
             <div className="flex flex-col items-start gap-2 sm:items-end">
               {role.is_system && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2.5 py-1 text-xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
                   <Lock className="h-3 w-3" />
                   System role
                 </span>
               )}
               <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
-                <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+                <div className="tf-panel px-3 py-2">
                   <div className="tf-meta">Assigned users</div>
                   <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{role.user_count || 0}</div>
                 </div>
-                <div className="rounded-xl border border-gray-100 bg-white px-3 py-2">
+                <div className="tf-panel px-3 py-2">
                   <div className="tf-meta">Selected permissions</div>
                   <div className="mt-1 text-xl max-sm:text-lg font-semibold text-gray-900">{selectedPermissionCodes.size}</div>
                 </div>
@@ -633,16 +633,16 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
         />
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <section className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+          <section className="overflow-hidden tf-card-soft">
             <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
-              <h2 className="text-base max-sm:text-sm font-semibold text-gray-900">Role Details</h2>
-              <p className="tf-body-muted max-sm:text-[13px]">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
+              <h2 className="tf-section-title max-sm:text-sm">Role Details</h2>
+              <p className="tf-body-muted">Adjust metadata, inheritance, and permissions without leaving the current workflow.</p>
             </div>
 
             <div className="space-y-8 p-5 sm:p-6">
               <div className="grid gap-5 md:grid-cols-2">
                 <label className="block">
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Role Name</span>
+                  <span className="mb-2 block tf-label">Role Name</span>
                   <input
                     type="text"
                     value={role.name}
@@ -658,13 +658,13 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                 </label>
 
                 <label className="block">
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Role Code</span>
+                  <span className="mb-2 block tf-label">Role Code</span>
                   <input type="text" value={role.code} className={fieldClassName} disabled />
                 </label>
               </div>
 
               <label className="block">
-                <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Description</span>
+                <span className="mb-2 block tf-label">Description</span>
                 <textarea
                   value={role.description || ''}
                   onChange={(e) => setRole({ ...role, description: e.target.value })}
@@ -677,7 +677,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               <div className="grid gap-5 md:grid-cols-2">
 
                 <label className="block">
-                  <span className="mb-2 block text-sm max-sm:text-[13px] font-medium text-gray-700">Copy permissions from</span>
+                  <span className="mb-2 block tf-label">Copy permissions from</span>
                   <FilterSelect
                     value={String(role.parent_role_id || '')}
                     onChange={(v) => handleParentRoleChange(v)}
@@ -696,8 +696,8 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
 
               <div>
                 <div className="mb-4">
-                  <h3 className="tf-card-title max-sm:text-sm">Permissions</h3>
-                  <p className="tf-body-muted max-sm:text-[13px]">Update the role’s access surface and review the selected scopes before saving.</p>
+                  <h3 className="tf-section-title max-sm:text-sm">Permissions</h3>
+                  <p className="tf-body-muted">Update the role’s access surface and review the selected scopes before saving.</p>
                 </div>
                 {renderPermissionCategories()}
               </div>
@@ -723,42 +723,42 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
           </section>
 
           <aside className="space-y-6 xl:sticky xl:top-6 xl:self-start">
-            <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
+            <section className="tf-card-soft p-5">
               <div className="flex items-start gap-3">
                 <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 shadow-sm shadow-brand-orange/10">
                   <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                 </span>
                 <div>
-                  <h3 className="tf-card-title max-sm:text-sm">Role Snapshot</h3>
-                  <p className="mt-1 tf-body-muted max-sm:text-[13px]">A compact view of the current role configuration.</p>
+                  <h3 className="tf-section-title max-sm:text-sm">Role Snapshot</h3>
+                  <p className="mt-1 tf-body-muted">A compact view of the current role configuration.</p>
                 </div>
               </div>
 
               <div className="mt-5 space-y-4">
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Name</div>
-                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{role.name}</div>
+                  <div className="tf-hint uppercase tracking-[0.16em]">Role Name</div>
+                  <div className="mt-1 tf-row-title">{role.name}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Role Code</div>
-                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{role.code}</div>
+                  <div className="tf-hint uppercase tracking-[0.16em]">Role Code</div>
+                  <div className="mt-1 tf-row-title">{role.code}</div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Copied from</div>
-                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">
+                  <div className="tf-hint uppercase tracking-[0.16em]">Copied from</div>
+                  <div className="mt-1 tf-row-title">
                     {roles.find((roleOption) => roleOption.id === role.parent_role_id)?.name || 'None'}
                   </div>
                 </div>
                 <div className="rounded-xl bg-gray-50 px-4 py-3 ring-1 ring-gray-100">
-                  <div className="text-xs uppercase tracking-[0.16em] text-gray-400">Selected Permissions</div>
-                  <div className="mt-1 tf-cell-name max-sm:text-[13px]">{selectedPermissionCodes.size}</div>
+                  <div className="tf-hint uppercase tracking-[0.16em]">Selected Permissions</div>
+                  <div className="mt-1 tf-row-title">{selectedPermissionCodes.size}</div>
                 </div>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]">
-              <h3 className="tf-card-title max-sm:text-sm">Guidance</h3>
-              <div className="mt-4 space-y-3 tf-card-desc max-sm:text-[13px]">
+            <section className="tf-card-soft p-5">
+              <h3 className="tf-section-title max-sm:text-sm">Guidance</h3>
+              <div className="mt-4 space-y-3 tf-body-secondary">
                 <div className="rounded-xl bg-brand-blue/[0.04] px-4 py-3 ring-1 ring-brand-blue/10">
                   System roles can still be reviewed and tuned, but key identity fields stay protected.
                 </div>

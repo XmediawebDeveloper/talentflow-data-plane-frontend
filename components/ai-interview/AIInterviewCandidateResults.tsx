@@ -17,7 +17,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, Users, CheckCircle, XCircle,
   FileDown, FileText, FileSpreadsheet, Download, X, ChevronDown, Loader2,
-  Square, CheckSquare,
+  Square, CheckSquare, Mail, Briefcase,
 } from 'lucide-react';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import {
@@ -38,6 +38,7 @@ import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import {
   getStatusVariant,
   getStatusLabel,
@@ -638,7 +639,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
              email and CID are what the search box is for. Picks are drafts
              until Done, as on the Activity Logs tab. */
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="tf-grid-4">
               <SearchableSelect
                 label="Job"
                 value={search.draftFilters.job}
@@ -757,58 +758,58 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     stateBody = displayMode === 'grid' ? <CardGridSkeleton count={8} className="xl:grid-cols-4" /> : (
       <div>
         {/* Table mirror — same columns/order as the real candidate results table */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+        <div className="tf-card-soft overflow-hidden">
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full text-sm">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                 <tr>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-right tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td"><Skeleton className="h-5 w-14 rounded-md" /></td>
+                    <td className="tf-td">
                       <div className="flex items-center gap-2">
                         <Skeleton className="w-7 h-7 rounded-full" />
                         <Skeleton className="h-4 w-28" />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td"><Skeleton className="h-4 w-32" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="tf-td">
                       <div className="flex items-center gap-2">
                         <Skeleton className="h-1.5 w-16 rounded-full" />
                         <Skeleton className="h-4 w-8" />
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td">
                       <div className="flex flex-col gap-1">
                         <Skeleton className="h-3 w-28" />
                         <Skeleton className="h-3 w-28" />
                         <Skeleton className="h-3 w-16" />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="tf-td text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -851,7 +852,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     <div>
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         {filteredRows.length === 0 ? (
           <ListEmptyState
             icon={Users}
@@ -863,7 +864,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
           />
         ) : displayMode === 'grid' ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            <div className="tf-grid-4 p-4">
               {pageRows.map((row) => {
                 const risk = getProctoringRisk(row);
                 const isSelected = selectedKeys.has(rowKey(row));
@@ -901,12 +902,12 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       )}
                     </div>
 
-                    <p className="tf-meta-strong truncate" title={row._config_title}>
+                    <p className="tf-meta truncate" title={row._config_title}>
                       {row._config_title}
                     </p>
 
                     {inviteSourceLabel(row) && (
-                      <p className="tf-meta-strong">
+                      <p className="tf-meta">
                         <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
                       </p>
                     )}
@@ -914,7 +915,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                       {row.status === 'in_progress' && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                        <span className="tf-badge flex bg-destructive text-white text-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                           LIVE
                         </span>
@@ -982,7 +983,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                      className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
                   <button
@@ -1008,11 +1009,11 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
           </>
         ) : (
           <>
-            <div className="overflow-x-auto tf-table-shell">
+            <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
               <table className="w-full text-sm">
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                   <tr>
-<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left tf-th">
+<th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
                       <button
                         type="button"
                         onClick={toggleAllOnPage}
@@ -1027,19 +1028,19 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         )}
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
-                    <th className="text-right px-4 py-3 tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                    <th className="tf-th-cell text-right tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1084,7 +1085,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                               {row.status === 'in_progress' && (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                                   LIVE
                                 </span>
@@ -1195,7 +1196,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     const key = rowKey(row);
                     return (
                       <tr key={key} className="transition-colors hover:bg-brand-blue/5">
-                        <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                        <td className="tf-td w-12 tf-sticky-col-left">
                           <button
                             type="button"
                             onClick={() => toggleSelected(row)}
@@ -1212,7 +1213,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         {CANDIDATE_COLUMNS.map((c) => (
                           <td key={c.id} className={cells[c.id].className}>{cells[c.id].content}</td>
                         ))}
-                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
+                        <td className="tf-td text-right whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center justify-end gap-1.5">
                             <ResultRowActions session={row} onView={() => openSession(row)} />
                           </div>
@@ -1223,6 +1224,85 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 </tbody>
               </table>
             </div>
+            <MobileRecordList className="p-3">
+              {pageRows.map((row) => {
+                const risk = getProctoringRisk(row);
+                const isSelected = selectedKeys.has(rowKey(row));
+                return (
+                  <MobileRecordCard
+                    key={rowKey(row)}
+                    selected={isSelected}
+                    select={
+                      <button
+                        type="button"
+                        onClick={() => toggleSelected(row)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                        aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    }
+                    idBadge={
+                      (row.candidate_cid || row._job_id) ? (
+                        <>
+                          {row.candidate_cid && (
+                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                              {row.candidate_cid}
+                            </span>
+                          )}
+                          {row._job_id && <JobIdBadge>{row._job_id}</JobIdBadge>}
+                        </>
+                      ) : undefined
+                    }
+                    badges={
+                      <>
+                        <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                        {row.status === 'in_progress' && (
+                          <span className="tf-badge flex bg-destructive text-white text-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            LIVE
+                          </span>
+                        )}
+                      </>
+                    }
+                    title={row.candidate_name || 'Unknown'}
+                    actions={<ResultRowActions session={row} onView={() => openSession(row)} />}
+                    meta={[
+                      { icon: <Mail className="w-3.5 h-3.5" />, label: row.candidate_email || '—' },
+                      { icon: <Briefcase className="w-3.5 h-3.5" />, label: row._config_title },
+                      { label: inviteSourceLabel(row) ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" /> : null },
+                    ]}
+                    fields={[
+                      {
+                        label: 'Score',
+                        value: mhsScore(row) != null ? (
+                          <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                            {mhsScore(row)}%
+                          </span>
+                        ) : '—',
+                      },
+                      { label: 'Result', value: sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : '—' },
+                      {
+                        label: 'Proctoring Risk',
+                        value: (row.status === 'completed' || row.status === 'terminated') ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
+                        ) : '—',
+                      },
+                      { label: 'Job Version', value: <VersionPill kind="job" version={row._job_version} /> },
+                      { label: 'Interview Version', value: <VersionPill kind="interview" version={row._interview_version} /> },
+                    ]}
+                  >
+                    <div className="text-xs text-gray-600 dark:text-slate-400">
+                      <InviteTimelineLines inv={row} duration={formatDuration(row)} />
+                    </div>
+                  </MobileRecordCard>
+                );
+              })}
+            </MobileRecordList>
 
             {filteredRows.length > 0 && (
               <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
@@ -1258,7 +1338,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                      className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
                   <button

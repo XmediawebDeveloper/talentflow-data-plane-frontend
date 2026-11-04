@@ -387,7 +387,7 @@ export default function JobOpeningPickerList({
             // rounded-lg / brand-blue focus + hover that ListToolbar's search,
             // SearchableSelect and DateField use on the Job Openings page, so
             // this picker's search reads as the same control family.
-            className="w-full h-9 pl-10 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+            className="tf-input pl-10 pr-4"
           />
         </div>
       </div>
@@ -422,7 +422,7 @@ export default function JobOpeningPickerList({
                   shown as a count for the same reason every other selection
                   UI in the app states it as a number rather than just "a job
                   is selected". */}
-              <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+              <span className="tf-badge text-brand-blue bg-brand-blue/10">
                 1 selected
               </span>
               <button
@@ -439,7 +439,7 @@ export default function JobOpeningPickerList({
             isn't on screen — otherwise a selected-but-elsewhere job reads as
             no selection at all. */}
         {selection && !selectionOnThisPage && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 tf-meta">
             <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
             <span>
               Selected: <span className="font-medium">

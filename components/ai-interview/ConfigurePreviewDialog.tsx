@@ -59,13 +59,13 @@ export default function ConfigurePreviewDialog({
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
                 {config?.jd_short_id && <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>}
-                <h2 className="tf-section-title truncate">{title}</h2>
+                <h2 className="tf-section-title sm:text-lg tracking-tight truncate">{title}</h2>
               </div>
               <p className="tf-meta mt-0.5">Configure Details</p>
             </div>
           </div>
           {!cancelInFooter && (
-            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close" className="px-2 flex-shrink-0">
+            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close" className="flex-shrink-0">
               <X className="w-5 h-5" />
             </Button>
           )}

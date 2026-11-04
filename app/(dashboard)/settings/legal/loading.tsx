@@ -5,9 +5,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Document).
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+        <div className="tf-page-sheet space-y-6">
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
           {/* Hero */}
@@ -23,7 +23,7 @@ export default function Loading() {
           </section>
 
           {/* Table */}
-          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+          <div className="tf-panel overflow-hidden">
             <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
               <Skeleton className="h-10 w-10 rounded-xl" />
               <div className="space-y-2">

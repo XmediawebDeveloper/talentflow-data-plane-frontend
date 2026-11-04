@@ -1470,7 +1470,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
           <div className="absolute inset-0 flex items-center justify-center bg-[#0a1020]/80 backdrop-blur-sm">
             <div className="text-center">
               <Loader2 className="w-8 h-8 text-violet-500 animate-spin mx-auto mb-3" />
-              <p className="text-xs text-gray-400">Loading avatar...</p>
+              <p className="tf-hint">Loading avatar...</p>
             </div>
           </div>
         )}

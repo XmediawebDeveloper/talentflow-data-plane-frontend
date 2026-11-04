@@ -23,6 +23,7 @@ import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 import { pdfSafe } from '@/lib/utils/pdfText';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { isNonEnglishAnswer, NON_ENGLISH_ANSWER_TEXT } from './nonEnglishAnswer';
 
 /** Session facts the PDF shows that aren't part of DashboardData. */
@@ -847,7 +848,7 @@ function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
       <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${iconTone}`}><Icon className="w-4 h-4" /></div>
       {/* Wraps on a phone, where the label column is ~120px and truncating
           left "Must-Have…" / "Nice-to-H…"; one truncated line from sm. */}
-      <div className="min-w-0 tf-cell-name [overflow-wrap:anywhere] sm:truncate">{label}</div>
+      <div className="min-w-0 tf-row-title [overflow-wrap:anywhere] sm:truncate">{label}</div>
     </div>
     <div className="relative col-span-2 sm:col-span-1 order-last sm:order-none">
       <div className="h-2.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
@@ -855,9 +856,9 @@ function SectionRow({ label, value, Icon, bar, iconTone, badge }: {
       </div>
       <div className="absolute -top-1 -bottom-1 border-l-2 border-dashed border-gray-400 dark:border-slate-500" style={{ left: `${MHS_THRESHOLD * 10}%` }} title={`Pass threshold ${MHS_THRESHOLD.toFixed(1)}`} />
     </div>
-    <div className="hidden sm:block text-lg font-bold text-gray-900 dark:text-slate-50 tabular-nums text-right">{formatScore1(value)}</div>
+    <div className="hidden sm:block tf-section-title tabular-nums text-right">{formatScore1(value)}</div>
     <div className="flex items-center justify-end gap-2">
-      <span className="sm:hidden text-base font-bold text-gray-900 dark:text-slate-50 tabular-nums">{formatScore1(value)}</span>
+      <span className="sm:hidden tf-section-title tabular-nums">{formatScore1(value)}</span>
       {badge}
     </div>
   </div>
@@ -874,7 +875,7 @@ function CoverageBlock({ label, cov, tone, Icon }: {
       <div className="flex items-center gap-2 min-w-0">
         <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tone.icon}`}><Icon className="w-3.5 h-3.5" /></div>
         {/* Same as SectionRow: wrap on a phone rather than truncate to "…-Have …". */}
-        <div className="min-w-0 tf-cell-name [overflow-wrap:anywhere] sm:truncate">{label}</div>
+        <div className="min-w-0 tf-row-title [overflow-wrap:anywhere] sm:truncate">{label}</div>
       </div>
       <span className={`shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ring-1 ${
         cov.pct === 100 ? 'bg-success-subtle text-success-strong ring-success-line'
@@ -908,26 +909,26 @@ function SkillTable({ title, rows, wide = false }: {
 }) {
   return (
   <div className="rounded-xl border border-gray-200 dark:border-slate-600/70 overflow-hidden min-w-0">
-    <div className="px-4 py-3 tf-cell-name">{title}</div>
-    <div className="overflow-x-auto">
+    <div className="px-4 py-3 tf-row-title">{title}</div>
+    <div className={`overflow-x-auto ${DESKTOP_TABLE_ONLY}`}>
       <table className="w-full text-sm">
         <thead>
-          <tr className="bg-white dark:bg-slate-900 text-xs text-gray-600 dark:text-slate-300">
-            <th className="text-left tf-th px-4 py-2">Skill</th>
-            {wide && <th className="text-left tf-th px-2 py-2 hidden md:table-cell">Cluster</th>}
-            <th className="text-center tf-th px-2 py-2 w-16">Weight</th>
+          <tr className="bg-white dark:bg-slate-900 tf-meta">
+            <th className="tf-th-cell text-left tf-th">Skill</th>
+            {wide && <th className="tf-th-cell text-left tf-th hidden md:table-cell">Cluster</th>}
+            <th className="tf-th-cell text-center tf-th w-16">Weight</th>
             <th className={`font-semibold px-4 py-2 text-xs text-gray-600 dark:text-slate-300 ${wide ? 'text-left w-56' : 'text-right w-16'}`}>Score</th>
-            {wide && <th className="text-left tf-th px-4 py-2 w-40 hidden sm:table-cell">Status</th>}
+            {wide && <th className="tf-th-cell text-left tf-th w-40 hidden sm:table-cell">Status</th>}
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
           {rows.map((s, i) => (
             <tr key={i}>
-              <td className="px-4 py-2 text-gray-800 dark:text-slate-200">{s.name}</td>
-              {wide && <td className="px-2 py-2 text-gray-500 dark:text-slate-400 hidden md:table-cell">{s.cluster || '—'}</td>}
-              <td className="px-2 py-2 text-center text-gray-500 dark:text-slate-400 tabular-nums">{s.weight}</td>
+              <td className="tf-td text-gray-800 dark:text-slate-200">{s.name}</td>
+              {wide && <td className="tf-td text-gray-500 dark:text-slate-400 hidden md:table-cell">{s.cluster || '—'}</td>}
+              <td className="tf-td text-center text-gray-500 dark:text-slate-400 tabular-nums">{s.weight}</td>
               {wide ? (
-                <td className="px-4 py-2">
+                <td className="tf-td">
                   <div className="flex items-center gap-2.5">
                     <div className="flex-1 h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
                       <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${isNotAssessed(s) ? 0 : Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
@@ -940,13 +941,40 @@ function SkillTable({ title, rows, wide = false }: {
               )}
               {wide && (() => {
                 const st = skillStatus(s.score, isNotAssessed(s));
-                return <td className="px-4 py-2 hidden sm:table-cell"><span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span></td>;
+                return <td className="tf-td hidden sm:table-cell"><span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span></td>;
               })()}
             </tr>
           ))}
         </tbody>
       </table>
     </div>
+    <MobileRecordList className="px-3 pb-3">
+      {rows.map((s, i) => {
+        const st = skillStatus(s.score, isNotAssessed(s));
+        return (
+          <MobileRecordCard
+            key={i}
+            badges={wide ? <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ring-1 ${st.cls}`}>{st.label}</span> : undefined}
+            title={s.name}
+            footer={
+              <span className={`font-bold tabular-nums ${isNotAssessed(s) ? 'text-gray-400' : scoreColor(s.score).text}`}>
+                {isNotAssessed(s) ? '—' : formatSkillScore(s.score)}
+              </span>
+            }
+            fields={[
+              ...(wide ? [{ label: 'Cluster', value: s.cluster || '—' }] : []),
+              { label: 'Weight', value: <span className="tabular-nums">{s.weight}</span> },
+            ]}
+          >
+            {wide && (
+              <div className="mt-2.5 h-1.5 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                <div className={`h-full rounded-full ${scoreColor(s.score).bar}`} style={{ width: `${isNotAssessed(s) ? 0 : Math.max(0, Math.min(100, (s.score / 10) * 100))}%` }} />
+              </div>
+            )}
+          </MobileRecordCard>
+        );
+      })}
+    </MobileRecordList>
   </div>
   );
 }
@@ -1056,7 +1084,7 @@ export function EvalReportCombined({
               {isPartialEvaluation ? (
                 <>
                   <div className={`text-lg font-bold ${verdictTone.text}`}>Partial Evaluation</div>
-                  <div className="tf-meta-strong mt-1 max-w-xl">
+                  <div className="tf-meta mt-1 max-w-xl">
                     This interview ended before completion. The AI evaluated only the questions the candidate attended, so no final pass/fail or match score is generated.
                   </div>
                 </>
@@ -1069,7 +1097,7 @@ export function EvalReportCombined({
                     <span className="text-lg font-bold">{finalResultLabel}</span>
                     <span className="text-sm font-medium">· {isPassed ? 'Recommended to Hire' : 'Does Not Meet Requirements'}</span>
                   </div>
-                  <div className="tf-meta-strong mt-1.5 tabular-nums">
+                  <div className="tf-meta mt-1.5 tabular-nums">
                     Must-Have {formatScore1(scores.mustHave)} / Threshold {MHS_THRESHOLD.toFixed(1)}
                     {isPassed
                       ? ` · +${formatScore1((scores.mustHave - MHS_THRESHOLD))} above`
@@ -1088,8 +1116,8 @@ export function EvalReportCombined({
                 <div key={label} className="flex items-center gap-2.5 rounded-xl bg-white/80 dark:bg-slate-900/60 ring-1 ring-black/5 dark:ring-white/10 px-3 py-2">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${icon}`}><Icon className="w-4 h-4" /></div>
                   <div className="min-w-0">
-                    <div className="text-lg font-bold tabular-nums leading-none text-gray-900 dark:text-slate-50">{value}</div>
-                    <div className="text-2xs text-gray-500 dark:text-slate-400 mt-1 whitespace-nowrap">{label}</div>
+                    <div className="tf-section-title tabular-nums leading-none">{value}</div>
+                    <div className="tf-micro-hint mt-1 whitespace-nowrap">{label}</div>
                   </div>
                 </div>
               ))}
@@ -1100,7 +1128,7 @@ export function EvalReportCombined({
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${verdictTone.icon}`}><Target className="w-4 h-4" /></div>
                   <div className="min-w-0">
                     <div className={`text-lg font-bold tabular-nums leading-none ${verdictTone.text}`}>{confidence}%</div>
-                    <div className="text-2xs text-gray-500 dark:text-slate-400 mt-1 whitespace-nowrap">Match Score</div>
+                    <div className="tf-micro-hint mt-1 whitespace-nowrap">Match Score</div>
                   </div>
                 </div>
               )}
@@ -1114,7 +1142,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Executive Summary</div>
         </div>
         {/* The original summary wording, one sentence per point, each with a tick. */}
-        <ul className="p-4 sm:p-5 space-y-2.5 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+        <ul className="p-4 sm:p-5 space-y-2.5 tf-body leading-relaxed">
           {[
             <>{candidate.name} completed an AI-powered technical interview for the <strong>{candidate.role}</strong> position on {interview.date || 'the scheduled date'}.</>,
             <>The evaluation consisted of <strong>{totalQuestions} question{totalQuestions !== 1 ? 's' : ''}</strong> covering <strong>{totalSkills} skill{totalSkills !== 1 ? 's' : ''}</strong> across multiple priority levels.</>,
@@ -1179,7 +1207,7 @@ export function EvalReportCombined({
               Icon={Star}
               iconTone="bg-brand-orange/10 text-brand-orange-deep"
               bar="bg-brand-orange"
-              badge={<span className="inline-flex items-center text-xs font-semibold px-2.5 py-1 rounded-full ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">Info Only</span>}
+              badge={<span className="tf-badge ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20">Info Only</span>}
             />
           )}
         </div>
@@ -1203,7 +1231,7 @@ export function EvalReportCombined({
                   tone={{ icon: 'bg-brand-orange/10 text-brand-orange-deep', bar: 'bg-brand-orange' }} />
               )}
             </div>
-            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/25 px-4 py-3 tf-meta-strong leading-relaxed">
+            <div className="mt-4 flex items-start gap-2.5 rounded-xl bg-brand-blue/5 border border-brand-blue/25 px-4 py-3 tf-meta leading-relaxed">
               <Info className="w-4 h-4 text-brand-blue shrink-0 mt-px" />
               <span><strong className="text-gray-800 dark:text-slate-200">Question Coverage</strong> reflects how much of the planned skill set was actually probed — not how well the candidate answered (that&apos;s the Section Score above).</span>
             </div>
@@ -1222,7 +1250,7 @@ export function EvalReportCombined({
           </div>
         </div>
         {flatMustHave.length === 0 && flatNiceToHave.length === 0 ? (
-          <div className="p-6 text-sm text-gray-400 italic text-center">No skills evaluated yet.</div>
+          <div className="p-6 tf-body-muted italic text-center">No skills evaluated yet.</div>
         ) : (
           // Two side-by-side tables when both sections exist; a single
           // full-width table (with Cluster / score bar / Status) otherwise.
@@ -1292,12 +1320,12 @@ export function EvalReportCombined({
                 <div key={i} className="px-4 sm:px-5 py-4 space-y-2" style={{ pageBreakInside: 'avoid' }}>
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Same pill + section tag as Question Analysis (All view). */}
-                    <span className="text-xs font-semibold text-white bg-brand-blue px-2 py-0.5 rounded-full">Question {i + 1}</span>
+                    <span className="tf-badge text-white bg-brand-blue">Question {i + 1}</span>
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${sectionClass}`}>{sectionLabel} · Q{q.qNum}</span>
                     {skillsText && <span className="tf-meta truncate min-w-0 flex-1">{skillsText}</span>}
                     <span className="ml-auto text-right">
                       {isHR
-                        ? <span className="text-xs font-medium text-gray-400 italic">Review only</span>
+                        ? <span className="tf-caption italic">Review only</span>
                         : <>
                             <span className={`text-base font-bold tabular-nums ${sc.text}`}>{formatScore1(q.questionScore)}</span>
                             {q.notDelivered && <span className="block text-2xs font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</span>}
@@ -1309,14 +1337,14 @@ export function EvalReportCombined({
                   {/* Formatted as in Question Analysis: bold text, no "Q:" prefix,
                       ending in a question mark. */}
                   {q.question && q.question.trim() && (
-                    <div className="tf-cell-name leading-relaxed">
+                    <div className="tf-row-title leading-relaxed">
                       {/[?!.]$/.test(q.question.trim()) ? q.question.trim() : `${q.question.trim()}?`}
                     </div>
                   )}
                   {/* Candidate's answer — the actual response the score is based on.
                       Labelled block, as in Question Analysis. */}
                   <div className="border-l-2 border-brand-blue/20 pl-3">
-                    <div className="text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Candidate&apos;s Answer</div>
+                    <div className="tf-caption mb-1">Candidate&apos;s Answer</div>
                     <div className={`text-sm leading-relaxed whitespace-pre-wrap break-words ${ansIsPlaceholder ? 'text-gray-400 italic' : 'text-gray-700 dark:text-slate-300'}`}>
                       {answerText}
                     </div>
@@ -1371,7 +1399,7 @@ export function EvalReportCombined({
             </div>
             {/* Point-wise — the same wording, one sentence per point, each
                 marked with the verdict's icon and colour. */}
-            <ul className="space-y-2.5 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+            <ul className="space-y-2.5 tf-body leading-relaxed">
               {[
                 ...(isPartialEvaluation ? [
                   <><strong>{candidate.name}</strong> was evaluated only on the portion of the interview completed before termination.</>,
@@ -1405,7 +1433,7 @@ export function EvalReportCombined({
           <div className={headerIcon}><ClipboardCheck className="w-4 h-4" /></div>
           <div className={cardTitle}>Strengths &amp; Concerns</div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-slate-600/70">
+        <div className="tf-grid-split divide-y lg:divide-y-0 lg:divide-x divide-gray-200 dark:divide-slate-600/70">
           {/* Key Strengths */}
           <div className="p-4 sm:p-5">
             <div className="flex items-center gap-2 mb-3 font-semibold text-sm text-success-strong">
@@ -1413,7 +1441,7 @@ export function EvalReportCombined({
               Key Strengths
             </div>
             {strengthItems.length > 0 ? (
-              <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+              <ul className="space-y-2 tf-body leading-relaxed">
                 {strengthItems.map((s, i) => (
                   <li key={i} className="flex items-start gap-2"><CheckCircle className="w-4 h-4 mt-0.5 shrink-0 text-success" /><span>{s}</span></li>
                 ))}
@@ -1430,7 +1458,7 @@ export function EvalReportCombined({
               Areas of Concern
             </div>
             {concernItems.length > 0 ? (
-              <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300">
+              <ul className="space-y-2 tf-body leading-relaxed">
                 {concernItems.map((w, i) => (
                   <li key={i} className="flex items-start gap-2"><XCircle className="w-4 h-4 mt-0.5 shrink-0 text-destructive" /><span>{w}</span></li>
                 ))}
@@ -1449,7 +1477,7 @@ export function EvalReportCombined({
           <div className={cardTitle}>Recommendations &amp; Next Steps</div>
         </div>
         <div className="p-4 sm:p-5">
-            <ul className="space-y-2 text-sm leading-relaxed text-gray-700 dark:text-slate-300 list-disc pl-5">
+            <ul className="space-y-2 tf-body leading-relaxed list-disc pl-5">
               {isPassed ? (
                 <>
                   <li><strong>Proceed to next round:</strong> Candidate demonstrates strong technical competency across must-have skills</li>
@@ -1471,7 +1499,7 @@ export function EvalReportCombined({
       {/* 9. Methodology + confidentiality */}
       <div className="rounded-2xl bg-brand-blue/5 border border-brand-blue/25 px-4 sm:px-5 py-4 flex items-start gap-3" style={{ pageBreakInside: 'avoid' }}>
         <Info className="w-4 h-4 text-brand-blue shrink-0 mt-0.5" />
-        <div className="tf-meta-strong leading-relaxed space-y-1.5">
+        <div className="tf-meta leading-relaxed space-y-1.5">
           <p>
             <strong className="text-brand-blue">Evaluation Methodology:</strong> This report was generated using AI-powered automated assessment.
             Must-Have Section Score = Average of Must-Have question scores (Pass threshold ≥ {MHS_THRESHOLD.toFixed(1)}).

@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send } from 'lucide-react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send, FileText } from 'lucide-react';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -401,7 +402,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                <h2 className="tf-section-title truncate tracking-tight">
                   <span className="hidden sm:inline">Assessment - Invite Status Tracking</span>
                   <span className="sm:hidden">Invite Status</span>
                 </h2>
@@ -415,7 +416,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               </div>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose} className="px-2" aria-label="Close">
+          <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </Button>
         </div>
@@ -475,7 +476,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             <p className="tf-meta">{resultsLabel}</p>
             {/* Completion rate — the AI tracker's badge, in place of the old card. */}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+            <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
               <TrendingUp className="w-3.5 h-3.5" />
               {completionRate}% Completion
             </span>
@@ -506,100 +507,100 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           ) : (
             <>
               {/* Mobile Card View */}
-              <div className="sm:hidden space-y-2 flex-1 min-h-0 overflow-y-auto">
+              <div className="tf-record-list lg:hidden flex-1 min-h-0 overflow-y-auto">
                 {visibleInvitations.map((invitation: any) => {
+                  const effectiveStatus = getEffectiveStatus(invitation);
                   return (
-                    <div key={invitation.id} className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-2.5">
-                      {/* Candidate row */}
-                      <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                        <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="xs" />
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">{invitation.candidate_name}</p>
-                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
-                        </div>
-                        <div className="shrink-0">{getStatusBadge(invitation)}</div>
-                      </div>
-
-                      {/* CID + Assessment + the secondary Expired flag the
-                          desktop table shows next to the status badge. */}
-                      <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
-                        <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded flex-shrink-0">
+                    <MobileRecordCard
+                      key={invitation.id}
+                      idBadge={
+                        <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                           {invitation.candidate_display_id || '-'}
                         </span>
-                        <span className="text-2xs text-gray-600 dark:text-slate-400 truncate flex-1">{invitation.assessment_title}</span>
-                        {isInvExpired(invitation) && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
-                            <Clock className="w-2.5 h-2.5" /> Expired
-                          </span>
-                        )}
-                      </div>
-
+                      }
+                      title={
+                        <span className="flex min-w-0 items-center gap-2">
+                          <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="sm" />
+                          <span className="truncate">{invitation.candidate_name}</span>
+                        </span>
+                      }
+                      badges={
+                        <>
+                          {getStatusBadge(invitation)}
+                          {/* The secondary Expired flag the desktop table shows next to the status badge. */}
+                          {isInvExpired(invitation) && (
+                            <span className="tf-badge text-2xs ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 flex-shrink-0">
+                              <Clock className="w-2.5 h-2.5" /> Expired
+                            </span>
+                          )}
+                        </>
+                      }
+                      meta={[
+                        { icon: <Mail />, label: invitation.candidate_email ? <span className="break-all">{invitation.candidate_email}</span> : null },
+                        { icon: <FileText />, label: invitation.assessment_title || null },
+                      ]}
+                      footer={
+                        effectiveStatus === 'completed' ? (
+                          <>
+                            <MobileStatChip tone={invitation.passed ? 'info' : 'danger'}>
+                              Score: {invitation.overall_score != null ? `${formatScore(invitation.overall_score)}%` : 'N/A'}
+                            </MobileStatChip>
+                            {invitation.passed !== null && (
+                              <MobileStatChip tone={invitation.passed ? 'info' : 'danger'}>
+                                {invitation.passed ? 'Pass' : 'Fail'}
+                              </MobileStatChip>
+                            )}
+                          </>
+                        ) : effectiveStatus === 'started' ? (
+                          <MobileStatChip tone="warning">
+                            Progress: {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
+                          </MobileStatChip>
+                        ) : undefined
+                      }
+                      actions={
+                        <>
+                          {effectiveStatus === 'completed' && invitation.attempt_id && (
+                            <button
+                              type="button"
+                              onClick={() => openResult(invitation)}
+                              title="View"
+                              aria-label="View"
+                              className="tf-icon-btn-outline"
+                            >
+                              <Eye />
+                            </button>
+                          )}
+                          <InvitationActionButtons
+                            actions={buildInvitationRowActions(invitation, {
+                              ...rowActionOptions,
+                              archived: isAssessmentArchived(invitation.assessment_status),
+                              jdDisabled,
+                            })}
+                          />
+                        </>
+                      }
+                    >
                       {invitation.status === 'failed' && (
-                        <p className="text-2xs text-red-600 mb-1.5">Incorrect Email</p>
+                        <p className="mt-2 text-xs text-red-600">Incorrect Email</p>
                       )}
 
                       {/* Timeline — a two-column grid rather than a free wrap,
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
-                      <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
-                        {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
-                          <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
-                            <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
-                            <span className="truncate">{label}: {formatIST(at)}</span>
-                          </div>
-                        ))}
-                      </div>
+                      {timelineEvents(invitation).length > 0 && (
+                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
+                          {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                            <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
+                              <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                              <span className="truncate">{label}: {formatIST(at)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                       {hasMoreTimelineHistory(invitation) && (
                         <ViewFullHistoryLink compact onClick={() => setHistoryTarget(invitation)} />
                       )}
-
-                      {/* Progress + Actions */}
-                      <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
-                        {/* Score/Progress row */}
-                        <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <div className="min-w-0">
-                            {getEffectiveStatus(invitation) === 'completed' ? (
-                              <div className="flex items-center gap-1 text-2xs">
-                                <span className="text-gray-600 dark:text-slate-400">Score:</span>
-                                <span className={`font-medium ${invitation.passed ? 'text-brand-blue' : 'text-red-600'}`}>
-                                  {invitation.overall_score != null ? `${formatScore(invitation.overall_score)}%` : 'N/A'}
-                                </span>
-                                {invitation.passed !== null && (
-                                  <span className={`text-2xs px-1 py-0.5 rounded ring-1 ${invitation.passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
-                                    {invitation.passed ? 'Pass' : 'Fail'}
-                                  </span>
-                                )}
-                              </div>
-                            ) : getEffectiveStatus(invitation) === 'started' ? (
-                              <div className="flex items-center gap-1 text-2xs">
-                                <span className="text-gray-600 dark:text-slate-400">Progress:</span>
-                                <span className="font-medium text-brand-orange-deep">
-                                  {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
-                                </span>
-                              </div>
-                            ) : (
-                              <span className="text-2xs text-gray-400 dark:text-slate-500">—</span>
-                            )}
-                          </div>
-                          {getEffectiveStatus(invitation) === 'completed' && invitation.attempt_id && (
-                            <button
-                              onClick={() => openResult(invitation)}
-                              className="flex items-center gap-1 px-1.5 py-0.5 text-2xs text-brand-blue hover:bg-brand-blue/5 rounded transition-colors shrink-0"
-                            >
-                              <Eye className="w-3 h-3" />
-                              View
-                            </button>
-                          )}
-                        </div>
-                        <InvitationActionButtons
-                          actions={buildInvitationRowActions(invitation, {
-                            ...rowActionOptions,
-                            archived: isAssessmentArchived(invitation.assessment_status),
-                            jdDisabled,
-                          })}
-                        />
-                      </div>
-                    </div>
+                    </MobileRecordCard>
                   );
                 })}
               </div>
@@ -608,7 +609,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   when at least one row in the JD's invitations belongs to
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
-              <div className="hidden sm:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
+              <div className="hidden lg:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
                 {/* Auto layout, not table-fixed. The fixed column widths
                     summed well past the table's min-width, so every column
                     was scaled down and the Actions cell wrapped its two
@@ -618,51 +619,51 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <table className="w-max min-w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">CID</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Status</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Timeline</th>
+                      <th className="tf-th-cell text-left tf-th">CID</th>
+                      <th className="tf-th-cell text-left tf-th">Candidate</th>
+                      <th className="tf-th-cell text-left tf-th">Assessment</th>
+                      <th className="tf-th-cell text-left tf-th">Status</th>
+                      <th className="tf-th-cell text-left tf-th">Timeline</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Tech Score</th>
+                        <th className="tf-th-cell text-center tf-th">Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
-                        <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Coding Score</th>
+                        <th className="tf-th-cell text-center tf-th">Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap tf-sticky-col">Actions</th>
+                      <th className="tf-th-cell text-left tf-th tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {visibleInvitations.map((invitation: any) => {
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                               {invitation.candidate_display_id || '-'}
                             </span>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-2 lg:gap-3">
                               <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                               {/* Capped rather than free: with auto layout a single
                                   long email would otherwise set the column width. */}
                               <div className="min-w-0 max-w-[220px]">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                                 <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <p className="tf-body truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {/* Badges stay on one line — the row height is set by
                                 the candidate cell, and a wrapping second badge
                                 was what pushed neighbouring columns out of line. */}
                             <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
                               {getStatusBadge(invitation)}
                               {isInvExpired(invitation) && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                                <span className="tf-badge ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 flex-shrink-0">
                                   <Clock className="w-3 h-3" /> Expired
                                 </span>
                               )}
@@ -677,7 +678,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               with a "+N" counter, which hid the progression
                               behind a tooltip. align-top so the first line sits
                               level with the other columns' single line. */}
-                          <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
+                          <td className="tf-td align-top tf-meta whitespace-nowrap">
                             {(() => {
                               const events = timelineEvents(invitation);
                               return (
@@ -708,7 +709,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               is gated identically). For a row whose source
                               assessment doesn't have tech, render '—'. */}
                           {invitations.some(inv => inv.assessment_technical_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center whitespace-nowrap">
+                            <td className="tf-td text-sm text-center whitespace-nowrap">
                               {(() => {
                                 if (!invitation.assessment_technical_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -731,7 +732,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                             </td>
                           )}
                           {invitations.some(inv => inv.assessment_coding_enabled) && (
-                            <td className="py-3 px-3 lg:px-4 align-middle text-sm text-center whitespace-nowrap">
+                            <td className="tf-td text-sm text-center whitespace-nowrap">
                               {(() => {
                                 if (!invitation.assessment_coding_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -753,7 +754,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               })()}
                             </td>
                           )}
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
+                          <td className="tf-td whitespace-nowrap tf-sticky-col">
                             <InvitationActionsMenu
                               actions={buildInvitationRowActions(invitation, {
                                 ...rowActionOptions,
@@ -786,7 +787,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -801,13 +802,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-center"
                   />
                 </div>
                 <button onClick={() => setPage(() => Math.max(1, currentPage - 1))} disabled={currentPage === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
+                <span className="px-1 sm:px-2 tf-body-secondary whitespace-nowrap">
                   Page {currentPage} of {totalPages}
                 </span>
                 <button onClick={() => setPage(() => Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className={pageBtn}>
@@ -825,7 +826,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 onClick={() => { if (onInviteMore) onInviteMore(); }}
                 aria-disabled={!onInviteMore || undefined}
                 title={!onInviteMore ? inviteMoreDeniedReason : undefined}
-                className={!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined}
+                className={`${(!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More

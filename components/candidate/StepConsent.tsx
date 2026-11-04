@@ -259,7 +259,7 @@ export default function StepConsent({
 
           {/* Role card — the job, then every fact about it and about the
               interview as one continuous run of badges. */}
-          <div className="relative overflow-hidden bg-white border border-gray-200 rounded-2xl shadow-sm">
+          <div className="tf-card-soft relative overflow-hidden">
             <div className="p-5 sm:p-6">
               {/* Title row: the role and its tagline on the left, the
                   candidate (name and email) in its top-right corner — under
@@ -292,7 +292,7 @@ export default function StepConsent({
                     </span>
                     <div className="min-w-0">
                       {candidateName && (
-                        <p className="tf-cell-name truncate" title={candidateName}>{candidateName}</p>
+                        <p className="tf-row-title truncate" title={candidateName}>{candidateName}</p>
                       )}
                       {candidateEmail && (
                         <p className="tf-meta break-all" title={candidateEmail}>{candidateEmail}</p>
@@ -332,7 +332,7 @@ export default function StepConsent({
                 <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white text-brand-blue border border-brand-blue/20 flex-shrink-0">
                   <FileText className="w-3.5 h-3.5" />
                 </span>
-                <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">About the Role</h2>
+                <h2 className="tf-row-title uppercase tracking-wide">About the Role</h2>
               </div>
               <div className="p-5">
                 {/* The typography plugin's colours are pinned by the .jd-prose rules
@@ -387,7 +387,7 @@ export default function StepConsent({
         {/* Sticky below the pinned header + stepper (not under it). On short
             laptops the panel scrolls inside itself, so Proceed is always
             reachable without scrolling the whole JD first. */}
-        <div className="lg:sticky lg:top-[calc(var(--tf-sticky-h,0px)+24px)] lg:max-h-[calc(100dvh-var(--tf-sticky-h,0px)-48px)] lg:overflow-y-auto bg-white border border-gray-200 rounded-2xl overflow-hidden min-w-0">
+        <div className="tf-panel lg:sticky lg:top-[calc(var(--tf-sticky-h,0px)+24px)] lg:max-h-[calc(100dvh-var(--tf-sticky-h,0px)-48px)] lg:overflow-y-auto overflow-hidden min-w-0">
 
           {/* Before You Begin */}
           <div className="p-5">
@@ -397,7 +397,7 @@ export default function StepConsent({
               </span>
               <div className="min-w-0">
                 <p className="text-lg font-bold text-gray-900 leading-tight">Before You Begin</p>
-                <p className="tf-card-desc mt-0.5">Please review the requirements below to ensure a smooth interview.</p>
+                <p className="tf-body-secondary mt-0.5">Please review the requirements below to ensure a smooth interview.</p>
               </div>
             </div>
             <div className="rounded-xl border border-gray-200 px-3">
@@ -406,7 +406,7 @@ export default function StepConsent({
                   <span className="my-2 flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue flex-shrink-0">
                     <Icon className="w-4 h-4" />
                   </span>
-                  <span className={`flex-1 min-w-0 flex items-center py-2 tf-card-desc leading-snug ${i > 0 ? 'border-t border-gray-100' : ''}`}>{text}</span>
+                  <span className={`flex-1 min-w-0 flex items-center py-2 tf-body-secondary leading-snug ${i > 0 ? 'border-t border-gray-100' : ''}`}>{text}</span>
                 </div>
               ))}
             </div>
@@ -425,7 +425,7 @@ export default function StepConsent({
                   </span>
                   <div className="min-w-0">
                     <p className="text-base font-bold text-gray-900 leading-tight">Mobile Verification Required</p>
-                    <p className="tf-card-desc leading-relaxed mt-1">
+                    <p className="tf-body-secondary leading-relaxed mt-1">
                       During the interview, you may be asked to verify your interview environment using your mobile phone.
                     </p>
                     <ul className="mt-3 space-y-2">
@@ -434,11 +434,11 @@ export default function StepConsent({
                           <span className="mt-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-blue text-white flex-shrink-0">
                             <Check className="w-3 h-3" strokeWidth={3} />
                           </span>
-                          <span className="tf-card-desc leading-snug">{point}</span>
+                          <span className="tf-body-secondary leading-snug">{point}</span>
                         </li>
                       ))}
                     </ul>
-                    <p className="tf-card-desc mt-3">Your mobile browser will open the verification page directly.</p>
+                    <p className="tf-body-secondary mt-3">Your mobile browser will open the verification page directly.</p>
                   </div>
                 </div>
               </div>
@@ -451,7 +451,7 @@ export default function StepConsent({
                     setMobileVerificationAcknowledged(next);
                     if (next && consentAccepted) revealAfterPaint(() => proceedRef.current);
                   }}
-                  className="mt-0.5 w-5 h-5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue flex-shrink-0"
+                  className="tf-checkbox mt-0.5 w-5 h-5 focus:ring-brand-blue"
                 />
                 <span className="tf-body">
                   I understand and agree to complete mobile environment verification if requested.
@@ -581,7 +581,7 @@ export default function StepConsent({
                       <Icon className="w-5 h-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="tf-cell-name">{title}</p>
+                      <p className="tf-row-title">{title}</p>
                       <p className="mt-0.5 tf-body-muted leading-relaxed">{desc}</p>
                     </div>
                   </li>
@@ -591,13 +591,13 @@ export default function StepConsent({
               {/* Row 2 - Learn More. Each card expands in place to its
                   details (policy, rights, retention). */}
               <div className="rounded-2xl bg-gray-50 border border-gray-100 p-4 sm:p-5">
-                <h3 className="text-lg font-bold text-gray-900">Learn More</h3>
+                <h3 className="tf-section-title">Learn More</h3>
                 <p className="mt-0.5 tf-body-muted">Read detailed information about your privacy, rights and data retention.</p>
                 <div className="mt-4 space-y-3">
                   {LEARN_MORE_ITEMS.map(({ key, icon: Icon, title, desc }) => {
                     const open = openLearnMore === key;
                     return (
-                      <div key={key} className="rounded-xl bg-white border border-gray-200 shadow-sm">
+                      <div key={key} className="tf-card-soft">
                         <button
                           type="button"
                           onClick={() => setOpenLearnMore(open ? null : key)}
@@ -608,13 +608,13 @@ export default function StepConsent({
                             <Icon className="w-5 h-5" />
                           </span>
                           <div className="flex-1 min-w-0">
-                            <p className="tf-cell-name">{title}</p>
+                            <p className="tf-row-title">{title}</p>
                             <p className="mt-0.5 tf-body-muted leading-relaxed">{desc}</p>
                           </div>
                           <ChevronRight className={`w-5 h-5 text-brand-blue flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
                         </button>
                         {open && (
-                          <div className="px-4 pb-4 sm:pl-[4.75rem] tf-card-desc space-y-2">
+                          <div className="px-4 pb-4 sm:pl-[4.75rem] tf-body-secondary space-y-2">
                             {key === 'privacy' && (
                               <>
                                 <p>Your data is encrypted in transit and at rest. It is never sold or shared with third parties beyond what&apos;s needed for this recruitment process.</p>

@@ -1,6 +1,7 @@
 import { Table2 } from 'lucide-react';
 import type { Cluster, Level } from './types';
 import { ExportMenu } from './ExportMenu';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { COVERAGE_EXPORT_HEADERS, exportCoverage, flattenCoverageRows } from './coverageExport';
 
 interface Props {
@@ -39,13 +40,13 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
   const exportRows = flattenCoverageRows(mustHaveClusters, niceToHaveClusters);
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
+    <div className="tf-card-soft overflow-hidden">
+      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700 flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center">
           <Table2 size={20} className="text-purple-600" />
         </div>
         <div className="flex-1">
-          <h2 className="text-2xl font-bold">Detailed Skills Table</h2>
+          <h2 className="text-lg sm:text-2xl font-bold">Detailed Skills Table</h2>
           <p className="tf-body-muted">Comprehensive view of all evaluated skills</p>
         </div>
         <ExportMenu
@@ -56,16 +57,16 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
         />
       </div>
 
-      <div className="overflow-x-auto tf-table-shell">
+      <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-gray-700">
             <tr>
-              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
-              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
-              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
-              <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
-              <th className="text-center p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
-              <th className="text-left p-4 tf-th" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
+              <th className="tf-th-cell text-left tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Type</th>
+              <th className="tf-th-cell text-left tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Skill Name</th>
+              <th className="tf-th-cell text-left tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Cluster</th>
+              <th className="tf-th-cell text-center tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Score</th>
+              <th className="tf-th-cell text-center tf-th" style={{ fontFamily: 'var(--font-mono)' }}>Level</th>
+              <th className="tf-th-cell text-left tf-th" style={{ fontFamily: 'var(--font-mono)' }}>AI Feedback</th>
             </tr>
           </thead>
           <tbody>
@@ -75,19 +76,19 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
               const ts = skillTypeStyle(skill.skillType);
               return (
                 <tr key={idx} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
-                  <td className="p-4">
+                  <td className="tf-td">
                     <span className={`inline-block px-2.5 py-1 text-2xs font-semibold rounded-full border ${ts.bg} ${ts.text} ${ts.border}`}>
                       {skill.skillType}
                     </span>
                   </td>
-                  <td className="p-4"><div className="font-medium">{skill.name}</div></td>
-                  <td className="p-4">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{skill.clusterName}</div>
+                  <td className="tf-td"><div className="font-medium">{skill.name}</div></td>
+                  <td className="tf-td">
+                    <div className="tf-body-secondary">{skill.clusterName}</div>
                     <div className="text-xs uppercase tracking-wider mt-1 font-semibold" style={{ color: cs.text, fontFamily: 'var(--font-mono)' }}>
                       {skill.clusterPriority} Priority
                     </div>
                   </td>
-                  <td className="p-4">
+                  <td className="tf-td">
                     <div className="flex flex-col items-center">
                       <div className="px-3 py-1 rounded-lg text-lg font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
                         {Math.round(skill.score)}
@@ -95,18 +96,60 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
                       <div className="tf-meta mt-1">/ 10</div>
                     </div>
                   </td>
-                  <td className="p-4 text-center">
+                  <td className="tf-td text-center">
                     <span className="px-3 py-1 rounded-full text-xs uppercase tracking-wider font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
                       {skill.level}
                     </span>
                   </td>
-                  <td className="p-4"><p className="text-sm text-gray-600 dark:text-gray-400 max-w-md">{skill.feedback}</p></td>
+                  <td className="tf-td"><p className="tf-body-secondary max-w-md">{skill.feedback}</p></td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <MobileRecordList className="p-3">
+        {allSkills.map((skill, idx) => {
+          const ls = getLevelStyle(skill.level);
+          const cs = getLevelStyle(skill.clusterPriority);
+          const ts = skillTypeStyle(skill.skillType);
+          return (
+            <MobileRecordCard
+              key={idx}
+              badges={
+                <>
+                  <span className={`inline-block px-2.5 py-1 text-2xs font-semibold rounded-full border ${ts.bg} ${ts.text} ${ts.border}`}>
+                    {skill.skillType}
+                  </span>
+                  <span className="px-3 py-1 rounded-full text-xs uppercase tracking-wider font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
+                    {skill.level}
+                  </span>
+                </>
+              }
+              title={skill.name}
+              footer={
+                <span className="px-2.5 py-0.5 rounded-lg text-base font-semibold" style={{ background: ls.bg, color: ls.text, fontFamily: 'var(--font-mono)', border: `1px solid ${ls.border}` }}>
+                  {Math.round(skill.score)}<span className="tf-meta ml-0.5">/ 10</span>
+                </span>
+              }
+              fields={[
+                {
+                  label: 'Cluster',
+                  value: (
+                    <>
+                      {skill.clusterName}{' '}
+                      <span className="text-xs uppercase tracking-wider font-semibold" style={{ color: cs.text, fontFamily: 'var(--font-mono)' }}>
+                        ({skill.clusterPriority} Priority)
+                      </span>
+                    </>
+                  ),
+                },
+                { label: 'AI Feedback', value: skill.feedback },
+              ]}
+            />
+          );
+        })}
+      </MobileRecordList>
 
       <div className="p-4 bg-gray-50 dark:bg-gray-900/30 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between flex-wrap gap-3">
         <div className="tf-body-muted">

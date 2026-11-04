@@ -206,10 +206,10 @@ export default function SearchFilterBar({
       {/* Advanced Filters Panel */}
       {showAdvancedFilters && (
         <div className="mt-3 sm:mt-4 bg-card rounded-lg shadow-sm border border-border p-4 sm:p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="tf-grid-3">
             {/* Skills Filter */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Briefcase className="w-4 h-4 text-gray-500" />
                 Skills
               </label>
@@ -235,13 +235,13 @@ export default function SearchFilterBar({
 
             {/* Experience Range */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Clock className="w-4 h-4 text-gray-500" />
                 Total Experience
               </label>
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Minimum Years</label>
+                  <label className="block tf-meta mb-1">Minimum Years</label>
                   <input
                     type="number"
                     min="0"
@@ -255,11 +255,11 @@ export default function SearchFilterBar({
                         min: e.target.value ? parseInt(e.target.value) : undefined
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    className="tf-input rounded-md"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs text-gray-600 mb-1">Maximum Years</label>
+                  <label className="block tf-meta mb-1">Maximum Years</label>
                   <input
                     type="number"
                     min="0"
@@ -273,11 +273,11 @@ export default function SearchFilterBar({
                         max: e.target.value ? parseInt(e.target.value) : undefined
                       }
                     })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                    className="tf-input rounded-md"
                   />
                 </div>
                 <div className="pt-2 border-t border-gray-200">
-                  <label className="block text-xs text-gray-600 mb-2">Or select range:</label>
+                  <label className="block tf-meta mb-2">Or select range:</label>
                   <div className="space-y-2">
                     {[
                       { label: '0-2 years', min: 0, max: 2 },
@@ -307,7 +307,7 @@ export default function SearchFilterBar({
 
             {/* Education Level */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <GraduationCap className="w-4 h-4 text-gray-500" />
                 Education Level
               </label>
@@ -337,7 +337,7 @@ export default function SearchFilterBar({
 
             {/* Location */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <MapPin className="w-4 h-4 text-gray-500" />
                 Current Location
               </label>
@@ -346,13 +346,13 @@ export default function SearchFilterBar({
                 placeholder="e.g., San Francisco, CA"
                 value={tempFilters.location || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, location: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                className="tf-input rounded-md"
               />
             </div>
 
             {/* Current Company */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Building2 className="w-4 h-4 text-gray-500" />
                 Current Company
               </label>
@@ -361,13 +361,13 @@ export default function SearchFilterBar({
                 placeholder="e.g., Google, Microsoft"
                 value={tempFilters.currentCompany || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, currentCompany: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                className="tf-input rounded-md"
               />
             </div>
 
             {/* Previous Company */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Building2 className="w-4 h-4 text-gray-500" />
                 Previous Company
               </label>
@@ -376,13 +376,13 @@ export default function SearchFilterBar({
                 placeholder="e.g., Amazon, Facebook"
                 value={tempFilters.previousCompany || ''}
                 onChange={(e) => setTempFilters({ ...tempFilters, previousCompany: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-gray-600"
+                className="tf-input rounded-md"
               />
             </div>
 
             {/* Notice Period */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Clock className="w-4 h-4 text-gray-500" />
                 Notice Period
               </label>
@@ -412,7 +412,7 @@ export default function SearchFilterBar({
 
             {/* Upload Date Range */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 Upload Date
               </label>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -428,7 +428,7 @@ export default function SearchFilterBar({
                   })}
                   className="sm:flex-1 sm:min-w-0"
                 />
-                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                 <DateField
                   aria-label="Upload date to"
                   value={tempFilters.uploadDateRange?.end || ''}
@@ -446,7 +446,7 @@ export default function SearchFilterBar({
 
             {/* Last Updated Date Range */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 Last Updated
               </label>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2">
@@ -462,7 +462,7 @@ export default function SearchFilterBar({
                   })}
                   className="sm:flex-1 sm:min-w-0"
                 />
-                <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                 <DateField
                   aria-label="Last updated to"
                   value={tempFilters.lastUpdatedRange?.end || ''}
@@ -480,7 +480,7 @@ export default function SearchFilterBar({
 
             {/* Resume Source */}
             <div>
-              <label className="flex items-center gap-2 text-sm text-gray-900 mb-3">
+              <label className="flex items-center gap-2 tf-body mb-3">
                 <Filter className="w-4 h-4 text-gray-500" />
                 Resume Source
               </label>
@@ -548,7 +548,7 @@ export default function SearchFilterBar({
               </div>
               <div>
                 <h3 className="text-gray-900 mb-1">Search Accuracy & Performance Guide</h3>
-                <p className="tf-meta-strong">Supports partial, exact, and multiple keyword searches</p>
+                <p className="tf-meta">Supports partial, exact, and multiple keyword searches</p>
               </div>
             </div>
             <button
@@ -559,16 +559,16 @@ export default function SearchFilterBar({
             </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="tf-grid-3">
             {/* Partial Text Match */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="tf-panel p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
                   <span className="text-green-700">✓</span>
                 </div>
-                <h4 className="text-sm text-gray-900">Partial Text Match</h4>
+                <h4 className="tf-body">Partial Text Match</h4>
               </div>
-              <p className="tf-meta-strong mb-3">Search with partial keywords to find candidates</p>
+              <p className="tf-meta mb-3">Search with partial keywords to find candidates</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">react</code>
@@ -582,14 +582,14 @@ export default function SearchFilterBar({
             </div>
 
             {/* Exact Match */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="tf-panel p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
                   <span className="text-gray-900">""</span>
                 </div>
-                <h4 className="text-sm text-gray-900">Exact Match</h4>
+                <h4 className="tf-body">Exact Match</h4>
               </div>
-              <p className="tf-meta-strong mb-3">Use quotes for exact phrase matching</p>
+              <p className="tf-meta mb-3">Use quotes for exact phrase matching</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-gray-800">"Senior Developer"</code>
@@ -603,14 +603,14 @@ export default function SearchFilterBar({
             </div>
 
             {/* Multiple Keywords */}
-            <div className="bg-white rounded-lg border border-gray-200 p-4">
+            <div className="tf-panel p-4">
               <div className="flex items-center gap-2 mb-3">
                 <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
                   <span className="text-orange-700">+</span>
                 </div>
-                <h4 className="text-sm text-gray-900">Multiple Keywords</h4>
+                <h4 className="tf-body">Multiple Keywords</h4>
               </div>
-              <p className="tf-meta-strong mb-3">Combine keywords with spaces (AND logic)</p>
+              <p className="tf-meta mb-3">Combine keywords with spaces (AND logic)</p>
               <div className="space-y-2">
                 <div className="bg-gray-50 rounded p-2 border border-gray-200">
                   <code className="text-xs text-orange-600">react python aws</code>
@@ -625,9 +625,9 @@ export default function SearchFilterBar({
           </div>
 
           {/* Search Fields */}
-          <div className="mt-4 bg-white rounded-lg border border-gray-200 p-4">
-            <h4 className="text-sm text-gray-900 mb-3">Searchable Fields (High Accuracy)</h4>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
+          <div className="tf-panel mt-4 p-4">
+            <h4 className="tf-body mb-3">Searchable Fields (High Accuracy)</h4>
+            <div className="tf-grid-stats">
               {[
                 { label: 'Candidate Name', icon: '👤' },
                 { label: 'Email Address', icon: '✉️' },
@@ -638,7 +638,7 @@ export default function SearchFilterBar({
                 { label: 'Resume Source', icon: '📁' },
                 { label: 'All Fields', icon: '🔍' },
               ].map((field) => (
-                <div key={field.label} className="flex items-center gap-2 tf-meta-strong">
+                <div key={field.label} className="flex items-center gap-2 tf-meta">
                   <span>{field.icon}</span>
                   <span>{field.label}</span>
                 </div>

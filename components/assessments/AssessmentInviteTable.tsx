@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import {
   timelineEvents,
   buildInvitationRowActions,
@@ -170,6 +171,19 @@ export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
 };
 
+/* A score column as a phone-card footer chip: the same readiness rule and the
+   same 70% mark (and blue-for-pass colouring) as the table's score cells. */
+const InviteScoreChip = ({ label, score, scoringStatus }: { label: string; score: any; scoringStatus?: string }) => {
+  const ready = score != null && scoringStatus !== 'processing' && scoringStatus !== 'pending';
+  if (!ready) return <MobileStatChip tone="neutral">{label}: —</MobileStatChip>;
+  const passed = score >= 70;
+  return (
+    <MobileStatChip tone={passed ? 'info' : 'danger'}>
+      {label}: {formatScore(score)}% · {passed ? 'Pass' : 'Fail'}
+    </MobileStatChip>
+  );
+};
+
 /* The popup's own value for this class, kept beside the markup that uses it. */
 const assessmentDropdownMenuItemClass = 'group';
 
@@ -270,7 +284,8 @@ export default function AssessmentInviteTable({
            scroll away with the content. Deliberately no overflow-hidden —
            the shell's overflow:auto is what lets the wide auto-layout
            table scroll sideways. */
-        <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+        <>
+        <div className={`${DESKTOP_TABLE_ONLY} tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg`}>
           {/* Auto layout, not table-fixed. The colgroup widths summed
               past the table's min-width, so every column was scaled
               down; combined with the shell's white-space: nowrap the
@@ -281,27 +296,27 @@ export default function AssessmentInviteTable({
           <table className="w-max min-w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
-                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
-                <th className="text-left py-3 px-4 tf-th">Candidate</th>
+                <th className="tf-th-cell w-8 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
+                <th className="tf-th-cell text-left tf-th">Candidate</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
                     sm and md, shifting every heading after Timeline off its
                     column. */}
-                <th className="text-left py-3 px-4 tf-th hidden md:table-cell">Timeline</th>
-                <th className="text-left py-3 px-4 tf-th">Status</th>
+                <th className="tf-th-cell text-left tf-th hidden md:table-cell">Timeline</th>
+                <th className="tf-th-cell text-left tf-th">Status</th>
                 {/* Tech / Coding Score columns are conditional on the
                     assessment having that round enabled — same rule as
                     the Results page. Showing a "Coding Score" column
                     for a JD without a coding round produced a
                     permanent "—" column that confused recruiters. */}
                 {techEnabled && (
-                  <th className="text-center py-3 px-4 tf-th">Tech Score</th>
+                  <th className="tf-th-cell text-center tf-th">Tech Score</th>
                 )}
                 {codingEnabled && (
-                  <th className="text-center py-3 px-4 tf-th">Coding Score</th>
+                  <th className="tf-th-cell text-center tf-th">Coding Score</th>
                 )}
-                <th className="text-left py-3 px-4 tf-th whitespace-nowrap">Invite Source</th>
-                <th className="text-left py-3 px-4 tf-th">CID</th>
+                <th className="tf-th-cell text-left tf-th">Invite Source</th>
+                <th className="tf-th-cell text-left tf-th">CID</th>
                 {/* Job scope only: with invites from several
                     assessments in one table, the row has to say which
                     job version its assessment belongs to - that is the
@@ -317,12 +332,12 @@ export default function AssessmentInviteTable({
                     relationship they are: this assessment version, on
                     that job version. */}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 tf-th">Job Version</th>
+                  <th className="tf-th-cell text-left tf-th">Job Version</th>
                 )}
                 {showVersionColumns && (
-                  <th className="text-left py-3 px-4 tf-th">Assessment Version</th>
+                  <th className="tf-th-cell text-left tf-th">Assessment Version</th>
                 )}
-                <th className="text-left py-3 px-4 tf-th tf-sticky-col">Actions</th>
+                <th className="tf-th-cell text-left tf-th tf-sticky-col">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -357,7 +372,7 @@ export default function AssessmentInviteTable({
                         Only bulk-actionable rows (Invited/Expired/Failed) get
                         a checkbox; the rest keep a fixed-width slot so the
                         columns stay aligned. */}
-                    <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                    <td className="tf-td pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                       {isBulkActionable(invitation) && !archived && !jdDisabled ? (
                         <button
                           type="button"
@@ -377,19 +392,19 @@ export default function AssessmentInviteTable({
                         <span className="inline-block w-5" />
                       )}
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="tf-td align-top">
                       <div className="flex items-center gap-3">
                         <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                         {/* Capped rather than free: under auto layout a
                             single long email would otherwise set the
                             column width for the whole table. */}
                         <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                          <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                           <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
                       </div>
                     </td>
-                        <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                        <td className="tf-td align-top tf-meta hidden md:table-cell">
                           {/* Same trail the Track Invites popup prints (timelineEvents). */}
                           <div className="space-y-1">
                             {timelineEvents(invitation).length === 0 ? (
@@ -407,7 +422,7 @@ export default function AssessmentInviteTable({
                             )}
                           </div>
                         </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="tf-td align-top">
                       {/* Status is the badge alone. Expiry is resolved inside
                           renderInviteStatusBadge, so a lapsed invite renders one Expired
                           badge — not its old status with a chip beside it — and
@@ -441,7 +456,7 @@ export default function AssessmentInviteTable({
                         && invitation.scoring_status !== 'processing'
                         && invitation.scoring_status !== 'pending';
                       return (
-                        <td className="py-3 px-4 align-top text-sm text-center">
+                        <td className="tf-td align-top text-sm text-center">
                           {techReady ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={`${SCORE_CELL_TEXT} ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
@@ -463,7 +478,7 @@ export default function AssessmentInviteTable({
                         && invitation.scoring_status !== 'processing'
                         && invitation.scoring_status !== 'pending';
                       return (
-                        <td className="py-3 px-4 align-top text-sm text-center">
+                        <td className="tf-td align-top text-sm text-center">
                           {codingReady ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={`${SCORE_CELL_TEXT} ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
@@ -481,10 +496,10 @@ export default function AssessmentInviteTable({
                     })()}
                     {/* Invite Source — how this candidate was actually
                         invited, from the invitation's own resume_id. */}
-                    <td className="py-3 px-4 align-top tf-td whitespace-nowrap">
+                    <td className="tf-td align-top tf-body whitespace-nowrap">
                       <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                     </td>
-                    <td className="py-3 px-4 align-top">
+                    <td className="tf-td align-top">
                       <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                         {invitation.candidate_display_id || '-'}
                       </span>
@@ -494,7 +509,7 @@ export default function AssessmentInviteTable({
                         chip, so V2 reads the same wherever a recruiter
                         meets it. */}
                     {showVersionColumns && (
-                      <td className="py-3 px-4 align-top">
+                      <td className="tf-td align-top">
                         <VersionChip kind="job" version={invitation._jd_version} />
                       </td>
                     )}
@@ -504,11 +519,11 @@ export default function AssessmentInviteTable({
                         asked for a version; the assessment is named in
                         the row's actions and on the page it opens. */}
                     {showVersionColumns && (
-                      <td className="py-3 px-4 align-top">
+                      <td className="tf-td align-top">
                         <VersionChip kind="assessment" version={invitation._assessment_version} />
                       </td>
                     )}
-                    <td className="py-3 px-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                    <td className="tf-td align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                       {/* Actions collapse into a kebab menu. This uses Radix's
                           DropdownMenu rather than the hand-rolled absolute
                           dropdown the cards above use, because this table sits
@@ -581,6 +596,125 @@ export default function AssessmentInviteTable({
             </tbody>
           </table>
         </div>
+        <MobileRecordList className="flex-1 min-h-0 overflow-y-auto">
+          {invitations.map((invitation: any) => {
+            const rowOpensDetails = canOpenResult(invitation);
+            const isSelected = selectedIds.has(invitation.id);
+            const actions = editingEmailId === invitation.id ? [] : buildInvitationRowActions(invitation, {
+              onResend,
+              onEditEmail: onStartEditEmail,
+              onEdit,
+              onRevoke,
+              revokingId,
+              onViewResult: canOpenResult(invitation) || invitation.status === 'completed' || !!invitation.completed_at
+                ? onOpenResult
+                : undefined,
+              archived,
+              jdDisabled,
+            });
+            return (
+              <MobileRecordCard
+                key={invitation.id}
+                selected={isSelected}
+                onClick={rowOpensDetails ? () => onOpenResult(invitation) : undefined}
+                select={isBulkResendable(invitation) && !archived && !jdDisabled ? (
+                  <button
+                    type="button"
+                    role="checkbox"
+                    aria-checked={isSelected}
+                    aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                    onClick={() => onToggleSelect(invitation.id)}
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                      isSelected
+                        ? 'bg-brand-blue border-brand-blue'
+                        : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                    }`}
+                  >
+                    {isSelected && <Check className="w-3 h-3 text-white" />}
+                  </button>
+                ) : undefined}
+                idBadge={
+                  <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                    {invitation.candidate_display_id || '-'}
+                  </span>
+                }
+                badges={<InviteStatusBadge inv={invitation} />}
+                title={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="md" />
+                    <span className="truncate" title={invitation.candidate_name}>{invitation.candidate_name}</span>
+                  </span>
+                }
+                actions={actions.length > 0 ? <InvitationActionsMenu actions={actions} /> : undefined}
+                meta={[
+                  { icon: <Mail className="w-3.5 h-3.5" />, label: invitation.candidate_email },
+                  { label: <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" /> },
+                ]}
+                fields={showVersionColumns ? [
+                  { label: 'Job Version', value: <VersionChip kind="job" version={invitation._jd_version} /> },
+                  { label: 'Assessment Version', value: <VersionChip kind="assessment" version={invitation._assessment_version} /> },
+                ] : undefined}
+                footer={(techEnabled || codingEnabled) ? (
+                  <>
+                    {techEnabled && <InviteScoreChip label="Tech" score={invitation.technical_score} scoringStatus={invitation.scoring_status} />}
+                    {codingEnabled && <InviteScoreChip label="Coding" score={invitation.coding_score} scoringStatus={invitation.scoring_status} />}
+                  </>
+                ) : undefined}
+              >
+                <div className="mt-3 tf-meta space-y-1">
+                  {timelineEvents(invitation).length === 0 ? (
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                      <span>Created: {formatIST(invitation.created_at)}</span>
+                    </div>
+                  ) : (
+                    timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                      <div key={`${label}-${i}`} className="flex items-center gap-2">
+                        <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                        <span className={tone}>{label}: {formatIST(at)}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+                {editingEmailId === invitation.id && (
+                  <div className="mt-3 flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="email"
+                      value={newEmailValue}
+                      onChange={e => onNewEmailChange(e.target.value)}
+                      placeholder="new@email.com"
+                      aria-invalid={newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue) ? 'true' : undefined}
+                      className={`text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 w-full ${
+                        newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue)
+                          ? 'border-destructive focus:ring-destructive/40 focus:border-destructive'
+                          : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue'
+                      }`}
+                      autoFocus
+                    />
+                    {newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue) && (
+                      <p className="text-2xs text-destructive">Please enter a valid email address.</p>
+                    )}
+                    <div className="flex gap-1">
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => onSubmitEmail(invitation)}
+                        disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                        icon={<Send className="w-3 h-3" />}
+                      >
+                        {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                      </Button>
+                      <Button variant="secondary" size="sm" onClick={onCancelEditEmail}>
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </MobileRecordCard>
+            );
+          })}
+        </MobileRecordList>
+        </>
       )}
     </>
   );

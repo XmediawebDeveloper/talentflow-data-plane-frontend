@@ -400,7 +400,7 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
 
       {/* Footer */}
       <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-400 text-center">
+        <p className="tf-hint text-center">
           {tenant?.name || 'TalentFlow'} v1.0
         </p>
       </div>

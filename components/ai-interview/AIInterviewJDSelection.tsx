@@ -199,9 +199,9 @@ export default function AIInterviewJDSelection() {
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             barRef={breadcrumbBarRef}
             className="mb-3"
@@ -216,7 +216,7 @@ export default function AIInterviewJDSelection() {
           <div className="w-full">
             <div className="mb-6 sm:mb-8">
               <h1 className="tf-page-title mb-2">Create New AI Interview</h1>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="tf-body-secondary sm:text-base">
                 Select a Job Description to create an AI-powered interview
               </p>
             </div>
@@ -231,11 +231,11 @@ export default function AIInterviewJDSelection() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="tf-card-soft">
               <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0">
                   <div className="min-w-0">
-                    <h2 className="tf-section-title">Select Job Description</h2>
+                    <h2 className="tf-section-title sm:text-lg tracking-tight">Select Job Description</h2>
                   </div>
                   <Button
                     variant="primary"
@@ -296,7 +296,7 @@ export default function AIInterviewJDSelection() {
                           placeholder="Search by JD number, role, department or location..."
                           value={jdSearch}
                           onChange={e => { setJdSearch(e.target.value); setJdPage(1); }}
-                          className="w-full min-w-0 pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                          className="tf-input pl-10 pr-4"
                         />
                       </div>
                     </div>
@@ -322,7 +322,7 @@ export default function AIInterviewJDSelection() {
                     )}
 
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300">
+                      <span className="tf-label">
                         Select a Job Opening
                         {lineageJobs.length > 0 && (
                           <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
@@ -332,7 +332,7 @@ export default function AIInterviewJDSelection() {
                       </span>
                       {jdPick && (
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+                          <span className="tf-badge text-brand-blue bg-brand-blue/10">
                             1 selected
                           </span>
                           <button
@@ -347,7 +347,7 @@ export default function AIInterviewJDSelection() {
                     </div>
 
                     {jdPick && !jdPickOnThisPage && (
-                      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 text-xs text-gray-700">
+                      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 tf-meta">
                         <CheckCircle2 className="w-4 h-4 text-brand-blue flex-shrink-0" />
                         <span>
                           Selected: <span className="font-medium">
@@ -447,7 +447,7 @@ export default function AIInterviewJDSelection() {
                                 disabled={!latestSelectable}
                                 onChange={() => latestSelectable && pickJdVersion(job, versionKey)}
                                 onClick={() => isPicked && pickJdVersion(job, versionKey)}
-                                className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
+                                className="tf-radio focus:ring-brand-blue/40"
                               />
                               <span className="sr-only">Select the latest version of {job.title}</span>
                             </label>
@@ -469,14 +469,14 @@ export default function AIInterviewJDSelection() {
                                     <CheckCircle2 className="w-5 h-5 text-brand-blue flex-shrink-0" />
                                   ) : jobDisabled ? (
                                     <span
-                                      className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-300 whitespace-nowrap"
+                                      className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300"
                                       title={JD_DISABLED_ACTION_MESSAGE}
                                     >
                                       Disabled
                                     </span>
                                   ) : jobArchived ? (
                                     <span
-                                      className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-300 whitespace-nowrap"
+                                      className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300"
                                       title={JD_ARCHIVED_ACTION_MESSAGE}
                                     >
                                       Archived

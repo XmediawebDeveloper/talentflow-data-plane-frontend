@@ -65,7 +65,7 @@ export default function AssignAssessmentModal({
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title truncate">Assign Assessment</h2>
+              <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Assign Assessment</h2>
               <p className="tf-meta mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
@@ -73,7 +73,7 @@ export default function AssignAssessmentModal({
             variant="secondary"
             size="sm"
             onClick={onClose}
-            className="px-2 flex-shrink-0"
+            className="flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -87,7 +87,7 @@ export default function AssignAssessmentModal({
             <div className="flex items-start gap-2 sm:gap-3">
               <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 dark:text-slate-100 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-slate-100 mb-1">
+                <h3 className="tf-row-title mb-1">
                   {resumes.length} Candidate{resumes.length > 1 ? 's' : ''} Selected
                 </h3>
                 <div className="text-xs text-gray-900 dark:text-slate-50 space-y-1">
@@ -131,8 +131,8 @@ export default function AssignAssessmentModal({
                       <ClipboardCheck className="w-4 h-4 sm:w-5 sm:h-5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 mb-1 [overflow-wrap:anywhere]">{assessment.title}</h4>
-                      <div className="flex items-center gap-2 sm:gap-4 text-xs text-gray-700 dark:text-slate-300 mb-2 flex-wrap">
+                      <h4 className="tf-row-title sm:text-base mb-1 [overflow-wrap:anywhere]">{assessment.title}</h4>
+                      <div className="flex items-center gap-2 sm:gap-4 tf-meta mb-2 flex-wrap">
                         <span className="flex items-center gap-1 min-w-0 max-w-full">
                           <Target className="w-3 h-3 flex-shrink-0" />
                           <span className="truncate">{assessment.linkedJD}</span>
@@ -181,8 +181,8 @@ export default function AssignAssessmentModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="tf-subsection-title mb-2">What Happens Next?</h4>
-                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
+                  <h4 className="tf-row-title mb-2">What Happens Next?</h4>
+                  <ul className="tf-meta space-y-1">
                     <li className="flex items-start gap-2">
                       <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
                       <span>Email invitations will be sent to all selected candidates</span>

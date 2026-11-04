@@ -33,13 +33,13 @@ export default function UploadHistoryEmptyState({
     <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand-blue/20 bg-white px-4 py-10 text-center sm:py-14">
       <TrayIllustration />
 
-      <h3 className="mt-6 text-lg font-bold tracking-tight text-gray-900 sm:text-xl">
+      <h3 className="mt-6 tf-section-title tracking-tight sm:text-xl">
         {title}
       </h3>
 
       <div className="mt-2 space-y-0.5">
         {lines.map((line, i) => (
-          <p key={i} className="text-xs leading-relaxed text-gray-500 sm:text-sm">
+          <p key={i} className="tf-meta leading-relaxed sm:text-sm">
             {line}
           </p>
         ))}

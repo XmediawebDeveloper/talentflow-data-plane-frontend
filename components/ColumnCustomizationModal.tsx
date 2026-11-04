@@ -38,8 +38,8 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
         {/* Header */}
         <div className="flex items-center p-4 sm:p-5 border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div>
-            <h2 className="tf-section-title">Customize Columns</h2>
-            <p className="tf-card-desc mt-0.5">
+            <h2 className="tf-section-title sm:text-lg">Customize Columns</h2>
+            <p className="tf-body-secondary mt-0.5">
               {enabledCount} of {selectedColumns.length} columns selected
             </p>
           </div>
@@ -58,10 +58,10 @@ export default function ColumnCustomizationModal({ columns, onClose, onApply }: 
                     type="checkbox"
                     checked={column.enabled}
                     onChange={() => toggleColumn(column.id)}
-                    className="w-4 h-4 accent-brand-blue rounded focus:ring-2 focus:ring-brand-blue/40"
+                    className="tf-checkbox accent-brand-blue focus:ring-2 focus:ring-brand-blue/40"
                   />
                 </div>
-                <span className="text-sm text-gray-900 dark:text-slate-50">{column.label}</span>
+                <span className="tf-body">{column.label}</span>
               </label>
             ))}
           </div>

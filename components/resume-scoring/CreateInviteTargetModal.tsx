@@ -65,7 +65,7 @@ export default function CreateInviteTargetModal({
               <Icon className="w-5 h-5 text-amber-600" />
             </div>
             <div className="min-w-0">
-              <h3 id="create-invite-target-title" className="text-base sm:text-lg font-bold text-gray-900 break-words">
+              <h3 id="create-invite-target-title" className="tf-section-title sm:text-lg break-words">
                 No {what} for this job yet
               </h3>
               <p className="tf-body-muted mt-1 break-words">
@@ -73,7 +73,7 @@ export default function CreateInviteTargetModal({
               </p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onCancel} className="px-2 flex-shrink-0" aria-label="Close">
+          <Button variant="secondary" size="sm" onClick={onCancel} className="flex-shrink-0" aria-label="Close">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -95,7 +95,7 @@ export default function CreateInviteTargetModal({
                   )}
                 </span>
                 <span className="min-w-0 pt-0.5">
-                  <span className="flex items-center gap-1.5 tf-cell-name">
+                  <span className="flex items-center gap-1.5 tf-row-title">
                     <step.icon className="w-4 h-4 text-brand-blue" />
                     {step.title}
                   </span>

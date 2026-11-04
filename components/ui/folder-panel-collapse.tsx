@@ -99,7 +99,7 @@ export function FolderPanelRail({
       >
         <ChevronsRight className="h-4 w-4" />
       </button>
-      <span className="text-xs font-medium text-gray-500 dark:text-slate-400 select-none" style={{ writingMode: 'vertical-rl' }}>
+      <span className="tf-caption select-none" style={{ writingMode: 'vertical-rl' }}>
         Folders
       </span>
     </div>

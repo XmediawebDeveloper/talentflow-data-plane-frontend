@@ -393,7 +393,7 @@ export default function ResumeTextPreviewModal({
               <Eye className="w-5 h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title truncate">{title}</h2>
+              <h2 className="tf-section-title sm:text-lg tracking-tight truncate">{title}</h2>
               {subtitle && <p className="tf-body-muted truncate">{subtitle}</p>}
             </div>
           </div>
@@ -403,7 +403,7 @@ export default function ResumeTextPreviewModal({
             {(resumeId || onDownload) && (
               <button
                 onClick={handleDownload}
-                className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm"
+                className="tf-btn tf-btn-secondary flex px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm whitespace-normal justify-start font-normal"
               >
                 <Download className="w-4 h-4" />
                 <span className="hidden sm:inline">Download</span>
@@ -465,7 +465,7 @@ export default function ResumeTextPreviewModal({
               </div>
             )
           ) : loading ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">
+            <div className="tf-card-soft p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">
               <Skeleton className="h-6 w-1/2" />
               <Skeleton className="h-4 w-1/3" />
               <Skeleton className="h-4 w-full" />
@@ -476,7 +476,7 @@ export default function ResumeTextPreviewModal({
               <Skeleton className="h-4 w-4/5" />
             </div>
           ) : content ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
+            <div className="tf-card-soft p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
               {lines.map((line, idx) => {
                 const trimmed = line.trim();
                 if (!trimmed) return <div key={idx} className="h-3" />;
@@ -488,7 +488,7 @@ export default function ResumeTextPreviewModal({
 
                 if (isHeader) {
                   return (
-                    <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
+                    <h3 key={idx} className="tf-section-title mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
                       {trimmed}
                     </h3>
                   );
@@ -507,9 +507,9 @@ export default function ResumeTextPreviewModal({
               })}
             </div>
           ) : (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+            <div className="tf-card-soft p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
               <FileText className="w-10 h-10 text-gray-400 mb-3" />
-              <p className="text-sm font-medium text-gray-900">Preview not available</p>
+              <p className="tf-row-name">Preview not available</p>
               <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>
             </div>
           )}

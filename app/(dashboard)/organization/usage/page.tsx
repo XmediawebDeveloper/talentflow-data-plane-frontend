@@ -44,9 +44,9 @@ export default function UsagePage() {
       : "Monitor and manage your organization's unit consumption in real time.";
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+      <div className="tf-page-sheet space-y-6">
         <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Usage' }]} />
 
         <PageHeader

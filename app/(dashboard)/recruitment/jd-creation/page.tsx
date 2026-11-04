@@ -151,7 +151,7 @@ function AccessBlockedError({
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center bg-slate-50 p-4 sm:p-8">
+    <div className="tf-page tf-page-pad flex items-center justify-center">
       <div className="max-w-md w-full bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-2xl shadow-brand-blue/10 p-5 sm:p-8 text-center">
         <div className="flex justify-center mb-4 sm:mb-6">
           {getErrorIcon()}
@@ -159,15 +159,15 @@ function AccessBlockedError({
         <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 mb-2 sm:mb-3 tracking-tight">
           {getErrorTitle()}
         </h2>
-        <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-4 sm:mb-6">
+        <p className="tf-body-secondary sm:text-base mb-4 sm:mb-6">
           {errorMessage}
         </p>
 
         {/* Show unit details if insufficient units */}
         {errorCode === 'INSUFFICIENT_UNITS' && accessCheck?.units && (
           <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6 text-left">
-            <p className="text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Unit Availability:</p>
-            <div className="space-y-1 text-sm text-gray-600 dark:text-slate-300">
+            <p className="tf-label mb-2">Unit Availability:</p>
+            <div className="space-y-1 tf-body-secondary">
               <p className={!accessCheck.units.RU?.sufficient ? 'text-red-600 dark:text-red-400 font-medium' : ''}>
                 Resume Storage: {accessCheck.units.RU?.available || 0} available {!accessCheck.units.RU?.sufficient && '❌'}
               </p>
@@ -190,8 +190,8 @@ function AccessBlockedError({
         {/* Show job quota details if exceeded */}
         {errorCode === 'JOB_QUOTA_EXCEEDED' && accessCheck?.job_quota && (
           <div className="bg-brand-blue/[0.04] dark:bg-brand-blue/10 ring-1 ring-brand-blue/15 dark:ring-brand-blue/30 rounded-lg p-4 mb-6 text-left">
-            <p className="text-sm font-medium text-gray-700 dark:text-slate-200 mb-2">Job Quota:</p>
-            <div className="text-sm text-gray-600 dark:text-slate-300">
+            <p className="tf-label mb-2">Job Quota:</p>
+            <div className="tf-body-secondary">
               <p>Used: {accessCheck.job_quota.used} / {accessCheck.job_quota.is_unlimited ? '∞' : accessCheck.job_quota.limit}</p>
             </div>
           </div>
@@ -201,7 +201,7 @@ function AccessBlockedError({
           {getActionButton()}
           <button
             onClick={onBack}
-            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
+            className="tf-btn tf-btn-secondary flex px-4 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm whitespace-normal"
           >
             <ArrowLeft className="w-4 h-4" />
             Go Back
@@ -238,14 +238,14 @@ function JDCreationSkeleton({ stage }: { stage?: string | null }) {
         <div className="rounded-xl bg-brand-blue/5 ring-1 ring-brand-blue/15 p-3 sm:p-5">
           <div className="flex items-start gap-3 sm:gap-4">
             <div className="hidden sm:block h-10 w-10 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
-            <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+            <div className="tf-grid-3 flex-1">
               {[0, 1, 2].map((i) => (
                 <div key={i} className="h-4 w-full rounded bg-gray-100 animate-pulse" />
               ))}
             </div>
           </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="tf-grid-split">
           {[0, 1].map((i) => (
             <div key={i} className="rounded-xl border border-gray-200 p-4 space-y-3">
               <div className="h-5 w-40 rounded bg-gray-200 animate-pulse" />
@@ -257,7 +257,7 @@ function JDCreationSkeleton({ stage }: { stage?: string | null }) {
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="tf-grid-2">
           {[0, 1].map((i) => (
             <div key={i} className="rounded-xl border border-gray-200 p-4 space-y-2">
               <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
@@ -360,7 +360,7 @@ function JDCreationSkeleton({ stage }: { stage?: string | null }) {
   return (
     <div className="h-full overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px] space-y-4 md:space-y-5">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 sm:mb-5 h-4 w-64 max-w-full rounded bg-gray-200 animate-pulse" />
 
@@ -938,7 +938,7 @@ function JDCreationContent() {
             <span className="font-semibold">{beingEdited.editorName ?? 'Another user'}</span> is editing this job
             description{since ? ` (last change ${since})` : ''}.
           </p>
-          <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-gray-600 dark:text-slate-400">
+          <ul className="mt-3 list-disc space-y-1 pl-5 tf-body-secondary">
             <li><span className="font-semibold">View only</span> — open the JD without editing it.</li>
             <li>
               <span className="font-semibold">Take over</span> — their unsaved changes are saved to the draft first,

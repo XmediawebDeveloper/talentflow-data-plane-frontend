@@ -99,7 +99,7 @@ export default function PlanChangeSuspendedBlock() {
                 <AlertTriangle className="w-8 h-8 text-white" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold text-white">Account Paused</h1>
+                <h1 className="tf-page-title text-white">Account Paused</h1>
                 <p className="text-orange-100 text-sm mt-1">Plan changes require your review</p>
               </div>
             </div>
@@ -120,7 +120,7 @@ export default function PlanChangeSuspendedBlock() {
             {/* Change summary */}
             {currentChange?.change_summary && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-                <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <h3 className="tf-row-title mb-3 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-orange-500" />
                   Pending Changes
                 </h3>
@@ -136,7 +136,7 @@ export default function PlanChangeSuspendedBlock() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">What does this mean?</h3>
-                  <p className="tf-card-desc">
+                  <p className="tf-body-secondary">
                     Your account access has been temporarily paused. You can restore full access by reviewing and accepting the plan changes, or contact support for assistance.
                   </p>
                 </div>
@@ -148,7 +148,7 @@ export default function PlanChangeSuspendedBlock() {
                 </div>
                 <div>
                   <h3 className="font-semibold text-gray-900 mb-1">How to restore access?</h3>
-                  <p className="tf-card-desc">
+                  <p className="tf-body-secondary">
                     Click &quot;Review & Accept Changes&quot; below to review the pending plan changes and accept them. Your account will be reactivated immediately.
                   </p>
                 </div>
@@ -200,7 +200,7 @@ export default function PlanChangeSuspendedBlock() {
 
         {/* Additional Info */}
         <div className="mt-6 text-center">
-          <p className="tf-card-desc">
+          <p className="tf-body-secondary">
             Your account data is safe and secure. Accepting the changes will restore full access immediately.
           </p>
         </div>

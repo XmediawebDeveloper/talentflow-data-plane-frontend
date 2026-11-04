@@ -114,7 +114,7 @@ function AlertDialogTitle({
   return (
     <AlertDialogPrimitive.Title
       data-slot="alert-dialog-title"
-      className={cn("text-lg font-semibold text-gray-900", className)}
+      className={cn("tf-section-title", className)}
       {...props}
     />
   );
@@ -127,7 +127,7 @@ function AlertDialogDescription({
   return (
     <AlertDialogPrimitive.Description
       data-slot="alert-dialog-description"
-      className={cn("text-gray-500 text-sm", className)}
+      className={cn("tf-body-muted", className)}
       {...props}
     />
   );
@@ -155,7 +155,7 @@ function AlertDialogCancel({
   return (
     <AlertDialogPrimitive.Cancel
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 hover:border-brand-blue/30",
+        "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 tf-label transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed border border-gray-200 bg-white hover:bg-gray-50 hover:border-brand-blue/30",
         className
       )}
       {...props}

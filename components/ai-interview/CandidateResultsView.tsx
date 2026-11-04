@@ -66,6 +66,7 @@ import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 import { useBreadcrumbOffset } from './AIInterviewStepIndicator';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -247,7 +248,7 @@ function VideoPane({
           <VideoOff className="w-6 h-6 text-destructive" />
         </div>
         <p className="tf-body-muted">Could not load {label.toLowerCase()}</p>
-        <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
+        <p className="tf-hint mt-1">The file may have been moved or deleted</p>
       </div>
     );
   }
@@ -304,12 +305,12 @@ function RecordingInfoPanel({
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
       <span className="tf-meta">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
+      <span className="tf-row-name">{value}</span>
     </div>
   );
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-2 tracking-tight">Recording Information</h3>
+    <div className="tf-card-soft p-4">
+      <h3 className="tf-row-title mb-2 tracking-tight">Recording Information</h3>
       <Row label="Status" value={<Badge variant="success">{status}</Badge>} />
       <Row label="File Size" value={formatBytes(size)} />
       <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />
@@ -423,7 +424,7 @@ function RecordingTabContent({
       </div>
 
       {/* Split layout: video left, info right */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="tf-grid-3">
         {/* Keyed on the view so the incoming recording fades in. */}
         <div key={recView} className="lg:col-span-2 space-y-2 animate-in fade-in duration-300 motion-reduce:animate-none">
           {isCandidate ? (
@@ -487,7 +488,7 @@ function RecordingTabContent({
           {/* Shortcut hint for the question timeline (VideoWithDuration). */}
           {(markers ?? []).some(m => m.kind !== 'violation') && (
             <div className="flex items-center justify-center gap-1 whitespace-nowrap tf-meta">
-              <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
+              <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
               <span>jump between questions</span>
             </div>
           )}
@@ -1800,7 +1801,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       <div className="w-16 h-16 rounded-full bg-brand-blue/5 ring-1 ring-brand-blue/10 flex items-center justify-center mx-auto mb-6">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
+      <h3 className="tf-section-title mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="tf-body-muted max-w-xs text-center">
         Please wait while the AI analyzes responses and verifies the results.
         The page will refresh automatically when ready.
@@ -1854,7 +1855,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       )}
       {(evalElapsedSec >= 180 || !!evalTriggerError) && (
         <div className="mt-6 flex flex-col items-center gap-2">
-          <p className="text-xs text-gray-400 text-center max-w-xs">
+          <p className="tf-hint text-center max-w-xs">
             {evalTriggerError
               ? 'You can retry the evaluation — it re-scores from the saved transcript.'
               : 'Taking longer than usual. You can retry the evaluation — it re-scores from the saved transcript.'}
@@ -2060,10 +2061,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     // div did the real scrolling — the breadcrumb visibly scrolled away.
     // `clip` doesn't establish a scroll container at all, so sticky resolves
     // against the app's one real scroller, same as the working list pages.
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
         <div
-          className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl"
+          className="tf-page-sheet min-h-[calc(100dvh-7rem)]"
           style={breadcrumbHeight ? ({ '--crumb-h': `${breadcrumbHeight}px` } as React.CSSProperties) : undefined}
         >
           {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with
@@ -2518,7 +2519,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               wrapping onto further rows; alert tabs flip to solid red when
               active). Desktop (lg+): a sticky vertical rail on the left with the
               content on the right. top-12 clears the sticky breadcrumb. */}
-          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
             <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
               <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
                 {tabs.map(tab => {
@@ -2549,7 +2550,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4">{tab.icon}</span>
                       <span className="leading-snug lg:min-w-0 lg:flex-1">{tab.label}</span>
                       {tab.live && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ring-1 ring-destructive-line">
+                        <span className="tf-badge flex bg-destructive text-white text-2xs ring-1 ring-destructive-line">
                           <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                           LIVE
                         </span>
@@ -2596,7 +2597,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
             box instead of stretching the grid column. p-4 below sm: the
             standard card inset — p-6 stacked on the cards inside each tab. */}
-        <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="min-w-0 tf-card-soft">
           <div className="p-4 sm:p-6">
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval
                 runs, except View JD, which does not depend on the evaluation. */}
@@ -2738,7 +2739,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {sentimentTimeline.length > 0 ? (
                     <>
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Sentiment Timeline</h3>
+                        <h3 className="tf-row-title mb-3 tracking-tight">Sentiment Timeline</h3>
                         <div className="bg-brand-blue/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 p-4" style={{ height: 300 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={sentimentTimeline} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
@@ -2757,12 +2758,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                       {/* Emotion per turn */}
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Emotion per Turn</h3>
+                        <h3 className="tf-row-title mb-3 tracking-tight">Emotion per Turn</h3>
                         <div className="flex flex-wrap gap-2">
                           {sentimentTimeline.map((t, i) => (
-                            <div key={i} className="px-3 py-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 text-center">
-                              <div className="text-2xs text-gray-400 mb-0.5">{t.turn}</div>
-                              <div className="text-xs font-medium text-gray-700 capitalize">
+                            <div key={i} className="tf-card-soft px-3 py-2 text-center">
+                              <div className="tf-micro-hint mb-0.5">{t.turn}</div>
+                              <div className="tf-caption capitalize">
                                 {t.dominant_emotion || 'neutral'}
                               </div>
                             </div>
@@ -2773,28 +2774,28 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       {/* Summary stats */}
                       {sentimentSummary.total_turns_analyzed != null && (
                         <div>
-                          <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Summary Statistics</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                          <h3 className="tf-row-title mb-3 tracking-tight">Summary Statistics</h3>
+                          <div className="tf-grid-stats">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-success">
                                 {(sentimentSummary.avg_confidence || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Confidence</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-destructive">
                                 {(sentimentSummary.avg_nervousness || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Nervousness</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-brand-blue">
                                 {(sentimentSummary.avg_engagement || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Engagement</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
-                              <div className="text-lg font-semibold text-gray-900">
+                            <div className="tf-card-soft p-3 text-center">
+                              <div className="tf-section-title">
                                 {sentimentSummary.total_turns_analyzed}
                               </div>
                               <div className="tf-meta">Turns Analyzed</div>
@@ -2988,7 +2989,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   const html2pdf = (await import('html2pdf.js')).default;
                   const root = document.createElement('div');
                   root.style.cssText = 'padding:24px;font-family:Arial,sans-serif;color:var(--raw-111111);max-width:720px;';
-                  let inner = `<h1 style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
+                  let inner = `<h1 className="tf-page-title" style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
                     <div style="font-size:12px;color:var(--raw-666666);margin-bottom:16px">${candidateNameLabel} · ${groups.length} questions</div>`;
                   groups.forEach((g: any, i: number) => {
                     const it = g.main;
@@ -3214,11 +3215,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             <span className={`flex-shrink-0 text-2xs font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>{badge}</span>
                             <div className="flex-1 min-w-0">
                               {fuSkipped && (
-                                <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
+                                <span className="tf-badge inline-block bg-slate-100 text-slate-500 ring-1 ring-slate-200 mb-1">
                                   Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
                                 </span>
                               )}
-                              <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
+                              <p className="tf-label leading-snug">{fu.question}</p>
                               {renderAnswer(fu, `${parentKey}-f-${fIdx}`)}
                             </div>
                           </div>
@@ -3240,7 +3241,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               CL{cl.clarification_number ?? cIdx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
+                              <p className="tf-label leading-snug">{cl.question}</p>
                               {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
                             </div>
                           </div>
@@ -3319,16 +3320,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 </span>
                               )}
                               {isSkipped && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                <span className="tf-badge bg-slate-100 text-slate-500 ring-1 ring-slate-200">
                                   {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-900 leading-snug mb-2">{item.question}</p>
+                            <p className="tf-row-name leading-snug mb-2">{item.question}</p>
                             {skillsForQ.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {skillsForQ.map((s, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                                  <span key={i} className="tf-badge bg-slate-100 text-slate-700 ring-1 ring-slate-200">
                                     {s.skill}
                                     {s.priority > 0 && (
                                       <span className="text-2xs text-slate-500">(P{s.priority})</span>
@@ -3342,7 +3343,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             {!isSkipped && (
                               <div className="text-right">
                                 <div className={`text-2xl font-bold ${finalScoreColor}`}>{formatScore1(finalScore)}</div>
-                                <div className="text-2xs text-gray-500 uppercase tracking-wider">Final Score</div>
+                                <div className="tf-micro-hint uppercase tracking-wider">Final Score</div>
                               </div>
                             )}
                             {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-400 mt-1" />}
@@ -3355,7 +3356,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {/* Candidate Answer */}
                           <div className="pt-4">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
@@ -3377,7 +3378,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {/* Skill Scoring Breakdown */}
                           {skillsForQ.length > 0 && !isSkipped && (
                             <div>
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
+                              <div className="tf-caption uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
                               <div className="space-y-2">
                                 {skillsForQ.map((s, i) => {
                                   const w = priorityWeight(s.priority);
@@ -3387,7 +3388,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     <div key={i} className="bg-slate-50 rounded-lg p-3">
                                       <div className="flex flex-wrap items-center justify-between gap-y-1 mb-1.5">
                                         <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="text-sm font-medium text-gray-900 truncate">{s.skill}</span>
+                                          <span className="tf-row-name truncate">{s.skill}</span>
                                           {s.priority > 0 && (
                                             <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200 flex-shrink-0">P{s.priority}</span>
                                           )}
@@ -3412,7 +3413,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
                             <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
-                              <div className="font-mono text-xs text-gray-700 space-y-0.5 break-words">
+                              <div className="font-mono tf-meta space-y-0.5 break-words">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
                                 <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
@@ -3449,7 +3450,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   const duration = item.duration_seconds;
 
                   return (
-                    <div key={cardKey} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div key={cardKey} className="tf-card-soft">
                       <button
                         onClick={() => toggleQuestion(cardKey)}
                         className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
@@ -3477,16 +3478,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 const t = String(item.topic || '').trim();
                                 const label = HR_TOPICS.has(t.toLowerCase()) ? t : 'HR';
                                 return (
-                                  <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-xs rounded-full">{label}</span>
+                                  <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{label}</span>
                                 );
                               })()}
                               {isSkipped && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                <span className="tf-badge bg-slate-100 text-slate-500 ring-1 ring-slate-200">
                                   {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
+                            <p className="tf-row-name leading-snug">{item.question}</p>
                           </div>
                           <div className="flex-shrink-0">
                             {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -3497,7 +3498,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <div className="px-4 pb-4 border-t border-gray-100 pt-4 space-y-3">
                           <div>
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
@@ -3514,7 +3515,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                 const SectionHeader = ({ title, badge, badgeCls }: { title: string; badge: string; badgeCls: string }) => (
                   <div className="flex items-center gap-3 mb-3">
-                    <h3 className="tf-card-title">{title}</h3>
+                    <h3 className="tf-section-title">{title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>
                   </div>
                 );
@@ -3628,7 +3629,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               envVerificationsLoading && envVerifications === null ? (
                 <div className="space-y-4">
                   {Array.from({ length: 2 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                    <div key={i} className="tf-card-soft overflow-hidden">
                       <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <Skeleton className="w-4 h-4 rounded" />
@@ -3668,11 +3669,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       setEnvFrameViewer({ urls: envAvailableFrames.map(f => f.url as string), index: 0 });
                     };
                     return (
-                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                      <div key={v.verification_id} className="tf-card-soft overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
                             <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                            <span className="tf-cell-name">Environment Verification</span>
+                            <span className="tf-row-title">Environment Verification</span>
                             <button
                               type="button"
                               disabled={envAvailableFrames.length === 0}
@@ -3684,7 +3685,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
                             </button>
                             {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-2xs text-gray-400 font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
+                              <span className="tf-micro-hint font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -3702,11 +3703,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </div>
                         <div className="p-4 sm:p-5 space-y-4">
                           <div>
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Candidate Verification Video</p>
+                            <p className="tf-eyebrow tracking-wide mb-1.5">Candidate Verification Video</p>
                             {!v.video_uploaded ? (
                               <p className="text-sm text-destructive italic">Video upload failed.</p>
                             ) : videoStillLoading ? (
-                              <p className="text-sm text-gray-400 italic">Loading video…</p>
+                              <p className="tf-body-muted italic">Loading video…</p>
                             ) : !videoSrc ? (
                               <p className="text-sm text-destructive italic">Video unavailable.</p>
                             ) : (
@@ -3746,7 +3747,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           </div>
                           {v.rgb_sequence_results && v.rgb_sequence_results.length > 0 && (
                             <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
+                              <p className="tf-eyebrow tracking-wide mb-1.5">
                                 RGB Challenge Sequence — deterministic per-second check
                               </p>
                               <div className="flex flex-wrap gap-2">
@@ -3764,7 +3765,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   </div>
                                 ))}
                               </div>
-                              <p className="text-2xs text-gray-400 mt-1.5">
+                              <p className="tf-micro-hint mt-1.5">
                                 Overall RGB_CHALLENGE = {v.rgb_sequence_results.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
                               </p>
                             </div>
@@ -3776,11 +3777,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
                             <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
                               <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
-                              <p className="tf-meta-strong">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
+                              <p className="tf-meta">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
                             </div>
                           ) : v.analysis_status === 'error' ? (
                             <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
-                              <p className="tf-meta-strong">AI analysis could not be completed for this recording — the video itself is still available above.</p>
+                              <p className="tf-meta">AI analysis could not be completed for this recording — the video itself is still available above.</p>
                             </div>
                           ) : v.analysis_status === 'done' ? (
                             <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-destructive-subtle ring-destructive-line' : 'bg-success-subtle ring-success-line'}`}>
@@ -3791,7 +3792,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           ) : null}
                           {v.ai_summary && (
                             <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
+                              <p className="tf-eyebrow tracking-wide mb-1">AI Summary</p>
                               <p className="tf-body leading-relaxed">{v.ai_summary}</p>
                             </div>
                           )}
@@ -3922,40 +3923,40 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             });
                             return (
                               <div>
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Flagged Items</p>
-                                <div className="overflow-x-auto rounded-lg ring-1 ring-gray-100">
+                                <p className="tf-eyebrow tracking-wide mb-2">Flagged Items</p>
+                                <div className={`overflow-x-auto rounded-lg ring-1 ring-gray-100 ${DESKTOP_TABLE_ONLY}`}>
                                   <table className="min-w-full text-left">
                                     <thead>
                                       <tr className="bg-white border-b border-gray-100">
-                                        <th className="px-3 py-2 tf-th">What happened</th>
-                                        <th className="px-3 py-2 tf-th">What we saw</th>
-                                        <th className="px-3 py-2 tf-th">Segment</th>
-                                        <th className="px-3 py-2 tf-th">When</th>
-                                        <th className="px-3 py-2 tf-th">Frame</th>
-                                        <th className="px-3 py-2 tf-th">Severity</th>
+                                        <th className="tf-th-cell tf-th">What happened</th>
+                                        <th className="tf-th-cell tf-th">What we saw</th>
+                                        <th className="tf-th-cell tf-th">Segment</th>
+                                        <th className="tf-th-cell tf-th">When</th>
+                                        <th className="tf-th-cell tf-th">Frame</th>
+                                        <th className="tf-th-cell tf-th">Severity</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100">
                                       {rows.map((r) => (
                                         <tr key={r.i} className="align-top">
-                                          <td className="px-3 py-2.5">
+                                          <td className="tf-td">
                                             <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line/60">
                                               {iconForLabel(r.label)}
                                               {r.label}
                                             </div>
                                             <div className="mt-1">
                                               {r.confidence === 'high' ? (
-                                                <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
+                                                <span className="tf-badge text-2xs tracking-wide bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
                                               ) : (
                                                 <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
                                               )}
                                             </div>
                                           </td>
-                                          <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
+                                          <td className="tf-td tf-meta max-w-[34ch] whitespace-normal break-words">
                                             {r.description}
                                           </td>
-                                          <td className="px-3 py-2.5 text-xs text-gray-600">{segmentLabel(r.phase)}</td>
-                                          <td className="px-3 py-2.5">
+                                          <td className="tf-td tf-meta">{segmentLabel(r.phase)}</td>
+                                          <td className="tf-td">
                                             {r.seekSeconds != null ? (
                                               <button
                                                 type="button"
@@ -3966,13 +3967,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                                 <Play className="w-3 h-3" />{r.approxTimestamp}
                                               </button>
                                             ) : (
-                                              <span className="text-xs font-mono text-gray-400">{r.approxTimestamp ?? '—'}</span>
+                                              <span className="tf-hint font-mono">{r.approxTimestamp ?? '—'}</span>
                                             )}
                                             {r.absoluteTs && (
-                                              <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
+                                              <div className="tf-micro-hint font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
                                             )}
                                           </td>
-                                          <td className="px-3 py-2.5">
+                                          <td className="tf-td">
                                             {r.matchedFrames.length > 0 ? (
                                               <button
                                                 type="button"
@@ -3983,7 +3984,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                                 {r.matchedFrames[0].url ? (
                                                   <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
                                                 ) : (
-                                                  <span className="absolute inset-0 flex items-center justify-center text-2xs text-gray-400">N/A</span>
+                                                  <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">N/A</span>
                                                 )}
                                                 {r.matchedFrames.length > 1 && (
                                                   <span className="absolute bottom-0 right-0 text-2xs font-mono text-white bg-black/60 px-1">
@@ -3995,7 +3996,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                               <span className="text-xs text-gray-300">—</span>
                                             )}
                                           </td>
-                                          <td className="px-3 py-2.5">
+                                          <td className="tf-td">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
                                               {r.severity.label}
                                             </span>
@@ -4005,6 +4006,79 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     </tbody>
                                   </table>
                                 </div>
+                                <MobileRecordList>
+                                  {rows.map((r) => (
+                                    <MobileRecordCard
+                                      key={r.i}
+                                      badges={
+                                        <>
+                                          {r.confidence === 'high' ? (
+                                            <span className="tf-badge text-2xs tracking-wide bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
+                                          ) : (
+                                            <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
+                                          )}
+                                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
+                                            {r.severity.label}
+                                          </span>
+                                        </>
+                                      }
+                                      title={
+                                        <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line/60">
+                                          {iconForLabel(r.label)}
+                                          {r.label}
+                                        </span>
+                                      }
+                                      fields={[
+                                        { label: 'What we saw', value: r.description },
+                                        { label: 'Segment', value: segmentLabel(r.phase) },
+                                        {
+                                          label: 'When',
+                                          value: (
+                                            <>
+                                              {r.seekSeconds != null ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={() => seekEnvVideo(r.seekSeconds as number)}
+                                                  title="Jump to this moment in the verification video"
+                                                  className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
+                                                >
+                                                  <Play className="w-3 h-3" />{r.approxTimestamp}
+                                                </button>
+                                              ) : (
+                                                <span className="tf-hint font-mono">{r.approxTimestamp ?? '—'}</span>
+                                              )}
+                                              {r.absoluteTs && (
+                                                <span className="tf-micro-hint font-mono ml-1">{formatTs(r.absoluteTs)}</span>
+                                              )}
+                                            </>
+                                          ),
+                                        },
+                                        {
+                                          label: 'Frame',
+                                          value: r.matchedFrames.length > 0 ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => openFrameViewer(r.matchedFrames, 0)}
+                                              title={`View ${r.matchedFrames.length} matching frame${r.matchedFrames.length > 1 ? 's' : ''}`}
+                                              className="relative inline-block align-middle w-14 h-9 rounded overflow-hidden ring-1 ring-gray-200 bg-gray-100 group flex-shrink-0"
+                                            >
+                                              {r.matchedFrames[0].url ? (
+                                                <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
+                                              ) : (
+                                                <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">N/A</span>
+                                              )}
+                                              {r.matchedFrames.length > 1 && (
+                                                <span className="absolute bottom-0 right-0 text-2xs font-mono text-white bg-black/60 px-1">
+                                                  {r.matchedFrames.length}
+                                                </span>
+                                              )}
+                                            </button>
+                                          ) : '—',
+                                        },
+                                      ]}
+                                    />
+                                  ))}
+                                </MobileRecordList>
                               </div>
                             );
                           })()}
@@ -4018,7 +4092,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             return (
                               <div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
+                                  <p className="tf-eyebrow tracking-wide flex items-center gap-1.5">
                                     <Camera className="w-3.5 h-3.5" /> Analyzed Frames
                                   </p>
                                   {frames && frames.length > 0 && (
@@ -4026,15 +4100,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                   )}
                                 </div>
                                 {loading || (!frames && !error) ? (
-                                  <p className="text-sm text-gray-400 italic">Loading frames…</p>
+                                  <p className="tf-body-muted italic">Loading frames…</p>
                                 ) : error ? (
                                   <p className="text-sm text-destructive italic">Could not load frames.</p>
                                 ) : !frames || frames.length === 0 ? (
-                                  <p className="text-sm text-gray-400 italic">
+                                  <p className="tf-body-muted italic">
                                     No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
                                   </p>
                                 ) : (
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                                  <div className="tf-grid-stats-5">
                                     {frames.map((f) => (
                                       <button
                                         key={f.index}
@@ -4050,7 +4124,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         {f.url ? (
                                           <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
                                         ) : (
-                                          <span className="absolute inset-0 flex items-center justify-center text-2xs text-gray-400">unavailable</span>
+                                          <span className="absolute inset-0 flex items-center justify-center tf-micro-hint">unavailable</span>
                                         )}
                                         <span className="absolute bottom-0.5 right-1 text-2xs font-mono text-white bg-black/50 px-1 rounded">
                                           {f.index + 1}
@@ -4485,7 +4559,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-400">{messages.length} messages</span>
+                        <span className="tf-hint">{messages.length} messages</span>
                         <div className="relative inline-grid grid-cols-2 bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
                           <span
                             aria-hidden
@@ -4904,21 +4978,21 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                           {/* Scrolls on its own (max 70vh) so the header row can
                               stay pinned to the top while the rows scroll. */}
-                          <div className="overflow-auto max-h-[70vh] rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
+                          <div className={`overflow-auto max-h-[70vh] tf-card-soft tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                             <table className="w-full text-sm">
-                              <thead className="bg-white text-gray-600 text-xs">
+                              <thead className="bg-white tf-meta">
                                 <tr>
                                   {/* Every header cell sticks to the top. Question ID (left)
                                       and Timestamp (right) also stay pinned sideways, so
                                       they sit above the rest (z-30). The inset shadows
                                       draw the borders, which sticky cells don't keep. */}
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 whitespace-nowrap sticky top-0 left-0 z-30 bg-white shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-24 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-white shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 left-0 z-30 bg-white shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
+                                  <th className="tf-th-cell text-left font-semibold w-24 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-white shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -4944,7 +5018,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                           {r.questionId}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 align-top">
+                                      <td className="tf-td align-top">
                                         <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${
                                           isDd ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFu ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-slate-100 text-slate-600 ring-slate-200'
                                         }`}>
@@ -4971,7 +5045,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                             </TruncatedTextCell>
                                           )}
                                       </td>
-                                      <td className="px-3 py-3 align-top text-gray-800 leading-snug">
+                                      <td className="tf-td align-top text-gray-800 leading-snug">
                                         {diff && diff.mode === 'word'
                                           ? <DiffText parts={diff.corrected} tone="corrected" />
                                           : rowSkip
@@ -4980,17 +5054,78 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                               </span>
                                             : <span>{r.corrected || '—'}</span>}
                                       </td>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-500">{r.language || 'English'}</td>
+                                      <td className="tf-td align-top tf-meta">{r.language || 'English'}</td>
                                       <td className={`px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap sticky right-0 z-10 ${stickyBg} shadow-[inset_1px_0_0_#e5e7eb]`}>{formatTs(r.timestamp)}</td>
                                     </tr>
                                   );
                                 })}
                                 {flatRows.length === 0 && (
-                                  <tr><td colSpan={7} className="px-4 py-6 text-center text-xs text-gray-400">No candidate responses recorded.</td></tr>
+                                  <tr><td colSpan={7} className="tf-td text-center tf-hint">No candidate responses recorded.</td></tr>
                                 )}
                               </tbody>
                             </table>
                           </div>
+                          <MobileRecordList empty={<p className="tf-td text-center tf-hint">No candidate responses recorded.</p>}>
+                            {flatRows.map((r, idx) => {
+                              const diff = r.raw && r.corrected ? diffWords(r.raw, r.corrected) : null;
+                              const isFu = r.type === 'Followup';
+                              const isDd = r.type === 'Deep Dive';
+                              const _rowAnswered = !!(r.raw?.trim() || r.corrected?.trim());
+                              const rowSkip = _skipReason(r.question, _rowAnswered);
+                              return (
+                                <MobileRecordCard
+                                  key={idx}
+                                  className={isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : undefined}
+                                  idBadge={
+                                    <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                                      {r.questionId}
+                                    </span>
+                                  }
+                                  badges={
+                                    <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${
+                                      isDd ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFu ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-slate-100 text-slate-600 ring-slate-200'
+                                    }`}>
+                                      {r.type}
+                                    </span>
+                                  }
+                                  wrapTitle
+                                  title={
+                                    <span className="block whitespace-normal text-sm font-normal italic text-gray-700 leading-snug">
+                                      <TruncatedTextCell text={r.question} expanded={transcriptExpanded} textClassName="italic" />
+                                    </span>
+                                  }
+                                  fields={[
+                                    {
+                                      label: 'Raw Transcript',
+                                      value: rowSkip && !(diff && diff.mode === 'word')
+                                        ? '—'
+                                        : (
+                                          <span className="text-brand-orange-deep">
+                                            <TruncatedTextCell text={r.raw} expanded={transcriptExpanded}>
+                                              {diff && diff.mode === 'word'
+                                                ? <DiffText parts={diff.raw} tone="raw" />
+                                                : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                            </TruncatedTextCell>
+                                          </span>
+                                        ),
+                                    },
+                                    {
+                                      label: 'Corrected Transcript',
+                                      value: diff && diff.mode === 'word'
+                                        ? <DiffText parts={diff.corrected} tone="corrected" />
+                                        : rowSkip
+                                          ? <span className={`inline-flex items-center gap-1.5 text-2xs font-medium ${rowSkip.tone === 'amber' ? 'text-warning' : 'text-slate-500'}`}>
+                                              <SkipForward className="w-3 h-3" />{rowSkip.text}
+                                            </span>
+                                          : <span className="text-gray-800">{r.corrected || '—'}</span>,
+                                    },
+                                    { label: 'Language', value: r.language || 'English' },
+                                    { label: 'Timestamp', value: formatTs(r.timestamp) },
+                                  ]}
+                                />
+                              );
+                            })}
+                          </MobileRecordList>
                         </div>
                       );
                     })()}
@@ -5236,12 +5371,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <Award className="w-6 h-6 text-warning" />
                         <div>
                           <div className="text-base font-semibold">Overall Capability Score</div>
-                          <div className="text-xs text-gray-400 mt-0.5">Final weighted score — MTH + NTH + HR</div>
+                          <div className="tf-hint mt-0.5">Final weighted score — MTH + NTH + HR</div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-5xl font-bold text-white">{capScore}</div>
-                        <div className="text-xs text-gray-400 mt-1">out of 100</div>
+                        <div className="tf-hint mt-1">out of 100</div>
                       </div>
                     </div>
                     {/* Score bar */}
@@ -5255,7 +5390,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                   {/* ── Section Score Cards ── */}
                   {Object.keys(sectionScores).length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="tf-grid-3">
                       {(['mth', 'nth', 'hr'] as const).map(key => {
                         const sec = sectionScores[key];
                         if (!sec) return null;
@@ -5265,7 +5400,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           <div key={key} className={`rounded-xl border ${bc.border} overflow-hidden`}>
                             <div className={`px-4 py-3 ${bc.bg} border-b ${bc.border}`}>
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{sectionLabel}</span>
+                                <span className="tf-caption uppercase tracking-wide">{sectionLabel}</span>
                                 <span className={`text-2xs font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{sec.band}</span>
                               </div>
                             </div>
@@ -5274,8 +5409,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 <span className={`text-3xl font-bold ${scoreColor(sec.score)}`}>
                                   {sec.score != null ? sec.score : '—'}
                                 </span>
-                                <span className="text-sm text-gray-400 mb-1">/ 100</span>
-                                <span className="ml-auto text-xs text-gray-400 mb-1">{sec.section_pct}% weight</span>
+                                <span className="tf-body-muted mb-1">/ 100</span>
+                                <span className="ml-auto tf-hint mb-1">{sec.section_pct}% weight</span>
                               </div>
                               <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div className={`h-1.5 rounded-full ${bc.bar}`} style={{ width: `${sec.score ?? 0}%` }} />
@@ -5296,12 +5431,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         {/* Section header */}
                         <div className="flex items-center gap-2">
                           <Target className="w-4 h-4 text-gray-600" />
-                          <h3 className="text-sm font-semibold text-gray-800">{sectionLabel}</h3>
-                          {sec && <span className="text-xs text-gray-400">({sec.section_pct}% of final score)</span>}
+                          <h3 className="tf-row-title">{sectionLabel}</h3>
+                          {sec && <span className="tf-hint">({sec.section_pct}% of final score)</span>}
                         </div>
 
                         {clusters.length === 0 && (
-                          <div className="text-xs text-gray-400 px-2">No clusters evaluated for this section.</div>
+                          <div className="tf-hint px-2">No clusters evaluated for this section.</div>
                         )}
 
                         {clusters.map(cluster => {
@@ -5312,15 +5447,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className={`flex items-center justify-between px-4 py-3 ${bc.bg}`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <TrendingUp className={`w-4 h-4 flex-shrink-0 ${bc.text}`} />
-                                  <span className="text-sm font-semibold text-gray-800 truncate">{cluster.cluster_name}</span>
-                                  <span className="text-2xs text-gray-400 flex-shrink-0">Priority {cluster.priority} · {cluster.weight}% weight</span>
+                                  <span className="tf-row-title truncate">{cluster.cluster_name}</span>
+                                  <span className="tf-micro-hint flex-shrink-0">Priority {cluster.priority} · {cluster.weight}% weight</span>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                                   <span className={`text-2xs font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{cluster.band}</span>
                                   <span className={`text-lg font-bold ${scoreColor(cluster.band_score)}`}>
                                     {cluster.band_score != null ? cluster.band_score : '—'}
                                   </span>
-                                  <span className="text-xs text-gray-400">/100</span>
+                                  <span className="tf-hint">/100</span>
                                 </div>
                               </div>
 
@@ -5337,7 +5472,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     return (
                                       <div key={si} className="flex items-center gap-3 px-4 py-2.5">
                                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sbc.dot}`} />
-                                        <span className="text-xs text-gray-700 flex-1 min-w-0">{ss.skill}</span>
+                                        <span className="tf-meta flex-1 min-w-0">{ss.skill}</span>
                                         <span className={`text-2xs font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${sbc.bg} ${sbc.border} ${sbc.text}`}>{ss.band}</span>
                                         <span className={`text-sm font-semibold w-10 text-right flex-shrink-0 ${scoreColor(ss.score)}`}>
                                           {ss.score != null ? ss.score : '—'}
@@ -5350,7 +5485,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                               {/* Cluster note */}
                               {cluster.cluster_note && (
-                                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-2xs text-gray-500 italic">
+                                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 tf-micro-hint italic">
                                   {cluster.cluster_note}
                                 </div>
                               )}
@@ -5415,7 +5550,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         size="sm"
                         onClick={() => setShowThresholdEditor(p => !p)}
                         aria-label="Configure risk thresholds" title="Configure risk thresholds"
-                        className="px-2"
+                        className=""
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -5428,27 +5563,27 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {/* Threshold Editor — configures per-box risk levels */}
                   {showThresholdEditor && (
                     <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white/60 backdrop-blur-sm">
-                      <p className="text-xs font-medium text-gray-600 mb-2 tracking-tight">Configure Per-Violation Risk Thresholds</p>
+                      <p className="tf-caption mb-2 tracking-tight">Configure Per-Violation Risk Thresholds</p>
                       <div className="flex items-center gap-4 flex-wrap">
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                        <label className="flex items-center gap-2 tf-meta">
                           <span className="text-brand-blue font-medium">Low Risk</span>
                           <span>0 –</span>
                           <input
                             type="number" min={1} max={violationThresholds.medMax - 1}
                             value={violationThresholds.lowMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, lowMax: Math.max(1, Math.min(t.medMax - 1, Number(e.target.value))) }))}
-                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                            className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                        <label className="flex items-center gap-2 tf-meta">
                           <span className="text-brand-orange-deep font-medium">Medium Risk</span>
                           <span>{violationThresholds.lowMax + 1} –</span>
                           <input
                             type="number" min={violationThresholds.lowMax + 1}
                             value={violationThresholds.medMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, medMax: Math.max(t.lowMax + 1, Number(e.target.value)) }))}
-                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                            className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
@@ -5478,8 +5613,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   ];
                   return (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation Breakdown</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <h3 className="tf-row-title mb-3 tracking-tight">Violation Breakdown</h3>
+                  <div className="tf-grid-stats">
                     {ALL_TYPES.map(type => {
                       const cfg = EVENT_CONFIG[type];
                       const count = violationCounts[type] ?? 0;
@@ -5520,7 +5655,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                 {/* Event Log Table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Event Log</h3>
+                  <h3 className="tf-row-title mb-3 tracking-tight">Event Log</h3>
                   {groupedViolations.length === 0 ? (
                     <div className="text-center py-12 bg-success-subtle rounded-xl border border-success-line ring-1 ring-success-line">
                       <ShieldAlert className="w-8 h-8 text-success mx-auto mb-2" />
@@ -5529,16 +5664,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </div>
                   ) : (
                     <>
-                      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
+                      <div className={`tf-card-soft overflow-hidden tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                         <table className="w-full text-sm">
                           <thead className="bg-white border-b border-gray-100">
                             <tr>
-                              <th className="px-4 py-2.5 text-left tf-th w-10">#</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Event</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Time</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Video Time</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Severity</th>
-                              <th className="px-4 py-2.5 text-right tf-th">Count</th>
+                              <th className="tf-th-cell text-left tf-th w-10">#</th>
+                              <th className="tf-th-cell text-left tf-th">Event</th>
+                              <th className="tf-th-cell text-left tf-th">Time</th>
+                              <th className="tf-th-cell text-left tf-th">Video Time</th>
+                              <th className="tf-th-cell text-left tf-th">Severity</th>
+                              <th className="tf-th-cell text-right tf-th">Count</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
@@ -5567,8 +5702,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               };
                               return (
                                 <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
-                                  <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="tf-td tf-hint">{globalIdx}</td>
+                                  <td className="tf-td">
                                     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 ${
                                       cfg ? `${cfg.bg} ${cfg.color} ring-black/[0.04]` : 'bg-slate-100 text-slate-600 ring-slate-200'
                                     }`}>
@@ -5576,8 +5711,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                       {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{formatTs(row.timestamp)}</td>
-                                  <td className="px-4 py-2.5 text-xs font-mono">
+                                  <td className="tf-td tf-meta font-mono">{formatTs(row.timestamp)}</td>
+                                  <td className="tf-td text-xs font-mono">
                                     {seekable ? (
                                       <button
                                         type="button"
@@ -5592,7 +5727,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                       <span className="text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
                                     )}
                                   </td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="tf-td">
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
                                       {sev}
                                     </span>
@@ -5604,6 +5739,66 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           </tbody>
                         </table>
                       </div>
+                      <MobileRecordList>
+                        {pagedViolations.map((row, idx) => {
+                          const cfg = EVENT_CONFIG[row.event_type];
+                          const sev = normaliseSeverity(row.severity);
+                          const sevStyle =
+                            sev === 'severe'   ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' :
+                            sev === 'moderate' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' :
+                                                 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+                          const countTone = row.count >= 5 ? 'danger' : row.count >= 3 ? 'warning' : 'neutral';
+                          const globalIdx = (safeViolationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                          const offsetSec = videoOffsetSeconds(row.timestamp, videoAnchor);
+                          const hasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                          const seekable = offsetSec != null && hasRecording;
+                          const jumpToRecording = () => {
+                            if (offsetSec == null) return;
+                            seekNonceRef.current += 1;
+                            setRecordingSeek({ seconds: offsetSec, key: seekNonceRef.current });
+                            setActiveTab('recording');
+                          };
+                          return (
+                            <MobileRecordCard
+                              key={idx}
+                              idBadge={<span className="tf-hint">#{globalIdx}</span>}
+                              badges={
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
+                                  {sev}
+                                </span>
+                              }
+                              title={
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 ${
+                                  cfg ? `${cfg.bg} ${cfg.color} ring-black/[0.04]` : 'bg-slate-100 text-slate-600 ring-slate-200'
+                                }`}>
+                                  {cfg?.icon}
+                                  {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
+                                </span>
+                              }
+                              fields={[
+                                { label: 'Time', value: <span className="font-mono">{formatTs(row.timestamp)}</span> },
+                                {
+                                  label: 'Video Time',
+                                  value: seekable ? (
+                                    <button
+                                      type="button"
+                                      onClick={jumpToRecording}
+                                      title="Jump to this moment in the recording"
+                                      className="inline-flex items-center gap-1 font-mono text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue/40 rounded"
+                                    >
+                                      <Play className="w-3 h-3" />
+                                      {formatVideoOffset(row.timestamp, videoAnchor)}
+                                    </button>
+                                  ) : (
+                                    <span className="font-mono text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
+                                  ),
+                                },
+                              ]}
+                              footer={<MobileStatChip tone={countTone}>Count: {row.count}</MobileStatChip>}
+                            />
+                          );
+                        })}
+                      </MobileRecordList>
 
                       {/* Pagination — shared ListPagination (consistent with other pages) */}
                       <ListPagination

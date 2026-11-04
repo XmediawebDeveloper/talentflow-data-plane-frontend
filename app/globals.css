@@ -297,7 +297,7 @@ html.tf-app-shell body {
   --muted: #f3f4f6;
   --muted-foreground: #6b7280;
   --destructive: #dc2626;
-  --ring: #374151;
+  --ring: #0f3c99; /* brand blue: one focus ring for buttons, tabs and inputs */
   --input: #e5e7eb;
   --input-background: #ffffff;
   /* Evaluation Dashboard — score bands (High / Medium / Low) */
@@ -1015,7 +1015,7 @@ html.tf-app-shell body {
   --muted: #374151;
   --muted-foreground: #9ca3af;
   --destructive: #ef4444;
-  --ring: #9ca3af;
+  --ring: #2563eb; /* lifted brand blue, same as dark --control-accent */
   --input: #374151;
   --input-background: #1f2937;
   /* Evaluation Dashboard — score bands (dark mode) */
@@ -1251,7 +1251,7 @@ button:has(.menu-item-label):focus-visible {
    ============================================ */
 
 /* Mobile: Base responsive adjustments - MINIMAL CHANGES */
-@media (max-width: 768px) {
+@media (width < theme(--breakpoint-md)) {
   /* Tables used to be given `display: block; overflow-x: auto` here so they
      could scroll sideways on a phone. Removed, and deliberately not replaced:
 
@@ -1287,7 +1287,7 @@ button:has(.menu-item-label):focus-visible {
 }
 
 /* Very small screens - phones in portrait */
-@media (max-width: 640px) {
+@media (width < theme(--breakpoint-sm)) {
   /* Allow text to wrap */
   body {
     overflow-wrap: break-word;
@@ -2064,7 +2064,7 @@ button:has(.menu-item-label):focus-visible {
   overflow-y: auto;
   padding: 1rem;
 }
-@media (min-width: 640px) {
+@media (width >= theme(--breakpoint-sm)) {
   .modal-body { padding: 1.5rem; }
 }
 
@@ -2077,7 +2077,7 @@ button:has(.menu-item-label):focus-visible {
   flex-direction: column-reverse;
   gap: 0.5rem;
 }
-@media (min-width: 640px) {
+@media (width >= theme(--breakpoint-sm)) {
   .modal-footer {
     flex-direction: row;
     justify-content: flex-end;
@@ -2114,7 +2114,7 @@ button:has(.menu-item-label):focus-visible {
 [data-slot="dialog-content"] :where(.overflow-y-auto, .overflow-auto, .tf-table-shell) {
   overscroll-behavior: contain;
 }
-@media (max-width: 640px) {
+@media (width < theme(--breakpoint-sm)) {
   [data-slot="dialog-content"] {
     padding: 1rem;
     gap: 0.75rem;
@@ -2134,14 +2134,14 @@ button:has(.menu-item-label):focus-visible {
   width: 100%;
   border-collapse: collapse;
 }
-@media (max-width: 640px) {
+@media (width < theme(--breakpoint-sm)) {
   .table-responsive { font-size: 0.8125rem; }
   .table-responsive th,
   .table-responsive td { padding: 0.5rem 0.625rem; }
 }
 
 /* ── Container query: stack modal footer buttons full-width on tiny screens */
-@media (max-width: 380px) {
+@media (width < theme(--breakpoint-xs)) {
   .modal-footer > button,
   .modal-footer > a {
     width: 100%;
@@ -2523,16 +2523,16 @@ html:has(:is(.fixed.inset-0:not(.hidden):is([class*="bg-black"], [class*="bg-gra
   padding-left: 1rem;
   padding-right: 1rem;
 }
-@media (min-width: 640px) {
+@media (width >= theme(--breakpoint-sm)) {
   .tf-table-shell :is(th, td):is(.sm\:px-5, .sm\:px-6) { padding-left: 1rem; padding-right: 1rem; }
 }
-@media (min-width: 768px) {
+@media (width >= theme(--breakpoint-md)) {
   .tf-table-shell :is(th, td):is(.md\:px-5, .md\:px-6) { padding-left: 1rem; padding-right: 1rem; }
 }
-@media (min-width: 1024px) {
+@media (width >= theme(--breakpoint-lg)) {
   .tf-table-shell :is(th, td):is(.lg\:px-5, .lg\:px-6) { padding-left: 1rem; padding-right: 1rem; }
 }
-@media (min-width: 1280px) {
+@media (width >= theme(--breakpoint-xl)) {
   .tf-table-shell :is(th, td):is(.xl\:px-5, .xl\:px-6) { padding-left: 1rem; padding-right: 1rem; }
 }
 .tf-table-shell table[class*="min-w-["]:not(.table-fixed, .tf-keep-min-w) {
@@ -3044,4 +3044,402 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 .tf-docx-preview img {
   max-width: 100%;
   height: auto;
+}
+
+/* ============================================================
+   TALENTFLOW UI STANDARD — global class names
+   One class per role, mirroring the approved JD module (job-openings /
+   job-details) and the shared components in components/ui. The full audit
+   behind these values is public/ui-size-audit.html.
+
+   They live in @layer components, so a Tailwind utility passed next to one
+   (e.g. `tf-input w-48`) still wins. <Button>, <Input>, <Select>, <DateField>
+   remain the first choice; use these on hand-written elements so they match.
+
+   Breakpoints are declared once in the @theme block below and used only by
+   name (`xs:`, `md:`, `max-sm:` …) — never `min-[400px]:` or a raw
+   `@media (min-width: …px)`. CSS in this file uses
+   `@media (width >= theme(--breakpoint-sm))`.
+   ============================================================ */
+
+/* ── Screen sizes (the only breakpoints in the app) ──────────────────────
+     2xs   360px  small phones (Galaxy S, Pixel); below it = 320px phones
+     xs    400px  large phones (iPhone Pro Max, Plus)
+     sm    640px  phone landscape / small tablet — main phone → tablet switch
+     md    768px  tablet portrait (useIsMobile() turns false here)
+     lg   1024px  tablet landscape / laptop — sidebar appears
+     xl   1280px  laptop
+     2xl  1536px  desktop
+   Test at 320px first: if a screen works there it works on every phone. */
+@theme {
+  --breakpoint-2xs: 22.5rem;
+  --breakpoint-xs: 25rem;
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 96rem;
+}
+
+@layer components {
+  /* ── Type (Inter) ──
+     Dark colours are the theme variables the dark-mode layer above already
+     paints the grey text utilities with (.dark .text-gray-900 → --text-primary,
+     700/600 → --text-secondary, 500/400 → --text-muted), so swapping
+     `text-sm text-gray-500 dark:text-slate-400` for `tf-body-muted` looks the
+     same in both themes. */
+  .tf-page-title    { @apply text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-[var(--text-primary)]; }
+  .tf-page-desc     { @apply text-sm text-gray-600 dark:text-[var(--text-secondary)]; }
+  .tf-popup-title   { @apply text-base sm:text-lg font-bold leading-snug; }
+  .tf-popup-subtitle{ @apply text-xs sm:text-sm; }
+  .tf-section-title { @apply text-base font-semibold text-gray-900 dark:text-[var(--text-primary)]; }   /* card / section heading */
+  .tf-row-title     { @apply text-sm font-semibold text-gray-900 dark:text-[var(--text-primary)]; }     /* row / card primary name */
+  .tf-row-name      { @apply text-sm font-medium text-gray-900 dark:text-[var(--text-primary)]; }       /* lighter primary text */
+  .tf-eyebrow       { @apply text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-[var(--text-muted)]; }
+  .tf-th            { @apply text-xs font-semibold text-gray-600 dark:text-[var(--text-secondary)]; }   /* table header, as job-openings */
+  .tf-label         { @apply text-sm font-medium text-gray-700 dark:text-[var(--text-secondary)]; }     /* form label */
+  .tf-body          { @apply text-sm text-gray-700 dark:text-[var(--text-secondary)]; }
+  .tf-body-secondary{ @apply text-sm text-gray-600 dark:text-[var(--text-secondary)]; }
+  .tf-caption       { @apply text-xs font-semibold text-gray-600 dark:text-[var(--text-secondary)]; }   /* small bold label (same look as tf-th) */
+  .tf-body-muted    { @apply text-sm text-gray-500 dark:text-[var(--text-muted)]; }
+  .tf-meta          { @apply text-xs text-gray-500 dark:text-[var(--text-muted)]; }                     /* helper, dates, 2nd line */
+  .tf-hint          { @apply text-xs text-gray-400 dark:text-[var(--text-muted)]; }                     /* faint hint, placeholder-like */
+  .tf-micro         { @apply text-2xs font-semibold; }
+  .tf-micro-hint    { @apply text-2xs text-gray-400 dark:text-[var(--text-muted)]; }
+  .tf-stat-value    { @apply text-xl font-bold text-gray-900 dark:text-[var(--text-primary)] tabular-nums; }
+
+  /* ── Buttons (same values as components/ui/button.tsx) ── */
+  .tf-btn {
+    @apply cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg font-medium whitespace-nowrap select-none transition-all duration-150
+           focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)]
+           disabled:opacity-50 disabled:cursor-not-allowed [&>svg]:shrink-0;
+  }
+  .tf-btn-sm  { @apply h-8 px-3 text-xs; }       /* 32px — table rows, toolbars */
+  .tf-btn-md  { @apply h-10 px-4 text-sm; }      /* 40px — default */
+  .tf-btn-lg  { @apply h-11 px-6 text-base; }    /* 44px — auth, candidate pages */
+  .tf-btn-primary     { @apply bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md active:shadow-sm; }
+  .tf-btn-secondary   { @apply bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]; }
+  .tf-btn-destructive { @apply bg-[var(--destructive)] text-white hover:opacity-90 shadow-sm hover:shadow-md; }
+  .tf-icon-btn { @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors; }
+
+  /* ── Form controls (36px, same as <Input>, <Select>, <DateField>) ── */
+  .tf-input {
+    @apply h-9 w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 text-sm text-gray-900 dark:text-slate-100
+           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  .tf-input-sm { @apply h-8 text-xs; }            /* dense table filters */
+  .tf-textarea {
+    @apply w-full min-w-0 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-gray-900 dark:text-slate-100
+           placeholder:text-gray-400 dark:placeholder:text-slate-500 transition
+           focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40;
+  }
+  /* Native, browser-drawn controls (no forms plugin): light mode keeps the browser accent on purpose,
+     dark mode is custom-drawn by the .dark input[type=checkbox|radio] rules above. */
+  .tf-checkbox, .tf-radio { @apply w-4 h-4 shrink-0 cursor-pointer disabled:cursor-not-allowed; }
+  .tf-choice { @apply inline-flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300 cursor-pointer; }
+  .tf-option-card { @apply rounded-xl border border-gray-200 dark:border-slate-700 p-3 sm:p-4 transition-colors cursor-pointer hover:border-brand-blue/40; }
+  .tf-option-card-active { @apply border-brand-blue ring-2 ring-brand-blue/20 bg-brand-blue/5; }
+
+  /* ── Tabs ──
+     Dark values mirror the dark-mode layer above (.dark .bg-brand-blue #2563eb, .dark .text-brand-blue
+     #93c5fd, .dark .text-gray-700 / -500, .dark .hover:bg-gray-100 …), so a tab looks the same as the
+     plain-utility version it replaces. The -active / -disabled classes also pin hover, so an active or
+     locked tab does not react to hover. */
+  /* Pill tabs — list pages (PageToolbar.Tabs). */
+  .tf-tab-pill { @apply shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors text-gray-700 hover:bg-gray-100 dark:text-[var(--text-secondary)] dark:hover:bg-[var(--surface-active)]; }
+  .tf-tab-pill-active { @apply bg-brand-blue text-white shadow-sm hover:bg-brand-blue dark:bg-[#2563eb] dark:text-white dark:hover:bg-[#2563eb]; }
+  /* Underline tabs — detail pages (job-details). */
+  .tf-tab-line { @apply relative inline-flex items-center gap-2 px-3 sm:px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 border-transparent transition-colors text-gray-500 hover:text-gray-800 hover:border-gray-300 dark:text-[var(--text-muted)] dark:hover:text-slate-200 dark:hover:border-slate-600; }
+  .tf-tab-line-active { @apply border-brand-blue text-brand-blue hover:border-brand-blue hover:text-brand-blue dark:border-[#2563eb] dark:text-[#93c5fd] dark:hover:border-[#2563eb] dark:hover:text-[#93c5fd]; }
+  .tf-tab-line-disabled { @apply border-transparent text-gray-400 cursor-not-allowed hover:border-transparent hover:text-gray-400 dark:text-[var(--text-muted)] dark:hover:border-transparent dark:hover:text-[var(--text-muted)]; }
+  .tf-tab-count { @apply px-1.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500 dark:bg-[var(--surface-hover)] dark:text-[var(--text-muted)]; }
+  .tf-tab-count-active { @apply bg-brand-blue/10 text-brand-blue dark:bg-[rgba(59,130,246,0.22)] dark:text-[#93c5fd]; }
+
+  /* ── States ── */
+  .tf-active { @apply bg-brand-blue text-white; }                 /* strong: tabs, segmented choice */
+  .tf-selected { @apply bg-brand-blue/10 text-brand-blue; }       /* soft: selected row / menu item */
+  .tf-focus { @apply focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2; }
+
+  /* ── Surfaces & spacing ── */
+  .tf-card { @apply bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 dark:bg-[var(--surface)] dark:border-[var(--border-dark)] dark:ring-white/[0.02]; }
+  .tf-card-muted { @apply bg-slate-50 rounded-lg border border-gray-200 dark:bg-[#111827] dark:border-[var(--border)]; }
+  .tf-card-soft { @apply bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 dark:bg-[var(--surface)] dark:border-[var(--border)] dark:ring-white/[0.02]; }   /* card with a lighter hairline */
+  .tf-panel { @apply bg-white rounded-xl border border-gray-200 dark:bg-[var(--surface)] dark:border-[var(--border)]; }   /* plain bordered panel, no shadow */
+  .tf-card-pad { @apply p-4 sm:p-5; }
+  /* Page shell — the job-openings layout every dashboard page uses: a grey page area holding one white sheet.
+     Dark values mirror the dark-mode layer (.dark .bg-slate-50 #111827, .dark .bg-white --surface). */
+  .tf-page { @apply flex-1 overflow-x-clip bg-slate-50 dark:bg-[#111827]; }
+  .tf-page-sheet { @apply w-full bg-white rounded-2xl p-4 md:p-8 my-4 md:my-5 shadow-2xl dark:bg-[var(--surface)]; }
+  .tf-page-pad { @apply p-4 md:p-8; }   /* page padding when there is no white sheet */
+  .tf-badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
+
+  /* ── Tables (job-openings cell size) ── */
+  .tf-td      { @apply px-3 py-2.5 align-middle; }            /* body cell */
+  .tf-th-cell { @apply px-3 py-2.5 align-middle whitespace-nowrap; }   /* header cell padding; text via tf-th */
+
+  /* ── Responsive grids — one column on a 320px phone, more as room allows ── */
+  .tf-grid-2     { @apply grid grid-cols-1 sm:grid-cols-2 gap-4; }                          /* 2 columns from 640px: fields, small cards */
+  .tf-grid-split { @apply grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6; }               /* main + side panes, side by side from 1024px */
+  .tf-grid-3     { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4; }          /* cards: 1 / 2 / 3 */
+  .tf-grid-4     { @apply grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4; }          /* cards: 1 / 2 / 4 */
+  .tf-grid-stats { @apply grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4; }                 /* 4 stat tiles: 2 / 4 */
+  .tf-grid-stats-3 { @apply grid grid-cols-1 xs:grid-cols-3 gap-3; }              /* 3 small figures */
+  .tf-grid-stats-5 { @apply grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4; } /* 5 stat tiles */
+  /* ── JD card (Job Descriptions list, phones and tablets) — dense flow ────────────────────
+     No columns and no half-empty rows: every line fills from the card's left padding and
+     wraps naturally. Text: name 16 → 18px bold · details 14px · dates, pills, tiles 12px. */
+  .tf-jd-card-top     { @apply flex flex-nowrap items-center gap-1.5 min-w-0; }
+  .tf-jd-card-pill    { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
+  /* Pill / version dots hide under 400px so the top row fits one line on a 320px phone. */
+  .tf-jd-card-dot     { @apply inline-block w-1.5 h-1.5 flex-shrink-0 rounded-full max-xs:hidden; }
+  /* Name row: name on one line ("…" when long) + version dropdown, Edit / View / More on the right. */
+  .tf-jd-card-head    { @apply mt-2.5 flex items-center gap-2 min-w-0; }
+  .tf-jd-card-name    { @apply flex min-w-0 flex-1 items-center gap-2; }
+  .tf-jd-card-title   { @apply min-w-0 truncate text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
+  .tf-jd-card-actions { @apply ml-auto flex-shrink-0; }
+  /* Details + dates block. */
+  .tf-jd-card-meta    { @apply mt-3; }
+  /* Details flow on natural lines: each item stays whole, the line wraps between items. */
+  .tf-jd-card-info    { @apply -my-0.5 flex flex-wrap items-center gap-x-4 text-sm text-gray-600 dark:text-slate-400 [&>span]:min-w-0 [&>span]:py-0.5 [&_svg]:shrink-0; }
+  /* Zero-height full-width item: forces a new line in a wrapping flex row. */
+  .tf-line-break      { @apply basis-full h-0 !p-0; }
+  .tf-jd-card-version { @apply inline-flex h-6 flex-shrink-0 items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-2 text-xs font-medium text-gray-600 whitespace-nowrap dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300; }
+  /* Dates: "Created · Posted" on one line, "By · Last Updated" on the next. */
+  .tf-jd-card-dates   { @apply mt-3 flex flex-col gap-1.5 text-xs; }
+  .tf-jd-card-date-row { @apply flex flex-wrap gap-x-4 gap-y-1; }
+  .tf-jd-card-date    { @apply flex items-baseline gap-1 whitespace-nowrap; }
+  .tf-jd-card-date-label { @apply font-semibold text-gray-700 dark:text-slate-300; }
+  .tf-jd-card-date-value { @apply text-gray-500 dark:text-slate-400; }
+  /* Divider, then Scored / Assessed / Interviewed in one row. Under 360px the number sits
+     above the label so all three still fit a 320px phone. */
+  .tf-jd-card-counts  { @apply mt-3 flex gap-2 border-t border-gray-200 pt-3 dark:border-slate-700; }
+  .tf-count-tile      { @apply flex min-w-0 flex-auto items-center justify-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-semibold whitespace-nowrap max-2xs:flex-col max-2xs:gap-0 max-2xs:px-1 max-2xs:py-1.5; }
+  .tf-count-tile-icon { @apply w-3.5 h-3.5 flex-shrink-0 max-2xs:hidden; }
+  .tf-count-tile-num  { @apply font-bold tabular-nums; }
+  /* The vN chip doubles as the version-history dropdown when a job has earlier versions. */
+  .tf-jd-card-version-btn  { @apply cursor-pointer hover:border-brand-blue/40 hover:text-brand-blue; }
+  .tf-jd-card-version-open { @apply !border-brand-blue/30 !bg-brand-sky !text-brand-blue; }
+
+  /* Version history on phones + tablets: one compact card per version. */
+  .tf-ver-list        { @apply space-y-2 rounded-xl border border-brand-blue/30 bg-brand-sky/40 p-1.5 xs:p-2 dark:border-brand-blue/40 dark:bg-slate-900; }
+  .tf-ver-card        { @apply relative rounded-lg border border-gray-200 bg-white p-2.5 xs:p-3 dark:border-slate-700 dark:bg-[var(--surface)]; }
+  .tf-ver-card-latest { @apply border-brand-blue/40; }
+  .tf-ver-card-selected { @apply border-brand-blue ring-1 ring-brand-blue/30; }
+  .tf-ver-card-top    { @apply flex min-w-0 flex-wrap items-center gap-1.5 pr-8 [&_.tf-ver-dot]:max-xs:hidden; }   /* badges wrap; the ⋮ menu is pinned top-right */
+  .tf-ver-card-actions { @apply absolute right-1.5 top-1.5 xs:right-2 xs:top-2 flex items-center gap-1; }
+  .tf-ver-card-title  { @apply mt-2 min-w-0 truncate text-sm font-semibold text-gray-900 dark:text-[var(--text-primary)]; }
+  .tf-ver-card-grid   { @apply mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2.5 border-t border-gray-100 pt-2.5 sm:grid-cols-3 md:grid-cols-4 dark:border-slate-700; }
+  .tf-ver-card-field  { @apply min-w-0; }
+  .tf-ver-card-field-wide { @apply col-span-2 sm:col-span-3 md:col-span-4; }
+  .tf-ver-card-label  { @apply text-2xs font-medium uppercase tracking-wide text-gray-400 dark:text-slate-500; }
+  .tf-ver-card-value  { @apply mt-0.5 break-words text-xs text-gray-700 dark:text-slate-300; }
+}
+
+@layer components {
+  .tf-jd-card-actions > div > button,
+  .tf-jd-card-actions > div > div > button {
+    height: 2rem !important; width: 2rem !important; padding: 0 !important; flex-shrink: 0;
+    border-radius: 0.5rem !important; border-color: transparent !important;
+    background-color: var(--color-gray-100) !important; color: var(--color-gray-600) !important; box-shadow: none !important;
+  }
+  .tf-jd-card-actions > div > button:hover,
+  .tf-jd-card-actions > div > div > button:hover { background-color: var(--color-gray-200) !important; }
+  /* Small phones: slightly smaller action buttons so the name keeps more room. */
+  @media (width < theme(--breakpoint-xs)) {
+    .tf-jd-card-actions > div { gap: 0.375rem !important; }
+    .tf-jd-card-actions > div > button,
+    .tf-jd-card-actions > div > div > button { height: 1.75rem !important; width: 1.75rem !important; }
+  }
+  .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]) {
+    height: 2rem !important; width: 2rem !important; border-radius: 0.5rem !important; border-color: transparent !important;
+    background-color: var(--color-gray-100) !important; color: var(--color-gray-600) !important;
+  }
+  .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]):hover { background-color: var(--color-gray-200) !important; }
+  .dark .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]) { background-color: var(--color-slate-800) !important; color: var(--color-slate-300) !important; }
+  /* Job Openings module, tab-card toolbars on phones (ListToolbar adds .tf-jdv-toolbar):
+       ( search ................ ) ( ⚙ Filters ) [≡ ⊞]
+       [All matches ▾] [Sort  Rating ▾ ⇅]
+       [☐ Select all]                  [Score]              ← nothing ticked
+       [☑ 1 selected           Clear [Actions ▾]]           ← rows ticked: tinted bar
+     The view switch stays on line 1: beside the filter and Sort pills it needs ~386px,
+     a 375px phone's toolbar has 311px. Lines are forced with zero-height full-width
+     pseudo items; items are placed with `order`. */
+  @media (width < theme(--breakpoint-sm)) {
+    .tf-jdv-toolbar { gap: 0.5rem !important; }
+    .tf-jdv-toolbar > .tf-tb-controls { display: contents !important; }
+    /* Line 1: rounded search · Filters pill · view switch. */
+    .tf-jdv-toolbar > .tf-tb-search { order: 1 !important; flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
+    .tf-jdv-toolbar > .tf-tb-search input { border-radius: 9999px !important; }
+    .tf-jdv-toolbar > .tf-tb-controls > [data-tb-filters] {
+      order: 2 !important; flex: none !important; border-radius: 9999px !important; padding: 0 0.875rem !important;
+      background: white !important; border: 1px solid var(--color-gray-200) !important; color: var(--color-brand-blue) !important; font-weight: 600;
+    }
+    .dark .tf-jdv-toolbar > .tf-tb-controls > [data-tb-filters] { background: var(--color-slate-900) !important; border-color: var(--color-slate-700) !important; }
+    .tf-jdv-toolbar > .tf-tb-trailing { order: 3 !important; margin-left: 0 !important; }
+    .tf-jdv-toolbar::before { content: ''; order: 4; flex: 1 1 100%; height: 0; margin-bottom: -0.5rem; }
+    /* Line 2: status filter and Sort as compact gray pills, at their own width. */
+    /* The status filter takes what the Sort pill leaves (basis 0), so the two never wrap apart. */
+    .tf-jdv-toolbar > .tf-tb-controls > [data-toolbar-filter] { order: 5 !important; flex: 1 1 0% !important; min-width: 0 !important; }
+    .tf-jdv-toolbar > .tf-tb-controls > [data-toolbar-sort] { order: 6 !important; flex: none !important; }
+    /* Sort pill: "Sort" (muted) + the field + the direction arrow, all in one gray pill. */
+    .tf-jdv-toolbar [data-toolbar-sort] > span { display: none !important; }
+    .tf-jdv-toolbar [data-toolbar-sort] > div { flex: none !important; }
+    .tf-jdv-toolbar [data-toolbar-sort] > div::before { content: 'Sort'; padding-left: 0.5rem; font-size: var(--text-sm); color: var(--color-gray-500); }
+    .tf-jdv-toolbar [data-toolbar-sort] select { width: 6.25rem !important; padding-left: 0.375rem !important; padding-right: 1.75rem !important; font-weight: 500; }
+    .tf-jdv-toolbar [data-toolbar-sort] select + svg { right: 0.375rem !important; }
+    .tf-jdv-toolbar [data-toolbar-sort] button { background: transparent !important; }
+    .tf-jdv-toolbar::after { content: ''; order: 7; flex: 1 1 100%; height: 0; margin-bottom: -0.5rem; }
+    /* Line 3: Select all on the left, the tab's action (Score, Run Match, Invite) on the right. */
+    .tf-jdv-toolbar > .tf-tb-lead { order: 8 !important; flex: 1 1 auto !important; min-height: 2.25rem; }
+    .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) {
+      order: 9 !important; flex: none !important; width: auto !important;
+    }
+    .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) :is(button, a) { width: auto !important; }
+    /* Select all: plain checkbox + label / "N selected" in brand blue; no pill, no chevron
+       (tapping still opens its menu). */
+    .tf-jdv-toolbar .tf-tb-selectall { background: transparent !important; border-color: transparent !important; box-shadow: none !important; padding-left: 0 !important; font-size: var(--text-sm) !important; color: var(--color-gray-700) !important; }
+    .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] { color: var(--color-brand-blue) !important; font-weight: 600; }
+    .tf-jdv-toolbar .tf-tb-selectall > svg:first-child { width: 1.125rem; height: 1.125rem; }
+    .tf-jdv-toolbar .tf-tb-selectall-chevron { display: none !important; }
+
+    /* Rows ticked: line 3 becomes a tinted, bordered bar, and the tab's Actions / Clear row
+       (.tf-tb-bulk, drawn right after the toolbar) moves up into its right side as
+       "Clear  [Actions ▾]". The tab's own action button steps aside meanwhile. */
+    .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar { margin-bottom: 0.75rem !important; }
+    .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar > .tf-tb-lead {
+      flex: 1 1 100% !important; min-height: 3rem; padding: 0 0.75rem; border-radius: 0.75rem;
+      background: color-mix(in srgb, var(--color-brand-blue) 7%, white);
+      border: 1px solid color-mix(in srgb, var(--color-brand-blue) 25%, white);
+    }
+    .dark .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar > .tf-tb-lead {
+      background: color-mix(in srgb, var(--color-brand-blue) 20%, var(--color-slate-900)); border-color: color-mix(in srgb, var(--color-brand-blue) 45%, var(--color-slate-900));
+    }
+    .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) { display: none !important; }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk {
+      position: relative; z-index: 1; width: max-content; margin: -3.375rem 0.4375rem 0.75rem auto;
+      flex-direction: row-reverse; gap: 0.25rem;
+    }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > * { flex: none !important; }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk button { width: auto !important; }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > button:last-child {
+      background: transparent !important; border-color: transparent !important; box-shadow: none !important;
+      color: var(--color-gray-700) !important; padding-inline: 0.625rem !important;
+    }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > button:last-child > svg { display: none; }
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child:is(button),
+    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child > button {
+      background: var(--color-brand-blue) !important; border-color: var(--color-brand-blue) !important; color: white !important; font-weight: 600;
+    }
+  }
+  /* Breadcrumb on phones — every page using PageBreadcrumb (it adds .tf-jdv-crumb):
+       [ Dashboard › Job Descriptions › php developer   ]   ← the trail (wraps when needed)
+       [ ───────────────────────────────────────────── ]
+       [ 3 / 279                              (‹)  (›) ]   ← only on pages with a pager
+     Every crumb shows its full name: when the trail doesn't fit one line it wraps
+     between crumbs onto the next line, and a single name longer than the bar wraps
+     inside itself. Nothing is cut or hidden. */
+  @media (width < theme(--breakpoint-sm)) {
+    .tf-jdv-crumb { border-radius: 0.75rem; }
+    .tf-jdv-crumb ol { flex-wrap: wrap !important; column-gap: 0.375rem !important; row-gap: 0.125rem !important; width: 100%; min-width: 0; }
+    .tf-jdv-crumb ol > li { min-width: 0; max-width: 100%; }
+    .tf-jdv-crumb ol > li > * { overflow-wrap: anywhere; }
+    /* With a pager: the trail on its own full line, the pager on a slim line under it. */
+    .tf-jdv-crumb .tf-crumb-row { flex-direction: column; align-items: stretch !important; gap: 0.5rem !important; }
+    .tf-jdv-crumb .tf-crumb-list { width: 100%; min-width: 0; }
+    .tf-jdv-crumb .tf-crumb-actions { margin-left: 0 !important; padding-top: 0.5rem; border-top: 1px solid var(--color-slate-200); }
+    .dark .tf-jdv-crumb .tf-crumb-actions { border-color: var(--color-slate-700); }
+    .tf-jdv-crumb .tf-pager { width: 100%; gap: 0.5rem !important; }
+    .tf-jdv-crumb .tf-pager > span { order: -1; margin-right: auto; padding: 0 !important; font-size: var(--text-xs) !important; font-weight: 600; color: var(--color-gray-600); }
+    .tf-jdv-crumb .tf-pager > button {
+      min-height: 0 !important; height: 2rem; width: 2rem; padding: 0 !important; border: 0 !important; border-radius: 9999px !important;
+      box-shadow: none !important; color: var(--color-brand-blue) !important;
+      background: color-mix(in srgb, var(--color-brand-blue) 9%, white) !important;
+    }
+    .dark .tf-jdv-crumb .tf-pager > button { background: color-mix(in srgb, var(--color-brand-blue) 25%, var(--color-slate-900)) !important; color: var(--color-slate-100) !important; }
+    .tf-jdv-crumb .tf-pager > button:not(:disabled):hover { background: var(--color-brand-blue) !important; color: white !important; }
+  }
+  /* Text buttons (icon + label, tagged data-jdv-text by the card): one line, natural width, never
+     squeezed into an icon square or into the ⋮ beside them. */
+  .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"])[data-jdv-text] {
+    width: auto !important; min-width: 0 !important; height: 2rem !important; min-height: 0 !important;
+    padding: 0 0.75rem !important; white-space: nowrap !important; flex-shrink: 0;
+    border-radius: 0.5rem !important; gap: 0.375rem !important; font-size: var(--text-xs) !important;
+  }
+  @media (width < theme(--breakpoint-xs)) {
+    .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]) { height: 1.75rem !important; width: 1.75rem !important; }
+  }
+  .dark .tf-jd-card-actions > div > button,
+  .dark .tf-jd-card-actions > div > div > button { background-color: var(--color-slate-800) !important; color: var(--color-slate-300) !important; }
+  /* Navigation tiles (icon + name + subtitle): wider than stat tiles so the full name fits — 1 / 2 / 3 / 4 / 5. */
+  .tf-grid-tiles { @apply grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4; }
+  /* Text that must show in full: wraps onto the next line instead of "…" (size unchanged). */
+  .tf-wrap { @apply whitespace-normal break-words; }
+
+  /* Popovers / floating panels never wider than the screen minus the gutter. */
+  .tf-fit-screen { @apply max-w-[calc(100vw-2rem)]; }
+
+  /* ── Record cards — how every table shows its rows on phones and tablets (below 1024px), modelled on the
+     job-openings card. Used through components/ui/mobile-record-card.tsx. ── */
+  .tf-record-list { @apply space-y-3; }
+  /* Card: checkbox column on the left, content beside it; count chips and the row's buttons along the bottom. */
+  .tf-record-card { @apply relative block w-full min-w-0 rounded-xl border border-gray-200 bg-white p-4 text-left transition-[box-shadow,border-color] duration-150 dark:bg-[var(--surface)] dark:border-[var(--border)]; }
+  .tf-record-card-clickable { @apply cursor-pointer hover:border-brand-blue/30 hover:shadow-md; }
+  .tf-record-card-selected { @apply border-brand-blue ring-1 ring-brand-blue/30 dark:border-[#2563eb]; }
+  .tf-record-body { @apply flex items-start gap-3; }
+  .tf-record-select { @apply flex h-5 shrink-0 items-center sm:h-6; }   /* centres the checkbox on the title line */
+  .tf-record-content { @apply min-w-0 flex-1; }
+  /* ID chip · title · version / status pills flow on one wrapping line, like "JD-338 Automation Developer v2 AI Disabled". */
+  .tf-record-head { @apply flex flex-wrap items-center gap-x-2 gap-y-1.5; }
+  .tf-record-title { @apply min-w-0 max-w-full break-words text-sm font-medium text-gray-900 line-clamp-2 sm:text-base dark:text-[var(--text-primary)]; }
+  .tf-record-title-wrap { @apply min-w-0 max-w-full break-words text-sm font-medium text-gray-900 sm:text-base dark:text-[var(--text-primary)]; }   /* long titles (questions) show in full */
+  .tf-record-meta { @apply mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-[var(--text-secondary)]; }
+  .tf-record-meta-item { @apply inline-flex min-w-0 max-w-full items-center gap-1.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg:not([class*='text-'])]:text-gray-400; }   /* coloured icons keep their colour */
+  /* ID chip shown before a card title (invoice #, ticket #, short ID) when there is no dedicated badge component. */
+  .tf-id-chip { @apply inline-flex shrink-0 items-center gap-1 rounded bg-brand-blue/5 px-2 py-0.5 font-mono text-xs font-medium text-brand-blue ring-1 ring-brand-blue/20; }
+  .tf-record-fields { @apply mt-2 flex flex-wrap gap-x-3 gap-y-1 text-sm; }
+  .tf-record-field { @apply inline-flex min-w-0 max-w-full items-baseline gap-1; }
+  .tf-record-field-label { @apply shrink-0 font-medium text-gray-700 dark:text-[var(--text-secondary)]; }
+  .tf-record-field-value { @apply min-w-0 break-words text-gray-500 dark:text-[var(--text-muted)]; }
+  .tf-record-footer { @apply mt-3 flex flex-wrap items-center gap-1; }                     /* count chips, from the card's left edge */
+  .tf-record-actions { @apply mt-3 flex flex-wrap items-center justify-end gap-2; }       /* the row's buttons, bottom-right */
+  /* Every button a screen puts in a card's action row looks like the job-openings card's eye / ⋮ buttons:
+     icon-only → 28px outlined square, 14px icon; with text → 28px-tall outlined button. `!` because each
+     screen passes its own button classes (utilities), which would otherwise win over this layer. */
+  .tf-record-actions :is(button, a, [role="button"]):has(> svg:only-child) {
+    @apply !h-7 !w-7 !min-w-0 !p-0 !rounded-md !border !border-gray-200 !bg-gray-50 !text-gray-700 !shadow-none hover:!bg-gray-100 hover:!text-brand-blue dark:!bg-[var(--surface)] dark:!border-[var(--border)] dark:!text-[var(--text-secondary)];
+  }
+  .tf-record-actions :is(button, a, [role="button"]):has(> svg:only-child) > svg { @apply !h-3.5 !w-3.5; }
+  .tf-record-actions :is(button, a, [role="button"]):not(:has(> svg:only-child)) {
+    @apply !h-7 !min-h-0 !py-0 !px-2.5 !rounded-md !text-xs !gap-1.5 [&>svg]:!h-3.5 [&>svg]:!w-3.5;
+  }
+  /* ── Job Openings module: MobileRecordCard `jd` variant (MobileRecordCardVariantProvider) ──
+     Same look as the Job Openings card (tf-jd-card-*). */
+  .tf-jdv-card        { @apply p-3 xs:p-4; }
+  .tf-jdv-select      { @apply flex shrink-0 items-center; }
+  /* Top row: checkbox · ID · pills. Wraps (unlike the JD card's fixed pills) because a record's
+     badges can be long — a skipped reason, an archived flag — and must never run past the card. */
+  .tf-jdv-top         { @apply flex min-w-0 flex-wrap items-center gap-1.5 [&>*]:max-w-full; }
+  .tf-jdv-title       { @apply min-w-0 truncate text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)] [&_span:not(:has(*))]:truncate; }
+  .tf-jdv-title-wrap  { @apply min-w-0 break-words text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
+  .tf-jdv-meta-item   { @apply inline-flex min-w-0 max-w-full items-center gap-1.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg:not([class*='text-'])]:text-gray-400; }
+  .tf-jdv-fields      { @apply mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs; }
+  .tf-jdv-field       { @apply flex min-w-0 max-w-full items-baseline gap-1; }
+  .tf-jdv-field-value { @apply min-w-0 break-words text-gray-500 dark:text-slate-400; }
+  /* Divider, then count chips as tiles (other footer items keep their own look). */
+  .tf-jdv-footer      { @apply mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 dark:border-slate-700; }
+  .tf-jdv-footer > .tf-stat-chip { @apply flex-auto justify-center rounded-lg px-2.5 py-2 font-semibold; }
+  /* Icon actions on the name row (JD card buttons); text actions on their own bottom row. */
+  .tf-jdv-actions     { @apply mt-0 ml-auto flex-shrink-0 flex-nowrap; }
+  .tf-jdv-actions-below { @apply mt-3 ml-0 flex-wrap justify-end gap-2 [&>*]:shrink-0; }
+  /* Count chips — "2 Scored" / "0 Assessed" / "0 Interviewed". Icons drop under 360px so three still fit a 320px phone. */
+  .tf-stat-chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0 max-2xs:[&>svg]:hidden md:gap-1.5 md:px-2; }
+  .tf-stat-chip-info    { @apply bg-info-subtle text-info-strong; }
+  .tf-stat-chip-success { @apply bg-success-subtle text-success-strong; }
+  .tf-stat-chip-warning { @apply bg-warning-subtle text-warning-strong; }
+  .tf-stat-chip-danger  { @apply bg-destructive-subtle text-destructive-strong; }
+  .tf-stat-chip-neutral { @apply bg-gray-100 text-gray-700 dark:bg-[var(--surface-hover)] dark:text-[var(--text-secondary)]; }
+  /* 28px outlined icon button (eye / edit / ⋮), as on the job-openings card. */
+  .tf-icon-btn-outline { @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:border-brand-blue/30 hover:text-brand-blue dark:bg-[var(--surface)] dark:border-[var(--border)] dark:text-[var(--text-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5; }
 }

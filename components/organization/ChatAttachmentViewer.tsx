@@ -63,7 +63,7 @@ export default function ChatAttachmentViewer({
   };
 
   const barButton =
-    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm max-sm:text-[13px] font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
+    'inline-flex h-9 items-center justify-center gap-1.5 rounded-lg px-2.5 text-sm font-medium text-white/90 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40';
 
   return createPortal(
     <div
@@ -77,7 +77,7 @@ export default function ChatAttachmentViewer({
         className="flex shrink-0 items-center gap-2 px-3 py-2 sm:px-5 sm:py-3"
         onClick={(e) => e.stopPropagation()}
       >
-        <p className="min-w-0 flex-1 truncate text-sm max-sm:text-[13px] font-medium text-white/90">{fileName}</p>
+        <p className="min-w-0 flex-1 truncate text-sm font-medium text-white/90">{fileName}</p>
         <button type="button" onClick={handleDownload} disabled={downloading} className={`${barButton} disabled:cursor-wait`} title="Download">
           {downloading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           <span className="hidden sm:inline">Download</span>

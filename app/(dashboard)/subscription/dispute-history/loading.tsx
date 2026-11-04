@@ -5,9 +5,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // Amount, Status, Actions).
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Title + actions */}
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="space-y-2">
@@ -21,9 +21,9 @@ export default function Loading() {
           </div>
 
           {/* Stat cards */}
-          <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
+          <div className="tf-grid-3 mb-6">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-5">
+              <div key={i} className="tf-panel p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-2">
                     <Skeleton className="h-3 w-24" />
@@ -37,7 +37,7 @@ export default function Loading() {
           </div>
 
           {/* Table */}
-          <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
+          <div className="tf-panel overflow-hidden">
             <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
               <Skeleton className="h-4 w-20" />
               <Skeleton className="mt-1.5 h-3 w-32" />

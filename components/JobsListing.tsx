@@ -3,6 +3,7 @@
 import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
+import { centerMenuOnPhoneRef } from '@/lib/hooks/useCenteredMenuOnPhone';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -27,7 +28,9 @@ import {
 } from '@/lib/utils/jobOpeningDisplay';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
-import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JobOpeningSummary, { JobOpeningPrimaryItems, JobOpeningDatesGrid } from '@/components/jobs/JobOpeningSummary';
+import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
+import { getCreationMethodConfig, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
@@ -181,7 +184,7 @@ interface JobsListingProps {
  * abstracted because that is how every other caller carries it.
  */
 const StatVersions = ({ count }: { count: number }) => (
-  <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+  <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
     {count} {count === 1 ? 'version' : 'versions'}
   </span>
 );
@@ -1117,9 +1120,9 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb barRef={breadcrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
@@ -1130,7 +1133,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               </div>
               <div>
                 <h1 className="tf-page-title mb-1">Job Openings</h1>
-                <p className="tf-card-desc">Create and manage your job postings</p>
+                <p className="tf-body-secondary">Create and manage your job postings</p>
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
@@ -1151,7 +1154,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       aria-disabled
                       onClick={() => { /* locked: tooltip only */ }}
                       title="You do not have permission to manage job configuration"
-                      className="w-full sm:w-auto opacity-50 cursor-not-allowed"
+                      className="w-full sm:w-auto opacity-50 cursor-not-allowed disabled:opacity-50"
                     >
                       <Settings className="w-4 h-4" />
                       Config
@@ -1209,7 +1212,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
-        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+        <div className="tf-card p-3 sm:p-4 mb-4">
           {/* Row 1: Search + More Filters — the canonical toolbar, now shared
               via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
@@ -1330,7 +1333,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <select> option (e.g. a full "City, State, Country" location) would
                   force its cell wider than the screen and overflow. min-w-0 lets the
                   cells (and the w-full selects inside) shrink to the grid track. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {/* Location and Industry now live inline with Search (see the
                     toolbar's leadingActions above). Department was removed. */}
                 {uniqueWorkModes.length > 0 && (
@@ -1759,12 +1762,249 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 const interviewedCount = candidateCounts ? candidateCounts[job.id]?.interviewed ?? 0 : null;
                 const hasCountBadges = applicantsCount != null || assessedCount != null || interviewedCount != null;
 
+                /* Edit / View / More - built once and placed in both layouts below
+                   (the phone/tablet card and the desktop row), so the two can
+                   never drift apart. Only one layout is visible at a time. */
+                const rowActions = (
+                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
+                    {/* Edit Button - icon only. Shown on every row except
+                        Archived/Disabled ones — those are already retired,
+                        so there is nothing on them to edit in place.
+                        Greyed out (not hidden) once a lineage has reached
+                        5 versions — that is the cap on how many versions
+                        one JD can have. */}
+                    {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
+                      const atMaxVersions = (job.versionNumber ?? 1) >= 5;
+                      return (
+                        <Button
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (atMaxVersions) {
+                              toast.error('This JD has reached the maximum of 5 versions and cannot be edited further.');
+                              return;
+                            }
+                            if (!canUpdateJd) {
+                              // Locked: tooltip only (no toast).
+                              return;
+                            }
+                            onEditJob(job);
+                          }}
+                          aria-disabled={!canUpdateJd || atMaxVersions}
+                          className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          aria-label="Edit"
+                          title={
+                            atMaxVersions
+                              ? 'Maximum of 5 versions reached'
+                              : !canUpdateJd
+                                ? 'You do not have permission to edit job descriptions'
+                                : 'Edit'
+                          }
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                      );
+                    })()}
+
+                    {/* View Button - icon only. Shown on every row for a
+                        consistent action set. */}
+                    <Button
+                      variant="secondary"
+                      onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
+                      aria-disabled={draftLocked || undefined}
+                      className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+                      aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+
+                    {/* Three-dot Menu */}
+                    <div className="relative">
+                      {/* Same Button (secondary, h-9 w-9) as Edit and View, so
+                          all three row actions share one border, background,
+                          icon color, hover state and shape. */}
+                      <Button
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown === job.id ? null : job.id);
+                        }}
+                        className="!h-7 !w-7 !p-0 rounded-md"
+                        aria-label="More actions"
+                        title="More actions"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </Button>
+                      {activeDropdown === job.id && (
+                        <div ref={centerMenuOnPhoneRef} className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
+                          {/* View Applicants - Hide for Draft */}
+                          {job.status.toLowerCase() !== 'draft' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                (onViewApplicants || onViewJob)(job);
+                                setActiveDropdown(null);
+                              }}
+                              className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                            >
+                              <Users className="w-4 h-4 text-menu-icon-secondary" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
+                            </button>
+                          )}
+                          {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
+                          {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onAIMatchDisabled) {
+                                  // Permission lock: tooltip only. Plan lock keeps its toast.
+                                  if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
+                                  return;
+                                }
+                                setActiveDropdown(null);
+                                onAIMatch(job);
+                              }}
+                              aria-disabled={onAIMatchDisabled}
+                              title={onAIMatchDisabled ? onAIMatchDisabledReason : ''}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                            >
+                              <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
+                            </button>
+                          )}
+                          {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onScoreResumesDisabled) {
+                                  // Permission lock: tooltip only. Plan lock keeps its toast.
+                                  if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
+                                  return;
+                                }
+                                onScoreResumes(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={onScoreResumesDisabled}
+                              title={onScoreResumesDisabled ? onScoreResumesDisabledReason : ''}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                            >
+                              <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+                            </button>
+                          )}
+                          {/* Disable Job for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canDisableJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                requestDisableJob(job);
+                              }}
+                              aria-disabled={!canDisableJd}
+                              title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDisableJd ? 'text-orange-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Ban className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
+                            </button>
+                          )}
+                          {/* Re-enable JD for Disabled */}
+                          {job.status === 'Disabled' && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canUpdateJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onRepublishJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canUpdateJd}
+                              title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canUpdateJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
+                            </button>
+                          )}
+                          {/* Archive Job — not offered on a Draft: there is
+                              nothing published to retire, Delete already
+                              covers removing a draft outright. */}
+                          {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canArchiveJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onArchiveJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canArchiveJd}
+                              title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Archive className={`w-4 h-4 ${canArchiveJd ? 'text-menu-icon-archive' : 'text-gray-400'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
+                            </button>
+                          )}
+                          {/* Unarchive Job */}
+                          {job.status === 'Archived' && onUnarchiveJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canArchiveJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onUnarchiveJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canArchiveJd}
+                              title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
+                            </button>
+                          )}
+                          {/* Delete Job */}
+                          {onDeleteJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canDeleteJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onDeleteJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canDeleteJd}
+                              title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDeleteJd ? 'text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+
                 return (
                   <div
                     key={job.id}
                     aria-disabled={draftLocked || undefined}
                     title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-3 xs:p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => {
                       if (draftLocked) return;
                       if (job.status.toLowerCase() === 'draft' && onEditJob) onEditJob(job);
@@ -1774,7 +2014,110 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     {/* flex-wrap: checkbox + job info (+ the counts column from
                         md) share the first row, so the checkbox sits on the Job
                         ID / Job Name line; the footer wraps under at full width. */}
-                    <div className="flex flex-wrap items-start gap-3 md:gap-x-4">
+                    {/* ── Phones and tablets (below lg): the JD card ─────────────────────
+                        Dense flow, no column gaps:
+                        1. checkbox · JD ID · source · status
+                        2. job name (one line, "…") · version · Edit / View / ⋮ on the right
+                        3. experience · industry · type · work mode (flowing)
+                        4. Created | Posted / By | Last Updated — two aligned columns
+                        5. divider, then Scored / Assessed / Interviewed — three tiles */}
+                    <div className="lg:hidden">
+                      <div className="tf-jd-card-top">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                          aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                          className="flex-shrink-0"
+                        >
+                          {selectedJobs.has(job.id)
+                            ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                            : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
+                        </button>
+                        {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
+                        {(() => {
+                          const method = getCreationMethodConfig(job.creation_method);
+                          const shown = getDisplayStatus(job.status, job.currentVersion);
+                          const tone = getStatusConfig(shown);
+                          return (
+                            <>
+                              <span className={`tf-jd-card-pill ${method.bg} ${method.text}`}>
+                                <span className={`tf-jd-card-dot ${method.dot}`} />
+                                {method.label}
+                              </span>
+                              <span className={`tf-jd-card-pill ${tone.bg} ${tone.text}`}>
+                                <span className={`tf-jd-card-dot ${tone.dot}`} />
+                                {shown}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="tf-jd-card-head">
+                        <div className="tf-jd-card-name">
+                          <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          {job.versionNumber && job.versionNumber >= 1 ? (
+                            hasVersionHistory ? (
+                              /* Version dropdown: opens / closes this job's version history. */
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
+                                aria-expanded={versionsExpanded}
+                                title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                                className={`tf-jd-card-version tf-jd-card-version-btn ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
+                              >
+                                <span className="tf-jd-card-dot bg-gray-400" />
+                                v{job.versionNumber}
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                            ) : (
+                              <span className="tf-jd-card-version">
+                                <span className="tf-jd-card-dot bg-gray-400" />
+                                v{job.versionNumber}
+                              </span>
+                            )
+                          ) : null}
+                        </div>
+                        <div className="tf-jd-card-actions">{rowActions}</div>
+                      </div>
+
+                      <div className="tf-jd-card-meta">
+                        <div className="tf-jd-card-info">
+                          <JobOpeningPrimaryItems job={job} hideEmpty breakBeforeType />
+                        </div>
+                        <JobOpeningDatesGrid job={job} />
+                      </div>
+
+                      {hasCountBadges && (
+                        <div className="tf-jd-card-counts">
+                          {applicantsCount != null && (
+                            <span className="tf-count-tile bg-info-subtle text-info-strong">
+                              <Users className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{applicantsCount}</span>
+                              <span>Scored</span>
+                            </span>
+                          )}
+                          {assessedCount != null && (
+                            <span className="tf-count-tile bg-success-subtle text-success-strong">
+                              <ClipboardCheck className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{assessedCount}</span>
+                              <span>Assessed</span>
+                            </span>
+                          )}
+                          {interviewedCount != null && (
+                            <span className="tf-count-tile bg-warning-subtle text-warning-strong">
+                              <Video className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{interviewedCount}</span>
+                              <span>Interviewed</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                    </div>
+
+                    {/* ── Laptop / desktop (lg and up): the row layout, unchanged ── */}
+                    <div className="hidden lg:flex flex-wrap items-start gap-3 md:gap-x-4">
                       {/* Individual Select — just the checkbox (the Briefcase
                           job icon that used to sit beside it was removed).
                           h-5 / sm:h-6 give the checkbox the title row's own
@@ -1825,19 +2168,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
                         {applicantsCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-info-subtle text-info-strong">
-                            <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Users className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-success-subtle text-success-strong">
-                            <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <ClipboardCheck className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {assessedCount} Assessed
                           </span>
                         )}
                         {interviewedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
-                            <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Video className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {interviewedCount} Interviewed
                           </span>
                         )}
@@ -1856,237 +2199,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       {/* From lg (laptop / desktop) View Versions moves beside
                           Edit and takes over the ml-auto that pushes the pair
                           right; below lg the footer is unchanged. */}
-                      <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
-                        {/* Edit Button - icon only. Shown on every row except
-                            Archived/Disabled ones — those are already retired,
-                            so there is nothing on them to edit in place.
-                            Greyed out (not hidden) once a lineage has reached
-                            5 versions — that is the cap on how many versions
-                            one JD can have. */}
-                        {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
-                          const atMaxVersions = (job.versionNumber ?? 1) >= 5;
-                          return (
-                            <Button
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (atMaxVersions) {
-                                  toast.error('This JD has reached the maximum of 5 versions and cannot be edited further.');
-                                  return;
-                                }
-                                if (!canUpdateJd) {
-                                  // Locked: tooltip only (no toast).
-                                  return;
-                                }
-                                onEditJob(job);
-                              }}
-                              aria-disabled={!canUpdateJd || atMaxVersions}
-                              className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              aria-label="Edit"
-                              title={
-                                atMaxVersions
-                                  ? 'Maximum of 5 versions reached'
-                                  : !canUpdateJd
-                                    ? 'You do not have permission to edit job descriptions'
-                                    : 'Edit'
-                              }
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </Button>
-                          );
-                        })()}
-
-                        {/* View Button - icon only. Shown on every row for a
-                            consistent action set. */}
-                        <Button
-                          variant="secondary"
-                          onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
-                          aria-disabled={draftLocked || undefined}
-                          className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-                          aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-
-                        {/* Three-dot Menu */}
-                        <div className="relative">
-                          {/* Same Button (secondary, h-9 w-9) as Edit and View, so
-                              all three row actions share one border, background,
-                              icon color, hover state and shape. */}
-                          <Button
-                            variant="secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                            }}
-                            className="!h-7 !w-7 !p-0 rounded-md"
-                            aria-label="More actions"
-                            title="More actions"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </Button>
-                          {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
-                              {/* View Applicants - Hide for Draft */}
-                              {job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    (onViewApplicants || onViewJob)(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
-                                >
-                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
-                                </button>
-                              )}
-                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
-                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onAIMatchDisabled) {
-                                      // Permission lock: tooltip only. Plan lock keeps its toast.
-                                      if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
-                                      return;
-                                    }
-                                    setActiveDropdown(null);
-                                    onAIMatch(job);
-                                  }}
-                                  aria-disabled={onAIMatchDisabled}
-                                  title={onAIMatchDisabled ? onAIMatchDisabledReason : ''}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
-                                >
-                                  <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
-                                </button>
-                              )}
-                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onScoreResumesDisabled) {
-                                      // Permission lock: tooltip only. Plan lock keeps its toast.
-                                      if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
-                                      return;
-                                    }
-                                    onScoreResumes(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={onScoreResumesDisabled}
-                                  title={onScoreResumesDisabled ? onScoreResumesDisabledReason : ''}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
-                                >
-                                  <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-                                </button>
-                              )}
-                              {/* Disable Job for Published */}
-                              {job.status === 'Published' && onDisableJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDisableJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    requestDisableJob(job);
-                                  }}
-                                  aria-disabled={!canDisableJd}
-                                  title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDisableJd ? 'text-orange-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Ban className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
-                                </button>
-                              )}
-                              {/* Re-enable JD for Disabled */}
-                              {job.status === 'Disabled' && onRepublishJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canUpdateJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onRepublishJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canUpdateJd}
-                                  title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canUpdateJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
-                                </button>
-                              )}
-                              {/* Archive Job — not offered on a Draft: there is
-                                  nothing published to retire, Delete already
-                                  covers removing a draft outright. */}
-                              {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canArchiveJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onArchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canArchiveJd}
-                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Archive className={`w-4 h-4 ${canArchiveJd ? 'text-menu-icon-archive' : 'text-gray-400'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
-                                </button>
-                              )}
-                              {/* Unarchive Job */}
-                              {job.status === 'Archived' && onUnarchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canArchiveJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onUnarchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canArchiveJd}
-                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
-                                </button>
-                              )}
-                              {/* Delete Job */}
-                              {onDeleteJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDeleteJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onDeleteJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canDeleteJd}
-                                  title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDeleteJd ? 'text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      {rowActions}
                       </div>
                         {/* View Versions — first in the footer, i.e. the card's
                             bottom-left corner, level with the icons. Shown
@@ -2341,7 +2454,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             </div>
         ) : (
           // Empty State
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+          <div className="tf-card-soft p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
@@ -2350,10 +2463,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <Briefcase className="w-5 h-5 text-brand-blue" />
                 )}
               </div>
-              <h3 className="tf-section-title mb-2">
+              <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="tf-card-desc mb-4 leading-relaxed">
+              <p className="tf-body-secondary mb-4 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -2374,12 +2487,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
         {/* Pagination Controls */}
         {sortedJobs.length > 5 && (
-          <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mt-4">
+          <div className="tf-card p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
               <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="tf-card-desc">Show:</span>
+                  <span className="tf-body-secondary">Show:</span>
                   <FilterSelect
                     value={String(itemsPerPage)}
                     onChange={(v) => handleItemsPerPageChange(Number(v))}
@@ -2387,12 +2500,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
                     options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
                   />
-                  <span className="tf-card-desc">per page</span>
+                  <span className="tf-body-secondary">per page</span>
                 </div>
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="tf-card-desc">
+                <span className="tf-body-secondary">
                   Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
                 </span>
               </div>
@@ -2401,7 +2514,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -2416,7 +2529,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                    className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                   />
                 </div>
 
@@ -2424,14 +2537,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
                 {/* Current / total */}
-                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
                 </span>
 
@@ -2439,7 +2552,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -2504,7 +2617,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="tf-section-title">Insufficient Units</h3>
+              <h3 className="tf-section-title sm:text-lg tracking-tight">Insufficient Units</h3>
               <button
                 onClick={() => setShowQuotaModal(false)}
                 className="text-gray-400 hover:text-gray-600 p-1"
@@ -2520,7 +2633,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                   <Briefcase className="w-5 h-5 text-destructive" />
                 </div>
-                <p className="tf-card-desc">
+                <p className="tf-body-secondary">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
                 </p>
               </div>

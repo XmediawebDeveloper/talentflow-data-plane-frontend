@@ -60,7 +60,7 @@ export default function SubStepProgress({
   allComplete?: boolean;
 }) {
   return (
-    <div className="w-full max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl shadow-sm px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-4">
+    <div className="tf-card-soft w-full max-w-xl mx-auto px-3 sm:px-5 py-3 flex items-center gap-2 sm:gap-4">
       <style>{STEP_RIPPLE_CSS}</style>
       {steps.map((label, idx) => {
         const done = allComplete || idx < activeIndex;

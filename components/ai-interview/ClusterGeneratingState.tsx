@@ -56,7 +56,7 @@ export default function ClusterGeneratingState() {
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
 
-        <h2 className="mt-5 text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
+        <h2 className="mt-5 tf-section-title sm:text-xl tracking-tight">
           AI is analyzing skills and generating clusters…
         </h2>
         <p className="mt-2 tf-body-muted max-w-xl mx-auto">

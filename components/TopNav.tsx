@@ -24,7 +24,7 @@ export default function TopNav() {
         </div>
         <div className="flex items-center gap-1">
           <div>
-            <div className="text-sm text-gray-900">John Recruiter</div>
+            <div className="tf-body">John Recruiter</div>
             <div className="tf-meta">Agency Pro</div>
           </div>
           <ChevronDown className="w-4 h-4 text-gray-500" />

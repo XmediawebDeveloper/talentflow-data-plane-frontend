@@ -1,4 +1,4 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X, Mail } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -21,6 +21,7 @@ import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogPr
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
+import { MobileRecordCard, MobileStatChip, useMobileRecordCardVariant } from '@/components/ui/mobile-record-card';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -1569,6 +1570,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* The row ⋮ (View Result, Create / Send, Download PDF Report) — one
      renderer for the list table, the grid cards and the phone / tablet list
      cards, so all three offer the same actions. */
+  /* Inside the Job Openings module the phone list uses the shared JD-style record card. */
+  const recordCardVariant = useMobileRecordCardVariant();
+
   const renderRowMenu = (candidate: CandidateResult) => (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -1895,7 +1899,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </span>
         );
       case 'jobVersion':
-        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="text-xs text-gray-400">—</span>;
+        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="tf-hint">—</span>;
       default:
         return null;
     }
@@ -1914,9 +1918,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        ROUTE, and nothing at all when embedded, where the host has already drawn
        one around this view. The nesting is kept either way so the content tree
        below is the one tree, never a second copy written for the tab. */
-    <div ref={rootRef} className={embedded ? undefined : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <div ref={rootRef} className={embedded ? undefined : 'tf-page'}>
       <div className={embedded ? undefined : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? undefined : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? undefined : 'tf-page-sheet'}>
           {/* Previous / Next assessment navigation rides inside the breadcrumb
               bar, as on job-details, so users can step through assessments
               without going back to the list — and without it scrolling away
@@ -1965,7 +1969,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   /* The app's one Job ID badge — see JobIdBadge. */
                   <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>
                 )}
-                <h1 className="min-w-0 text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">
+                <h1 className="tf-page-title min-w-0 tf-section-title truncate">
                   {jdTitle || assessmentTitle}
                 </h1>
               </div>
@@ -1977,7 +1981,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   assessment version) in the same way. Wraps under itself on a
                   phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-card-desc">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-body-secondary">
                   <span className="shrink-0">
                     {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
                   </span>
@@ -2267,7 +2271,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         /* Embedded: the AI Talent Match tab's spacing — the row's own `mb-3`
            under the controls and the More Filters panel's `pb-4` under the
            fields, nothing on the block itself. */
-        <div className={toolbarPortal ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
+        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
             /* Keystroke-by-keystroke, as the search field always was. */
@@ -2381,7 +2385,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               of line; h-9 matches the toolbar band. Holds Customize Columns
               and Export plus the selection-bound Download PDF Reports. */}
           {portaled && selectedRows.length > 0 && (
-          <StickyBulkBar className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2460,7 +2464,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           ) : (
             <div className="mt-3 pt-3 border-t border-brand-blue/10">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {filterFields}
               </div>
             </div>
@@ -2492,7 +2496,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                      className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selectedRows.length} selected`}
                     >
                       <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -2531,7 +2535,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   type="button"
                   onClick={() => setSelectedRows([])}
                   title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
                 >
                   <X className="w-4 h-4" />
                   Clear
@@ -2570,7 +2574,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         })()}
 
         {/* Candidates Results Table */}
-        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+        <div className="tf-card overflow-hidden">
           {/* Heading + candidate count — standalone only. Embedded in Job
               Details this row is dropped entirely to match the AI Talent
               Match reference, whose table card has no heading/count row at
@@ -2583,7 +2587,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {!portaled && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
+              <h2 className="truncate tf-row-name sm:text-base tracking-tight">Candidate Results</h2>
               {isFetching && (
                 <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
               )}
@@ -2702,6 +2706,50 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech', value: candidate.tech_score }] : []),
                   ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding', value: candidate.coding_score }] : []),
                 ];
+                if (recordCardVariant === 'jd') {
+                  const shownRounds = rounds.filter(({ value }) => value !== undefined);
+                  return (
+                    <MobileRecordCard
+                      key={candidate.id}
+                      selected={isSelected}
+                      onClick={() => viewCandidateDetails(candidate)}
+                      select={
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
+                          className="tf-checkbox focus:ring-brand-blue/40"
+                        />
+                      }
+                      badges={
+                        <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
+                          {statusLabel(candidate.status)}
+                        </Badge>
+                      }
+                      title={showName(candidate.name) || 'Unknown'}
+                      actions={renderRowMenu(candidate)}
+                      meta={[{ icon: <Mail />, label: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null }]}
+                      fields={[
+                        { label: 'Submitted', value: candidate.completedDate && candidate.completedDate !== '-' ? candidate.completedDate : null },
+                        { label: 'Duration', value: candidate.duration && candidate.duration !== '-' ? candidate.duration : null },
+                      ]}
+                      footer={shownRounds.length > 0 ? (
+                        <>
+                          {shownRounds.map(({ label, value }) => (
+                            <MobileStatChip
+                              key={label}
+                              tone={typeof value !== 'number' ? 'neutral' : value >= passingThreshold ? 'success' : 'danger'}
+                            >
+                              {label} {typeof value === 'number' ? `${value}%` : '—'}
+                            </MobileStatChip>
+                          ))}
+                        </>
+                      ) : undefined}
+                    />
+                  );
+                }
                 return (
                   <div
                     key={candidate.id}
@@ -2717,7 +2765,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Select ${candidate.name || 'candidate'}`}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 shrink-0"
+                        className="tf-checkbox mt-1 focus:ring-brand-blue/40"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
@@ -3090,7 +3138,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {jdShortId ? (
                             <JobIdBadge>{jdShortId}</JobIdBadge>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3108,7 +3156,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.jobVersion != null ? (
                             <VersionPill kind="job" version={candidate.jobVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3124,7 +3172,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.assessmentVersion != null ? (
                             <VersionPill kind="assessment" version={candidate.assessmentVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}

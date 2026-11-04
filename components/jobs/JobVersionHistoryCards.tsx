@@ -71,7 +71,7 @@ export default function JobVersionHistoryCards({
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
         <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="tf-cell-name">Version History</p>
+        <p className="tf-row-title">Version History</p>
       </div>
       {loading && !versions ? (
         <div className="flex items-center gap-2 py-2 tf-meta">
@@ -177,7 +177,7 @@ export default function JobVersionHistoryCards({
 
                 {/* Experience / location / work mode */}
                 {metaParts.length > 0 && (
-                  <p className="tf-meta-strong truncate mb-1.5">
+                  <p className="tf-meta truncate mb-1.5">
                     {metaParts.join(' · ')}
                   </p>
                 )}

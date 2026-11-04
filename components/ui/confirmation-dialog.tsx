@@ -87,7 +87,7 @@ export function ConfirmationDialog({
             <h3 className="text-xl font-semibold text-gray-900 text-center mb-2">{title}</h3>
 
             {/* Description */}
-            <p className="text-gray-600 text-center text-sm mb-6">{description}</p>
+            <p className="tf-body-secondary text-center mb-6">{description}</p>
 
             {/* Custom content */}
             {children && <div className="mb-6">{children}</div>}

@@ -1297,7 +1297,7 @@ export default function ServerCandidatePicker({
           ]}
           className={SELECT_CONTROL}
         />
-        <label className="inline-flex items-center gap-1.5 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
+        <label className="inline-flex items-center gap-1.5 tf-meta cursor-pointer">
           <input type="checkbox" checked={!!filters.exclude_invited} onChange={(e) => setFilter('exclude_invited', e.target.checked || undefined)} disabled={!versionId} className="m-0 rounded border-gray-300" />
           Hide already invited
         </label>
@@ -1482,7 +1482,7 @@ export default function ServerCandidatePicker({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5 min-w-0">
-                      <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate" title={r.name}>{shownName}</span>
+                      <span className="tf-row-name truncate" title={r.name}>{shownName}</span>
                       {isDbTab(source) && versionChip(r)}
                     </span>
                     <span className="flex items-center gap-1 min-w-0 tf-meta">
@@ -1500,7 +1500,7 @@ export default function ServerCandidatePicker({
                     </span>
                   </span>
                   {r.already_invited && (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Invited</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Invited</span>
                   )}
                   {r.archived && (
                     <span title="Archived — unarchive it (Resume Database) to invite this candidate" className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400">
@@ -1517,7 +1517,7 @@ export default function ServerCandidatePicker({
                       {r.score.percent}%<span className="hidden sm:inline font-medium">&nbsp;· {SERVER_MATCH_LABEL[r.score.match_status]}</span>
                     </span>
                   ) : (
-                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium border bg-gray-50 dark:bg-slate-800/50 text-gray-500 dark:text-slate-400 border-gray-200 dark:border-slate-700">Not scored</span>
+                    <span className="shrink-0 inline-flex items-center px-1.5 py-0.5 rounded-md tf-micro-hint border bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700">Not scored</span>
                   )}
                   {(r.rating || !r.score) && r.source === 'talent-match' && (
                     <span title="Match rating" className={`shrink-0 inline-flex items-center justify-center min-w-[1.75rem] px-1.5 py-0.5 rounded-md text-xs font-bold border ${ratingTone(r.rating || 0)}`}>
@@ -1551,7 +1551,7 @@ export default function ServerCandidatePicker({
       </div>
 
       {filterModeHere && (
-        <p role="note" className="tf-meta-strong">
+        <p role="note" className="tf-meta">
           Every candidate matching {describeFilters(selection.filters) || 'this tab'} is selected ({fmt(selectionCount(selection))}). Untick a row to leave them out; the list is re-checked when you send.
         </p>
       )}

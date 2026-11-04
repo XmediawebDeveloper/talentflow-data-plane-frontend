@@ -40,7 +40,7 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
                   <FileText className="w-8 h-8 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-white">Terms & Conditions Update</h1>
+                  <h1 className="tf-page-title text-white">Terms & Conditions Update</h1>
                   <p className="text-blue-100 text-sm mt-1">Action required to continue using TalentFlow</p>
                 </div>
               </div>
@@ -77,7 +77,7 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900 mb-1">What do I need to do?</h3>
-                    <p className="tf-card-desc">
+                    <p className="tf-body-secondary">
                       Review the updated terms and accept them to restore full access to your account and all features.
                     </p>
                   </div>
@@ -90,7 +90,7 @@ export default function TermsBlockingOverlay({ accountSuspended }: TermsBlocking
                     </div>
                     <div>
                       <h3 className="font-semibold text-gray-900 mb-1">Updated Terms</h3>
-                      <p className="tf-card-desc">
+                      <p className="tf-body-secondary">
                         {currentTerms.title} - Version {currentTerms.version}
                       </p>
                     </div>

@@ -85,7 +85,7 @@ const stepLabel = (s: Step, singular: string) => (s === 'version' ? singular : S
 /* The page's sections: an intro over each step, a white block. */
 const INTRO_H = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 const INTRO_P = 'mt-1 text-sm text-gray-600 dark:text-slate-400';
-const BLOCK = 'rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4';
+const BLOCK = 'tf-panel p-4';
 
 /** A candidate's identity in the review — the backend's `review_key`. */
 const reviewKey = (c: { resume_id?: string | null; email?: string | null }) =>
@@ -1151,7 +1151,7 @@ export default function VersionInviteDialog({
                 <Icon className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h2 id="version-invite-title" className="tf-section-title">
+                <h2 id="version-invite-title" className="tf-section-title sm:text-lg tracking-tight">
                   Invite to {label.singular}
                 </h2>
                 <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
@@ -1258,7 +1258,7 @@ export default function VersionInviteDialog({
               </div>
             )}
             {off ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-card-desc">{off}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-body-secondary">{off}</div>
             ) : !job ? (
               /* No job given: every published one, any job — the pick names
                  the job and the version. */
@@ -1306,7 +1306,7 @@ export default function VersionInviteDialog({
                         <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                         Choose a different {label.singular.toLowerCase()}
                       </button>
-                    ) : <h4 className="tf-subsection-title">Select {label.singular.toLowerCase()} version</h4>}
+                    ) : <h4 className="tf-row-title">Select {label.singular.toLowerCase()} version</h4>}
                     {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
                   <VersionList
@@ -1360,7 +1360,7 @@ export default function VersionInviteDialog({
                   <h3 className={INTRO_H}>Check the message and send</h3>
                   <p className={INTRO_P}>This is the email each candidate receives with their personal link.</p>
                 </div>
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <dl className="tf-grid-3">
                   {[
                     { term: label.singular, value: pickedName, bad: false },
                     {
@@ -1376,8 +1376,8 @@ export default function VersionInviteDialog({
                       bad: unitsAfter !== null && unitsAfter < 0,
                     },
                   ].map((d) => (
-                    <div key={d.term} className="min-w-0 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
-                      <dt className="text-xs text-gray-500 dark:text-slate-400">{d.term}</dt>
+                    <div key={d.term} className="min-w-0 tf-panel px-3 py-2.5">
+                      <dt className="tf-meta">{d.term}</dt>
                       <dd className={`mt-0.5 truncate text-[0.9375rem] font-semibold tabular-nums ${d.bad ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`} title={d.value}>{d.value}</dd>
                     </div>
                   ))}
@@ -1470,7 +1470,7 @@ export default function VersionInviteDialog({
               {bulkJob ? (
                 <button
                   onClick={onClose}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  className="tf-btn tf-btn-primary w-full sm:w-auto flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                 >
                   Done
                 </button>
@@ -1498,7 +1498,7 @@ export default function VersionInviteDialog({
                     <button
                       onClick={chooseFromList}
                       disabled={!listPicked}
-                      className="flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none min-w-0 flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                     >
                       Continue
                     </button>
@@ -1566,8 +1566,8 @@ export default function VersionInviteDialog({
                 </div>
               ) : (
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
-                <h3 id="version-invite-confirm" className="tf-card-title">{confirm.title}</h3>
-                <p className="mt-1.5 tf-card-desc">{confirm.message}</p>
+                <h3 id="version-invite-confirm" className="tf-section-title">{confirm.title}</h3>
+                <p className="mt-1.5 tf-body-secondary">{confirm.message}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">{confirm.cancelText ?? 'Cancel'}</Button>
                   <Button

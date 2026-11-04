@@ -4,11 +4,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 // cards (Logo / Colors / Domain) inside the max-w-[1400px] white card shell.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Hero */}
-          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
+          <section className="tf-panel relative mb-4 sm:mb-6 overflow-hidden p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -23,7 +23,7 @@ export default function Loading() {
           </section>
           {/* Section cards: header + fields, mirroring Logo / Colors / Domain */}
           {[2, 2, 1].map((fields, s) => (
-            <div key={s} className="mb-4 sm:mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div key={s} className="tf-panel mb-4 sm:mb-6 overflow-hidden">
               <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
                 <Skeleton className="h-10 w-10 rounded-xl" />
                 <div className="space-y-1.5">

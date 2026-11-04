@@ -8,6 +8,7 @@ import readXlsxFile from 'read-excel-file/browser';
 import { EMAIL_FORMAT_ERROR, isValidEmailFormat } from '@/lib/utils/email';
 import { NAME_FORMAT_ERROR, isValidCandidateName } from '@/lib/utils/name';
 import ListPagination from '@/components/ListPagination';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import type { BulkExtraCandidate } from '@/lib/services/bulkInviteService';
 
@@ -761,22 +762,34 @@ export default function ExtraCandidatesInput({
                 </button>
               </div>
               {upload.open && upload.invalid.length > 0 && (
-                <div className="mt-2.5 max-h-48 overflow-y-auto">
+                <>
+                <div className={`mt-2.5 max-h-48 overflow-y-auto ${DESKTOP_TABLE_ONLY}`}>
                   <table className="w-full table-fixed text-xs">
                     <thead className="text-left text-gray-600 dark:text-slate-400">
-                      <tr><th className="w-16 px-2 py-1.5 font-semibold">Row</th><th className="px-2 py-1.5 font-semibold">Email in the sheet</th><th className="w-28 px-2 py-1.5 font-semibold">Problem</th></tr>
+                      <tr><th className="tf-th-cell w-16 font-semibold">Row</th><th className="tf-th-cell font-semibold">Email in the sheet</th><th className="tf-th-cell w-28 font-semibold">Problem</th></tr>
                     </thead>
                     <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60 border-t border-gray-100 dark:border-slate-700/60">
                       {upload.invalid.map((r) => (
                         <tr key={`${r.row}-${r.email}`}>
-                          <td className="px-2 py-1.5 tabular-nums">{r.row}</td>
-                          <td className="px-2 py-1.5"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
-                          <td className="px-2 py-1.5">{r.problem}</td>
+                          <td className="tf-td tabular-nums">{r.row}</td>
+                          <td className="tf-td"><span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span></td>
+                          <td className="tf-td">{r.problem}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
+                <MobileRecordList className="mt-2.5 max-h-48 overflow-y-auto">
+                  {upload.invalid.map((r) => (
+                    <MobileRecordCard
+                      key={`${r.row}-${r.email}`}
+                      idBadge={<span className="tf-meta tabular-nums">Row {r.row}</span>}
+                      title={<span className="block truncate" title={r.email}>{r.email || <i className="text-gray-400">empty</i>}</span>}
+                      fields={[{ label: 'Problem', value: r.problem }]}
+                    />
+                  ))}
+                </MobileRecordList>
+                </>
               )}
             </div>
           )}
@@ -793,7 +806,7 @@ export default function ExtraCandidatesInput({
         <div className="space-y-2">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="inline-flex items-center gap-2.5">
-              <b className="text-sm font-semibold text-gray-900 dark:text-slate-50 tabular-nums">
+              <b className="tf-row-title tabular-nums">
                 {modeRows.length.toLocaleString()} {mode === 'manual' ? 'typed in' : 'from sheets'}
               </b>
               <button type="button" onClick={clearAll} disabled={disabled} className="text-xs font-medium text-gray-500 dark:text-slate-400 hover:text-destructive hover:underline underline-offset-2 disabled:opacity-50">
@@ -808,7 +821,7 @@ export default function ExtraCandidatesInput({
                 onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 placeholder="Search name or email"
                 aria-label="Search added candidates"
-                className="h-8 w-full pl-8 pr-2 text-xs border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                className="tf-input h-8 pl-8 pr-2 text-xs"
               />
             </label>
           </div>
@@ -835,12 +848,12 @@ export default function ExtraCandidatesInput({
           )}
           <div className="overflow-hidden rounded-lg border border-gray-200 dark:border-slate-700">
             <table className="w-full table-fixed text-sm">
-              <thead className="bg-slate-50 dark:bg-slate-800 text-xs text-gray-500 dark:text-slate-400">
+              <thead className="bg-slate-50 dark:bg-slate-800 tf-meta">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold">Name</th>
-                  <th className="hidden sm:table-cell px-3 py-2 text-left font-semibold">Email</th>
-                  {mode === 'excel' && <th className="hidden md:table-cell w-40 px-3 py-2 text-left font-semibold">Source</th>}
-                  <th className={`${onCopyLink ? 'w-[10.5rem]' : 'w-[5rem]'} px-2 py-2 text-center font-semibold`}>Actions</th>
+                  <th className="tf-th-cell text-left font-semibold">Name</th>
+                  <th className="tf-th-cell hidden sm:table-cell text-left font-semibold">Email</th>
+                  {mode === 'excel' && <th className="tf-th-cell hidden md:table-cell w-40 text-left font-semibold">Source</th>}
+                  <th className={`${onCopyLink ? 'w-[10.5rem]' : 'w-[5rem]'} tf-th-cell text-center font-semibold`}>Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -848,7 +861,7 @@ export default function ExtraCandidatesInput({
                   const draft = editing?.id === r.id ? editing : null;
                   return (
                   <tr key={r.id} className={draft ? 'bg-brand-blue/[0.03] dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'}>
-                    <td className="px-3 py-2 align-top">
+                    <td className="tf-td align-top">
                       {draft ? (
                         <>
                           <input
@@ -883,7 +896,7 @@ export default function ExtraCandidatesInput({
                         </>
                       )}
                     </td>
-                    <td className="hidden sm:table-cell px-3 py-2 align-top text-gray-600 dark:text-slate-400">
+                    <td className="tf-td hidden sm:table-cell align-top text-gray-600 dark:text-slate-400">
                       {draft ? (
                         <input
                           type="email"
@@ -897,14 +910,14 @@ export default function ExtraCandidatesInput({
                       ) : <span className="block truncate" title={r.email}>{r.email}</span>}
                     </td>
                     {mode === 'excel' && (
-                      <td className="hidden md:table-cell px-3 py-2 align-top">
-                        <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 text-2xs text-gray-600 dark:text-slate-300" title={r.origin}>
+                      <td className="tf-td hidden md:table-cell align-top">
+                        <span className="inline-flex max-w-full items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-1.5 py-0.5 tf-micro-hint" title={r.origin}>
                           <FileSpreadsheet className="w-3 h-3 shrink-0 text-emerald-600" aria-hidden="true" />
                           <span className="truncate">{r.origin}</span>
                         </span>
                       </td>
                     )}
-                    <td className="px-2 py-2 align-top">
+                    <td className="tf-td align-top">
                       <span className="flex items-center justify-center gap-1 whitespace-nowrap">
                         {draft ? (
                           <>
@@ -971,7 +984,7 @@ export default function ExtraCandidatesInput({
                   );
                 })}
                 {pageRows.length === 0 && (
-                  <tr><td colSpan={4} className="px-3 py-4 text-center text-sm text-gray-500 dark:text-slate-400">No one matches your search.</td></tr>
+                  <tr><td colSpan={4} className="tf-td text-center tf-body-muted">No one matches your search.</td></tr>
                 )}
               </tbody>
             </table>

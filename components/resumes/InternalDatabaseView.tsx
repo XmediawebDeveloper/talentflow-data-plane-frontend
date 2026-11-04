@@ -1048,9 +1048,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     // and a table skeleton that mirrors ResumeTable's real columns — so the
     // placeholder lines up with the content that replaces it, not a generic block.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             {/* Breadcrumb + tab strip — rendered for real even while the list
                 loads, so switching tabs stays possible and nothing shifts. */}
             {header}
@@ -1066,7 +1066,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
               </div>
             </div>
             {/* Search + table card */}
-            <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges overflow-hidden">
+            <div className="tf-card tf-round-edges overflow-hidden">
               <div className="p-3 flex gap-2 items-center border-b border-gray-200">
                 <Skeleton className="h-9 flex-1 rounded-lg" />
                 <Skeleton className="h-9 w-24 rounded-lg" />
@@ -1083,9 +1083,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {header}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div className="flex items-start gap-3">
@@ -1095,7 +1095,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <h1 className="tf-page-title">Shared Resume Database</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
+              <span className="tf-badge bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {/* The same rows the table lists (search applied). The
                     versions note is a server total for the whole list, so it
                     only shows while no search is narrowing it. */}
@@ -1105,7 +1105,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 )}
               </span>
             </div>
-            <p className="tf-card-desc">
+            <p className="tf-body-secondary">
               Search and filter resumes shared across your organization
             </p>
           </div>
@@ -1399,7 +1399,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 <div className="min-w-0">
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
                   <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
@@ -1422,14 +1422,14 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                 <button
                   onClick={() => setIsZipDownloadModalOpen(false)}
                   disabled={isDownloadingSelection}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingSelection}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isDownloadingSelection ? (
                     <>

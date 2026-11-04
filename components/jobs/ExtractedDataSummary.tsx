@@ -51,7 +51,7 @@ export function ExtractedSummaryCard({
           title="Extracted Data Summary"
           hint={`Click to ${open ? 'hide' : 'view'} structured requirements`}
           badge={aiExtracted ? (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+            <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
               <Wand2 className="w-3 h-3" />
               AI Extracted
             </span>
@@ -87,7 +87,7 @@ export function SummarySectionHeading({
 }) {
   return (
     <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
-      <h3 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
+      <h3 className="flex items-center gap-2 tf-row-title sm:text-base">
         <Icon className={`w-4 h-4 flex-shrink-0 ${STEP2_SECTION_TONES[tone].icon}`} />
         {title}
       </h3>
@@ -221,7 +221,7 @@ export default function ExtractedDataSummary({
   return (
     <ExtractedSummaryCard open={open} onToggle={() => setOpen((v) => !v)} aiExtracted={aiExtracted}>
       <SummarySection icon={Sparkles} tone="blue" title="Skills & Requirements">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+        <div className="tf-grid-2">
           <div className="min-w-0">
             <h4 className={SUMMARY_LIST_HEADING}>Must-Have Skills ({mustHaveSkills.length})</h4>
             <SummaryItemList items={mustHaveSkills} />
@@ -255,7 +255,7 @@ export default function ExtractedDataSummary({
       </SummarySection>
 
       <SummarySection icon={Briefcase} tone="success" title="Role Requirements">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="tf-grid-2">
           <div className={SUMMARY_TILE}>
             <h4 className={SUMMARY_FIELD_LABEL}>Experience</h4>
             {experience ? (
@@ -306,14 +306,14 @@ export default function ExtractedDataSummary({
       </SummarySection>
 
       <SummarySection icon={MapPin} tone="cyan" title="Location & Work Setup" last>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+        <div className="tf-grid-2">
           {(locationChips.length > 0 || location) && (
             <div className={`${SUMMARY_TILE} sm:col-span-2`}>
               <h4 className={SUMMARY_FIELD_LABEL}>Location</h4>
               <div className="flex flex-wrap gap-2">
                 {locationChips.length > 0 ? (
                   locationChips.map((loc, index) => (
-                    <span key={index} className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200">
+                    <span key={index} className="tf-panel inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 tf-body">
                       <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
                       <span className="min-w-0 [overflow-wrap:anywhere]">{loc.city}</span>
                       {loc.radius_km != null && (
@@ -322,7 +322,7 @@ export default function ExtractedDataSummary({
                     </span>
                   ))
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 rounded-lg bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-800 dark:text-slate-200">
+                  <span className="tf-panel inline-flex items-center gap-1.5 max-w-full px-2.5 py-1 tf-body">
                     <MapPin className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
                     <span className="min-w-0 [overflow-wrap:anywhere]">{location}</span>
                   </span>

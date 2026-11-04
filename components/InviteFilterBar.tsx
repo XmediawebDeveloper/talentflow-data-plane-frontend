@@ -155,7 +155,7 @@ export default function InviteFilterBar({
             value={localSearch}
             onChange={(e) => setLocalSearch(e.target.value)}
             placeholder={searchPlaceholder}
-            className="w-full h-[38px] rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-9 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue"
+            className="tf-input pl-9 pr-9"
           />
           {localSearch && (
             <button
@@ -197,7 +197,7 @@ export default function InviteFilterBar({
         <DateField
           value={filters.dateFrom}
           onChange={(v) => onChange({ ...filters, dateFrom: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
+          className="min-w-0 max-xs:col-span-2 h-9 px-2 sm:px-3 text-sm"
           aria-label="Invite date from"
         />
 
@@ -205,7 +205,7 @@ export default function InviteFilterBar({
           value={filters.dateTo}
           min={filters.dateFrom || undefined}
           onChange={(v) => onChange({ ...filters, dateTo: v })}
-          className="min-w-0 max-[399px]:col-span-2 h-[38px] px-2 sm:px-3 text-sm"
+          className="min-w-0 max-xs:col-span-2 h-9 px-2 sm:px-3 text-sm"
           aria-label="Invite date to"
         />
 
@@ -213,7 +213,7 @@ export default function InviteFilterBar({
           type="button"
           onClick={handleClear}
           disabled={!hasActiveFilters}
-          className="col-span-2 md:col-span-1 h-[38px] px-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-medium text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+          className="tf-btn tf-btn-secondary col-span-2 md:col-span-1 h-9 px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors gap-0"
         >
           Clear Filters
         </button>

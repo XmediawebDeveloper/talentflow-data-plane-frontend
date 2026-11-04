@@ -170,7 +170,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 <AlertCircle className="w-4 h-4 text-warning" />
                 <h3 id="instructions-heading" className={T_SECTION}>Key rules</h3>
               </div>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5">
+              <ul className="tf-grid-4">
                 {importantInstructions.map((instruction, index) => {
                   const critical = 'critical' in instruction && instruction.critical;
                   return (
@@ -184,7 +184,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                         <instruction.icon className={`w-3.5 h-3.5 shrink-0 ${critical ? 'text-destructive' : 'text-warning'}`} />
                         {instruction.title}
                       </p>
-                      <p className="mt-1 tf-meta-strong leading-relaxed">{instruction.text}</p>
+                      <p className="mt-1 tf-meta leading-relaxed">{instruction.text}</p>
                     </li>
                   );
                 })}
@@ -201,14 +201,14 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 </h3>
                 <span className="tf-meta">— this assessment is monitored to keep it fair</span>
               </div>
-              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+              <ul className="tf-grid-stats-5">
                 {proctoringFeatures.map((feature, index) => (
                   <li key={index} className="rounded-lg bg-brand-cyan/5 ring-1 ring-brand-cyan/15 px-3 py-2.5">
-                    <p className="flex items-center gap-1.5 tf-cell-name">
+                    <p className="flex items-center gap-1.5 tf-row-title">
                       <feature.icon className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
                       {feature.label}
                     </p>
-                    <p className="mt-1 tf-meta-strong leading-relaxed">{feature.description}</p>
+                    <p className="mt-1 tf-meta leading-relaxed">{feature.description}</p>
                   </li>
                 ))}
               </ul>
