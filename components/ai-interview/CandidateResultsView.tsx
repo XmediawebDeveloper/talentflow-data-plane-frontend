@@ -1423,7 +1423,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     status: string;
     analysis_status: string | null;
     triggered_at: string | null;
+    // When the phone first opened the QR link (null = never scanned) and
+    // when the QR window closed/closes. Optional — older backends omit them.
+    opened_at?: string | null;
+    expires_at?: string | null;
     submitted_at: string | null;
+    video_duration_seconds?: number | null;
     video_uploaded: boolean;
     video_url: string | null;
     download_url: string | null;
@@ -1465,8 +1470,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const envVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
+  // Per-verification "Retry analysis" in-flight flag + last error message.
+  const [envReanalyzing, setEnvReanalyzing] = useState<Record<string, boolean>>({});
+  const [envReanalyzeError, setEnvReanalyzeError] = useState<Record<string, string>>({});
+
+  // Initial load — runs once per interview on mount (not only when the tab
+  // is opened) so the tab badge can show the count and turn red for a
+  // flagged result before the recruiter even clicks into the tab.
   useEffect(() => {
-    if (activeTab !== 'verification' || envVerifications !== null) return;
+    if (envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1484,7 +1496,69 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       })
       .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
     return () => { cancelled = true; };
-  }, [activeTab, liveSession.id, envVerifications]);
+  }, [liveSession.id, envVerifications]);
+
+  // Auto-refresh while anything is still in flight — analysis queued/running,
+  // or the QR still waiting on the phone (pending/opened). Silent re-fetch
+  // (no skeleton) every 5s; stops by itself once every attempt is final.
+  // Frames for an attempt whose analysis_status changed are dropped so the
+  // frames effect below re-fetches them (they only exist once analysis ends).
+  const envHasInFlight = useMemo(
+    () => (envVerifications ?? []).some(v =>
+      v.analysis_status === 'pending' || v.analysis_status === 'running'
+      // pending/opened only count while the interview is live — after it
+      // ends, a row stuck there is final (candidate never finished), and
+      // polling it would never stop.
+      || (isInProgress && (v.status === 'pending' || v.status === 'opened'))
+    ),
+    [envVerifications, isInProgress],
+  );
+  useEffect(() => {
+    if (!envHasInFlight) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api.get(`/ai-interview/${liveSession.id}/environment-verifications`)
+        .then(res => {
+          if (cancelled) return;
+          const list: EnvVerificationRecord[] = Array.isArray(res?.data?.verifications) ? res.data.verifications : [];
+          setEnvVerifications(prev => {
+            const prevById = new Map((prev ?? []).map(p => [p.verification_id, p]));
+            const changed = list
+              .filter(n => prevById.get(n.verification_id)?.analysis_status !== n.analysis_status)
+              .map(n => n.verification_id);
+            if (changed.length > 0) {
+              const drop = <T,>(rec: Record<string, T>) => {
+                const next = { ...rec };
+                changed.forEach(id => { delete next[id]; });
+                return next;
+              };
+              setEnvFrames(drop);
+              setEnvFramesError(drop);
+              setEnvFramesLoading(drop);
+            }
+            return list;
+          });
+        })
+        .catch(() => { /* keep showing last good data; next tick retries */ });
+    }, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [envHasInFlight, envVerifications, liveSession.id]);
+
+  const retryEnvAnalysis = (verificationId: string) => {
+    setEnvReanalyzing(prev => ({ ...prev, [verificationId]: true }));
+    setEnvReanalyzeError(prev => { const n = { ...prev }; delete n[verificationId]; return n; });
+    api.post(`/ai-interview/environment-verification/${verificationId}/reanalyze`)
+      .then(() => {
+        setEnvVerifications(prev => (prev ?? []).map(v =>
+          v.verification_id === verificationId ? { ...v, analysis_status: 'pending' } : v
+        ));
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.detail;
+        setEnvReanalyzeError(prev => ({ ...prev, [verificationId]: typeof msg === 'string' ? msg : 'Could not restart analysis. Please try again.' }));
+      })
+      .finally(() => setEnvReanalyzing(prev => ({ ...prev, [verificationId]: false })));
+  };
 
   // Verification Frames tab — the ~20 individual frames the vision LLM
   // actually analyzed, one fetch per verification record (frames are
@@ -1774,7 +1848,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
-    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: (envVerifications ?? []).some(v => v.result_severity === 'flagged' || v.color_match === false || v.id_match === false) ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -3655,57 +3729,129 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     ? 'Could not load QR verification data — please refresh and try again.'
                     : liveSession.environment_verification_enabled
                     ? 'No QR verification was triggered during this interview.'
-                    : 'Mobile Environment Verification was not enabled for this interview.'
+                    : 'QR Verification was not enabled for this interview.'
                 )
               ) : (
                 <div className="space-y-4">
-                  {envVerifications.map((v) => {
+                  {envVerifications.map((v, attemptIdx) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
-                    const envFramesForVerification = envFrames[v.verification_id];
-                    const envAvailableFrames = envFramesForVerification ? envFramesForVerification.filter(f => f.url) : [];
-                    const openAllFramesViewer = () => {
-                      if (envAvailableFrames.length === 0) return;
-                      setEnvFrameViewer({ urls: envAvailableFrames.map(f => f.url as string), index: 0 });
+
+                    // ── Attempt state (what actually happened on the phone) ──
+                    // pending/opened rows only count as "in progress" while the
+                    // interview is still live; once it has ended they're final.
+                    const waitingOnPhone = !v.video_uploaded && isInProgress && (v.status === 'pending' || v.status === 'opened');
+                    const notCompleted = !v.video_uploaded && !waitingOnPhone && (v.status === 'expired' || v.status === 'pending' || v.status === 'opened');
+                    const uploadFailed = !v.video_uploaded && !waitingOnPhone && !notCompleted;
+                    const notUploadedMessage = waitingOnPhone
+                      ? (v.status === 'opened'
+                          ? 'QR scanned — waiting for the candidate to finish recording…'
+                          : 'Waiting for the candidate to scan the QR code…')
+                      : notCompleted
+                      ? (v.opened_at
+                          ? 'The candidate opened the link on their phone but did not submit a recording before time ran out.'
+                          : 'The candidate did not scan the QR code before it expired.')
+                      : 'The candidate submitted, but the video upload failed.';
+
+                    // ── Final result (shown in the card header) ──
+                    const analysing = v.analysis_status === 'pending' || v.analysis_status === 'running';
+                    const checksFailed = v.color_match === false || v.id_match === false;
+                    const flagged = v.result_severity === 'flagged';
+                    const verdict: { label: string; cls: string; icon: React.ReactNode } =
+                      waitingOnPhone
+                        ? { label: 'In progress', cls: 'bg-gray-100 text-gray-600 ring-gray-200', icon: <Loader2 className="w-3.5 h-3.5 animate-spin" /> }
+                      : notCompleted
+                        ? { label: 'Not completed', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/30', icon: <AlertTriangle className="w-3.5 h-3.5" /> }
+                      : uploadFailed
+                        ? { label: 'Upload failed', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <XCircle className="w-3.5 h-3.5" /> }
+                      : flagged || checksFailed
+                        ? { label: 'Needs review', cls: 'bg-destructive-subtle text-destructive ring-destructive-line', icon: <ShieldAlert className="w-3.5 h-3.5" /> }
+                      : analysing
+                        ? { label: 'Analyzing', cls: 'bg-gray-100 text-gray-600 ring-gray-200', icon: <Loader2 className="w-3.5 h-3.5 animate-spin" /> }
+                      : v.analysis_status === 'error'
+                        ? { label: 'Analysis failed', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/30', icon: <AlertTriangle className="w-3.5 h-3.5" /> }
+                      : v.analysis_status === 'done'
+                        ? { label: 'Passed', cls: 'bg-success-subtle text-success ring-success-line', icon: <CheckCircle2 className="w-3.5 h-3.5" /> }
+                        : { label: 'Uploaded', cls: 'bg-gray-100 text-gray-600 ring-gray-200', icon: <Check className="w-3.5 h-3.5" /> };
+                    const headerIcon = verdict.label === 'Passed'
+                      ? <ShieldCheck className="w-4 h-4 text-success flex-shrink-0" />
+                      : verdict.label === 'Needs review' || verdict.label === 'Upload failed'
+                      ? <ShieldAlert className="w-4 h-4 text-destructive flex-shrink-0" />
+                      : <ScanQrCode className="w-4 h-4 text-brand-blue flex-shrink-0" />;
+
+                    // ── Timing ──
+                    const secondsBetween = (a?: string | null, b?: string | null) => {
+                      if (!a || !b) return null;
+                      const d = (new Date(b).getTime() - new Date(a).getTime()) / 1000;
+                      return Number.isFinite(d) && d >= 0 ? Math.round(d) : null;
                     };
+                    const timeToScan = secondsBetween(v.triggered_at, v.opened_at);
+                    const durationSec = envVideoDurations[v.verification_id]
+                      ?? (v.video_duration_seconds != null ? Math.round(v.video_duration_seconds) : null);
+                    const rgbTotal = v.rgb_sequence_results?.length ?? 0;
+                    const rgbMatched = v.rgb_sequence_results?.filter(r => r.match).length ?? 0;
                     return (
                       <div key={v.verification_id} className="tf-card-soft overflow-hidden">
                         <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                           <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                            <span className="tf-row-title">Environment Verification</span>
-                            <button
-                              type="button"
-                              disabled={envAvailableFrames.length === 0}
-                              onClick={openAllFramesViewer}
-                              title={envAvailableFrames.length > 0 ? `View ${envAvailableFrames.length} analyzed frames` : 'No stored frames for this attempt'}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
-                            >
-                              <Camera className="w-3.5 h-3.5" />
-                              Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
-                            </button>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="tf-micro-hint font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
-                            )}
+                            {headerIcon}
+                            <span className="tf-row-title">
+                              QR Verification{envVerifications.length > 1 ? ` · Attempt ${attemptIdx + 1}` : ''}
+                            </span>
+                            <span className={`inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-full ring-1 ${verdict.cls}`}>
+                              {verdict.icon}{verdict.label}
+                            </span>
                           </div>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {v.color_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                Color {v.color_match ? 'matched' : 'mismatch'}
+                              <span
+                                className={`inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}
+                                title="The colors flashing on the laptop screen were seen in the phone video — proves the phone was filming this laptop live."
+                              >
+                                {v.color_match ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                Screen color {v.color_match ? 'verified' : 'not verified'}
                               </span>
                             )}
                             {v.id_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                ID {v.id_match ? 'matched' : 'mismatch'}
+                              <span
+                                className={`inline-flex items-center gap-1 text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}
+                                title="The one-time session code shown on the laptop was readable in the phone video."
+                              >
+                                {v.id_match ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                                Session code {v.id_match ? 'verified' : 'not verified'}
                               </span>
                             )}
                           </div>
+                        </div>
+                        <div className="px-4 sm:px-5 py-2.5 border-b border-gray-100 flex items-center flex-wrap gap-x-4 gap-y-1.5 tf-meta">
+                          <span className="inline-flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-gray-400" />
+                            Shown <span className="font-mono">{formatTs(v.triggered_at || undefined)}</span>
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+                            Scanned{' '}
+                            {v.opened_at ? (
+                              <>
+                                <span className="font-mono">{formatTs(v.opened_at)}</span>
+                                {timeToScan != null && <span className="text-gray-400">({timeToScan}s later)</span>}
+                              </>
+                            ) : <span className="text-gray-400">—</span>}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5 text-gray-400" />
+                            Submitted{' '}
+                            {v.submitted_at ? <span className="font-mono">{formatTs(v.submitted_at)}</span> : <span className="text-gray-400">—</span>}
+                          </span>
+                          {renderWatchInRecording(v.triggered_at)}
                         </div>
                         <div className="p-4 sm:p-5 space-y-4">
                           <div>
                             <p className="tf-eyebrow tracking-wide mb-1.5">Candidate Verification Video</p>
                             {!v.video_uploaded ? (
-                              <p className="text-sm text-destructive italic">Video upload failed.</p>
+                              <p className={`text-sm italic ${uploadFailed ? 'text-destructive' : waitingOnPhone ? 'tf-body-muted' : 'text-brand-orange-deep'}`}>
+                                {notUploadedMessage}
+                              </p>
                             ) : videoStillLoading ? (
                               <p className="tf-body-muted italic">Loading video…</p>
                             ) : !videoSrc ? (
