@@ -132,9 +132,62 @@ const loadScoredTab = async (jdId: string, p: ListParams, signal?: AbortSignal):
   return { items, total: items.length, page: 1, page_size: items.length, counts };
 };
 
-/** One page of a tab — Scored Resumes whole, from the job's scored list. */
+/** Every AI Talent Match candidate for the job, unfiltered — unlike the job's
+    own `talent-match` list (which the server drops an archived resume out of
+    entirely, same as every source), this still lists one. Used only to
+    recover archived rows, same role `loadJobScored` plays for Scored Resumes. */
+const loadJdMatched = async (jdId: string): Promise<ServerInviteCandidate[]> => {
+  const { candidates } = await aiMatchService.listJdCandidates(jdId, 5000);
+  return candidates
+    .filter((c) => c.resumeId)
+    .map((c) => ({
+      resume_id: c.resumeId,
+      name: c.name || 'Unknown',
+      email: c.email || '',
+      phone: c.phone || '',
+      source: 'talent-match' as const,
+      rating: c.rank ?? null,
+      match_score: c.matchScore ?? null,
+      // Not known from this list; the job's own list (merged in below) has
+      // it for any resume that was also scored.
+      score: null,
+      already_invited: false,
+      archived: !!c.isArchived,
+      version: c.resumeVersion ?? null,
+    }));
+};
+
+/* AI Talent Match, same shape as loadScoredTab: the job's own talent-match
+   list (authoritative, but archived resumes never reach it) unioned with the
+   unfiltered match list (only used to recover those archived rows, greyed
+   out same as Scored Resumes). */
+const loadTalentMatchTab = async (jdId: string, p: ListParams, signal?: AbortSignal): Promise<ListPage> => {
+  const [{ items: own, counts: serverCounts }, matched] = await Promise.all([
+    loadServerAll(jdId, { ...p, search: undefined, match_status: undefined, min_rating: undefined, min_score: undefined, exclude_invited: undefined, scored: undefined }, signal),
+    loadJdMatched(jdId),
+  ]);
+  const ownById = new Map(own.map((r) => [r.resume_id, r]));
+  const byId = new Map<string, ServerInviteCandidate>();
+  for (const r of matched) if (!byId.has(r.resume_id)) byId.set(r.resume_id, ownById.get(r.resume_id) ?? r);
+  for (const r of own) if (!byId.has(r.resume_id)) byId.set(r.resume_id, r);
+  const q = p.search?.trim().toLowerCase();
+  const items = sortRows([...byId.values()].filter((r) =>
+    (!q || r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q))
+    && (p.scored === undefined || (p.scored ? !!r.score : !r.score))
+    && (!p.match_status || r.score?.match_status === p.match_status)
+    && (!p.min_rating || (r.rating ?? 0) >= p.min_rating)
+    && (!p.min_score || (r.score?.percent ?? 0) >= p.min_score)
+    && (!p.exclude_invited || !r.already_invited)), p.sort);
+  const counts = { ...serverCounts, 'talent-match': byId.size };
+  return { items, total: items.length, page: 1, page_size: items.length, counts };
+};
+
+/** One page of a tab — AI Talent Match and Scored Resumes read whole, from
+    the job's own lists merged with their unfiltered counterpart. */
 const loadListPage = (jdId: string, p: ListParams, signal?: AbortSignal): Promise<ListPage> =>
-  p.source === 'score-resume' ? loadScoredTab(jdId, p, signal) : bulkInviteService.listCandidates(jdId, p, signal);
+  p.source === 'score-resume' ? loadScoredTab(jdId, p, signal)
+    : p.source === 'talent-match' ? loadTalentMatchTab(jdId, p, signal)
+    : bulkInviteService.listCandidates(jdId, p, signal);
 
 /* The list tabs: the job's two lists, then the resume database — the share
    step's "Select From" (My Resumes / Shared Database), here as server-paged

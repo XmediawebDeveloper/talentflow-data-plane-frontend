@@ -1,12 +1,12 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
-import { assessmentInviteSource } from '@/components/AIInterviewInviteTable';
+import { assessmentInviteSource, InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
@@ -20,6 +20,7 @@ import InviteFilterBar, {
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { assessmentService, isAssessmentArchived } from '@/lib/services/assessmentService';
 import {
@@ -34,9 +35,12 @@ import {
   InvitationHistoryDialog,
   RevokeInvitationDialog,
   EditInvitationModal,
+  isRevocableInvitation,
+  canResendInvite,
 } from '@/components/AssessmentInviteActions';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
+import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
    still unopened) and Edit (name + email, revoked-only, then Save & Send) when
@@ -192,6 +196,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               assessment_title: assessment.title,
               assessment_id: assessment.id,
               assessment_version: assessment.version,
+              // Job Version / Assessment Version columns — same fields the
+              // Assessments page's job-scoped Track Invites popup stamps
+              // (_jd_version / _assessment_version), so VersionChip renders
+              // identically here.
+              _jd_version: assessment.jd_version ?? jobVersion ?? undefined,
+              _assessment_version: assessment.version,
               ...assessmentInviteSource(inv),
               assessment_technical_enabled: assessment.technical_enabled,
               assessment_coding_enabled: assessment.coding_enabled,
@@ -336,6 +346,107 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   const pageStart = (currentPage - 1) * INVITES_PAGE_SIZE;
   const visibleInvitations = filteredInvitations.slice(pageStart, pageStart + INVITES_PAGE_SIZE);
 
+  /* Bulk selection — same control, wording and rules as the Assessments
+     page's own job-scoped Track Invites popup: any row this popup's own
+     per-row menu can revoke or resend gets a checkbox, scoped to the rows on
+     the current page. Which bulk BUTTON appears depends on the ticked
+     selection being uniformly one status-class or the other; a mixed
+     Invited+Expired selection shows neither. */
+  const isBulkActionable = (inv: any): boolean => isRevocableInvitation(inv) || canResendInvite(inv);
+  const inviteArchived = (inv: any): boolean => isAssessmentArchived(inv.assessment_status);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectableIds = jdDisabled
+    ? []
+    : visibleInvitations.filter((inv: any) => isBulkActionable(inv) && !inviteArchived(inv)).map((inv: any) => inv.id);
+  const selectedRows = visibleInvitations.filter((inv: any) => selectedIds.has(inv.id));
+  const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvitation);
+  const allResendable = selectedRows.length > 0 && selectedRows.every(canResendInvite);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
+  const toggleSelectAll = () =>
+    setSelectedIds(() => (allSelected ? new Set<string>() : new Set<string>(selectableIds)));
+  const toggleSelectOne = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  /* Reloads (paging, filtering, the 15s refresh moving a candidate forward)
+     can leave selected ids pointing at rows that are gone or no longer
+     eligible — drop those so the bulk button's count always matches what an
+     action would actually do. */
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const valid = new Set(visibleInvitations.filter(isBulkActionable).map((inv: any) => inv.id));
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleInvitations, jdDisabled]);
+
+  const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
+  const [isBulkResending, setIsBulkResending] = useState(false);
+  const [showBulkRevokeConfirm, setShowBulkRevokeConfirm] = useState(false);
+  const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+
+  // Bulk resend — same endpoint as the single-row Resend, called per
+  // invitation. Sequential on purpose: a burst of parallel resends is exactly
+  // the kind of thing mail rate-limiters punish.
+  const handleBulkResend = async () => {
+    const targets = visibleInvitations.filter((inv: any) => selectedIds.has(inv.id) && canResendInvite(inv));
+    if (targets.length === 0) {
+      setShowBulkResendConfirm(false);
+      return;
+    }
+    setIsBulkResending(true);
+    let sent = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      try {
+        await assessmentService.resendInvitation(inv.assessment_id, inv.id);
+        sent++;
+      } catch (error) {
+        console.error(`Failed to resend invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
+    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+    setSelectedIds(new Set());
+    setShowBulkResendConfirm(false);
+    setIsBulkResending(false);
+    await handleInvitesChanged();
+  };
+
+  // Bulk revoke — only offered when canModifyInvites, mirroring the per-row
+  // Revoke action's own gate.
+  const handleBulkRevoke = async () => {
+    const targets = selectedRows.filter(isRevocableInvitation);
+    if (targets.length === 0) {
+      setShowBulkRevokeConfirm(false);
+      return;
+    }
+    setIsBulkRevoking(true);
+    let revoked = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      try {
+        await assessmentService.revokeInvitation(inv.assessment_id, inv.id);
+        revoked++;
+      } catch (error) {
+        console.error(`Failed to revoke invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
+    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    setSelectedIds(new Set());
+    setShowBulkRevokeConfirm(false);
+    setIsBulkRevoking(false);
+    await handleInvitesChanged();
+  };
+
   // "Go to page" input for the footer — buffered locally so a partial edit
   // doesn't get clobbered by currentPage until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState(String(currentPage));
@@ -470,6 +581,59 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           ]}
           onClearExtras={() => { setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
         />
+
+        {/* Select All — same control, wording and placement as the
+            Assessments page's own Track Invites popup. Any Invited or
+            Expired row counts, regardless of the active stat card. */}
+        {!isLoading && selectableIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+            >
+              <span
+                role="checkbox"
+                aria-checked={allSelected}
+                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                  allSelected
+                    ? 'bg-brand-blue border-brand-blue'
+                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                }`}
+              >
+                {allSelected && <Check className="w-3 h-3 text-white" />}
+              </span>
+              Select All ({selectableIds.length})
+            </button>
+            <div className="flex items-center gap-2">
+              {/* Uniform selection's bulk action — never both at once. */}
+              {allResendable && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowBulkResendConfirm(true)}
+                  disabled={isBulkResending}
+                  icon={isBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                >
+                  {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
+                </Button>
+              )}
+              {canModifyInvites && allRevocable && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowBulkRevokeConfirm(true)}
+                  disabled={isBulkRevoking}
+                  icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                >
+                  {isBulkRevoking ? 'Revoking…' : `Revoke (${selectedIds.size})`}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
 
         {!isLoading && invitations.length > 0 && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
@@ -618,17 +782,20 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <table className="w-max min-w-full">
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">CID</th>
+                      <th className="w-8 py-3 pl-3 lg:pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
                       <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Status</th>
                       <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Timeline</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Status</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
                         <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
                         <th className="text-center py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Coding Score</th>
                       )}
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Invite Source</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">CID</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Job Version</th>
+                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment Version</th>
                       <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
@@ -636,10 +803,28 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                     {visibleInvitations.map((invitation: any) => {
                       return (
                         <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
-                            <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
-                              {invitation.candidate_display_id || '-'}
-                            </span>
+                          {/* stopPropagation: this row has no row-level click
+                              handler today, but kept consistent with the
+                              Assessments page popup's own checkbox cell. */}
+                          <td className="py-3 pl-3 lg:pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                            {isBulkActionable(invitation) && !inviteArchived(invitation) && !jdDisabled ? (
+                              <button
+                                type="button"
+                                role="checkbox"
+                                aria-checked={selectedIds.has(invitation.id)}
+                                aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                                onClick={() => toggleSelectOne(invitation.id)}
+                                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                  selectedIds.has(invitation.id)
+                                    ? 'bg-brand-blue border-brand-blue'
+                                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                                }`}
+                              >
+                                {selectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
+                              </button>
+                            ) : (
+                              <span className="inline-block w-5" />
+                            )}
                           </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
                             <div className="flex items-center gap-2 lg:gap-3">
@@ -650,25 +835,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                                 <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
-                            </div>
-                          </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
-                            <p className="tf-body truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
-                          </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
-                            {/* Badges stay on one line — the row height is set by
-                                the candidate cell, and a wrapping second badge
-                                was what pushed neighbouring columns out of line. */}
-                            <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
-                              {getStatusBadge(invitation)}
-                              {isInvExpired(invitation) && (
-                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
-                                  <Clock className="w-3 h-3" /> Expired
-                                </span>
-                              )}
-                              {invitation.status === 'failed' && (
-                                <span className="text-xs text-red-600 whitespace-nowrap">Incorrect Email</span>
-                              )}
                             </div>
                           </td>
                           {/* Every milestone on its own line, oldest first, the
@@ -702,6 +868,22 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 </>
                               );
                             })()}
+                          </td>
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                            {/* Badges stay on one line — the row height is set by
+                                the candidate cell, and a wrapping second badge
+                                was what pushed neighbouring columns out of line. */}
+                            <div className="flex items-center gap-1.5 flex-nowrap overflow-hidden">
+                              {getStatusBadge(invitation)}
+                              {isInvExpired(invitation) && (
+                                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                                  <Clock className="w-3 h-3" /> Expired
+                                </span>
+                              )}
+                              {invitation.status === 'failed' && (
+                                <span className="text-xs text-red-600 whitespace-nowrap">Incorrect Email</span>
+                              )}
+                            </div>
                           </td>
                           {/* Tech Score column body — render the cell only
                               when *some* row has tech enabled (column header
@@ -753,6 +935,29 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               })()}
                             </td>
                           )}
+                          {/* Invite Source — how this candidate was actually
+                              invited, from the invitation's own resume_id. */}
+                          <td className="py-3 px-3 lg:px-4 align-middle tf-td whitespace-nowrap">
+                            <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
+                          </td>
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                            <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
+                              {invitation.candidate_display_id || '-'}
+                            </span>
+                          </td>
+                          {/* Job Version / Assessment Version — this popup
+                              aggregates every assessment attached to the JD,
+                              so each row says which job version its
+                              assessment belongs to and which version of the
+                              assessment itself it is, the same two chips the
+                              Assessments page's job-scoped Track Invites
+                              popup shows. */}
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                            <VersionChip kind="job" version={invitation._jd_version} />
+                          </td>
+                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                            <VersionChip kind="assessment" version={invitation._assessment_version} />
+                          </td>
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
                             <InvitationActionsMenu
                               actions={buildInvitationRowActions(invitation, {
@@ -851,6 +1056,30 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         target={historyTarget}
         onClose={() => setHistoryTarget(null)}
         getAssessmentId={(inv) => inv.assessment_id}
+      />
+
+      {/* Bulk resend confirmation — selected Expired/Failed candidates only. */}
+      <ConfirmationDialog
+        isOpen={showBulkResendConfirm}
+        onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+        onConfirm={handleBulkResend}
+        title="Resend invitations to selected candidates?"
+        description={`A fresh assessment link will be emailed to ${selectedIds.size} selected candidate${selectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+        confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${selectedIds.size}`}
+        cancelText="Cancel"
+        variant="info"
+      />
+
+      {/* Bulk revoke — selected Invited candidates only. */}
+      <ConfirmationDialog
+        isOpen={showBulkRevokeConfirm}
+        onClose={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
+        onConfirm={handleBulkRevoke}
+        title="Revoke invitations for selected candidates?"
+        description={`The assessment link for ${selectedRows.length} selected candidate${selectedRows.length === 1 ? '' : 's'} will stop working immediately.`}
+        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedRows.length}`}
+        cancelText="Cancel"
+        variant="danger"
       />
     </div>
   );
