@@ -484,7 +484,10 @@ export const resumeService = {
     if (key) writeReconcileStamp(key, Date.now());
     reconcileInFlight = (async () => {
       try {
-        await api.post('/resumes/usage/reconcile');
+        // Adjusts a usage counter only — no listed data changes, so keep the
+        // list caches (see `invalidatesLists`); the layout refetches quota
+        // itself after a reconcile that ran.
+        await api.post('/resumes/usage/reconcile', undefined, { invalidatesLists: false });
         return true;
       } catch {
         // Reconciliation is best-effort; never block the page on it. Drop the

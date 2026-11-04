@@ -30,7 +30,6 @@ import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, 
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
-import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import {
@@ -1860,8 +1859,6 @@ export default function AITalentMatchPage({
         jobTitle={jobTitle}
         jobId={jdId}
         jobCode={jobs.find(j => j.id === jdId)?.jobId}
-        assessmentConfigured={inviteTargets.hasAssessment(jdId)}
-        aiInterviewConfigured={inviteTargets.hasAIInterview(jdId)}
         enableInternalAIInterviewInvite
         /* Row Invite -> Create / Send for this job — Job Details' popup. */
         onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, jdId, candidates, jobTitle)}
@@ -2459,7 +2456,14 @@ export default function AITalentMatchPage({
      3. Its published screen links back with `?resume_invite=1`; here the
         ticks come back, the job is re-checked, and the invite opens for the
         same candidates. Nothing published → ticks back, no invite. */
-  const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
+  /* No tenant-wide assessment / AI-interview walk here. This page used to
+     page through every /assessments and /ai-interview/configs on landing
+     (useAllJobInviteTargets) only to hand two "configured" flags to the
+     expanded score table and the scorecard — both of which invite through
+     this page's Create / Send popup (onOpenInviteDialog), where those flags
+     gate nothing: the popup itself offers Create when the job has none and
+     re-checks the job when it opens. Permission, plan and JD/resume locks
+     (jobLockFor, inviteGateFor) still gate every entry. */
   /** A JD's status, capitalised ('Published', 'Disabled', 'Archived', …), from
    *  whichever source has it. `jobs` starts from the user's OWN JDs (my-jds),
    *  so in a tenant where someone else created the job it can be missing —
@@ -2917,8 +2921,6 @@ export default function AITalentMatchPage({
             onNext: idx < scoreNavList.length - 1 ? () => moveScoreDetail(scoreNavList[idx + 1]) : undefined,
           };
         })()}
-        assessmentConfigured={inviteTargets.hasAssessment(scoreDetailView.jdId)}
-        aiInterviewConfigured={inviteTargets.hasAIInterview(scoreDetailView.jdId)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'AI Talent Match', onClick: close },
