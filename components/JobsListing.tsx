@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info, ArrowUp, ArrowDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
 import { centerMenuOnPhoneRef } from '@/lib/hooks/useCenteredMenuOnPhone';
@@ -58,8 +58,32 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/** The fields the job list sorts by — one list for the Sort control and the phone Sort menu. */
+const JOB_SORT_OPTIONS: { value: JobSortBy; label: string }[] = [
+  { value: 'date', label: 'Date Posted' },
+  { value: 'applicants', label: 'Scored' },
+  { value: 'assessed', label: 'Assessed' },
+  { value: 'interviewed', label: 'Interviewed' },
+  { value: 'title', label: 'Job Title' },
+  { value: 'status', label: 'Status' },
+  { value: 'industry', label: 'Industry Type' },
+];
+
+/** The two sort orders, worded for the field: dates newest / oldest, counts highest / lowest,
+ *  text A → Z / Z → A. */
+const sortOrderLabels = (field: JobSortBy): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'applicants' || field === 'assessed' || field === 'interviewed'
+      ? { desc: 'Highest first', asc: 'Lowest first' }
+      : { desc: 'Z → A', asc: 'A → Z' };
 
 const viewVersionsMenuItemClass = 'group text-gray-700 dark:text-slate-200';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 dark:text-orange-300 [&_svg]:!text-current';
@@ -1200,8 +1224,12 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
         <>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
-        <div className="tf-card p-3 sm:p-4 mb-4">
+        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort.
+            Phones (globals.css, `.tf-jobs-toolbar`): search · filter icon, the
+            Location / Industry / Creator pills (scrolling), the status tabs
+            (underlined, scrolling), All / AI / Manual, then Select all · Sort ·
+            Refresh. From sm the layout below is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
           {/* Row 1: Search + More Filters — the canonical toolbar, now shared
               via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
@@ -1218,7 +1246,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             // all come from the shared SearchableSelect chrome, so they match the
             // Search input and the date fields. They stack full-width on mobile.
             leadingActions={
-              <>
+              <div className="tf-jobs-filter-pills contents">
                 {uniqueLocations.length > 1 && (
                   <SearchableSelect
                     className="w-full sm:w-48"
@@ -1255,7 +1283,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     ariaLabel="Filter by created by"
                   />
                 )}
-              </>
+              </div>
             }
             // Search flexes to fill the row; `controlsFollowSearch` gives the
             // search→control gap the same 8px as control→control, so Search,
@@ -1271,7 +1299,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             // Sort by sits right after More Filters, in the search row.
             afterFiltersActions={
             totalMatching > 0 ? (
-              <div className="flex items-center gap-2">
+              <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. One size at
@@ -1285,15 +1313,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     }}
                     ariaLabel="Sort jobs by"
                     className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
-                    options={[
-                      { value: 'date', label: 'Date Posted' },
-                      { value: 'applicants', label: 'Scored' },
-                      { value: 'assessed', label: 'Assessed' },
-                      { value: 'interviewed', label: 'Interviewed' },
-                      { value: 'title', label: 'Job Title' },
-                      { value: 'status', label: 'Status' },
-                      { value: 'industry', label: 'Industry Type' },
-                    ]}
+                    options={JOB_SORT_OPTIONS}
                   />
                   <button
                     type="button"
@@ -1399,11 +1419,11 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
               The row itself always renders (so the status tabs stay reachable even
               when a filter yields no rows); Select all and Sort render only when
               there are jobs to act on. */}
-          <div className="flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
+          <div className="tf-jobs-row2 flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
             {/* Select all + Bulk Actions — sits at the head of the row, where the
                 "Show:" label used to be. */}
             {totalMatching > 0 && (
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <div className="tf-jobs-select flex items-center gap-2 sm:gap-3 flex-wrap">
                 {/* One Select All button. Its dropdown carries BOTH scopes:
                     "this page (N)" — tracks the Show: N per-page value — and
                     "all jobs (N)" — the total across every page. */}
@@ -1412,7 +1432,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={`${tabPill(hasSelection)} h-9`}
+                    className={`tf-jobs-selectall ${tabPill(hasSelection)} h-9`}
+                    data-active={hasSelection || undefined}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1634,9 +1655,12 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             )}
 
             {/* Status tabs */}
+            <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Job status">
             {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
               <button
                 key={status}
+                role="tab"
+                aria-selected={statusFilter.toLowerCase() === status.toLowerCase()}
                 onClick={() => search.setFilter('status', status.toLowerCase())}
                 className={`${tabPill(statusFilter.toLowerCase() === status.toLowerCase())} h-9`}
               >
@@ -1644,6 +1668,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 {pillCountBadge(statusFilter.toLowerCase() === status.toLowerCase(), statusPillCount(status))}
               </button>
             ))}
+            </div>
 
             {/* Creation method: [ All | AI Generated | Manual ] — a single
                 connected segmented toggle (shared tinted track; the active
@@ -1651,7 +1676,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 Phones: the toggle takes the full row, each option sized to its
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
-            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
+            <div className="tf-jobs-method flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
               <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
@@ -1680,6 +1705,44 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
               </div>
             </div>
 
+            {/* Phones: one "Sort" button that opens a menu — the fields, then the order
+                (worded for the field). From sm the inline Sort control above is used. */}
+            {sortedJobs.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tf-jobs-sortmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue data-[state=open]:border-brand-blue/40 data-[state=open]:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    aria-label={`Sort: ${JOB_SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? ''}, ${sortOrderLabels(sortBy)[sortOrder]}`}
+                  >
+                    <ArrowUpDown className="w-4 h-4 text-brand-blue" />
+                    Sort
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
+                  <DropdownMenuLabel className="text-xs text-gray-500">Sort by</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as JobSortBy)}>
+                    {JOB_SORT_OPTIONS.map((o) => (
+                      <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Order</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+                    <DropdownMenuRadioItem value="desc">
+                      <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).desc}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="asc">
+                      <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).asc}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {/* Refresh — right corner of the pill row, as on AI Interviews. */}
             {(
               <Button
@@ -1690,7 +1753,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 title="Refresh"
                 aria-label="Refresh"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
-                className="flex-shrink-0 !h-9 sm:ml-auto"
+                className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
               >
                 <span className="hidden 2xl:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
               </Button>

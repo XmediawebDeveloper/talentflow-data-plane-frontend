@@ -1175,22 +1175,25 @@ export default function VersionInviteDialog({
               <nav aria-label="Steps" className="flex-shrink-0 max-sm:sticky max-sm:top-0 max-sm:z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 overflow-x-auto">
                 {/* Below laptop width only the current step names itself — four
                     labels overran a tablet-width popup and were cut off. */}
-                <ol className="flex min-w-max lg:min-w-0 items-center gap-1.5 sm:gap-2">
+                {/* Phones / tablets: the row fits the popup (all four circles visible)
+                    rather than scrolling sideways with step 4 out of view; on phones
+                    the current step's name sits on its own line below. */}
+                <ol className="flex w-full min-w-0 items-center gap-1.5 sm:gap-2">
                   {steps.map((s, i) => {
                     const done = i < stepIndex;
                     const here = i === stepIndex;
                     const open = !here && reachable(i);
                     return (
                       <Fragment key={s}>
-                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-4 sm:min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
-                        <li>
+                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-3 sm:min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
+                        <li className={here ? 'min-w-0' : 'shrink-0'}>
                           <button
                             type="button"
                             onClick={() => { if (open) goTo(s); }}
                             disabled={!open}
                             aria-current={here ? 'step' : undefined}
                             title={stepLabel(s, label.singular)}
-                            className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
+                            className={`flex max-w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
                               here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-400 dark:text-slate-500'
                             }`}
                           >
@@ -1199,13 +1202,17 @@ export default function VersionInviteDialog({
                             }`}>
                               {done ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
                             </span>
-                            <span className={here ? '' : 'max-lg:hidden'}>{stepLabel(s, label.singular)}</span>
+                            <span className={here ? 'min-w-0 truncate max-sm:hidden' : 'max-lg:hidden'}>{stepLabel(s, label.singular)}</span>
                           </button>
                         </li>
                       </Fragment>
                     );
                   })}
                 </ol>
+                {/* Phones: the current step's name on its own line, never squeezed between the circles. */}
+                <p className="sm:hidden mt-2 text-sm text-gray-600 dark:text-slate-300">
+                  Step {stepIndex + 1} of {steps.length} · <span className="font-semibold text-gray-900 dark:text-slate-50">{stepLabel(steps[stepIndex], label.singular)}</span>
+                </p>
               </nav>
 
               {/* The version being sent, pinned under the steps. */}
@@ -1466,7 +1473,9 @@ export default function VersionInviteDialog({
               {footerText}
             </p>
             {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
-            <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+            {/* Phones: Cancel / Back share the first line, the main action takes a full
+                line under them, so its label is never cut. */}
+            <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto max-sm:flex-wrap">
               {bulkJob ? (
                 <button
                   onClick={onClose}
@@ -1481,7 +1490,7 @@ export default function VersionInviteDialog({
                   <Button
                     variant="secondary"
                     onClick={requestClose}
-                    className="!h-9 shrink-0 px-4"
+                    className="!h-9 shrink-0 px-4 max-sm:flex-1"
                   >
                     Cancel
                   </Button>
@@ -1489,7 +1498,7 @@ export default function VersionInviteDialog({
                     <Button
                       variant="secondary"
                       onClick={() => goTo(steps[stepIndex - 1])}
-                      className="!h-9 shrink-0 px-4"
+                      className="!h-9 shrink-0 px-4 max-sm:flex-1"
                     >
                       Back
                     </Button>
@@ -1498,7 +1507,7 @@ export default function VersionInviteDialog({
                     <button
                       onClick={chooseFromList}
                       disabled={!listPicked}
-                      className="tf-btn tf-btn-primary flex-1 sm:flex-none min-w-0 flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none min-w-0 max-sm:basis-full flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                     >
                       Continue
                     </button>
@@ -1509,13 +1518,11 @@ export default function VersionInviteDialog({
                       aria-disabled={!inSteps || nextDisabled}
                       aria-label={primaryLabel}
                       title={current !== 'version' && noUnits ? `No ${unitsNoun} units left.` : current === 'send' ? deniedTitle : undefined}
-                      className={`flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`flex-1 sm:flex-none min-w-0 max-sm:basis-full flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : current === 'send' ? <Mail className="w-4 h-4" /> : null}
-                      {/* Phones: "Next:" gives way so the label fits — except
-                          before the send step, where "Send invite" alone would
-                          read as sending now. */}
-                      {primaryLabel.startsWith('Next: ') ? <span className="truncate"><span className={nextStep === 'send' ? '' : 'max-sm:hidden'}>Next: </span>{primaryLabel.slice(6)}</span> : primaryLabel}
+                      {/* On phones the button has a full line of its own, so the whole label fits. */}
+                      {primaryLabel.startsWith('Next: ') ? <span className="truncate">{primaryLabel}</span> : primaryLabel}
                     </button>
                   )}
                 </>
