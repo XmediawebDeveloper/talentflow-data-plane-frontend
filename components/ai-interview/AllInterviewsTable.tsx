@@ -396,9 +396,12 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
  * it is ready), then each row's Completed count. Module level so the page can
  * warm the tab (`prefetchInterviewRows`) through the same code the table uses.
  */
-async function loadInterviewRows(onList: (rows: InterviewRow[]) => void): Promise<InterviewRow[]> {
+async function loadInterviewRows(onList: (rows: InterviewRow[]) => void, fresh = false): Promise<InterviewRow[]> {
   const startedAt = performance.now();
-  const { live, archived } = await aiInterviewService.listAllConfigsSplit();
+  /* The config lists come through the shared list cache (lib/utils/listCache);
+     `fresh` (every reload after the table's first load) always asks the
+     server. The Completed counts below are always read fresh. */
+  const { live, archived } = await aiInterviewService.listAllConfigsSplit(fresh ? { fresh } : { reuseRecent: true });
 
   const seen = new Set<string>();
   const merged: AIInterviewResponse[] = [];
@@ -530,7 +533,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       setError(null);
       setIsLoading(false);
     };
-    fetchAll(show)
+    // A refresh always asks the server; the first load may share a recent read.
+    fetchAll(show, isRefresh)
       .then((next) => {
         if (!alive) return;
         // Fresh objects, so the rows whose Completed just landed re-render.
@@ -558,13 +562,14 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
   /* Each row's job badge comes from its config's `jd_status`, which only
      arrives with the rows — so a job disabled / archived / re-enabled anywhere
-     (this tab, another tab, window focus, or every 30s for another user's
-     change) re-reads them quietly: no skeleton, rows kept on a failure. */
+     (this tab or another tab: at once; tab visible again or another user's
+     change: throttled, see useJobStatusRefresh) re-reads them quietly: no
+     skeleton, rows kept on a failure. */
   useJobStatusRefresh(() => {
     if (!hasLoadedOnce.current) return;
     quietReloadRef.current = true;
     setReloadToken((t) => t + 1);
-  }, { pollMs: 30_000 });
+  });
 
   const retry = () => {
     setIsLoading(true);

@@ -28,6 +28,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -972,9 +973,14 @@ export default function ResumeScoringPage({
   // Bulk download state for scored resumes
   const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
 
-  // Available units from quota API
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);  // RS quota for scoring
-  const [availableASUnits, setAvailableASUnits] = useState<number | null>(null);  // AS quota for invites
+  // Available units from the shared QuotaContext (one /usage/quota-status call
+  // app-wide). useFreshQuota refreshes it on mount unless it is seconds old.
+  const { quotaData: sharedQuotaData, loading: sharedQuotaLoading } = useFreshQuota();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sharedQuotas = sharedQuotaData?.quotas as any;
+  const availableUnits: number | null = sharedQuotas?.RS ? (sharedQuotas.RS.total_remaining || 0) : null;  // RS quota for scoring
+  // FIX: Use AS (Assessment) quota for invite button, not RS
+  const availableASUnits: number | null = sharedQuotas?.AS ? (sharedQuotas.AS.total_remaining || 0) : null;  // AS quota for invites
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
@@ -1043,7 +1049,7 @@ export default function ResumeScoringPage({
      flag also flips on failure, and a 10s cap stops a slow call from holding
      the page. Latched: later refreshes never bring the skeleton back. */
   const [globalSettled, setGlobalSettled] = useState(false);
-  const [quotaSettled, setQuotaSettled] = useState(false);
+  const quotaSettled = !!sharedQuotaData || !sharedQuotaLoading;
   const [firstPaintCapped, setFirstPaintCapped] = useState(false);
   const firstPaintDoneRef = useRef(false);
   useEffect(() => {
@@ -1668,28 +1674,6 @@ export default function ResumeScoringPage({
       return () => clearTimeout(timeout);
     }
   }, [isWaitingForInitialJd]);
-
-  // Fetch available units on mount
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const response = await api.get('/usage/quota-status');
-        const quotas = response.data?.data?.quotas;
-        if (quotas?.RS) {
-          setAvailableUnits(quotas.RS.total_remaining || 0);
-        }
-        // FIX: Use AS (Assessment) quota for invite button, not RS
-        if (quotas?.AS) {
-          setAvailableASUnits(quotas.AS.total_remaining || 0);
-        }
-      } catch (error) {
-        console.log('[ResumeScoringPage] Failed to load quota:', error);
-      } finally {
-        setQuotaSettled(true);
-      }
-    };
-    fetchQuota();
-  }, []);
 
   // Track jobs that have already started scoring to prevent duplicate scoring
   const scoringStartedRef = useRef<Set<string>>(new Set());

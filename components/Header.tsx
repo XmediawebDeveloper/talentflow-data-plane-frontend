@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 import { PERMISSION_DENIED_MESSAGE } from '@/components/shared/PermissionLockedOverlay';
 import { isRouteAuthorized } from '@/lib/navigation/routeAccess';
 import NameAvatar from '@/components/ui/name-avatar';
+import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 
 /* Highest unread count the bell badge spells out. 1-9 show as themselves;
    anything from 10 up reads "9+" — the count keeps growing behind the scenes
@@ -290,6 +291,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     onCountUpdate: handleCountUpdate,
     onPermissionsUpdated: () => {
       console.log('[Header] onPermissionsUpdated triggered via WebSocket — calling refreshUser() + fetchQuotaStatus()');
+      clearRbacSessionCache(); // cached role counts / permission catalogue must not outlive a permission change
       refreshUser();
       // Also refresh quota data to detect plan changes (e.g., admin-initiated downgrade)
       fetchQuotaStatus();

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing, { type BulkStatusAction } from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
@@ -18,7 +18,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import api from '@/lib/services/api';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { mapJDToJob, formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
@@ -142,7 +142,6 @@ export default function JobOpeningsPage() {
      are still loading, and those pages may still carry the deleted row. Only
      that row - a delete removes ONE version; the job's other versions stay. */
   const deletedIdsRef = useRef(new Set<string>());
-  const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
      each one with its own dashboard icon and count, so it needs the parts. */
@@ -185,6 +184,21 @@ export default function JobOpeningsPage() {
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  /* Job-publishing quota from the shared QuotaContext (one /usage/quota-status
+     call app-wide); useFreshQuota refreshes it on open unless it is seconds old. */
+  const { quotaData } = useFreshQuota(5000, user?.id);
+  const quotaInfo = useMemo<{ remaining: number; limit: number; used: number } | undefined>(() => {
+    const maxJobs = quotaData?.quotas?.max_jobs;
+    if (!maxJobs) return undefined;
+    // Same expressions the page's own fetch used (values passed through as-is).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = maxJobs as any;
+    return {
+      remaining: m.total_remaining || 0,
+      limit: (m.subscription?.limit || 0) + (m.addon?.total_purchased || 0),
+      used: m.subscription?.used || 0,
+    };
+  }, [quotaData]);
   // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
   // JD's own "Score Resume" permission (jd:add_applicants).
   // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
@@ -255,26 +269,9 @@ export default function JobOpeningsPage() {
   useEffect(() => {
     if (!user) return;
     fetchJobs();
-    fetchQuotaInfo();
     // Invalidate this run's in-flight pages on user change / unmount.
     return () => { fetchSeqRef.current += 1; };
   }, [user?.id]);
-
-  const fetchQuotaInfo = async () => {
-    try {
-      const response = await api.get('/usage/quota-status');
-      if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
-        const maxJobs = response.data.data.quotas.max_jobs;
-        setQuotaInfo({
-          remaining: maxJobs.total_remaining || 0,
-          limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
-          used: maxJobs.subscription?.used || 0,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch quota info:', error);
-    }
-  };
 
   const fetchJobs = async () => {
     const seq = ++fetchSeqRef.current;
