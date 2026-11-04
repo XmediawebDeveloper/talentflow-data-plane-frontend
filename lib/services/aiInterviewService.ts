@@ -4,6 +4,8 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
+import { cachedList, listCacheKey, listReadOptions, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
 import { announceBeingEdited, isStaging, markPendingThisVisit } from '@/lib/utils/aiInterviewEditSession';
 
 /** Another user is editing this config in the wizard right now (409 INTERVIEW_BEING_EDITED). */
@@ -287,6 +289,8 @@ export interface AIInterviewResponse {
   /** Position in the interview's lineage (V1, V2..), stored by the backend. Null on
    *  candidate sessions and on rows that predate it. */
   interview_version?: number | null;
+  /** GET /configs (server-paged): the Nth config of its job version, over every config. */
+  list_ordinal?: number | null;
   candidate_name?: string;
   candidate_email?: string;
   position?: string;
@@ -440,6 +444,71 @@ export interface AIInterviewStatsResponse {
   candidates_interviewed?: number;
   /** Finished interviews (completed + terminated), repeats included. */
   interview_sessions?: number;
+  /** Distinct jobs (JD lineages) with a config, for the same filters. */
+  total_jobs?: number;
+  /** Configs with at least one invitation ("Invite Shared"). */
+  invited_configs?: number;
+  /** Configs in completed / cancelled status. */
+  completed_configs?: number;
+}
+
+/**
+ * GET /ai-interview/configs and /configs/stats filter params — ONE builder on
+ * the server reads them for both, so a card's count equals the list's total.
+ * Every field optional; absent = the endpoint's original behaviour.
+ */
+export interface AIConfigListFilters {
+  /** One status, a comma list, or 'all' (archived included). */
+  status?: string;
+  search?: string;
+  /** 'table' = job name / JD id / AI id; 'list' = + creator name and must-have skills. */
+  search_scope?: 'table' | 'list';
+  mode?: 'timed' | 'flexible';
+  job?: string;
+  jd_version?: number;
+  interview_version?: number;
+  created_by?: string;
+  created_from?: string;
+  created_to?: string;
+  invited_only?: boolean;
+}
+
+export interface AIConfigListQuery extends AIConfigListFilters {
+  page: number;
+  page_size: number;
+  sort_by?: string;
+  sort_dir?: 'asc' | 'desc';
+  status_first?: 'published' | 'active' | 'draft';
+  collapse?: 'lineage';
+  [k: string]: unknown;
+}
+
+export interface AIConfigFilterOptions {
+  jobs: { value: string; label: string; count: number }[];
+  job_versions: number[];
+  interview_versions: number[];
+  creators: string[];
+}
+
+export interface AIInvitationOverview {
+  total: number;
+  invited: number;
+  completed: number;
+  in_progress: number;
+  terminated: number;
+  cancelled: number;
+  revoked: number;
+  expired: number;
+}
+
+/** Drop empty values so the request (and the list cache key) carries only set filters. */
+export function cleanAIConfigParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
 }
 
 export interface SendInviteRequest {
@@ -848,22 +917,18 @@ export const aiInterviewService = {
       'published', 'invited', 'consent_pending', 'system_check', 'in_progress', 'scheduled',
     ];
     try {
-      let page = 1;
-      let seen = 0;
+      const isLive = (c: AIInterviewResponse) =>
+        c.jd_id === jdId && c.status !== 'archived' && LIVE_STATUSES.includes(c.status);
       // Paginate rather than trusting one big page — a tenant with many
       // configs would otherwise silently fall off the end and get a duplicate.
-      while (page <= 20) {
-        const res = await this.listConfigs({ page, page_size: 100, compact: true });
-        const items = res.items ?? [];
-        const match = items.find(
-          (c) => c.jd_id === jdId && c.status !== 'archived' && LIVE_STATUSES.includes(c.status),
-        );
-        if (match) return match;
-        seen += items.length;
-        if (items.length < 100 || seen >= (res.total ?? seen)) break;
-        page++;
-      }
-      return null;
+      // Page 1 alone (a match there needs nothing more), then the rest a few
+      // at a time; pages are read in page order and reading stops after the
+      // first page with a match, so the first match in page order still wins.
+      const configs = await fetchAllPages<AIInterviewResponse>(
+        (page) => this.listConfigs({ page, page_size: 100, compact: true }),
+        { pageSize: 100, maxPages: 20, stopAfter: (items) => items.some(isLive) },
+      );
+      return configs.find(isLive) ?? null;
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -893,12 +958,105 @@ export const aiInterviewService = {
    * trips, repeated per screen. Identical concurrent calls are shared by the
    * API client, so screens that load together pay for it once.
    */
-  async listAllConfigsSplit(): Promise<{ live: AIInterviewResponse[]; archived: AIInterviewResponse[] }> {
+  async listAllConfigsSplit(opts?: ListReadOptions): Promise<{ live: AIInterviewResponse[]; archived: AIInterviewResponse[] }> {
     const [live, archived] = await Promise.all([
-      fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ page, page_size, compact: true })),
-      fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true })),
+      aiInterviewService.listAllConfigRows({}, opts),
+      aiInterviewService.listAllConfigRows({ status: 'archived' }, opts),
     ]);
-    return { live: live.items || [], archived: archived.items || [] };
+    return { live, archived };
+  },
+
+  /**
+   * Every compact config of one status filter (none = the default non-archived
+   * list), all pages (`fetchAllRows`). Read through the shared list cache
+   * (lib/utils/listCache): identical reads in flight share one request; with
+   * `reuseRecent` a completed one is reused for a short while; `fresh` always
+   * asks the server. Every mutating function below clears it.
+   */
+  async listAllConfigRows(params: { status?: string } = {}, opts?: ListReadOptions): Promise<AIInterviewResponse[]> {
+    return cachedList(
+      listCacheKey('ai-configs|all-rows', { status: params.status, compact: true }),
+      async () => {
+        const result = await fetchAllRows((page_size, page) =>
+          aiInterviewService.listConfigs({ ...(params.status ? { status: params.status } : {}), page, page_size, compact: true }),
+        );
+        return result.items || [];
+      },
+      listReadOptions(opts),
+    );
+  },
+
+  /** One page of configs for the given filters / sort (server-side paging). */
+  async listConfigsPage(query: AIConfigListQuery): Promise<AIInterviewListResponse> {
+    try {
+      const response = await api.get<AIInterviewListResponse>('/ai-interview/configs', {
+        params: { compact: true, ...cleanAIConfigParams(query) },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every config matching the filters — only for actions that need them all
+   *  (export of a whole filtered set), at click time, never on landing. */
+  async listAllMatchingConfigs(query: Omit<AIConfigListQuery, 'page' | 'page_size'>): Promise<AIInterviewResponse[]> {
+    const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigsPage({ ...query, page, page_size } as AIConfigListQuery));
+    return result.items || [];
+  },
+
+  /** Card counts for the same filters the list takes. */
+  async getConfigStatsFiltered(filters: AIConfigListFilters = {}): Promise<AIInterviewStatsResponse> {
+    try {
+      const response = await api.get<AIInterviewStatsResponse>('/ai-interview/configs/stats', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Ids of every config matching the filters — select-all across pages. */
+  async getConfigIds(filters: AIConfigListFilters = {}): Promise<string[]> {
+    try {
+      const response = await api.get<{ ids: string[] }>('/ai-interview/configs/ids', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data?.ids || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** The filter panel's option lists — fetched when the panel opens. */
+  async getConfigFilterOptions(status?: string): Promise<AIConfigFilterOptions> {
+    try {
+      const response = await api.get<AIConfigFilterOptions>('/ai-interview/configs/filter-options', {
+        params: status ? { status } : {},
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Invitation overview cards for many configs in one request (≤200 ids per call). */
+  async getInvitationOverview(configIds: string[]): Promise<Record<string, AIInvitationOverview>> {
+    const ids = Array.from(new Set(configIds.filter(Boolean)));
+    const out: Record<string, AIInvitationOverview> = {};
+    for (let i = 0; i < ids.length; i += 200) {
+      try {
+        const response = await api.get<{ overview: Record<string, AIInvitationOverview> }>(
+          '/ai-interview/invitation-overview',
+          { params: { ids: ids.slice(i, i + 200).join(',') } },
+        );
+        Object.assign(out, response.data?.overview || {});
+      } catch (error) {
+        throw new Error(handleApiError(error));
+      }
+    }
+    return out;
   },
 
   /**
@@ -1746,3 +1904,36 @@ export const aiInterviewService = {
     return response.data;
   },
 };
+
+/* Every function that writes (or can change a config, its counts, its
+   jd_status or an invitation) clears the shared list cache before and after
+   it runs. The API client's write hook clears it too; this keeps the rule
+   visible here. Read-only helpers (suggestTopics, skill / cluster AI helpers)
+   and the best-effort log* calls are left out on purpose. */
+withListCacheInvalidation(aiInterviewService, [
+  'create',
+  'update',
+  'applyPendingEdits',
+  'takeOverEditing',
+  'discardPendingEdits',
+  'delete',
+  'sendInvite',
+  'recordConsent',
+  'recordSystemCheck',
+  'startInterview',
+  'completeInterview',
+  'cancelInterview',
+  'saveSettings',
+  'publishConfig',
+  'inviteCandidate',
+  'archive',
+  'unarchive',
+  'clone',
+  'generateShareLink',
+  'createInviteLink',
+  'sendSessionEmail',
+  'revokeInvitation',
+  'updateInvitation',
+  'triggerEvaluation',
+  'reEvaluatePartial',
+]);

@@ -36,6 +36,12 @@ const api: AxiosInstance = axios.create({
 declare module 'axios' {
   interface AxiosRequestConfig {
     dedupe?: boolean;
+    /**
+     * Non-GET only. Pass `false` for a POST that only READS (e.g. a batch
+     * lookup sent as POST because of its body size), so it does not throw
+     * away the shared GETs in flight. Never set it on a request that writes.
+     */
+    invalidatesCache?: boolean;
   }
 }
 const GET_REUSE_MS = 1000;
@@ -45,6 +51,7 @@ const baseAdapter = axios.getAdapter(api.defaults.adapter);
 api.defaults.adapter = (config: InternalAxiosRequestConfig) => {
   const method = (config.method || 'get').toLowerCase();
   if (method !== 'get') {
+    if (config.invalidatesCache === false) return baseAdapter(config);
     sharedGets.clear();
     return baseAdapter(config).finally(() => sharedGets.clear());
   }
@@ -547,6 +554,29 @@ export const dispatchPlanChangePendingEvent = (detail: PlanChangePendingDetail) 
   }
 };
 
+// Single in-flight token refresh. Every caller that needs a refresh (parallel
+// 401s, the permission-version check below) awaits the same POST /auth/refresh
+// instead of each firing its own — refresh tokens rotate, so concurrent calls
+// with the same refresh token would otherwise race. Cleared once it settles
+// (success or failure) so a later expiry starts a fresh refresh.
+let refreshInFlight: Promise<string> | null = null;
+
+const refreshAccessToken = (currentRefreshToken: string): Promise<string> => {
+  if (!refreshInFlight) {
+    refreshInFlight = axios
+      .post(`${API_BASE_URL}/auth/refresh`, { refresh_token: currentRefreshToken })
+      .then((response) => {
+        const { access_token, refresh_token } = response.data;
+        setTokens(access_token, refresh_token);
+        return access_token as string;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+};
+
 // ✅ NEW: Permission version check interceptor - runs BEFORE error handling
 // This checks if permissions have changed on the server and triggers a token refresh
 api.interceptors.response.use(
@@ -565,12 +595,7 @@ api.interceptors.response.use(
         try {
           const { refreshToken: currentRefreshToken } = getTokens();
           if (currentRefreshToken) {
-            const refreshResponse = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-              refresh_token: currentRefreshToken,
-            });
-
-            const { access_token, refresh_token } = refreshResponse.data;
-            setTokens(access_token, refresh_token);
+            await refreshAccessToken(currentRefreshToken);
 
             console.log('[AUTH] Token refreshed successfully with new permissions');
 
@@ -586,8 +611,16 @@ api.interceptors.response.use(
     }
 
     // ✅ Check if quota-status response has expired trial/plan dates
-    if (response.config.url?.includes('/usage/quota-status')) {
-      const quotaData = response.data?.data || response.data;
+    // The app-shell /bootstrap response carries the same quota-status body
+    // (parts.quota_status.data) — run the same expiry check on it.
+    const bootstrapQuotaPart = response.config.url?.includes('/bootstrap')
+      ? response.data?.parts?.quota_status
+      : undefined;
+    const bootstrapQuota = bootstrapQuotaPart?.status === 200 ? bootstrapQuotaPart.data : undefined;
+    if (response.config.url?.includes('/usage/quota-status') || bootstrapQuota) {
+      const quotaData = bootstrapQuota
+        ? (bootstrapQuota.data || bootstrapQuota)
+        : (response.data?.data || response.data);
       if (!quotaData) {
         return response; // No data to check
       }
@@ -749,12 +782,8 @@ api.interceptors.response.use(
       try {
         const { refreshToken } = getTokens();
         if (refreshToken) {
-          const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-            refresh_token: refreshToken,
-          });
-
-          const { access_token, refresh_token } = response.data;
-          setTokens(access_token, refresh_token);
+          // Shared with any refresh already in flight (see refreshAccessToken).
+          const access_token = await refreshAccessToken(refreshToken);
 
           originalRequest.headers.Authorization = `Bearer ${access_token}`;
           return api(originalRequest);

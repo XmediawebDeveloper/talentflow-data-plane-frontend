@@ -47,6 +47,8 @@ import {
 } from './AIInterviewResults';
 import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
+import { cachedList, listCacheKey } from '@/lib/utils/listCache';
 import {
   FilterSelect,
   FilterDateRange,
@@ -184,36 +186,37 @@ export interface AIInterviewCandidateResultsProps {
  * the tab itself uses. Returns null when `isStale()` says a newer run replaced
  * this one.
  */
-async function fetchAIResultRows(isStale: () => boolean = () => false): Promise<CandidateSessionRow[] | null> {
+async function fetchAIResultRows(isStale: () => boolean = () => false, fresh = false): Promise<CandidateSessionRow[] | null> {
     /* Every config, archived included and every page of each — the same set
        the page's Total Interviewed card counts sessions over. A config past
        the first page, or one archived after its candidates finished, used
        to drop its sessions from this tab while the card still counted
        them. A page that fails throws, rather than ending the list early. */
-    const listAllConfigs = async (status?: string) => {
-      const all: AIInterviewResponse[] = [];
-      for (let page = 1; ; page += 1) {
-        const res = await aiInterviewService.listConfigs({ status, page, page_size: 500, compact: true });
-        const items = res.items ?? [];
-        all.push(...items);
-        if (items.length < 500 || all.length >= (res.total ?? all.length)) break;
-      }
-      return all;
-    };
+    const listAllConfigs = (status?: string): Promise<AIInterviewResponse[]> =>
+      /* Through the shared list cache (lib/utils/listCache); `fresh` (Refresh)
+         always asks the server. The sessions below are never cached. */
+      cachedList(
+        listCacheKey('ai-configs|all-pages', { status, page_size: 500, compact: true }),
+        // Page 1, then the rest a few at a time, kept in page order.
+        () => fetchAllPages(
+          (page) => aiInterviewService.listConfigs({ status, page, page_size: 500, compact: true }),
+          { pageSize: 500 },
+        ),
+        { fresh },
+      );
     /* The sessions list does not depend on the config lists, so it is asked
        for beside them rather than after them. */
     const fetchSessions = async (): Promise<AIInterviewResponse[] | null> => {
       // Paginated — a mature tenant can have more completed/terminated
       // sessions than fit on one page.
-      const collected: AIInterviewResponse[] = [];
-      for (let page = 1; page <= 40; page += 1) {
-        // No catch: a failed page is a load error, not the end of the list.
-        const res = await aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 });
-        if (isStale()) return null;
-        const items = res.items ?? [];
-        collected.push(...items);
-        if (items.length < 1000 || collected.length >= (res.total ?? collected.length)) break;
-      }
+      // No catch: a failed page is a load error, not the end of the list.
+      // Page 1, then the rest a few at a time, kept in page order; a newer
+      // run (isStale) stops further pages from being started.
+      const collected = await fetchAllPages(
+        (page) => aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 }),
+        { pageSize: 1000, maxPages: 40, shouldStop: isStale },
+      );
+      if (isStale()) return null;
       return collected;
     };
     const [activeConfigs, archivedConfigs, fetchedSessions] = await Promise.all([listAllConfigs(), listAllConfigs('archived'), fetchSessions()]);
@@ -352,7 +355,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
   const loadSeqRef = useRef(0);
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
-  const loadAllSessions = useCallback(async () => {
+  /* `fresh`: Refresh re-reads the config lists from the server; the mount
+     load may share a recent read of them. */
+  const loadAllSessions = useCallback(async (fresh = false) => {
     const seq = ++loadSeqRef.current;
     const isStale = () => seq !== loadSeqRef.current;
     const startedAt = performance.now();
@@ -360,7 +365,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     if (rowsRef.current.length === 0) setIsLoading(true);
     setError(null);
     try {
-      const merged = await fetchAIResultRows(isStale);
+      const merged = await fetchAIResultRows(isStale, fresh);
       if (merged === null) return;
       setRows(merged);
       writeListSnapshot('ai-results:rows', merged);
@@ -391,7 +396,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
       skippedFirstRefreshSignal.current = true;
       return;
     }
-    loadAllSessions();
+    loadAllSessions(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
@@ -822,7 +827,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     stateBody = (
       <div className="p-6 text-center">
         <p className="text-sm text-destructive mb-3">{error}</p>
-        <Button variant="primary" size="md" onClick={loadAllSessions}>
+        <Button variant="primary" size="md" onClick={() => loadAllSessions(true)}>
           Retry
         </Button>
       </div>

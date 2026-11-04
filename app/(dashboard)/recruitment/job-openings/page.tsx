@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing, { type BulkStatusAction } from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
@@ -18,13 +18,12 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import api from '@/lib/services/api';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
-import { mapJDToJob, formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { readListSnapshot, writeListSnapshot } from '@/lib/utils/listSnapshot';
 import {
   AlertDialog,
   AlertDialogContent,
@@ -53,96 +52,10 @@ const usageModuleIcon = (label: string) => {
 };
 
 
-const JD_BATCH_SIZE = 100;
-
-// Loading skeleton for Job Openings — mirrors the real overview JobsListing
-// renders: the white rounded card shell, breadcrumb, header (icon + title +
-// subtitle + Config/Create buttons) and the 4-up stat-card grid (Total Jobs /
-// Published / Drafts / Archived). Kept inline (no separate file) so it sits
-// beside the layout it shadows and can't drift from it.
-function JobOpeningsSkeleton() {
-  return (
-    <main className="tf-page">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <div className="tf-page-sheet">
-          {/* Breadcrumb */}
-          <div className="mb-4 md:mb-6 h-4 w-56 rounded bg-gray-200 animate-pulse" />
-
-          {/* Header */}
-          <div className="mb-5">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-              <div className="flex items-start gap-3">
-                <div className="hidden sm:block h-9 w-9 rounded-lg bg-gray-200 animate-pulse" />
-                <div className="space-y-2">
-                  <div className="h-6 w-40 rounded bg-gray-200 animate-pulse" />
-                  <div className="h-4 w-56 rounded bg-gray-100 animate-pulse" />
-                </div>
-              </div>
-              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-                <div className="h-9 w-full sm:w-28 rounded-lg bg-gray-100 animate-pulse" />
-                <div className="h-9 w-full sm:w-36 rounded-lg bg-gray-200 animate-pulse" />
-              </div>
-            </div>
-
-            {/* Stat cards — 4-up grid (matches StatsCardGrid columns=4) */}
-            <div className="tf-grid-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="relative overflow-hidden tf-panel px-3.5 py-3.5 sm:px-4 sm:py-4">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-2.5">
-                      <div className="h-9 w-9 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
-                      <div className="space-y-2 pt-0.5">
-                        <div className="h-3.5 w-20 rounded bg-gray-200 animate-pulse" />
-                        <div className="h-6 w-12 rounded bg-gray-200 animate-pulse" />
-                      </div>
-                    </div>
-                    <div className="h-7 w-7 shrink-0 rounded-lg bg-gray-100 animate-pulse" />
-                  </div>
-                  <div className="mt-3 h-5 w-20 rounded-full bg-gray-100 animate-pulse" />
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
-  );
-}
-
 export default function JobOpeningsPage() {
-  /* Last fully-loaded list, remembered in memory. A revisit paints it (rows and
-     stat counts) straight away and refreshes quietly; only a first visit with
-     nothing remembered shows the skeleton. */
-  const rememberedJobsRef = useRef<Job[] | null>(null);
-  const [jobs, setJobs] = useState<Job[]>(() => {
-    rememberedJobsRef.current = readListSnapshot<Job[]>('job-openings:jobs');
-    return rememberedJobsRef.current ?? [];
-  });
-  const [loading, setLoading] = useState(() => rememberedJobsRef.current === null);
-  /* Whether `jobs` holds every page yet. The stat cards show a placeholder
-     until it does, then count straight from `jobs` — the same rows, and the
-     same version rules, as the table below them. They used to show the
-     server's page-1 `status_counts` first and then hand over to that tally,
-     but the two count differently (the server by each lineage's latest
-     version, the cards by "any version has the status", so each card equals
-     its tab's row count) — the handover was the jump from one set of numbers
-     to another on every load. */
-  const [jobsFullyLoaded, setJobsFullyLoaded] = useState(() => rememberedJobsRef.current !== null);
-
-  // Keep the remembered list current, including after local edits/deletes, so
-  // the next visit doesn't briefly show a row that was removed here.
-  useEffect(() => {
-    if (jobsFullyLoaded) writeListSnapshot('job-openings:jobs', jobs);
-  }, [jobs, jobsFullyLoaded]);
-  /* Bumped by every fetchJobs run and by unmount / user change, so a response
-     belonging to an older run is dropped instead of overwriting newer data
-     (or appending its pages onto another run's list). */
-  const fetchSeqRef = useRef(0);
-  /* Rows (versions) deleted on this mount. A delete can land while later pages
-     are still loading, and those pages may still carry the deleted row. Only
-     that row - a delete removes ONE version; the job's other versions stay. */
-  const deletedIdsRef = useRef(new Set<string>());
-  const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
+  /* The list, its stat cards and its paging live in JobsListing, which asks
+     the server for one page and the card counts (GET /jd?view=jobs +
+     GET /jd/stats) instead of this page downloading every JD version. */
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
      each one with its own dashboard icon and count, so it needs the parts. */
@@ -185,6 +98,21 @@ export default function JobOpeningsPage() {
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  /* Job-publishing quota from the shared QuotaContext (one /usage/quota-status
+     call app-wide); useFreshQuota refreshes it on open unless it is seconds old. */
+  const { quotaData } = useFreshQuota(5000, user?.id);
+  const quotaInfo = useMemo<{ remaining: number; limit: number; used: number } | undefined>(() => {
+    const maxJobs = quotaData?.quotas?.max_jobs;
+    if (!maxJobs) return undefined;
+    // Same expressions the page's own fetch used (values passed through as-is).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const m = maxJobs as any;
+    return {
+      remaining: m.total_remaining || 0,
+      limit: (m.subscription?.limit || 0) + (m.addon?.total_purchased || 0),
+      used: m.subscription?.used || 0,
+    };
+  }, [quotaData]);
   // Score Resumes from the JD list needs Resume Scoring → Score Resume and the
   // JD's own "Score Resume" permission (jd:add_applicants).
   // Run AI Talent Match from the JD list needs AI Talent Match → Run and the
@@ -223,7 +151,7 @@ export default function JobOpeningsPage() {
   // job-details page lands the user exactly where they left off. The outer div
   // below is the outermost root that owns the scroll container, so the scroll
   // ref is attached here (JobsListing renders inside it).
-  const rootRef = useScrollRestoration('job-openings', !loading);
+  const rootRef = useScrollRestoration('job-openings', true);
   useListStatePersistence(
     'job-openings',
     { activeFilter },
@@ -250,132 +178,6 @@ export default function JobOpeningsPage() {
       router.replace(`/recruitment/job-details?id=${jdIdFromUrl}`);
     }
   }, [searchParams, router]);
-
-  // Re-fetch jobs and quota when user changes
-  useEffect(() => {
-    if (!user) return;
-    fetchJobs();
-    fetchQuotaInfo();
-    // Invalidate this run's in-flight pages on user change / unmount.
-    return () => { fetchSeqRef.current += 1; };
-  }, [user?.id]);
-
-  const fetchQuotaInfo = async () => {
-    try {
-      const response = await api.get('/usage/quota-status');
-      if (response.data?.status === 'success' && response.data.data?.quotas?.max_jobs) {
-        const maxJobs = response.data.data.quotas.max_jobs;
-        setQuotaInfo({
-          remaining: maxJobs.total_remaining || 0,
-          limit: (maxJobs.subscription?.limit || 0) + (maxJobs.addon?.total_purchased || 0),
-          used: maxJobs.subscription?.used || 0,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to fetch quota info:', error);
-    }
-  };
-
-  const fetchJobs = async () => {
-    const seq = ++fetchSeqRef.current;
-    const isStale = () => seq !== fetchSeqRef.current;
-    // Quiet refresh when a remembered list is already on screen: keep it (rows,
-    // counts, no skeleton) and swap in the fresh list once every page is in.
-    const quiet = rememberedJobsRef.current !== null;
-    rememberedJobsRef.current = null;
-    if (!quiet) {
-      setLoading(true);
-      setJobsFullyLoaded(false);
-    }
-    // Pull "my JDs" in smaller pages. The previous page_size=total request
-    // produced oversized responses and browser transport failures upstream.
-    let firstPage;
-    let firstJobs: Job[] = [];
-    try {
-      firstPage = await jdService.list({
-        page: 1,
-        page_size: JD_BATCH_SIZE,
-        source: 'my-jds',
-      });
-      if (isStale()) return;
-
-      /* One mapping for every surface that lists JDs — this page and the Apply
-         to Job dialog both build their rows with it, so neither can end up
-         missing a field the other shows (publish count, lineage version,
-         experience). Paint the first page IMMEDIATELY so the user sees jobs
-         instead of waiting for every remaining page to load sequentially.
-         `?? []` guards a backend response without an `items` array — otherwise
-         `.map` would throw and (crucially) leave the page stuck on the skeleton. */
-      firstJobs = (firstPage.items ?? []).map(mapJDToJob);
-      if (!quiet) setJobs(firstJobs);
-    } catch (error) {
-      if (isStale()) return;
-      // First-page failure (or a bad shape) is a real load failure — surface it.
-      // The `finally` below still clears the skeleton so the page never hangs.
-      console.error('Failed to fetch jobs:', error);
-      toast.error('Failed to load job openings');
-      return;
-    } finally {
-      // ALWAYS drop the skeleton after the first page attempt, success or not —
-      // this is the guarantee that the page can never be stuck showing only the
-      // skeleton with no data. A stale run leaves it to the run that replaced it.
-      if (!isStale()) setLoading(false);
-    }
-
-    // Fetch any remaining pages in PARALLEL (not one after another) so the full
-    // list — and the accurate overview counts — arrive as fast as possible. A
-    // page that fails is skipped rather than wiping the jobs already on screen.
-    const totalPages = Math.max(
-      firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
-      1
-    );
-    if (totalPages <= 1) {
-      if (quiet) setJobs(firstJobs.filter((j) => !deletedIdsRef.current.has(j.id)));
-      setJobsFullyLoaded(true);
-      return;
-    }
-
-    const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
-    const results = await Promise.allSettled(
-      restPages.map((page) =>
-        jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' })
-      )
-    );
-    if (isStale()) return;
-    const restJobs = results.flatMap((r) =>
-      r.status === 'fulfilled' ? (r.value.items ?? []).map(mapJDToJob) : []
-    );
-    if (quiet) {
-      // Replace the remembered list wholesale with the fresh pages (deduped:
-      // a JD created mid-fetch can shift a row across a page boundary).
-      const seen = new Set<string>();
-      setJobs([...firstJobs, ...restJobs].filter((j) => {
-        if (seen.has(j.id) || deletedIdsRef.current.has(j.id)) return false;
-        seen.add(j.id);
-        return true;
-      }));
-    } else if (restJobs.length) {
-      setJobs((prev) => {
-        /* A JD created between the page requests shifts rows across page
-           boundaries, so the same row can arrive twice — count it once. The
-           row already on screen wins: it may carry a status the recruiter has
-           changed since page 1 loaded. */
-        const seen = new Set(prev.map((j) => j.id));
-        const fresh = restJobs.filter((j) => {
-          if (seen.has(j.id) || deletedIdsRef.current.has(j.id)) return false;
-          seen.add(j.id);
-          return true;
-        });
-        return fresh.length ? [...prev, ...fresh] : prev;
-      });
-    }
-    if (results.some((r) => r.status === 'rejected')) {
-      toast.error('Some job openings could not be loaded — counts may be incomplete. Refresh to try again.');
-    }
-    // `jobs` now has every page (or every page that didn't fail) — the stat
-    // cards can drop their placeholder and count it.
-    setJobsFullyLoaded(true);
-  };
 
   const mapStatus = (status: string): 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled' => {
     const statusMap: Record<string, 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled'> = {
@@ -447,11 +249,11 @@ export default function JobOpeningsPage() {
   const handleUpdateJobStatus = async (jobId: string, status: string) => {
     try {
       await jdService.updateStatus(jobId, status);
-      setJobs(prev => prev.map(job =>
-        job.id === jobId ? { ...job, status: mapStatus(status) } : job
-      ));
       markVersionStatus(jobId, status.toLowerCase());
-      toast.success('Job status updated');
+      const updated = jobs.find(job => job.id === jobId);
+      toast.success(updated
+        ? `${formatJobSubject({ ...updated, versionNumber: updated.versionNumber ?? 1 })} status updated to ${mapStatus(status)}.`
+        : 'Job status updated');
     } catch (error) {
       toast.error('Failed to update job status');
     }
@@ -515,11 +317,11 @@ export default function JobOpeningsPage() {
       // The job already had an open draft version: that one is reopened, not a new copy.
       if (newJd.reused_existing_draft) {
         toast.success('Opened the existing draft version', {
-          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} is already in draft. Continue editing it.`,
         });
       } else {
         toast.success('New version created', {
-          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} was created as a new draft. Edit and publish it independently.`,
         });
       }
       // Start on Step 1 with ALL the source JD's data pre-filled (title, JD
@@ -541,9 +343,6 @@ export default function JobOpeningsPage() {
     try {
       // Use publish endpoint which tracks quota/units
       await jdService.publish(job.id);
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'Published', postedDate: new Date().toISOString() } : j
-      ));
       markVersionStatus(job.id, 'published');
       toast.success(formatJobActionMessage(job, 'published'));
     } catch (error: any) {
@@ -574,7 +373,7 @@ export default function JobOpeningsPage() {
   /* Version ids the backend has confirmed deleted. The same stale-cache gap as
    * the status overrides above: the View Versions table's lineage was fetched
    * before the delete, so a deleted version stayed listed until a refresh.
-   * State, not deletedIdsRef, so the panel re-renders when one is added. */
+   * State, so the panel re-renders when one is added. */
   const [deletedVersionIds, setDeletedVersionIds] = useState<Set<string>>(new Set());
   const markVersionsDeleted = (versionIds: string[]) =>
     setDeletedVersionIds(prev => new Set([...prev, ...versionIds]));
@@ -593,9 +392,6 @@ export default function JobOpeningsPage() {
     setDisableDialog(prev => ({ ...prev, disabling: true }));
     try {
       await jdService.updateStatus(job.id, 'disabled');
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'Disabled' } : j
-      ));
       markVersionStatus(job.id, 'disabled');
       toast.success(formatJobActionMessage(job, 'disabled'));
       closeDisableDialog();
@@ -612,9 +408,6 @@ export default function JobOpeningsPage() {
   const handleRepublishJob = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'published');
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'Published' } : j
-      ));
       markVersionStatus(job.id, 'published');
       toast.success(formatJobActionMessage(job, 're-enabled'));
     } catch (error) {
@@ -636,9 +429,6 @@ export default function JobOpeningsPage() {
     setArchiveDialog(prev => ({ ...prev, busy: true }));
     try {
       await jdService.updateStatus(job.id, 'archived');
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'Archived' } : j
-      ));
       markVersionStatus(job.id, 'archived');
       toast.success(formatJobActionMessage(job, 'archived'));
       setArchiveDialog({ open: false, job: null, busy: false });
@@ -652,9 +442,6 @@ export default function JobOpeningsPage() {
   const handleUnarchiveJob = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'published');
-      setJobs(prev => prev.map(j =>
-        j.id === job.id ? { ...j, status: 'Published' } : j
-      ));
       markVersionStatus(job.id, 'published');
       toast.success(formatJobActionMessage(job, 'unarchived and published'));
     } catch (error) {
@@ -706,9 +493,7 @@ export default function JobOpeningsPage() {
       // remaining version the latest again, so it takes this row's place on the
       // All Jobs list. Dropping the whole lineage here hid v1 of a job whose v2
       // draft was deleted, which looked as if the entire job had been deleted.
-      deletedIdsRef.current.add(job.id);
       markVersionsDeleted([job.id]);
-      setJobs(prev => prev.filter(j => j.id !== job.id));
       toast.success(formatJobActionMessage(job, 'deleted'));
     } catch (error: any) {
       toast.error(friendlyErrorMessage(error, "Couldn't delete job. Please try again."));
@@ -741,7 +526,6 @@ export default function JobOpeningsPage() {
     }
     if (updatedIds.length > 0) {
       const updated = new Set(updatedIds);
-      setJobs(prev => prev.map(job => updated.has(job.id) ? { ...job, status: mapStatus(status) } : job));
     }
     if (failed === 0) {
       const onlyUpdated = updatedIds.length === 1 ? targets.find(job => job.id === updatedIds[0]) : undefined;
@@ -847,9 +631,7 @@ export default function JobOpeningsPage() {
       // older versions of that job still exist, and collapseToLatestVersions puts
       // the newest of them back on the All Jobs list - which is correct, because
       // the job itself was not deleted.
-      deletedIds.forEach((id) => deletedIdsRef.current.add(id));
       markVersionsDeleted(deletedIds);
-      setJobs(prev => prev.filter(job => !deletedIds.includes(job.id)));
     }
 
     if (deletedIds.length > 0 && skipped.length === 0 && failed === 0) {
@@ -869,18 +651,9 @@ export default function JobOpeningsPage() {
     }
   };
 
-  if (loading) {
-    // Skeleton instead of a spinner during the initial fetch, matching the
-    // route-level loading.tsx so the load reads as one continuous skeleton.
-    return <JobOpeningsSkeleton />;
-  }
-
   return (
     <div ref={rootRef} className="tf-page relative flex flex-col">
       <JobsListing
-        jobs={jobs}
-        onRefresh={fetchJobs}
-        jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={handleCreateNew}
         onCreateNewDisabled={!(hasPermission('canCreateJD') || isTenantAdmin)}
         onViewJob={handleViewJob}

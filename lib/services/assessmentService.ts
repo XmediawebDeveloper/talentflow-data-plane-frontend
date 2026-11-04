@@ -3,6 +3,7 @@
  */
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import { withListCacheInvalidation } from '@/lib/utils/listCache';
 
 // A configured HR topic: either a plain topic label or a full question object.
 // Mirrors the backend's `List[Any]` (app/schemas/assessment.py).
@@ -399,6 +400,59 @@ export interface DetailedResultResponse {
 
 // ==================== NEW API INTERFACES ====================
 
+/** The list's server-side filters — the SAME set GET /assessments,
+ *  /assessments/stats and /assessments/ids read (one backend filter builder),
+ *  so a card's count equals the list's total for the same query. */
+export interface AssessmentListFilterParams {
+  jd_id?: string;
+  /** One status or a comma list ("published,draft"). */
+  status?: string;
+  search?: string;
+  /** 'job' = Job ID / Job Name only (the list's search box). */
+  search_scope?: 'job';
+  /** Job short id (JD-014) — every version of that job. */
+  job?: string;
+  jd_version?: number;
+  version?: number;
+  created_by?: string;
+  /** yyyy-mm-dd, inclusive. */
+  created_from?: string;
+  created_to?: string;
+  invited_only?: boolean;
+  /** The Total Jobs Type filter: 'Technical' | 'Behavioral' | 'Aptitude'. */
+  type?: string;
+}
+
+export type AssessmentListSortKey =
+  | 'published' | 'updated' | 'jobId' | 'jobName' | 'jobVersion' | 'assessmentVersion'
+  | 'status' | 'invitations' | 'completed' | 'createdAt' | 'createdBy';
+
+export interface AssessmentPageParams extends AssessmentListFilterParams {
+  [k: string]: unknown;
+  page: number;
+  page_size: number;
+  sort_by?: AssessmentListSortKey;
+  sort_dir?: 'asc' | 'desc';
+  /** Float this status to the top ('published' = Active first). */
+  status_first?: string;
+  ids?: string;
+  /** 'lineage' = one row per job, in the Total Jobs order. */
+  collapse?: 'lineage';
+}
+
+export interface AssessmentFilterOptions {
+  jobs: { value: string; label: string; count: number }[];
+  job_versions: number[];
+  versions: number[];
+  creators: string[];
+}
+
+/** Drop empty values so the cache key and the query string stay minimal. */
+const compactParams = <T extends object>(params: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  ) as Partial<T>;
+
 // 1. Stats Summary
 export interface AssessmentStatsResponse {
   total_assessments: number;
@@ -424,6 +478,8 @@ export interface AssessmentStatsResponse {
   total_ever_created?: number;
   total_deleted?: number;
   total_candidates_completed?: number;
+  /** Assessments with at least one invitation (same filters). */
+  invited_assessments?: number;
 }
 
 // 2. Clone Assessment
@@ -623,6 +679,55 @@ export const assessmentService = {
   }): Promise<AssessmentListResponse> {
     try {
       const response = await api.get<AssessmentListResponse>('/assessments', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * ONE page of the list, filtered / searched / sorted on the server.
+   */
+  async listPage(params: AssessmentPageParams): Promise<AssessmentListResponse> {
+    try {
+      const response = await api.get<AssessmentListResponse>('/assessments', { params: compactParams(params) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Card counts for the list's filters (same WHERE as `listPage`). */
+  async getFilteredStats(filters: AssessmentListFilterParams, options?: { timeout?: number }): Promise<AssessmentStatsResponse> {
+    try {
+      const response = await api.get<AssessmentStatsResponse>('/assessments/stats', {
+        params: compactParams(filters),
+        timeout: options?.timeout,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every id matching the list's filters — "select all" across pages. */
+  async listIds(
+    filters: AssessmentListFilterParams & Pick<AssessmentPageParams, 'sort_by' | 'sort_dir' | 'status_first'>,
+  ): Promise<string[]> {
+    try {
+      const response = await api.get<{ ids: string[] }>('/assessments/ids', { params: compactParams(filters) });
+      return response.data.ids || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** The filter panel's option lists — read when the panel opens. */
+  async getFilterOptions(status?: string): Promise<AssessmentFilterOptions> {
+    try {
+      const response = await api.get<AssessmentFilterOptions>('/assessments/filter-options', {
+        params: compactParams({ status }),
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -1505,6 +1610,36 @@ export const assessmentService = {
     }
   },
 };
+
+/* Every function that writes (or can change an assessment, its counts or an
+   invitation) clears the shared list cache (lib/utils/listCache) before and
+   after it runs — the cached whole-list reads in jobAssessmentHierarchy and
+   the assessment tables. The API client's write hook clears it too; this
+   keeps the rule visible here. The best-effort log* calls and the PDF
+   exports are left out on purpose. */
+withListCacheInvalidation(assessmentService, [
+  'create',
+  'update',
+  'publish',
+  'close',
+  'delete',
+  'invite',
+  'bulkInvite',
+  'deleteResult',
+  'generateCandidateInsights',
+  'clone',
+  'archive',
+  'unarchive',
+  'revokePendingInvitations',
+  'createInviteLink',
+  'resendInvitation',
+  'revokeInvitation',
+  'updateInvitationEmail',
+  'updateInvitationDetails',
+  'requestRefund',
+  'processRefund',
+  'regenerateQuestions',
+]);
 
 // Candidate-facing services (public)
 export const candidateAssessmentService = {

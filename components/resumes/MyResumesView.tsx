@@ -86,6 +86,11 @@ const FOLDER_ACTION_MENU_HEIGHT = 188;
 
 type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders';
 
+/* fetchData options. `dedupe`: the call came from the params effect and may be
+   skipped if it ends up replayed behind a running fetch that loaded the same
+   params. `replay`: set internally when the guard replays a queued call. */
+type FetchDataOptions = { dedupe?: boolean; replay?: boolean };
+
 const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
   { value: 'all', label: 'All folders' },
   { value: 'with-resumes', label: 'Has resumes' },
@@ -1107,13 +1112,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     currentFilters?: any;
     folderId?: string;
     silent?: boolean;
+    dedupe?: boolean;
     resolve?: () => void;
   } | null>(null);
+  // Request params (JSON of the list request) of the last fetch that completed
+  // successfully. Cleared when a fetch starts, so it never describes data that
+  // a later fetch may have replaced. Read by the guard replay below.
+  const lastCompletedFetchKeyRef = useRef<string>('');
   // Always the newest fetchData. The replay has to go through this rather than
   // calling itself: page/sort live in the closure, not the arguments, so a
   // self-call would refetch with the page the *outgoing* render had.
   const fetchDataRef = useRef<
-    ((searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => Promise<void>) | null
+    ((searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean, opts?: FetchDataOptions) => Promise<void>) | null
   >(null);
 
   // Persist + restore this list's scroll position and view state so returning
@@ -1156,8 +1166,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
   useEffect(() => {
     fetchData();
-    fetchUploadHistory();
-    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at ±200).
+    // Upload history is fetched by the `user?.id` effect below, which also
+    // runs on mount whenever the user is already known — calling it here too
+    // sent `upload/batches` twice on every visit.
+    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at
+    // ±200). Throttled inside the service to once per 15 minutes per session.
     resumeService.reconcileUsage();
     hasMountedRef.current = true; // Mark as mounted
 
@@ -1226,7 +1239,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       // Use lighter loading for page/sort changes when data is already on screen
       const isPageChange = resumes.length > 0;
-      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false).finally(() => {
+      // `dedupe`: if this call has to wait behind a running fetch, its replay
+      // is skipped when it would request exactly what that fetch just loaded
+      // (the state-restore path on a refresh). Write-triggered refetches don't
+      // pass it, so they always run.
+      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false, { dedupe: true }).finally(() => {
         setIsPaginating(false);
         console.log('[MyResumes] useEffect - Fetch complete');
       });
@@ -1632,41 +1649,50 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      request gets the exact number without disturbing the current view — used
      after uploads, which is when the badge would otherwise lag or flicker
      between the folder total and the global one. */
+  /* One GET /resumes/stats for My Resumes: the All Resumes total (active only)
+     and every folder's listing total (archived rows included, as a folder
+     listing includes them). Unfiltered — the badges describe the library. */
+  const fetchMyResumeStats = () =>
+    resumeService.stats({ source: 'my-resumes', include_archived: false });
+
   const refreshAllResumesTotal = async () => {
     try {
       // Same rule as the All Resumes listing: active resumes only, so the badge
       // and the table can never disagree about archived ones.
-      const res = await resumeService.list({
-        source: 'my-resumes',
-        page: 1,
-        page_size: 1,
-        include_archived: false,
-      });
-      allResumesTotalRef.current = res.total;
-      setAllResumesTotal(res.total);
-      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: res.total } : f)));
+      // GET /resumes/stats — same params as the folder reconcile below, so the
+      // api client's GET sharing serves both from one request.
+      const stats = await fetchMyResumeStats();
+      const total = stats.all_total;
+      if (typeof total !== 'number') return;
+      allResumesTotalRef.current = total;
+      setAllResumesTotal(total);
+      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: total } : f)));
     } catch {
       // Keep the last known figure rather than flashing a wrong one.
     }
   };
 
-  /* Bring every folder badge in line with what opening that folder lists, by
-     asking the same endpoint the table uses for each folder's total. The
-     folders API counts stored rows — versions included — so its numbers can
-     read higher than the list ever shows.
+  /* Bring every folder badge in line with what opening that folder lists,
+     from GET /resumes/stats (built from the same filter as the table's
+     list). The folders API counts stored rows — versions included — so its
+     numbers can read higher than the list ever shows.
 
-     Bounded on purpose: one small request per folder, only from the plain
-     unfiltered view (page load and post-upload refreshes), and skipped
-     entirely for large trees where the fan-out would cost more than the
-     inconsistency. Those keep the server's own count. */
-  const MAX_FOLDERS_TO_RECONCILE = 30;
+     One request for the whole tree, only from the plain unfiltered view
+     (page load and post-upload refreshes). */
   const reconcilingFoldersRef = useRef(false);
   const lastReconciledRef = useRef('');
-  /* Set by the first fetch. That one waits for the reconcile pass before
-     showing the folder tree, so the badges never paint the raw server count
-     and then drop to the corrected one. Later fetches reuse the cached
-     corrections (see below) and reconcile in the background as before. */
-  const folderCountsPrimedRef = useRef(false);
+  /* The newest folder snapshot a fetch put on screen: its signature (ids +
+     raw server counts) and, when it came from the unfiltered view, the raw
+     tree to reconcile. The reconcile pass runs in the background (never
+     awaited by a fetch), so a refetch can land while it is in flight; when
+     the snapshot it measured is no longer the newest, its results are
+     dropped and the pass re-runs against the newest one. */
+  const latestFolderSnapshotRef = useRef<{ signature: string; reconcileTarget: FolderType[] | null }>({
+    signature: '',
+    reconcileTarget: null,
+  });
+  const folderSnapshotSignature = (folderList: FolderType[]) =>
+    JSON.stringify(flattenAllFolders(folderList).filter(f => f.id !== 'all').map(f => [f.id, f.count]));
 
   /* Corrections have to outlive the fetch that produced them. Every fetch
      rebuilds the tree from the API, which reinstalls the raw count — so a
@@ -1699,7 +1725,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const reconcileFolderCounts = async (folderList: FolderType[]) => {
     if (reconcilingFoldersRef.current) return;
     const flat = flattenAllFolders(folderList).filter(f => f.id !== 'all');
-    if (flat.length === 0 || flat.length > MAX_FOLDERS_TO_RECONCILE) return;
+    // One stats call covers any number of folders, so no size cap any more.
+    if (flat.length === 0) return;
 
     // The server's numbers are the input to this correction, so re-running it
     // on an identical snapshot can only produce the same answer. Without this,
@@ -1709,25 +1736,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     lastReconciledRef.current = signature;
 
     reconcilingFoldersRef.current = true;
+    let superseded = false;
     try {
-      const totals = await Promise.all(
-        flat.map(async (folder) => {
-          try {
-            const res = await resumeService.list({
-              source: 'my-resumes',
-              folder_id: folder.id,
-              page: 1,
-              page_size: 1,
-              // Folder badges count what the folder lists — and Archived
-              // Resumes lists archived rows, so this mirrors the table's rule.
-              include_archived: true,
-            });
-            return [folder.id, res.total] as const;
-          } catch {
-            return [folder.id, null] as const;
-          }
-        }),
+      /* ONE GET /resumes/stats call for every folder (was one page_size=1
+         list per folder). Its per-folder numbers are exactly what
+         GET /resumes?source=my-resumes&folder_id=<id> returns as `total` —
+         archived rows included, as Archived Resumes lists them. A folder the
+         server has no rows for is 0. On failure nothing is corrected. */
+      let folderTotals: Record<string, number> | null = null;
+      try {
+        folderTotals = (await fetchMyResumeStats()).folders ?? {};
+      } catch {
+        folderTotals = null;
+      }
+      const totals = flat.map(
+        (folder) => [folder.id, folderTotals ? (folderTotals[folder.id] ?? 0) : null] as const,
       );
+
+      // A newer fetch replaced the folder snapshot while these were in
+      // flight (an upload, move, delete, or a filtered folder list). These
+      // totals describe the old one, so drop them; `finally` re-runs the pass
+      // for the newest snapshot.
+      if (latestFolderSnapshotRef.current.signature !== signature) {
+        superseded = true;
+        return;
+      }
 
       const byId = new Map(
         totals.filter((entry): entry is readonly [string, number] => entry[1] !== null),
@@ -1749,10 +1782,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setFolders(prev => applyCachedCorrections(prev));
     } finally {
       reconcilingFoldersRef.current = false;
+      if (superseded) {
+        // Let the newest snapshot be measured even if it repeats an older
+        // signature, then run it (only if it came from the unfiltered view).
+        lastReconciledRef.current = '';
+        const target = latestFolderSnapshotRef.current.reconcileTarget;
+        if (target) reconcileFolderCounts(target);
+      }
     }
   };
 
-  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean, opts?: FetchDataOptions) => {
     console.log('[FETCH] fetchData called', {
       searchTerm,
       filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
@@ -1771,11 +1811,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       console.log('[FETCH] Already fetching, queueing this call');
       // Resolve as a displaced entry rather than hanging: whoever awaited it
       // (the refetch effect, to drop its overlay) must not wait forever.
-      pendingFetchRef.current?.resolve?.();
+      const displaced = pendingFetchRef.current;
+      displaced?.resolve?.();
+      /* The replay may only be skipped when every call it stands for allowed
+         that — a displaced write-triggered refetch keeps it from being skipped. */
+      const dedupe = !!opts?.dedupe && (displaced ? !!displaced.dedupe : true);
       /* Returns a promise that settles when the REPLAY finishes, not now —
          callers use it to decide when the table has really caught up. */
       return new Promise<void>(resolve => {
-        pendingFetchRef.current = { searchTerm, currentFilters, folderId, silent, resolve };
+        pendingFetchRef.current = { searchTerm, currentFilters, folderId, silent, dedupe, resolve };
       });
     }
 
@@ -1862,6 +1906,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           searchParams.source_type = currentFilters.sourceType;
         }
       }
+
+      /* Guard replay of a param-effect call (see `dedupe` above): skip it when
+         it asks for exactly what the fetch that just finished loaded. On a
+         refresh the restored view usually equals the mount fetch's defaults,
+         and this replay was a second identical list + folders round trip. */
+      const fetchKey = JSON.stringify(searchParams);
+      if (opts?.replay && opts.dedupe && fetchKey === lastCompletedFetchKeyRef.current) {
+        console.log('[FETCH] Replay matches the last completed fetch, skipping');
+        return;
+      }
+      lastCompletedFetchKeyRef.current = '';
 
       const [resumeResponse, folderResponse] = await Promise.all([
         resumeService.list(searchParams),
@@ -1976,12 +2031,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // against these, not against numbers it corrected itself.
       const rawFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
-      // First load only (see folderCountsPrimedRef): the page is still on its
-      // skeleton, so correct the badges before the tree first appears. Bounded
-      // like every reconcile — one parallel round of small requests.
-      const primeFolderCounts = !folderCountsPrimedRef.current;
-      folderCountsPrimedRef.current = true;
-      if (primeFolderCounts && isUnfiltered) await reconcileFolderCounts(rawFolders);
+      // Newest folder snapshot on screen — a reconcile pass that measured an
+      // older one must not write its corrections over this (see the helper).
+      latestFolderSnapshotRef.current = {
+        signature: folderSnapshotSignature(rawFolders),
+        reconcileTarget: isUnfiltered ? rawFolders : null,
+      };
 
       setResumes(convertedResumes);
       setLoadedFolderId(folderId || 'all');
@@ -1989,9 +2044,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setTotalIncludingVersions(resumeResponse.total_including_versions);
       setTotalPages(resumeResponse.total_pages);
       setFolders(applyCachedCorrections(rawFolders));
+      lastCompletedFetchKeyRef.current = fetchKey;
 
       // Same correction for every other folder, so the badges are right before
       // the user opens them. Only off the unfiltered view — see the helper.
+      // Not awaited, including on first load: the tree paints with the
+      // server's `resume_count` and the pass corrects the badges in place.
       if (isUnfiltered) reconcileFolderCounts(rawFolders);
 
       /* A page number restored from the last visit can point past the end of
@@ -2034,6 +2092,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         Promise.resolve(
           (fetchDataRef.current ?? fetchData)(
             queued.searchTerm, queued.currentFilters, queued.folderId, queued.silent,
+            { dedupe: queued.dedupe, replay: true },
           ),
         ).finally(() => queued.resolve?.());
       }

@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import api, { handleUnauthorized, UNITS_CONSUMED_EVENT } from '@/lib/services/api';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 
 interface FeatureItem {
   feature_key: string;
@@ -190,9 +191,17 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
       }
       setError(null);
 
-      console.log('[QuotaContext] Fetching quota-status...');
-      const response = await api.get('/usage/quota-status');
-      const data = response.data?.data || response.data;
+      // First load of the page: the app-shell /bootstrap response, if it
+      // carried this part (a forced refresh always asks the endpoint).
+      const boot = force ? { hit: false as const } : await takeBootstrapPart<any>('quota_status');
+      let data: any;
+      if (boot.hit) {
+        data = boot.data?.data || boot.data;
+      } else {
+        console.log('[QuotaContext] Fetching quota-status...');
+        const response = await api.get('/usage/quota-status');
+        data = response.data?.data || response.data;
+      }
 
       // Detect plan changes by comparing with previous plan data
       const newPlanName = data?.plan_info?.plan_name || data?.plan_name;
@@ -303,8 +312,13 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     return quotaDataRef.current;
   }, [fetchQuotaData]);
 
+  const contextValue = useMemo<QuotaContextType>(
+    () => ({ quotaData, loading, error, hasPermission, refetch, lastFetchTime }),
+    [quotaData, loading, error, hasPermission, refetch, lastFetchTime],
+  );
+
   return (
-    <QuotaContext.Provider value={{ quotaData, loading, error, hasPermission, refetch, lastFetchTime }}>
+    <QuotaContext.Provider value={contextValue}>
       {children}
     </QuotaContext.Provider>
   );

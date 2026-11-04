@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import { User, Tenant, Permission, FeatureFlags, UserRole } from '@/lib/types/tenant';
 import { authService, clearTokens } from '@/lib/services';
 import { handleUnauthorized, dispatchAccessRestrictedEvent, ApiError } from '@/lib/services/api';
@@ -324,6 +324,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      missing badge is not worth a console error or a toast on every load. */
   const displayIdFetchedForRef = useRef<string | null>(null);
   useEffect(() => {
+    // Wait for /auth/me (restoreSession) to answer first: it normally carries
+    // user_display_id, so a cached user missing it no longer costs an extra
+    // /users/{id} on every hard load.
+    if (!permissionsVerified) return;
     if (!user?.id || user.userDisplayId) return;
     if (displayIdFetchedForRef.current === user.id) return;
     displayIdFetchedForRef.current = user.id;
@@ -346,7 +350,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  }, [user?.id, user?.userDisplayId]);
+  }, [user?.id, user?.userDisplayId, permissionsVerified]);
 
   // RBAC01-07: Role-based helpers
   const isTenantAdmin = user ? isTenantAdminRole(user.role) : false;
@@ -774,7 +778,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [user]); // Re-run if user changes (login/logout)
 
-  const login = (userData: User, tenantName?: string) => {
+  const login = useCallback((userData: User, tenantName?: string) => {
     console.log('[AUTH] Login called for:', userData.email, 'tenant:', tenantName);
     // A fresh login hands us server-issued permissions — nothing stale to wait on.
     setPermissionsVerified(true);
@@ -826,9 +830,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('permission_version');
       console.log('[AUTH] Permission version cache cleared on login');
     }
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     console.log('[AUTH] Logout called');
 
     // Ensure talentflow_subdomain is always fresh from live React state before getLoginUrl() reads it.
@@ -876,12 +880,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // both are handled correctly by window.location.href.) Forced, so a page's
     // unsaved-changes prompt doesn't stand between the user and the sign-out.
     forceNavigate(loginUrl);
-  };
+  }, [user]);
 
-  const updateUser = (userData: User) => {
+  const updateUser = useCallback((userData: User) => {
     setUser(userData);
     saveUserToStorage(userData);
-  };
+  }, []);
 
   // Refresh user data from API (useful after permission changes)
   const refreshUser = useCallback(async () => {
@@ -949,33 +953,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [user, refreshUser]);
 
+  // Memoized so useAuth consumers re-render only when a value below changes,
+  // not on every AuthProvider render. Every function listed is a useCallback.
+  const contextValue = useMemo<AuthContextType>(() => ({
+    user,
+    tenant,
+    isAuthenticated,
+    isLoading,
+    permissionsVerified,
+    login,
+    logout,
+    updateUser,
+    // RBAC01-07: Extended role and permission helpers
+    isTenantAdmin,
+    isRecruiter,
+    isViewer,
+    isBillingManager,
+    isStandardUser,
+    isReadOnlyRole,
+    hasFeature,
+    hasPermission,
+    hasPermissionCode,
+    canAccessBilling,
+    canManageUsers,
+    canModifyData,
+    refreshUser,
+  }), [
+    user,
+    tenant,
+    isAuthenticated,
+    isLoading,
+    permissionsVerified,
+    login,
+    logout,
+    updateUser,
+    isTenantAdmin,
+    isRecruiter,
+    isViewer,
+    isBillingManager,
+    isStandardUser,
+    isReadOnlyRole,
+    hasFeature,
+    hasPermission,
+    hasPermissionCode,
+    canAccessBilling,
+    canManageUsers,
+    canModifyData,
+    refreshUser,
+  ]);
+
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        tenant,
-        isAuthenticated,
-        isLoading,
-        permissionsVerified,
-        login,
-        logout,
-        updateUser,
-        // RBAC01-07: Extended role and permission helpers
-        isTenantAdmin,
-        isRecruiter,
-        isViewer,
-        isBillingManager,
-        isStandardUser,
-        isReadOnlyRole,
-        hasFeature,
-        hasPermission,
-        hasPermissionCode,
-        canAccessBilling,
-        canManageUsers,
-        canModifyData,
-        refreshUser,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

@@ -28,6 +28,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -248,6 +249,14 @@ interface ScoredResumeData {
   jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
+  /** Server-counted Exact / Partial / No Match for this JD version, every
+   *  score event (GET /scoring/jds). The job rows read their counts from
+   *  these, so they never need the whole scored-resume table. */
+  verdictCounts?: { exact: number; partial: number; none: number };
+  /** Who ran this version's most recent scoring (GET /scoring/jds). */
+  latestScoredBy?: string;
+  /** True once `scoredResumes` holds this version's scores (onLoadJdScores). */
+  scoresLoaded?: boolean;
   /**
    * The highest `jdVersionNumber` seen across every scored entry in this
    * job's lineage, filled in by `collapseHistoryToLatestVersions`. Since that
@@ -418,7 +427,11 @@ interface ResumeScoringPageProps {
    *  only once the route re-fetches the ENTIRE scored-resume table just to
    *  re-derive these same four numbers by summing rows client-side. `null`
    *  while that initial probe is still in flight. */
-  scoreCounts?: { total: number; exact: number; partial: number; none: number } | null;
+  scoreCounts?: {
+    total: number; exact: number; partial: number; none: number;
+    /** Distinct candidates behind each card (GET /scoring/stats). */
+    people?: { all: number; exact: number; partial: number; none: number };
+  } | null;
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
   onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
@@ -506,6 +519,8 @@ export default function ResumeScoringPage({
 
   // Track if we've already handled the initialJdId to prevent re-triggering
   const [initialJdHandled, setInitialJdHandled] = useState(false);
+  // One per-JD score load for a ?jd_id&score_id landing (see the initial-JD effect).
+  const initialJdScoresRequestedRef = useRef(false);
   const [selectedCandidateForView, setSelectedCandidateForView] = useState<any | null>(null);
   /* Whether the JD being viewed has a published assessment to invite to — the
      one gate the Invite controls on this page need, since only assessment
@@ -632,6 +647,18 @@ export default function ResumeScoringPage({
       setIsRefreshingHistoryModal(false);
     }
   };
+
+  /* The Scoring History modal lists every score of the job's lineage. The
+     landing index carries counts only, so opening it loads each version's
+     scores that are not in yet (once; Refresh above re-reads them all). */
+  useEffect(() => {
+    if (!historyModalItem || !onLoadJdScores) return;
+    const groupKey = resolveHistoryGroupKey(historyModalItem);
+    scoredHistory
+      .filter((h) => resolveHistoryGroupKey(h) === groupKey && !h.scoresLoaded && !!h.verdictCounts)
+      .forEach((h) => { void onLoadJdScores(h.jobId, h.jobTitle); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyModalItem]);
 
   /* "Show All Versions" beside the version badge on a job's own scoring page: lists every
      version's scored resumes for that job instead of only the version the
@@ -972,9 +999,14 @@ export default function ResumeScoringPage({
   // Bulk download state for scored resumes
   const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
 
-  // Available units from quota API
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);  // RS quota for scoring
-  const [availableASUnits, setAvailableASUnits] = useState<number | null>(null);  // AS quota for invites
+  // Available units from the shared QuotaContext (one /usage/quota-status call
+  // app-wide). useFreshQuota refreshes it on mount unless it is seconds old.
+  const { quotaData: sharedQuotaData, loading: sharedQuotaLoading } = useFreshQuota();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sharedQuotas = sharedQuotaData?.quotas as any;
+  const availableUnits: number | null = sharedQuotas?.RS ? (sharedQuotas.RS.total_remaining || 0) : null;  // RS quota for scoring
+  // FIX: Use AS (Assessment) quota for invite button, not RS
+  const availableASUnits: number | null = sharedQuotas?.AS ? (sharedQuotas.AS.total_remaining || 0) : null;  // AS quota for invites
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
@@ -1043,7 +1075,7 @@ export default function ResumeScoringPage({
      flag also flips on failure, and a 10s cap stops a slow call from holding
      the page. Latched: later refreshes never bring the skeleton back. */
   const [globalSettled, setGlobalSettled] = useState(false);
-  const [quotaSettled, setQuotaSettled] = useState(false);
+  const quotaSettled = !!sharedQuotaData || !sharedQuotaLoading;
   const [firstPaintCapped, setFirstPaintCapped] = useState(false);
   const firstPaintDoneRef = useRef(false);
   useEffect(() => {
@@ -1132,7 +1164,7 @@ export default function ResumeScoringPage({
       // to silently cap this list at 100 rows with no pagination to reach
       // the rest, so "Total Resumes Scored"/"View by Candidates" undercounted
       // against the real total the moment more than 100 resumes existed.
-      const response = await fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page, page_size }));
+      const response = await fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page, page_size, include_counts: false }));
 
       // Convert to ScoredResumesTable format
       const converted = response.items.map((item: any) => ({
@@ -1180,6 +1212,8 @@ export default function ResumeScoringPage({
     } catch (error) {
       console.error('Failed to fetch global scored resumes:', error);
       setGlobalFailed(true);
+      // Let the next need (another tick / expand) try again.
+      globalPrefetchedRef.current = false;
       if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
@@ -1300,6 +1334,8 @@ export default function ResumeScoringPage({
     setPartialJobRows(h.partialJobRows ?? {});
     setSelectedScoredResumes(h.selectedScoredResumes ?? []);
     setHandoffReturn(h);
+    // The hand-off resolves its candidates from the cross-job score list.
+    ensureGlobalScoredResumes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -1388,39 +1424,36 @@ export default function ResumeScoringPage({
    *  scored list is in, a placeholder until then — never the version's own
    *  total first, which would then jump to the tally. See `globalFailed`. */
   const scoredCountValue = (versionTotal: number, tally: { exact: number; partial: number; none: number }) => {
-    if (globalLoaded) return tally.exact + tally.partial + tally.none;
+    // Server counts (GET /scoring/jds) are there from the first paint.
+    if (globalLoaded || (scoredHistory.length > 0 && scoredHistory.every(h => h.verdictCounts))) {
+      return tally.exact + tally.partial + tally.none;
+    }
     if (globalFailed) return versionTotal;
     return <span className="inline-block h-4 w-6 rounded bg-gray-100 dark:bg-slate-800 animate-pulse align-middle" aria-label="Loading" />;
   };
 
   /**
-   * Warm the "View by Candidates" list in the background, so clicking that card
-   * renders rows instead of a spinner.
-   *
-   * The card shows its count from `scoredHistory`, which is already loaded — so
-   * the user can click the moment the page paints, while the rows themselves
-   * hadn't been requested yet. Fetching them during the seconds spent reading
-   * the cards moves that wait off the click.
-   *
-   * Deliberately after `historyLoading` clears: the history IS the page, and
-   * this request must not compete with it for the connection.
-   *
-   * `prefetchedRef` makes this fire at most once per mount. Without it a failed
-   * request would leave the list empty, the effect would re-satisfy its own
-   * conditions, and it would retry forever.
+   * The cross-job scored list (every score, with resume details) is NOT
+   * loaded on landing any more: the cards come from GET /scoring/stats and
+   * the job rows' counts from GET /scoring/jds. It loads only when something
+   * on screen needs the individual scores — View by Candidates (the effect
+   * above), a job opened inline or ticked (its candidates / export / invite),
+   * an invite hand-off coming back, or a candidate page reopened from a
+   * cross-job list. `globalPrefetchedRef` keeps it to one request per need;
+   * `invalidateGlobalScoredResumes` resets it after new scores land.
    */
-  useEffect(() => {
-    // Not waiting for the history any more: the first paint now waits for
-    // both, so fetching them side by side gets the page up sooner.
-    // Already in the view — the effect above is handling it.
-    if (isGlobalView) return;
-    if (globalScoredResumes.length > 0 || isLoadingGlobal) return;
-    if (globalPrefetchedRef.current) return;
-
+  const ensureGlobalScoredResumes = () => {
+    if (globalLoaded || isLoadingGlobal || globalPrefetchedRef.current) return;
     globalPrefetchedRef.current = true;
     void fetchGlobalScoredResumes({ silent: true });
+  };
+  const needsGlobalScores = expandedJobKeys.size > 0
+    || selectedHistoryItems.size > 0
+    || Object.values(partialJobRows).some(ids => ids.length > 0);
+  useEffect(() => {
+    if (needsGlobalScores) ensureGlobalScoredResumes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
+  }, [needsGlobalScores, globalLoaded]);
 
   /** `scroll`: bring the list into view. On for the stat cards (they sit
    *  above the list and open it); OFF for the view pills — those sit right on
@@ -1487,6 +1520,8 @@ export default function ResumeScoringPage({
     // cross-job scores are in (see `initialOpenedFrom`).
     if (initialJdId && initialScoreId && initialOpenedFrom) {
       if (!globalSettled) {
+        // Not loaded on landing any more — this page needs it, so ask now.
+        ensureGlobalScoredResumes();
         if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
         return;
       }
@@ -1557,11 +1592,25 @@ export default function ResumeScoringPage({
       if (scoredHistory.length > 0) {
         console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
         const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
+        /* The landing index carries no per-JD scores any more (only counts):
+           a score_id (or show_progress) landing needs THIS job's scores, so
+           load them first and come back here once they are in. The waiting
+           timeout below still releases the page if that load never lands. */
+        const needsJdScores = !!historyItem && !historyItem.scoresLoaded && !!historyItem.verdictCounts
+          && (!!initialScoreId || (initialShowProgress && !pendingScoringData));
+        if (historyItem && needsJdScores) {
+          if (!initialJdScoresRequestedRef.current) {
+            initialJdScoresRequestedRef.current = true;
+            onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+          }
+          if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+          return;
+        }
         if (historyItem) {
           console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
           setSelectedHistoryItem(historyItem);
-          // Load full scores for this JD dynamically
-          onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+          // Load full scores for this JD dynamically (unless just loaded above)
+          if (!historyItem.scoresLoaded) onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
 
           // If we also have a score_id, open the candidate view directly
           if (initialScoreId && historyItem.scoredResumes) {
@@ -1634,13 +1683,20 @@ export default function ResumeScoringPage({
   // popup refreshed history the moment the run settled). Same layout-effect
   // shape as pendingAutoSelectJdId, for the same no-intermediate-paint reason.
   const [pendingViewResult, setPendingViewResult] = useState<{ jobId: string; resumeId: string } | null>(null);
+  const pendingViewLoadRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!pendingViewResult) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingViewResult.jobId);
     const candidate = historyItem?.scoredResumes?.find((r: any) =>
       r.resumeId === pendingViewResult.resumeId || r.resume_id === pendingViewResult.resumeId || r.id === pendingViewResult.resumeId
     );
+    // The history index holds counts only: pull this job's scores once.
+    if (historyItem && !candidate && !historyItem.scoresLoaded && pendingViewLoadRef.current !== historyItem.jobId) {
+      pendingViewLoadRef.current = historyItem.jobId;
+      onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+    }
     if (!historyItem || !candidate) return;
+    pendingViewLoadRef.current = null;
     setPendingViewResult(null);
     setSelectedHistoryItem(historyItem);
     setSelectedCandidateForView(candidate);
@@ -1668,28 +1724,6 @@ export default function ResumeScoringPage({
       return () => clearTimeout(timeout);
     }
   }, [isWaitingForInitialJd]);
-
-  // Fetch available units on mount
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const response = await api.get('/usage/quota-status');
-        const quotas = response.data?.data?.quotas;
-        if (quotas?.RS) {
-          setAvailableUnits(quotas.RS.total_remaining || 0);
-        }
-        // FIX: Use AS (Assessment) quota for invite button, not RS
-        if (quotas?.AS) {
-          setAvailableASUnits(quotas.AS.total_remaining || 0);
-        }
-      } catch (error) {
-        console.log('[ResumeScoringPage] Failed to load quota:', error);
-      } finally {
-        setQuotaSettled(true);
-      }
-    };
-    fetchQuota();
-  }, []);
 
   // Track jobs that have already started scoring to prevent duplicate scoring
   const scoringStartedRef = useRef<Set<string>>(new Set());
@@ -2375,7 +2409,9 @@ export default function ResumeScoringPage({
   // First paint of the list landing: hold the skeleton until everything the
   // first screen shows has arrived (see `globalSettled`).
   if (!firstPaintDoneRef.current) {
-    const ready = firstPaintCapped || (!historyLoading && globalSettled && quotaSettled);
+    // The cross-job score list is no longer part of the first screen (cards
+    // and job-row counts come from the server), so it no longer gates it.
+    const ready = firstPaintCapped || (!historyLoading && quotaSettled);
     if (!ready && !initialJdId) return <ResumeScoringSkeleton variant="overview" />;
     firstPaintDoneRef.current = true;
   }
@@ -3154,7 +3190,21 @@ export default function ResumeScoringPage({
        scored resume just to sum/reduce over them again. Falls back to the
        client-side tally below when the prop isn't available (e.g. an older
        host of this component, or the probe failing). */
-    const totalResumesScored = scoreCounts ? scoreCounts.total : allScoredResumeRows.length;
+    /* Fallback when the stats call failed: the per-version server counts the
+       job index carries, else (an older host) the rows themselves. */
+    const indexCounts = scoredHistory.every(h => h.verdictCounts)
+      ? scoredHistory.reduce(
+          (acc, h) => ({
+            exact: acc.exact + (h.verdictCounts?.exact ?? 0),
+            partial: acc.partial + (h.verdictCounts?.partial ?? 0),
+            none: acc.none + (h.verdictCounts?.none ?? 0),
+          }),
+          { exact: 0, partial: 0, none: 0 },
+        )
+      : null;
+    const totalResumesScored = scoreCounts
+      ? scoreCounts.total
+      : indexCounts ? indexCounts.exact + indexCounts.partial + indexCounts.none : allScoredResumeRows.length;
     /* How the whole library came out, one bucket per verdict. Counted over
        scoring EVENTS — the same rows `totalResumesScored` counts — so the
        three add up to that first card rather than to some other population.
@@ -3165,7 +3215,7 @@ export default function ResumeScoringPage({
        Match, which is how the per-job breakdown below has always treated it. */
     const matchCounts = scoreCounts
       ? { exact: scoreCounts.exact, partial: scoreCounts.partial, none: scoreCounts.none }
-      : allScoredResumeRows.reduce(
+      : indexCounts ?? allScoredResumeRows.reduce(
           (acc, r: any) => {
             const verdict = normalizeMatchResult(r.matchStatus ?? r.match_status);
             if (verdict === 'Exact Match') acc.exact += 1;
@@ -3239,17 +3289,52 @@ export default function ResumeScoringPage({
     }
     const jobScores = (item: ScoredResumeData): any[] => scoresByJob.get(resolveHistoryGroupKey(item)) || [];
 
+    /* A job's Exact / Partial / No Match across every version, from the
+       server counts on each scored version (GET /scoring/jds) - summed per
+       lineage with the same key the rows collapse by. Available on landing,
+       so the rows, the verdict filter and the count sorts no longer wait for
+       (or need) the whole cross-job score list. Falls back to counting the
+       loaded rows for a host that passes no server counts. */
+    const serverTallies = scoredHistory.every(h => h.verdictCounts);
+    const tallyByJob = new Map<string, { exact: number; partial: number; none: number }>();
+    if (serverTallies) {
+      for (const h of scoredHistory) {
+        const key = resolveHistoryGroupKey(h);
+        const t = tallyByJob.get(key) || { exact: 0, partial: 0, none: 0 };
+        t.exact += h.verdictCounts!.exact;
+        t.partial += h.verdictCounts!.partial;
+        t.none += h.verdictCounts!.none;
+        tallyByJob.set(key, t);
+      }
+    }
+    const jobTally = (item: ScoredResumeData): { exact: number; partial: number; none: number } => {
+      if (serverTallies) return tallyByJob.get(resolveHistoryGroupKey(item)) || { exact: 0, partial: 0, none: 0 };
+      return jobScores(item).reduce(
+        (acc, r) => {
+          const v = rowVerdict(r);
+          if (v === 'Exact Match') acc.exact += 1;
+          else if (v === 'Partial Match') acc.partial += 1;
+          else acc.none += 1;
+          return acc;
+        },
+        { exact: 0, partial: 0, none: 0 },
+      );
+    };
+    const tallyReady = serverTallies || globalLoaded;
+    const tallyOf = (t: { exact: number; partial: number; none: number }, v: Verdict) =>
+      v === 'Exact Match' ? t.exact : v === 'Partial Match' ? t.partial : t.none;
+
     /* Under a verdict filter, only jobs that have at least one such score.
        Not applied until the scores have loaded — an unloaded list would
        otherwise hide every job. */
-    const collapsedHistoryFiltered = matchFilter && globalLoaded
-      ? collapsedHistoryAll.filter(item => jobScores(item).some(r => rowVerdict(r) === matchFilter))
+    const collapsedHistoryFiltered = matchFilter && tallyReady
+      ? collapsedHistoryAll.filter(item => tallyOf(jobTally(item), matchFilter) > 0)
       : collapsedHistoryAll;
 
     /* Sort by — Last Scored / Job Title / JD ID / candidate counts (under
        the verdict pill). Ties keep the list's own newest-first order. */
     const jobSortValue = (item: ScoredResumeData): number | string => {
-      const verdictCount = (v: Verdict) => jobScores(item).filter(r => rowVerdict(r) === v).length;
+      const verdictCount = (v: Verdict) => tallyOf(jobTally(item), v);
       switch (jobSortBy) {
         case 'title': return (item.jobTitle || '').toLowerCase();
         case 'jdId': {
@@ -3258,7 +3343,8 @@ export default function ResumeScoringPage({
           return isNaN(n) ? code.toLowerCase() : n;
         }
         case 'candidates':
-          return matchFilter ? verdictCount(matchFilter) : jobScores(item).length;
+          if (matchFilter) return verdictCount(matchFilter);
+          { const t = jobTally(item); return t.exact + t.partial + t.none; }
         case 'exact': return verdictCount('Exact Match');
         case 'partial': return verdictCount('Partial Match');
         case 'none': return verdictCount('No Match');
@@ -3411,16 +3497,19 @@ export default function ResumeScoringPage({
             const v = rowVerdict(r);
             (v === 'Exact Match' ? people.exact : v === 'Partial Match' ? people.partial : people.none).add(k);
           });
+          // Server-counted (GET /scoring/stats) - no longer needs every score.
+          const peopleCounts = scoreCounts?.people
+            ?? (globalLoaded ? { all: people.all.size, exact: people.exact.size, partial: people.partial.size, none: people.none.size } : null);
           const CandidatesChip = ({ count }: { count: number }) => (
             <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
               {count} {count === 1 ? 'candidate' : 'candidates'}
             </span>
           );
           const cards = [
-            { id: null, label: 'All Scored', icon: FileText, count: totalResumesScored, people: people.all.size },
-            { id: 'Exact Match' as const, label: 'Exact Match', icon: CheckCircle2, count: matchCounts.exact, people: people.exact.size },
-            { id: 'Partial Match' as const, label: 'Partial Match', icon: TrendingUp, count: matchCounts.partial, people: people.partial.size },
-            { id: 'No Match' as const, label: 'No Match', icon: XCircle, count: matchCounts.none, people: people.none.size },
+            { id: null, label: 'All Scored', icon: FileText, count: totalResumesScored, people: peopleCounts?.all },
+            { id: 'Exact Match' as const, label: 'Exact Match', icon: CheckCircle2, count: matchCounts.exact, people: peopleCounts?.exact },
+            { id: 'Partial Match' as const, label: 'Partial Match', icon: TrendingUp, count: matchCounts.partial, people: peopleCounts?.partial },
+            { id: 'No Match' as const, label: 'No Match', icon: XCircle, count: matchCounts.none, people: peopleCounts?.none },
           ];
           return (
             <div className="mb-4 sm:mb-5">
@@ -3442,7 +3531,7 @@ export default function ResumeScoringPage({
                       setPageView('list');
                     }}
                   >
-                    {globalLoaded && <CandidatesChip count={card.people} />}
+                    {card.people !== undefined && <CandidatesChip count={card.people} />}
                   </StatsCard>
                 ))}
               </StatsCardGrid>
@@ -4160,16 +4249,7 @@ export default function ResumeScoringPage({
               const isSelected = selectedHistoryItems.has(jobKey);
               const isPartlySelected = isJobPartlySelected(jobKey);
               const scoresForJob = jobScores(item);
-              const verdictTally = scoresForJob.reduce(
-                (acc, r) => {
-                  const v = rowVerdict(r);
-                  if (v === 'Exact Match') acc.exact += 1;
-                  else if (v === 'Partial Match') acc.partial += 1;
-                  else acc.none += 1;
-                  return acc;
-                },
-                { exact: 0, partial: 0, none: 0 },
-              );
+              const verdictTally = jobTally(item);
               const scoresInFilter = matchFilter
                 ? scoresForJob.filter(r => rowVerdict(r) === matchFilter)
                 : scoresForJob;
@@ -4386,10 +4466,10 @@ export default function ResumeScoringPage({
                             value a shade lighter (JobOpeningSummary's
                             MetaLabelValue). */}
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-body-secondary mb-2">
-                          {item.scoredResumes?.[0]?.scoredBy && (
+                          {(item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy) && (
                             <span className="flex items-center gap-1">
                               <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
-                              <span className="font-normal text-gray-500 dark:text-slate-400 min-w-0 [overflow-wrap:anywhere]">{item.scoredResumes[0].scoredBy}</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400 min-w-0 [overflow-wrap:anywhere]">{item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy}</span>
                             </span>
                           )}
                           <span className="flex items-center gap-1">
@@ -4410,7 +4490,7 @@ export default function ResumeScoringPage({
                               view stacks them on the right, as the Job
                               Descriptions cards stack Applicants / Assessed /
                               Interviewed. */}
-                          {jobListDisplayMode !== 'grid' ? null : !globalLoaded ? (
+                          {jobListDisplayMode !== 'grid' ? null : !tallyReady ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                               {scoredCountValue(item.totalScored, verdictTally)} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
@@ -4459,7 +4539,7 @@ export default function ResumeScoringPage({
                             (see `scoredCountValue`). */}
                         {jobListDisplayMode !== 'grid' && (
                           <div className="flex flex-row flex-wrap gap-1 sm:flex-col sm:items-stretch sm:gap-1.5 flex-shrink-0">
-                            {!globalLoaded ? (
+                            {!tallyReady ? (
                               <span className="flex items-center gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                                 <FileText className="w-4 h-4 max-2xs:hidden" />
                                 {scoredCountValue(item.totalScored, verdictTally)} Scored
@@ -4600,7 +4680,7 @@ export default function ResumeScoringPage({
                       </>
                     }
                     fields={[
-                      { label: 'By', value: item.scoredResumes?.[0]?.scoredBy },
+                      { label: 'By', value: item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy },
                       { label: 'Scored', value: formatIST(item.scoredAt) },
                       {
                         label: 'Scored Count',
@@ -4610,7 +4690,7 @@ export default function ResumeScoringPage({
                     /* Exact / Partial / No Match across every version of this
                        job; under a verdict filter the others are muted. Until
                        the scores load, a placeholder (see `scoredCountValue`). */
-                    footer={!globalLoaded ? (
+                    footer={!tallyReady ? (
                       <MobileStatChip tone="info" icon={<FileText />}>
                         {scoredCountValue(item.totalScored, verdictTally)} Scored
                       </MobileStatChip>
@@ -4756,7 +4836,7 @@ export default function ResumeScoringPage({
                         </div>
                       </td>
                       <td className="tf-td hidden lg:table-cell">
-                        <span className="tf-body-secondary">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
+                        <span className="tf-body-secondary">{item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy || '—'}</span>
                       </td>
                       <td className="tf-td hidden lg:table-cell whitespace-nowrap">
                         <div className="flex items-center gap-2 tf-body-muted">
@@ -4770,7 +4850,7 @@ export default function ResumeScoringPage({
                         </span>
                       </td>
                       {/* Result: one column per match type (Exact / Partial / No Match). */}
-                      {!globalLoaded ? (
+                      {!tallyReady ? (
                         <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />

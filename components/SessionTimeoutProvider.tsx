@@ -1,11 +1,12 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Clock, X, ArrowRight, Info } from 'lucide-react';
 import { clearTokens, getTokens } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { toast } from 'sonner';
 import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
@@ -73,7 +74,9 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
         const { accessToken } = getTokens();
         if (!accessToken) return;
 
-        const settings = await userSettingsApi.getSettings();
+        // First load: the app-shell /bootstrap response, if it carried this part.
+        const boot = await takeBootstrapPart<Awaited<ReturnType<typeof userSettingsApi.getSettings>>>('user_settings');
+        const settings = boot.hit ? boot.data : await userSettingsApi.getSettings();
         if (settings?.session_timeout_minutes) {
           setTimeoutMinutes(settings.session_timeout_minutes);
         }
@@ -236,15 +239,16 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
     resetTimer();
   }, [timeoutMinutes, resetTimer]);
 
+  // Memoized so consumers re-render only when one of these actually changes.
+  // remainingSeconds is part of the value, so the countdown still propagates
+  // every tick while the warning is shown (it stays fixed otherwise).
+  const contextValue = useMemo<SessionTimeoutContextType>(
+    () => ({ resetTimer, timeoutMinutes, isWarningVisible, remainingSeconds }),
+    [resetTimer, timeoutMinutes, isWarningVisible, remainingSeconds],
+  );
+
   return (
-    <SessionTimeoutContext.Provider
-      value={{
-        resetTimer,
-        timeoutMinutes,
-        isWarningVisible,
-        remainingSeconds,
-      }}
-    >
+    <SessionTimeoutContext.Provider value={contextValue}>
       {children}
 
       {/* Inactivity Warning Modal */}

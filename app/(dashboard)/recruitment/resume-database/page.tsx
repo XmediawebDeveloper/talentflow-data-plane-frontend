@@ -118,9 +118,9 @@ export default function ResumeDatabasePage() {
   const tabLocked = (tab: ResumeTab): boolean =>
     !authLoading && (tab === 'my-resumes' ? !canSeeMyResumes : !canSeeInternalDb);
 
-  /* Per-pool totals for the tab badges. One page_size=1 request each — the
-     same probe the views use for their own totals — so switching tabs never
-     waits on a full listing. Active resumes only, matching the My Resumes
+  /* Per-pool totals for the tab badges: ONE GET /resumes/stats call (both
+     pools in a single COUNT … FILTER query, no folder breakdown) instead of a
+     page_size=1 probe per tab. Active resumes only, matching the My Resumes
      "All Resumes" badge. Refetched when the tab changes so a count picks up
      uploads/deletes made on the other tab. */
   const [tabCounts, setTabCounts] = useState<Partial<Record<ResumeTab, number>>>({});
@@ -128,16 +128,22 @@ export default function ResumeDatabasePage() {
     if (!bothPools) return;
     let cancelled = false;
     const load = () => {
-      (['my-resumes', 'internal-db'] as const).forEach((tab) => {
-        resumeService
-          .list({ source: tab, page: 1, page_size: 1, include_archived: false })
-          .then((res) => {
-            if (!cancelled) setTabCounts((prev) => ({ ...prev, [tab]: res.total }));
-          })
-          .catch(() => {
-            // Keep the last known figure (or none) rather than showing a wrong one.
+      resumeService
+        .stats({ include_archived: false, include_folders: false })
+        .then((res) => {
+          if (cancelled) return;
+          setTabCounts((prev) => {
+            const next = { ...prev };
+            (['my-resumes', 'internal-db'] as const).forEach((tab) => {
+              const n = res.sources?.[tab];
+              if (typeof n === 'number') next[tab] = n;
+            });
+            return next;
           });
-      });
+        })
+        .catch(() => {
+          // Keep the last known figure (or none) rather than showing a wrong one.
+        });
     };
     load();
     // Archive / unarchive / move / delete inside either view changes these

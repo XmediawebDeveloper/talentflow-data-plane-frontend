@@ -12,14 +12,15 @@ import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/
 import { createPortal } from 'react-dom';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
-import { startWarmUp } from '@/lib/utils/warmUp';
-import { prefetchAssessmentRows } from '@/components/assessments/AllAssessmentsTable';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import AssessmentCreation from './AssessmentCreation';
+import dynamic from 'next/dynamic';
+/* Create / Results / Details are separate screens of this page that open on a
+   click; loading them on demand keeps ~700 KB of source out of the landing. */
+const AssessmentCreation = dynamic(() => import('./AssessmentCreation'), { ssr: false, loading: () => null });
 import ListPagination from './ListPagination';
-import AssessmentResults from './AssessmentResults';
+const AssessmentResults = dynamic(() => import('./AssessmentResults'), { ssr: false, loading: () => null });
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import AssessmentAuditTrail from './AssessmentAuditTrail';
 import ConsentLogs from './compliance/ConsentLogs';
@@ -27,7 +28,7 @@ import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentConfigureModal from './AssessmentConfigureModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
-import AssessmentDetailsView from './AssessmentDetailsView';
+const AssessmentDetailsView = dynamic(() => import('./AssessmentDetailsView'), { ssr: false, loading: () => null });
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -129,7 +130,8 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import Dropdown from '@/components/ui/filter-select';
 import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
-import type { AssessmentResponse } from '@/lib/services/assessmentService';
+import type { AssessmentResponse, AssessmentPageParams } from '@/lib/services/assessmentService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus, assessmentStatusLabel } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -145,6 +147,7 @@ import {
   resolveJobVersionsByJdId,
   jobVersionOfAssessment,
   listAllAssessments,
+  listAssessmentsBatched,
   MAX_ASSESSMENT_VERSIONS,
   type JobAssessmentHierarchy,
 } from '@/lib/utils/jobAssessmentHierarchy';
@@ -342,8 +345,6 @@ function JobCompletedCandidateCounts({
 }
 
 const INVITATIONS_PAGE_SIZE = 10;
-/** Batch size when pulling every assessment for a browser-side filter. */
-const FULL_SET_BATCH_SIZE = 100;
 /**
  * Page size for the cross-job fan-outs (the Candidate Results and Invitation
  * Status tabs). Unchanged from the single fixed page they used to ask for, so
@@ -533,14 +534,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
      The default stays 'all', so which tab the page opens on is unchanged. */
   const [activeTab, setActiveTab] = useState<AssessmentPageTab>(initialListTab ?? 'all');
-  /* Two-step view: 'cards' shows only the 3 stat tiles; 'list' shows tabs +
-     filters + assessments list.
-     'cards' unless the arrival named a tab (`initialListTab`), which is the
-     caller saying it already knows the cut of the list the recruiter wants.
-     Set as initial state rather than in an effect so the first paint is the
-     list with its tab pill and summary card already highlighted —
-     `isOverviewCardActive` reads exactly this pair. */
-  const [pageView, setPageView] = useState<'cards' | 'list'>(initialListTab ? 'list' : 'cards');
+  /* Lands on the Total card with the list open (all modules do — see Resume
+     Scoring / AI Talent Match). Set as initial state rather than in an effect
+     so the first paint is the list with its tab pill and summary card already
+     highlighted — `isOverviewCardActive` reads exactly this pair. 'cards' stays
+     in the type only so an old persisted snapshot still parses. */
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
   /* The single slot every tab's search / More Filters / count badge row is
@@ -1024,8 +1023,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   /* Once per mount. Re-entering the Assessment Module remounts and refetches,
      which is what makes each version's action right on the way back in. */
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadJdsWithAssessments(); }, []);
+  /* Read only on Total Jobs, whose version panels are its one reader — not
+     on landing (All Assessments), where nothing shows it. */
+  const jdsWithAssessmentsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (activeTab !== 'jobs' || jdsWithAssessmentsLoadedRef.current) return;
+    jdsWithAssessmentsLoadedRef.current = true;
+    void loadJdsWithAssessments();
+  }, [activeTab]);
 
   /**
    * JD row id → job version number, accumulated from every lineage this page
@@ -1784,7 +1789,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          on what they happened to be doing last. What still restores is display
          preference: rows per page, the settings sub-tab. */
       if (!initialListTab) {
-        if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+        if (s.pageView === 'list') setPageView(s.pageView);
         if ((s.activeTab as string) === 'consent') setActiveTab('settings');
         else if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
         if (typeof s.openVersionsFor === 'string') {
@@ -2848,24 +2853,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setTrackingSelectedIds(new Set());
   };
 
-  /** Every assessment matching `filters`, fetched in batches to the end of the set. */
-  const fetchAllAssessments = async (filters: any) => {
-    const collected: any[] = [];
-    let apiPage = 1;
+  /** Every assessment matching `filters`, fetched in batches of 100 to the end
+   *  of the set (`listAssessmentsBatched`, through the shared list cache —
+   *  `fresh` always asks the server). */
+  const fetchAllAssessments = async (filters: any, fresh: boolean) => {
     // Batched rather than one page_size=total request, matching how the AI
     // Interviews list pulls its full set.
-    for (;;) {
-      const batch = await assessmentService.list({
-        ...filters,
-        page: apiPage,
-        page_size: FULL_SET_BATCH_SIZE,
-      });
-      const items = batch.items || [];
-      collected.push(...items);
-      const total = batch.total ?? collected.length;
-      if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
-      apiPage++;
-    }
+    const collected: any[] = await listAssessmentsBatched(filters, fresh ? { fresh } : { reuseRecent: true });
     /* Offset paging over a list that can change between batches can hand the
        same assessment back on two pages — one row per id. */
     const seen = new Set<string>();
@@ -2928,7 +2922,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          footer would be counting versions where it claims to count
          assessments. */
       {
-        const collected = await fetchAllAssessments(filters);
+        /* A tab click may share a recent read (its own 60 s cache aside);
+           a reload — after a change, or Refresh — always asks the server. */
+        const collected = await fetchAllAssessments(filters, mode === 'reload');
         if (isStale()) return;
         assessmentsCacheRef.current.set(cacheKey, { rows: collected, at: Date.now() });
         writeListSnapshot('assessments:page-cache', Array.from(assessmentsCacheRef.current.entries()));
@@ -2953,6 +2949,81 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (!isStale()) setIsLoading(false);
     }
   };
+
+  /* The flat tables' visible rows, and every version of THEIR jobs — one
+     request (GET /assessments?job=JD-1,JD-2,…) per page of rows — merged into
+     the page's loaded set. That is what the row menus' gates read (version
+     cap, latest-version rule, sibling draft, job lock), so they answer for the
+     rows on screen without the whole tenant's list. */
+  const loadedVisibleJobsRef = useRef(new Set<string>());
+  const mergeLoadedAssessments = (incoming: any[], replaceJobs?: Set<string>) => {
+    if (incoming.length === 0 && !replaceJobs?.size) return;
+    setApiAssessments((prev) => {
+      /* A job read afresh replaces what was held for it, so a deleted or
+         archived version does not linger in the gates. */
+      const kept = replaceJobs?.size ? prev.filter((a) => !replaceJobs.has(a.jd_short_id)) : prev;
+      const byId = new Map(kept.map((a) => [a.id, a]));
+      for (const raw of incoming) byId.set(raw.id, mapAssessmentFromApi(raw, byId.size));
+      return Array.from(byId.values());
+    });
+  };
+  const loadAssessmentsForVisibleJobs = async (rows: AssessmentResponse[]) => {
+    mergeLoadedAssessments(rows);
+    const jobs = Array.from(new Set(rows.map((r) => r.jd_short_id).filter((j): j is string => !!j)))
+      .filter((j) => !loadedVisibleJobsRef.current.has(j));
+    if (jobs.length === 0) return;
+    jobs.forEach((j) => loadedVisibleJobsRef.current.add(j));
+    try {
+      const res = await assessmentService.listPage({ job: jobs.join(','), page: 1, page_size: 500 });
+      mergeLoadedAssessments(res.items || [], new Set(jobs));
+    } catch (error) {
+      jobs.forEach((j) => loadedVisibleJobsRef.current.delete(j));
+      console.log('[TalentFlow] Failed to load assessments for the visible jobs:', error);
+    }
+  };
+
+  /* ── Total Jobs on the server ──────────────────────────────────────────
+     One row per job, paged: GET /assessments?collapse=lineage with the tab's
+     search and filters (the Total Jobs order — latest publish first — and the
+     draft-never-represents rule, moved to SQL). The versions behind each row
+     are read for the jobs on screen (`loadAssessmentsForVisibleJobs`), which
+     is what the row figures, version panels and menu gates read. */
+  const serverTotalJobs = activeTab === 'jobs';
+  const totalJobsQuery: AssessmentPageParams = {
+    collapse: 'lineage',
+    jd_id: preSelectedJdId || undefined,
+    search: assessmentSearchQuery.trim() || undefined,
+    search_scope: assessmentSearchQuery.trim() ? 'job' : undefined,
+    type: filterType !== 'all' ? filterType : undefined,
+    created_by: filterCreatedBy !== 'all' ? filterCreatedBy : undefined,
+    created_from: filterCreatedFrom || undefined,
+    created_to: filterCreatedTo || undefined,
+    sort_dir: listSortBy === 'oldest' ? 'asc' : undefined,
+    status_first: listSortBy === 'active' ? 'published' : listSortBy === 'draft' ? 'draft' : undefined,
+    page: assessmentCurrentPage,
+    page_size: assessmentItemsPerPage,
+  };
+  const totalJobsPaged = usePagedList<AssessmentResponse, unknown, AssessmentPageParams>({
+    name: 'assessments:total-jobs',
+    query: totalJobsQuery,
+    fetchPage: (q) => assessmentService.listPage(q),
+    enabled: serverTotalJobs,
+  });
+  const totalJobsRows = totalJobsPaged.items.map((a, index) => mapAssessmentFromApi(a, index));
+  useEffect(() => {
+    if (!serverTotalJobs || totalJobsPaged.items.length === 0) return;
+    void loadAssessmentsForVisibleJobs(totalJobsPaged.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [serverTotalJobs, totalJobsPaged.items]);
+  /* The Created By filter's names: every author, from the server, when the
+     panel opens (the page no longer holds every assessment). */
+  const [serverCreators, setServerCreators] = useState<string[]>([]);
+  useEffect(() => {
+    if (!showAssessmentFilters || serverCreators.length) return;
+    assessmentService.getFilterOptions()
+      .then((opts) => setServerCreators(opts.creators || []))
+      .catch(() => { /* the loaded rows' authors still show */ });
+  }, [showAssessmentFilters, serverCreators.length]);
 
   /* Which assessment - and so which JOB VERSION - one invite belongs to.
      Stamped on the row because a job-scoped table holds invites from several
@@ -3202,7 +3273,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}&from=candidate-results`);
   };
 
-  const loadAllCompletedCandidates = async () => {
+  /* `fromCache`: only the tab-open effect passes true — it may reuse a recent
+     assessment list (lib/utils/listCache). Refresh, polls and reloads after a
+     change always read it fresh. */
+  const loadAllCompletedCandidates = async (fromCache = false) => {
     const startedAt = performance.now();
     // Rows already on screen: refresh behind them rather than back to a skeleton.
     if (completedCandidatesRef.current.length === 0) setIsLoadingCompletedCandidates(true);
@@ -3211,7 +3285,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       /* Every assessment of every job version, paged to the end rather than
          asked for one fixed page — a tenant past that page size lost whole
          assessments off the reply, and with them their candidates. */
-      const items = await listAllAssessments();
+      const items = await listAllAssessments({}, fromCache ? { reuseRecent: true } : { fresh: true });
       if (items.length === 0) {
         setCompletedCandidates([]);
         return;
@@ -3396,7 +3470,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Trigger the aggregated load whenever the user switches into this tab.
   useEffect(() => {
     if (activeTab === 'completed-candidates') {
-      loadAllCompletedCandidates();
+      loadAllCompletedCandidates(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
@@ -3414,7 +3488,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      stacking another fan-out on top. */
   const inviteStatusSeqRef = useRef(0);
   const inviteStatusInFlightRef = useRef(0);
-  const loadAllInviteStatuses = async (silent = false) => {
+  /* `fromCache`: only the tab-open effect passes true (see
+     loadAllCompletedCandidates). */
+  const loadAllInviteStatuses = async (silent = false, fromCache = false) => {
     const seq = ++inviteStatusSeqRef.current;
     const isStale = () => seq !== inviteStatusSeqRef.current;
     inviteStatusInFlightRef.current += 1;
@@ -3425,7 +3501,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     try {
       /* Every assessment of every job version, paged to the end — see the same
          call in `loadAllCompletedCandidates`. */
-      const items = await listAllAssessments();
+      const items = await listAllAssessments({}, fromCache ? { reuseRecent: true } : { fresh: true });
       if (isStale()) return;
       if (items.length === 0) {
         setInviteStatusRows([]);
@@ -3549,32 +3625,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  /* Warm-up: once the page's own stats have loaded, load the other tabs' data in
-     the background, lightest first, so a click on any tab finds it ready instead
-     of starting from a skeleton. Each step is skipped quietly if it fails (the
-     tab then loads normally when opened). Runs once per visit; only leaving the
-     page stops it. */
-  const warmFnsRef = useRef({ results: loadAllCompletedCandidates, invites: loadAllInviteStatuses });
-  warmFnsRef.current = { results: loadAllCompletedCandidates, invites: loadAllInviteStatuses };
-  const warmedRef = useRef(false);
-  const cancelWarmUpRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (isLoadingStats || warmedRef.current) return;
-    warmedRef.current = true;
-    cancelWarmUpRef.current = startWarmUp([
-      () => prefetchAssessmentRows(),
-      () => prefetchAssessmentRows('published'),
-      () => prefetchAssessmentRows('draft'),
-      () => prefetchAssessmentRows('archived'),
-      () => warmFnsRef.current.results(),
-      () => warmFnsRef.current.invites(true),
-    ]);
-  }, [isLoadingStats]);
-  useEffect(() => () => cancelWarmUpRef.current?.(), []);
+  /* No background warm-up of the other tabs: it re-read the assessment list
+     four more times (all / published / draft / archived) plus every result and
+     every invitation on each visit, whether or not those tabs were opened.
+     Each tab loads its own data when opened (and shows its remembered
+     snapshot meanwhile). */
 
   useEffect(() => {
     if (activeTab !== 'invitation-status') return;
-    loadAllInviteStatuses();
+    loadAllInviteStatuses(false, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab]);
   /* Candidates open, start and finish on their own, so the tab polls quietly
@@ -3583,6 +3642,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useTrackerPoll(activeTab === 'invitation-status', () => {
     if (inviteStatusInFlightRef.current === 0) return loadAllInviteStatuses(true);
   });
+
+  /* Topic settings (which sections Create offers) — read the first time the
+     Create view opens rather than on every landing. */
+  const topicsLoadedRef = useRef(false);
+  useEffect(() => {
+    if (!showCreation || topicsLoadedRef.current) return;
+    topicsLoadedRef.current = true;
+    api.get('/assessments/settings/topics', { timeout: 20000 })
+      .then((res) => { if (res.data) setTopicSettings(res.data); })
+      .catch((error) => {
+        topicsLoadedRef.current = false;
+        console.log('[TalentFlow] Failed to load topic settings:', error);
+      });
+  }, [showCreation]);
 
   // FIX-004: Auto-open creation view inline if requested via props
   useEffect(() => {
@@ -3619,9 +3692,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         // call turns "hangs forever" into "fails after 20s", which the
         // existing per-branch fallbacks below already handle correctly.
         const STATS_TIMEOUT_MS = 20000;
-        const [statsResult, topicsResult] = await Promise.allSettled([
+        /* Stats only. The topic settings are read when Create opens (below):
+           nothing on the list landing shows them. */
+        const [statsResult] = await Promise.allSettled([
           assessmentService.getStats({ timeout: STATS_TIMEOUT_MS }),
-          api.get('/assessments/settings/topics', { timeout: STATS_TIMEOUT_MS }),
         ]);
 
         // Process stats. Guarded against a fulfilled-but-empty/malformed body
@@ -3665,16 +3739,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         // Quota (AS units) comes from the shared QuotaContext via useModuleQuota.
 
-        // Process topic settings (for assessment creation)
-        if (topicsResult.status === 'fulfilled') {
-          const topicsData = topicsResult.value.data;
-          if (topicsData) {
-            setTopicSettings(topicsData);
-            console.log('[TalentFlow] Loaded topic settings from API');
-          }
-        } else {
-          console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
-        }
       } catch (error) {
         console.error('[TalentFlow] loadAllData failed unexpectedly:', error);
       } finally {
@@ -3689,6 +3753,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   useEffect(() => {
     if (activeTab === 'invitation-status' || activeTab === 'settings') {
+      return;
+    }
+    /* All / Active / Draft / Archived page on the server (AllAssessmentsTable,
+       one page per request); what their row menus need is read for the jobs on
+       screen (`loadAssessmentsForVisibleJobs`), not by downloading every
+       assessment on landing. */
+    if (isFlatAssessmentTab(activeTab) || activeTab === 'jobs') {
+      setIsLoading(false);
       return;
     }
     loadAssessmentsPage(assessmentCurrentPage, 'tab');
@@ -3964,7 +4036,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setCompletedCandidatesByAssessment({});
       setUncountedCompletedIds(new Set());
       setCompletedCandidatesGeneration((generation) => generation + 1);
-      await loadAssessmentsPage(assessmentCurrentPage);
+      if (isFlatAssessmentTab(activeTab) || activeTab === 'jobs') {
+        /* The paged list re-reads its page (the write cleared the list cache;
+           the flat table also gets the signal above) and reports its rows
+           again; their jobs are then re-read rather than every assessment. */
+        loadedVisibleJobsRef.current.clear();
+        if (activeTab === 'jobs') totalJobsPaged.refresh();
+      } else {
+        await loadAssessmentsPage(assessmentCurrentPage);
+      }
       // Also reload stats and quota
       await Promise.all([reloadStats(), reloadQuota()]);
     } catch (error) {
@@ -4924,7 +5004,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Everyone who has created one of the loaded assessments, for the filter list.
   const assessmentCreators = Array.from(
-    new Set(assessments.map((a) => a.created_by_name).filter(Boolean))
+    new Set([...serverCreators, ...assessments.map((a) => a.created_by_name)].filter(Boolean))
   ).sort();
 
   const assessmentFilterCount = assessmentListSearch.activeFilterCount;
@@ -4933,7 +5013,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const clearAssessmentFilters = assessmentListSearch.reset;
 
 
-  const assessmentResultCount = collapsedAssessments.length;
+  const assessmentResultCount = serverTotalJobs ? totalJobsPaged.total : collapsedAssessments.length;
 
   /**
    * Per-job totals for the Job List rows, bucketed by lineage.
@@ -5942,7 +6022,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     stats.total_unique_candidates
     ?? (completedCandidates.length > 0 ? countCandidateEmails(completedCandidates) : uniqueEmailsAssessed);
 
-  const visibleAssessments = collapsedAssessments.slice(
+  const visibleAssessments = serverTotalJobs ? (totalJobsRows as typeof collapsedAssessments) : collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
     assessmentCurrentPage * assessmentItemsPerPage
   );
@@ -7467,6 +7547,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   /* Every flat tab: the same ⋮ items the row has on Total Jobs. */
                   extraRowActions={buildFlatTabExtraActions}
                   reloadSignal={flatTableReloadSignal}
+                  onVisibleRowsChange={(rows) => { void loadAssessmentsForVisibleJobs(rows); }}
                   displayMode={listDisplayMode}
                   onDisplayModeChange={setListDisplayMode}
                   /* The table's own Archive / Unarchive / Delete: re-read the
@@ -7475,7 +7556,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                      refetched its own rows. */
                   onMutated={() => {
                     void reloadStats();
-                    void loadAssessmentsPage(assessmentCurrentPage);
+                    // The table re-reports its rows after its refetch; their jobs re-read then.
+                    loadedVisibleJobsRef.current.clear();
                   }}
                 />
               );
@@ -7789,7 +7871,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   ) : completedCandidatesError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-destructive mb-3">{completedCandidatesError}</p>
-                      <Button variant="primary" size="md" onClick={loadAllCompletedCandidates}>
+                      <Button variant="primary" size="md" onClick={() => loadAllCompletedCandidates()}>
                         Retry
                       </Button>
                     </div>
@@ -10052,10 +10134,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 )}
               </div>
-            ) : isLoading && listDisplayMode === 'grid' ? (
+            ) : (isLoading || (serverTotalJobs && totalJobsPaged.loading)) && listDisplayMode === 'grid' ? (
               /* Card view loads as card skeletons. */
               <CardGridSkeleton count={6} />
-            ) : isLoading ? (
+            ) : isLoading || (serverTotalJobs && totalJobsPaged.loading) ? (
               /* Loading State — mirrors the job-list rows (renderJobListRow) */
               <div className="space-y-3">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -10090,7 +10172,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 ))}
               </div>
-            ) : filteredAssessments.length === 0 ? (() => {
+            ) : (serverTotalJobs ? totalJobsPaged.total === 0 : filteredAssessments.length === 0) ? (() => {
               /* One shared ListEmptyState for both zeros this list can reach.
                  It picks the flavour itself from `isNarrowed`: a search or
                  filter that matched nothing gets "No assessments match …" plus

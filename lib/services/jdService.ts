@@ -3,6 +3,8 @@
  */
 
 import api, { handleApiError } from './api';
+import { cachedList, invalidateListCache, listCacheKey, listReadOptions, withListCacheInvalidation, type ListReadOptions } from '@/lib/utils/listCache';
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 
 /* A job was enabled, disabled, archived or unarchived. Surfaces that show a
    job's status without owning that action (the Send Invite popup's job
@@ -173,7 +175,70 @@ export interface JDListResponse {
     draft?: number;
     archived?: number;
   } | null;
+  /** `listJobs` only: per row id, distinct versions in the job's lineage and
+   *  distinct versions with this row's status (drives "View Versions"). */
+  versions_meta?: Record<string, { version_count: number; tab_version_count: number }> | null;
 }
+
+/** The Job Openings toolbar's filters — shared by `listJobs` and `getJobStats`,
+ *  which the server builds from ONE filter function (card == list total). */
+export interface JobOpeningsFilters {
+  search?: string;
+  creation_method?: 'ai' | 'manual';
+  location?: string;
+  department?: string;
+  industry?: string;
+  employment_type?: string;
+  work_mode?: string;
+  created_by_name?: string;
+  experience?: string;
+  applicants?: string;
+  date_from?: string;
+  date_to?: string;
+}
+
+export interface JobOpeningsListParams extends JobOpeningsFilters {
+  /** all | published | draft | disabled | archived */
+  status_tab?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  page: number;
+  page_size: number;
+}
+
+export type JobOpeningsTab = 'all' | 'published' | 'draft' | 'disabled' | 'archived' | 'closed';
+
+export interface JobOpeningsStats {
+  total: number;
+  published: number;
+  draft: number;
+  disabled: number;
+  archived: number;
+  closed: number;
+  /** Rows each tab lists for these filters. */
+  jobs: Record<JobOpeningsTab, number>;
+  /** Version rows with each status that pass these filters. */
+  versions: Record<JobOpeningsTab, number>;
+  /** Per tab, with the creation-method filter left out. */
+  by_method: Record<JobOpeningsTab, { all: number; ai: number; manual: number }>;
+  facets: {
+    locations: string[];
+    employment_types: string[];
+    industries: string[];
+    creators: string[];
+    work_modes: string[];
+  };
+}
+
+/** Drop empty / 'all' filters so they never reach the query string. */
+const cleanJobParams = <T extends object>(params: T): Partial<T> => {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === 'all') continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
+};
 
 export interface ExtractedLocation {
   city?: string;
@@ -690,6 +755,32 @@ export const jdService = {
     } catch (error) {
       throw new Error(handleApiError(error));
     }
+  },
+
+  /**
+   * Every JD record (all versions) of `source: 'my-jds'`, pages of 100 — page
+   * 1, then the rest a few at a time, kept in page order. Read through the
+   * shared list cache (lib/utils/listCache): identical reads in flight share
+   * one request; with `reuseRecent` a completed one is reused for a short
+   * while; `fresh` always asks the server. Every mutating function below, and
+   * any job status change, clears it.
+   */
+  async listAllMine(opts?: ListReadOptions): Promise<JDResponse[]> {
+    const PAGE_SIZE = 100;
+    return cachedList(
+      listCacheKey('jds|all-pages', { source: 'my-jds', page_size: PAGE_SIZE }),
+      async () => {
+        const first = await jdService.list({ page: 1, page_size: PAGE_SIZE, source: 'my-jds' });
+        const items = [...first.items];
+        const totalPages = Math.max(first.total_pages || Math.ceil(first.total / PAGE_SIZE), 1);
+        const rest = await fetchRemainingPages(totalPages, (page) =>
+          jdService.list({ page, page_size: PAGE_SIZE, source: 'my-jds' }),
+        );
+        for (const next of rest) items.push(...next.items);
+        return items;
+      },
+      listReadOptions(opts),
+    );
   },
 
   /**
@@ -1222,6 +1313,74 @@ export const jdService = {
   },
 
   /**
+   * One page of the Job Openings list, paged/filtered/sorted server-side:
+   * one row per job on "All Jobs", one row per job among the versions with
+   * the tab's status on a status tab (GET /jd?view=jobs).
+   */
+  async listJobs(params: JobOpeningsListParams): Promise<JDListResponse> {
+    try {
+      const response = await api.get<JDListResponse>('/jd', {
+        params: { ...cleanJobParams(params), view: 'jobs' },
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Every version row of the jobs the list matches (only the tab's status on a
+   * status tab) — what "Select all versions" selects. Pages of 100.
+   */
+  async listJobVersions(params: Omit<JobOpeningsListParams, 'page' | 'page_size'>): Promise<JDResponse[]> {
+    const PAGE_SIZE = 100;
+    const fetchPage = async (page: number) => {
+      const response = await api.get<JDListResponse>('/jd', {
+        params: { ...cleanJobParams(params), view: 'job_versions', page, page_size: PAGE_SIZE },
+      });
+      return response.data;
+    };
+    try {
+      const first = await fetchPage(1);
+      const items = [...(first.items ?? [])];
+      const totalPages = Math.max(first.total_pages || 1, 1);
+      const rest = await fetchRemainingPages(totalPages, fetchPage);
+      for (const next of rest) items.push(...(next.items ?? []));
+      return items;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Job Openings stat cards / tab badges / filter options for these filters (GET /jd/stats). */
+  async getJobStats(filters: JobOpeningsFilters): Promise<JobOpeningsStats> {
+    try {
+      const response = await api.get<JobOpeningsStats>('/jd/stats', { params: cleanJobParams(filters) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** "N assessed" / "N interviewed" for these JD ids, in one request (chunks of 200). */
+  async getCandidateCounts(jdIds: string[]): Promise<Record<string, { assessed: number; interviewed: number }>> {
+    const ids = Array.from(new Set(jdIds.filter(Boolean)));
+    const out: Record<string, { assessed: number; interviewed: number }> = {};
+    if (ids.length === 0) return out;
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const response = await api.get<{ counts: typeof out }>('/jd/candidate-counts', {
+          params: { ids: ids.slice(i, i + 200).join(',') },
+        });
+        Object.assign(out, response.data?.counts || {});
+      }
+      return out;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * JD row id → job version number for EVERY version of every job these ids
    * belong to, in ONE request.
    *
@@ -1333,5 +1492,43 @@ export const jdService = {
     }
   },
 };
+
+/* Every function that writes clears the shared list cache (lib/utils/listCache)
+   before and after it runs — the cached JD, AI interview config and assessment
+   lists (configs and assessments carry their job's status). The API client's
+   write hook clears it too; this keeps the rule visible here and also covers
+   `generateStream`, which does not go through the API client. Read-only
+   helpers (validateTitle, extractParamsFromText, stripFresherInvitation,
+   validateIndustry) and logVersionDownload are left out on purpose. */
+withListCacheInvalidation(jdService, [
+  'create',
+  'generate',
+  'generateStream',
+  'extractParams',
+  'update',
+  'updateStatus',
+  'publish',
+  'startWorkingCopy',
+  'commitWorkingCopy',
+  'createNewVersion',
+  'reformatWithParams',
+  'archive',
+  'disable',
+  'enable',
+  'delete',
+]);
+
+/* A job's status changed (this tab, or another tab of the app over the
+   BroadcastChannel): the cached lists may show the old status — drop them so
+   the next read, cached or not, asks the server. */
+if (typeof window !== 'undefined') {
+  window.addEventListener(JD_STATUS_CHANGED_EVENT, () => invalidateListCache());
+  try {
+    const channel = new BroadcastChannel(JD_STATUS_CHANNEL);
+    channel.onmessage = () => invalidateListCache();
+  } catch {
+    // No BroadcastChannel: other tabs' changes show after the cache's TTL.
+  }
+}
 
 export default jdService;

@@ -82,9 +82,62 @@ interface PlanDetails {
 }
 
 // onSwitchToLogin stays in SignUpProps for callers; the in-card "Sign in" link was removed.
+// Desktop layout (see SIGNUP_FLOW_CSS): both columns share one screen height.
+const SIGNUP_FIT_QUERY = '(min-width: 1024px) and (min-height: 480px)';
+
+// Keeps a fixed-height box from ever scrolling: when its content is taller
+// than the box, the whole box is zoomed down (text and elements together)
+// just enough to fit, never below MIN_FIT_ZOOM. Re-fits on resize and on any
+// content change (OTP strip, password checks, step change).
+const MIN_FIT_ZOOM = 0.65;
+function useFitToHeight(ref: React.RefObject<HTMLElement | null>, deps: unknown[]) {
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof window === 'undefined') return;
+    const mq = window.matchMedia(SIGNUP_FIT_QUERY);
+    const style = el.style as CSSStyleDeclaration & { zoom: string };
+    const overflows = () => el.scrollHeight > el.clientHeight + 1;
+    let frame = 0;
+    const fit = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        style.zoom = '';
+        if (!mq.matches || !overflows()) return;
+        // First guess from the ratio, then step down until it really fits
+        // (zoom rounds sizes, so the first guess can be a few px over).
+        let z = Math.max(MIN_FIT_ZOOM, Math.floor((el.clientHeight / el.scrollHeight) * 100) / 100);
+        style.zoom = String(z);
+        while (overflows() && z > MIN_FIT_ZOOM) {
+          z = Math.max(MIN_FIT_ZOOM, +(z - 0.01).toFixed(2));
+          style.zoom = String(z);
+        }
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    Array.from(el.children).forEach((c) => ro.observe(c));
+    const mo = new MutationObserver(fit);
+    mo.observe(el, { childList: true, subtree: true });
+    mq.addEventListener('change', fit);
+    window.addEventListener('resize', fit);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+      mo.disconnect();
+      mq.removeEventListener('change', fit);
+      window.removeEventListener('resize', fit);
+      style.zoom = '';
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 export default function SignUp({ onBackToPublic }: SignUpProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const summaryRef = useRef<HTMLElement>(null);
 
   // Get encoded plan from URL query params (e.g., /signup?plan=ENCODED_ID)
   const encodedPlanFromUrl = searchParams.get('plan');
@@ -143,6 +196,8 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const [availableIntervals, setAvailableIntervals] = useState<{ MONTHLY: boolean; ANNUAL: boolean }>({ MONTHLY: false, ANNUAL: false });
   const [paymentProcessing, setPaymentProcessing] = useState(false);
   const [planLoading, setPlanLoading] = useState(false);
+  useFitToHeight(panelRef, [step]);
+  useFitToHeight(summaryRef, [step, planLoading]);
   const [createdTenantId, setCreatedTenantId] = useState<string | null>(null);
   const [createdSubdomain, setCreatedSubdomain] = useState<string | null>(null);
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
@@ -1166,6 +1221,42 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   // 0 = paying now, 1..3 = finished.
   const nextDoneCount = checkoutDone ? nextSteps.length : 0;
 
+  // Cancel leaves signup. Before the account exists it returns to pricing
+  // (confirming first if anything was typed); once the account exists
+  // (payment step) it skips payment and goes to sign in, so nothing is lost.
+  const handleCancel = () => {
+    if (step === 'payment') {
+      handleSkipPayment();
+      return;
+    }
+    const typed = Object.values(form).some((v) => typeof v === 'string' && v.trim() !== '');
+    if (typed && !window.confirm('Leave signup? The details you entered will be lost.')) return;
+    router.push('/pricing');
+  };
+  const cancelBusy = isLoading || paymentProcessing || razorpayProcessing;
+  // Shown beside each step's main button, at the bottom of the left card.
+  const cancelButton = (
+    <button type="button" onClick={handleCancel} disabled={cancelBusy} className="tf-su-cancel">
+      <X style={{ width: 16, height: 16 }} />
+      {step === 'payment' ? 'Cancel and pay later' : 'Cancel'}
+    </button>
+  );
+
+  // Header for each group of fields on the Details step: number (or a tick
+  // once the group is complete), title and a short hint.
+  const sectionHead = (n: number, title: string, hint: string, done: boolean) => (
+    <div className="tf-su-sec-head">
+      <span className={`tf-su-sec-num${done ? ' is-done' : ''}`} aria-hidden="true">
+        {done ? <Check style={{ width: 14, height: 14 }} strokeWidth={3} /> : n}
+      </span>
+      <div className="tf-su-sec-titles">
+        <h3>{title}</h3>
+        <p>{hint}</p>
+      </div>
+      {done && <span className="tf-su-sec-done">Complete</span>}
+    </div>
+  );
+
   // Payment and Done are one view: it changes in place when payment succeeds.
   const checkoutPanel = (
     <div className={`tf-co${checkoutDone ? ' is-done' : ''}`}>
@@ -1295,10 +1386,12 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
       {!checkoutDone && (
         <div className="tf-co-pay">
+          <div className="tf-su-btnrow">
+          {cancelButton}
           <button
             onClick={handlePaymentSubmit}
             disabled={paymentProcessing || razorpayProcessing || !selectedPlanDetails}
-            className={`tf-auth-btn${paymentProcessing || razorpayProcessing ? ' tf-auth-btn--busy' : ''}`}
+            className={`tf-auth-btn tf-auth-btn--auto${paymentProcessing || razorpayProcessing ? ' tf-auth-btn--busy' : ''}`}
           >
             {paymentProcessing || razorpayProcessing ? (
               <>
@@ -1312,6 +1405,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
               </>
             )}
           </button>
+          </div>
           <p className="tf-co-secure">
             <ShieldCheck style={{ width: 15, height: 15 }} />
             Secure payment · GST included
@@ -1488,12 +1582,14 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 </label>
               </div>
 
-              {/* Create Account Button */}
+              {/* Cancel + Create account, bottom-right */}
+              <div className="tf-su-btnrow">
+              {cancelButton}
               <button
                 type="button"
                 onClick={handleCreateAccount}
                 disabled={!agreedToTerms || !agreedToPrivacy || isLoading || termsConsentLoading}
-                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
+                className={`tf-auth-btn tf-auth-btn--auto${isLoading ? ' tf-auth-btn--busy' : ''}`}
               >
                 {isLoading ? (
                   <>
@@ -1507,6 +1603,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                   </>
                 )}
               </button>
+              </div>
           </>
   );
 
@@ -1539,19 +1636,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
     window.history.replaceState(window.history.state, '', url.toString());
   };
   const yearlySave = Math.round(selectedPlanDetails?.discount_percentage ?? 0);
-  // Cancel leaves signup. Before the account exists it returns to pricing
-  // (confirming first if anything was typed); once the account exists
-  // (payment step) it skips payment and goes to sign in, so nothing is lost.
-  const handleCancel = () => {
-    if (step === 'payment') {
-      handleSkipPayment();
-      return;
-    }
-    const typed = Object.values(form).some((v) => typeof v === 'string' && v.trim() !== '');
-    if (typed && !window.confirm('Leave signup? The details you entered will be lost.')) return;
-    router.push('/pricing');
-  };
-  const cancelBusy = isLoading || paymentProcessing || razorpayProcessing;
 
   // Order summary figures (GST at 18%, as in the payment step).
   const subtotal = selectedPlanDetails?.base_price ?? 0;
@@ -1568,7 +1652,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
     ? 'Try TalentFlow before you pick a plan. The trial comes with its own limits for users, jobs and AI usage.'
     : selectedPlanDetails?.description?.trim() || '';
   const enabledFeatures = (selectedPlanDetails?.features || []).filter((f) => f.is_enabled).map((f) => f.feature_name);
-  const shownFeatures = enabledFeatures.slice(0, 4);
   const currentStepLabel = stepItems[stepIndex]?.label ?? '';
   const priceOn = !freeTrialAcknowledged && !!selectedPlanDetails;
 
@@ -1580,7 +1663,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
     );
 
   const orderSummary = (
-    <aside className={`tf-su-summary${planLoading ? ' is-loading' : ''}`} aria-label="Order summary" aria-busy={planLoading || undefined}>
+    <aside ref={summaryRef} className={`tf-su-summary${planLoading ? ' is-loading' : ''}`} aria-label="Order summary" aria-busy={planLoading || undefined}>
       <div className="tf-su-summary-head">
         <h2>Order summary</h2>
         <span className="tf-su-chip">{summaryCurrency}</span>
@@ -1635,28 +1718,36 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
         {step === 'form' && (
           <>
-            {includedUnits.length > 0 && (
-              <div className="tf-su-box">
-                <p className="tf-su-box-title">Included in your plan</p>
-                <dl className="tf-su-rows tf-su-rows--two">
-                  {includedUnits.map(([key, value]) => (
-                    <div key={key}>
-                      <dt>{getQuotaLabel(key)}</dt>
-                      <dd>{formatQuotaValue(key, value as number | string | undefined)}</dd>
-                    </div>
-                  ))}
-                </dl>
-              </div>
-            )}
-            {shownFeatures.length > 0 && (
-              <ul className="tf-su-features">
-                {shownFeatures.map((f) => (
-                  <li key={f}><Check style={{ width: 14, height: 14 }} strokeWidth={3} /> {f}</li>
-                ))}
-                {enabledFeatures.length > shownFeatures.length && (
-                  <li className="tf-su-more">+{enabledFeatures.length - shownFeatures.length} more features</li>
+            {/* Two columns: plan limits | features. Both stretch to fill the card. */}
+            {(includedUnits.length > 0 || enabledFeatures.length > 0) && (
+              <div className={`tf-su-incl${includedUnits.length > 0 && enabledFeatures.length > 0 ? '' : ' is-single'}`}>
+                {includedUnits.length > 0 && (
+                  <div className="tf-su-box tf-su-incl-col">
+                    <p className="tf-su-box-title">Included in your plan</p>
+                    <dl className="tf-su-incl-list">
+                      {includedUnits.map(([key, value]) => (
+                        <div key={key}>
+                          <dt>{getQuotaLabel(key)}</dt>
+                          <dd>{formatQuotaValue(key, value as number | string | undefined)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
                 )}
-              </ul>
+                {enabledFeatures.length > 0 && (
+                  <div className="tf-su-box tf-su-incl-col">
+                    <p className="tf-su-box-title">Features</p>
+                    <ul className="tf-su-incl-feats">
+                      {enabledFeatures.slice(0, 8).map((f) => (
+                        <li key={f}><Check style={{ width: 13, height: 13 }} strokeWidth={3} /> <span>{f}</span></li>
+                      ))}
+                      {enabledFeatures.length > 8 && (
+                        <li className="tf-su-more">+{enabledFeatures.length - 8} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}
@@ -1743,29 +1834,17 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         </div>
       )}
 
-      {step !== 'success' && (
+      {step === 'form' && (
         <div className="tf-su-actions">
-          {step === 'form' && (
-            <button
-              type="button"
-              onClick={() => setShowPlanModal(true)}
-              className="tf-auth-btn tf-auth-btn--outline tf-auth-btn--sm"
-            >
-              Change plan
-            </button>
-          )}
-          <button type="button" onClick={handleCancel} disabled={cancelBusy} className="tf-su-cancel">
-            <X style={{ width: 16, height: 16 }} />
-            {step === 'payment' ? 'Cancel and pay later' : 'Cancel'}
+          <button
+            type="button"
+            onClick={() => setShowPlanModal(true)}
+            className="tf-auth-btn tf-auth-btn--outline tf-auth-btn--sm"
+          >
+            Change plan
           </button>
         </div>
       )}
-
-      <ul className="tf-su-trust">
-        <li><ShieldCheck style={{ width: 15, height: 15 }} /> Secure checkout</li>
-        <li><Check style={{ width: 15, height: 15 }} /> Top up units anytime, no plan change needed</li>
-        <li><Check style={{ width: 15, height: 15 }} /> Units lost to a technical problem can be disputed and refunded</li>
-      </ul>
     </aside>
   );
 
@@ -1788,10 +1867,10 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
             <Image src="/logos/talent_flow_logo.png" alt="BION TalentFlow" width={157} height={35} priority />
           </button>
           <h1 className="tf-su-sr-only">Sign up for TalentFlow</h1>
-          <span className="tf-su-secure">
-            <Lock style={{ width: 14, height: 14 }} />
-            Secure checkout
-          </span>
+          <a href="/pricing" className="tf-su-backlink">
+            <ArrowLeft style={{ width: 15, height: 15 }} />
+            Back to pricing
+          </a>
         </div>
       </header>
 
@@ -1823,7 +1902,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
               </ol>
             </div>
   
-            <div key={step} className="tf-signup-panel">
+            <div key={step} ref={panelRef} className="tf-signup-panel">
             {step === 'form' && (
               <>
             <h2 className="tf-auth-title">Create your account</h2>
@@ -1837,6 +1916,9 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
             )}
 
             <form onSubmit={handleSubmit} className="tf-su-form">
+              <section className="tf-su-sec">
+              {sectionHead(1, 'Workspace', 'Your company and who will manage it', !!form.companyName.trim() && !!form.adminName.trim() && !companyNameError && !adminNameError)}
+              <div className="tf-su-sec-body">
               {/* Company Name */}
               <div className="tf-auth-field">
                 <label className="tf-auth-label" htmlFor="tf-signup-company">Company name</label>
@@ -1889,6 +1971,12 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 )}
               </div>
 
+              </div>
+              </section>
+
+              <section className="tf-su-sec">
+              {sectionHead(2, 'Contact & verification', 'We send a 6-digit code to your work email', otpVerified && !!form.phoneNumber.trim() && !phoneInvalid)}
+              <div className="tf-su-sec-body">
               {/* Work Email with OTP */}
               <div className="tf-auth-field">
                 <label className="tf-auth-label" htmlFor="tf-signup-email">
@@ -1944,59 +2032,6 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                   </p>
                 )}
 
-                {/* Inline OTP Input */}
-                {otpSent && !otpVerified && (
-                  <div className="tf-auth-panel" style={{ marginTop: 14 }}>
-                    <p style={{ fontSize: 13, color: 'var(--tf-ink-muted)', margin: '0 0 12px', textAlign: 'center' }}>
-                      Enter the 6-digit code sent to{' '}
-                      <strong style={{ color: 'var(--tf-ink)', fontWeight: 600 }}>{form.adminEmail}</strong>
-                    </p>
-                    <div className="tf-auth-otp-row" style={{ marginBottom: 12 }}>
-                      {otpCode.map((digit, index) => (
-                        <input
-                          key={index}
-                          ref={el => { otpInputRefs.current[index] = el; }}
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={6}
-                          value={digit}
-                          onChange={(e) => handleOtpChange(index, e.target.value)}
-                          onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                          disabled={isVerifying}
-                          aria-label={`Digit ${index + 1} of 6`}
-                          className="tf-auth-otp"
-                          style={{ width: 40, height: 46, fontSize: 18 }}
-                        />
-                      ))}
-                    </div>
-                    {isVerifying && (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--tf-brand-ink)', fontSize: 12.5, marginBottom: 10 }}>
-                        <Loader2 className="tf-auth-spin" style={{ width: 15, height: 15 }} />
-                        Verifying…
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, fontSize: 13 }}>
-                      <button
-                        type="button"
-                        onClick={handleResendOtp}
-                        disabled={isSendingOtp || resendTimer > 0}
-                        className="tf-auth-link"
-                      >
-                        {isSendingOtp ? 'Sending…' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
-                      </button>
-                      <span aria-hidden="true" style={{ color: 'var(--tf-border-strong)' }}>|</span>
-                      <button
-                        type="button"
-                        onClick={handleChangeEmail}
-                        className="tf-auth-link"
-                        style={{ color: 'var(--tf-ink-muted)' }}
-                      >
-                        Change email
-                      </button>
-                    </div>
-                  </div>
-                )}
-
                 {/* OTP Verified Success */}
                 {otpVerified && (
                   <p className="tf-auth-field-success">
@@ -2034,6 +2069,67 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 )}
               </div>
 
+              {/* Inline OTP — one compact full-width strip under email | phone */}
+              {otpSent && !otpVerified && (
+                <div className="tf-su-otp">
+                  <div className="tf-su-otp-text">
+                    <strong>Enter the 6-digit code</strong>
+                    <span>Sent to <b>{form.adminEmail}</b></span>
+                  </div>
+                  <div className="tf-auth-otp-row tf-su-otp-row">
+                    {otpCode.map((digit, index) => (
+                      <input
+                        key={index}
+                        ref={el => { otpInputRefs.current[index] = el; }}
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={6}
+                        value={digit}
+                        onChange={(e) => handleOtpChange(index, e.target.value)}
+                        onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                        disabled={isVerifying}
+                        aria-label={`Digit ${index + 1} of 6`}
+                        className="tf-auth-otp"
+                        style={{ width: 38, height: 42, fontSize: 17 }}
+                      />
+                    ))}
+                  </div>
+                  <div className="tf-su-otp-links">
+                    {isVerifying ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--tf-brand-ink)' }}>
+                        <Loader2 className="tf-auth-spin" style={{ width: 14, height: 14 }} />
+                        Verifying…
+                      </span>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleResendOtp}
+                          disabled={isSendingOtp || resendTimer > 0}
+                          className="tf-auth-link"
+                        >
+                          {isSendingOtp ? 'Sending…' : resendTimer > 0 ? `Resend in ${resendTimer}s` : 'Resend code'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleChangeEmail}
+                          className="tf-auth-link"
+                          style={{ color: 'var(--tf-ink-muted)' }}
+                        >
+                          Change email
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              </div>
+              </section>
+
+              <section className="tf-su-sec">
+              {sectionHead(3, 'Security', 'Choose a strong password for the admin account', passwordStrength === 5 && passwordsMatch)}
+              <div className="tf-su-sec-body">
               {/* Passwords */}
               <div className="tf-auth-grid-2">
                 <div className="tf-auth-field">
@@ -2088,83 +2184,54 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 </div>
               </div>
 
-              {/* Password Requirements - Live Validation */}
-              {(form.password || form.confirmPassword) && (
-                <div className="tf-auth-panel" style={{ marginBottom: 18 }}>
-                  <p style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--tf-ink-muted)', margin: '0 0 10px' }}>
-                    Password requirements
-                  </p>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px 16px' }}>
-                    {[
-                      { label: 'At least 8 characters', check: passwordChecks.length },
-                      { label: 'One uppercase letter', check: passwordChecks.uppercase },
-                      { label: 'One lowercase letter', check: passwordChecks.lowercase },
-                      { label: 'One number', check: passwordChecks.number },
-                      { label: 'One special character', check: passwordChecks.special },
-                      { label: 'Passwords match', check: passwordsMatch },
-                    ].map((req, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <CheckCircle style={{
-                          width: 15,
-                          height: 15,
-                          flexShrink: 0,
-                          color: req.check ? 'var(--tf-success)' : 'var(--tf-border-strong)',
-                          transition: 'color 0.2s',
-                        }} />
-                        <span style={{
-                          fontSize: 12.5,
-                          color: req.check ? 'var(--tf-ink-muted)' : 'var(--tf-ink-subtle)',
-                          transition: 'color 0.2s',
-                        }}>
-                          {req.label}
-                        </span>
+              {/* Password requirements — compact strip: strength bar + 3×2 checks */}
+              {(form.password || form.confirmPassword) && (() => {
+                const strengthColor = passwordStrength <= 2
+                  ? 'var(--tf-danger)'
+                  : passwordStrength <= 3
+                    ? 'var(--tf-warning)'
+                    : passwordStrength <= 4
+                      ? 'var(--tf-brand)'
+                      : 'var(--tf-success)';
+                const strengthLabel = passwordStrength === 0 ? 'Too weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong';
+                return (
+                  <div className="tf-su-pw">
+                    <div className="tf-su-pw-head">
+                      <span>Password strength</span>
+                      <div className="tf-su-pw-bar" aria-hidden="true">
+                        <i style={{ width: `${(passwordStrength / 5) * 100}%`, background: strengthColor }} />
                       </div>
-                    ))}
-                  </div>
-
-                  {/* Strength Bar */}
-                  <div style={{ marginTop: 14 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, color: 'var(--tf-ink-subtle)' }}>Password strength</span>
-                      <span style={{
-                        fontSize: 12,
-                        fontWeight: 600,
-                        color: passwordStrength <= 2
-                          ? 'var(--tf-danger)'
-                          : passwordStrength <= 3
-                            ? 'var(--tf-warning)'
-                            : passwordStrength <= 4
-                              ? 'var(--tf-brand-ink)'
-                              : 'var(--tf-success-ink)',
-                      }}>
-                        {passwordStrength === 0 ? 'Too weak' : passwordStrength <= 2 ? 'Weak' : passwordStrength <= 3 ? 'Fair' : passwordStrength <= 4 ? 'Good' : 'Strong'}
-                      </span>
+                      <strong style={{ color: strengthColor }}>{strengthLabel}</strong>
                     </div>
-                    <div style={{ height: 5, background: 'var(--tf-surface-sunken)', border: '1px solid var(--tf-border)', borderRadius: 999, overflow: 'hidden' }}>
-                      <div style={{
-                        height: '100%',
-                        width: `${(passwordStrength / 5) * 100}%`,
-                        background: passwordStrength <= 2
-                          ? 'var(--tf-danger)'
-                          : passwordStrength <= 3
-                            ? 'var(--tf-warning)'
-                            : passwordStrength <= 4
-                              ? 'var(--tf-brand)'
-                              : 'var(--tf-success)',
-                        borderRadius: 999,
-                        transition: 'width 0.3s ease, background-color 0.3s ease',
-                      }} />
-                    </div>
+                    <ul className="tf-su-pw-reqs">
+                      {[
+                        { label: '8+ characters', check: passwordChecks.length },
+                        { label: 'Uppercase letter', check: passwordChecks.uppercase },
+                        { label: 'Lowercase letter', check: passwordChecks.lowercase },
+                        { label: 'Number', check: passwordChecks.number },
+                        { label: 'Special character', check: passwordChecks.special },
+                        { label: 'Passwords match', check: passwordsMatch },
+                      ].map((req) => (
+                        <li key={req.label} className={req.check ? 'is-ok' : ''}>
+                          <CheckCircle style={{ width: 14, height: 14, flexShrink: 0 }} />
+                          {req.label}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
-              {/* Submit */}
+              </div>
+              </section>
+
+              {/* Cancel + Submit, pinned to the bottom of the card */}
+              <div className="tf-su-btnrow tf-su-foot">
+              {cancelButton}
               <button
                 type="submit"
                 disabled={isLoading || !isFormComplete}
-                className={`tf-auth-btn${isLoading ? ' tf-auth-btn--busy' : ''}`}
-                style={{ marginTop: 4 }}
+                className={`tf-auth-btn tf-auth-btn--auto${isLoading ? ' tf-auth-btn--busy' : ''}`}
               >
                 {isLoading ? (
                   <>
@@ -2183,6 +2250,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                   </>
                 )}
               </button>
+              </div>
             </form>
 
               </>
@@ -2204,15 +2272,74 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 const SIGNUP_FLOW_CSS = `
 .tf-signup-page { display: block; padding: 0; }
 .tf-signup-page::before { opacity: .12; }
+/* Primary buttons on signup: solid brand blue instead of the blue→cyan gradient. */
+.tf-signup-page .tf-auth-btn:not(.tf-auth-btn--outline):not(:disabled),
+.tf-signup-page .tf-auth-btn--busy:disabled { background: var(--brand-blue); filter: none; }
+.tf-signup-page .tf-auth-btn:not(.tf-auth-btn--outline):hover:not(:disabled) { background: var(--tf-brand-active, #0a2f7a); filter: none; }
 
 /* top bar */
 .tf-su-top { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--tf-surface) 88%, transparent); backdrop-filter: blur(14px); border-bottom: 1px solid var(--tf-border); }
 .tf-su-top-inner { max-width: 1560px; margin: 0 auto; padding: 14px clamp(16px, 3vw, 32px); display: flex; align-items: center; gap: 18px; }
 .tf-su-logo { display: inline-flex; padding: 0; border: 0; background: none; cursor: pointer; flex-shrink: 0; }
 .tf-su-logo img { height: 32px; width: auto; }
-.tf-su-secure { margin-left: auto; display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 14px; border-radius: 999px; background: var(--tf-success-tint); color: var(--tf-success-ink); border: 1px solid var(--tf-success-border); font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.tf-su-backlink { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600; color: var(--tf-brand-ink); text-decoration: none; flex-shrink: 0; }
+.tf-su-backlink:hover { text-decoration: underline; text-underline-offset: 3px; }
+.tf-su-backlink svg { transition: transform .2s ease; }
+.tf-su-backlink:hover svg { transform: translateX(-2px); }
+.tf-su-btnrow { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.tf-su-btnrow > .tf-auth-btn { padding: 0 24px; }
+
+/* Details form: three numbered section cards + a footer with the buttons */
+.tf-su-form { display: flex; flex-direction: column; gap: 10px; }
+.tf-su-sec { position: relative; padding: 12px 18px 2px; border-radius: 14px; border: 1px solid var(--tf-border); background: linear-gradient(180deg, var(--tf-surface-subtle), var(--tf-surface) 70%); transition: border-color .3s ease, box-shadow .3s ease; }
+.tf-su-sec::before { content: ""; position: absolute; left: -1px; top: 14px; bottom: 14px; width: 3px; border-radius: 0 3px 3px 0; background: var(--tf-border-strong); transition: background-color .3s ease; }
+.tf-su-sec:focus-within { border-color: var(--tf-brand-border); box-shadow: 0 10px 24px -18px color-mix(in srgb, var(--brand-blue) 55%, transparent); }
+.tf-su-sec:focus-within::before { background: var(--brand-blue); }
+.tf-su-sec:has(.tf-su-sec-num.is-done)::before { background: var(--tf-success); }
+.tf-su-sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.tf-su-sec-num { display: grid; place-items: center; width: 24px; height: 24px; flex-shrink: 0; border-radius: 8px; font-size: 12px; font-weight: 800; background: var(--tf-brand-tint-solid); color: var(--tf-brand-ink); border: 1px solid var(--tf-brand-border); transition: background-color .3s ease, color .3s ease, border-color .3s ease; }
+.tf-su-sec-num.is-done { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+.tf-su-sec-titles { min-width: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 10px; }
+.tf-su-sec-titles h3 { margin: 0; font-size: 14.5px; font-weight: 700; color: var(--tf-ink); line-height: 1.25; }
+.tf-su-sec-titles p { margin: 0; font-size: 12.5px; color: var(--tf-ink-subtle); line-height: 1.35; }
+.tf-su-sec-done { margin-left: auto; display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: var(--tf-success-tint); color: var(--tf-success-ink); border: 1px solid var(--tf-success-border); flex-shrink: 0; animation: tf-signup-rise .3s ease both; }
+.tf-su-sec-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; align-items: start; }
+.tf-su-sec-body > * { grid-column: 1 / -1; }
+.tf-su-sec-body > .tf-auth-field { grid-column: auto; }
+.tf-su-sec-body .tf-auth-field { margin-bottom: 12px; }
+.tf-su-foot { padding-top: 12px; border-top: 1px solid var(--tf-border); }
+@media (max-width: 640px) {
+  .tf-su-sec { padding: 12px 12px 2px; }
+  .tf-su-sec-body { grid-template-columns: 1fr; }
+  .tf-su-sec-titles p { display: none; }
+}
+
+/* OTP strip: text | 6 boxes | links, on one row */
+.tf-su-otp { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; margin: 0 0 14px; padding: 10px 14px; border-radius: var(--tf-radius-sm); border: 1px solid var(--tf-brand-border); background: var(--tf-brand-tint); animation: tf-signup-rise .35s cubic-bezier(.22,1,.36,1) both; }
+.tf-su-otp-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 180px; }
+.tf-su-otp-text strong { font-size: 13.5px; font-weight: 700; color: var(--tf-ink); }
+.tf-su-otp-text span { font-size: 12.5px; color: var(--tf-ink-subtle); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tf-su-otp-text b { font-weight: 600; color: var(--tf-ink-muted); }
+.tf-su-otp-row { margin: 0 !important; gap: 6px; flex: none; }
+.tf-su-otp-links { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; font-size: 12.5px; flex: none; }
+
+/* Password strip: strength bar on top, 3×2 checks below */
+.tf-su-pw { margin: 0 0 14px; padding: 10px 14px; border-radius: var(--tf-radius-sm); border: 1px solid var(--tf-border); background: var(--tf-surface-subtle); }
+.tf-su-pw-head { display: flex; align-items: center; gap: 12px; font-size: 12.5px; color: var(--tf-ink-subtle); }
+.tf-su-pw-head strong { font-size: 12.5px; font-weight: 700; min-width: 52px; text-align: right; }
+.tf-su-pw-bar { flex: 1; height: 5px; border-radius: 999px; background: var(--tf-surface-sunken); border: 1px solid var(--tf-border); overflow: hidden; }
+.tf-su-pw-bar > i { display: block; height: 100%; border-radius: 999px; transition: width .3s ease, background-color .3s ease; }
+.tf-su-pw-reqs { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px 14px; }
+.tf-su-pw-reqs li { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--tf-ink-subtle); white-space: nowrap; transition: color .2s ease; }
+.tf-su-pw-reqs svg { color: var(--tf-border-strong); transition: color .2s ease; }
+.tf-su-pw-reqs li.is-ok { color: var(--tf-ink-muted); }
+.tf-su-pw-reqs li.is-ok svg { color: var(--tf-success); }
+@media (max-width: 640px) {
+  .tf-su-otp-links { flex-direction: row; gap: 14px; }
+  .tf-su-pw-reqs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 .tf-su-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.tf-su-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: 100%; height: 42px; border-radius: var(--tf-radius-sm); border: 1px solid transparent; background: transparent; color: var(--tf-ink-subtle); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
+.tf-su-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: 46px; padding: 0 18px; border-radius: var(--tf-radius-md); border: 1px solid var(--tf-border-strong); background: transparent; color: var(--tf-ink-subtle); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
 .tf-su-cancel:hover:not(:disabled) { color: #c2410c; background: rgba(234, 88, 12, .07); border-color: rgba(234, 88, 12, .22); }
 .tf-su-cancel:disabled { opacity: .5; cursor: not-allowed; }
 @keyframes tf-signup-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -2229,7 +2356,7 @@ const SIGNUP_FLOW_CSS = `
 }
 .tf-signup-page .tf-auth-input.is-invalid:focus { box-shadow: none; }
 
-.tf-su-shell { max-width: 1560px; margin: 0 auto; padding: clamp(20px, 3vw, 40px) clamp(16px, 3vw, 32px) 56px; display: grid; grid-template-columns: minmax(0, 1fr) 440px; gap: clamp(24px, 3vw, 40px); align-items: start; }
+.tf-su-shell { max-width: 1560px; margin: 0 auto; padding: clamp(20px, 3vw, 40px) clamp(16px, 3vw, 32px) 56px; display: grid; grid-template-columns: minmax(0, 1fr) clamp(440px, 34vw, 540px); gap: clamp(24px, 3vw, 40px); align-items: start; }
 .tf-su-card { padding: clamp(20px, 2.6vw, 36px); }
 
 /* stepper */
@@ -2291,6 +2418,20 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-plan-name { font-size: 16.5px; font-weight: 700; color: var(--tf-ink); }
 .tf-su-plan-sub { margin-top: 2px; font-size: 13px; color: var(--tf-ink-subtle); }
 .tf-su-box { margin-top: 16px; padding: 14px 16px; border-radius: var(--tf-radius-sm); background: var(--tf-surface-subtle); border: 1px solid var(--tf-border); }
+/* Form step: plan limits | features, side by side */
+.tf-su-incl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; margin-top: 10px; }
+.tf-su-incl.is-single { grid-template-columns: 1fr; }
+.tf-su-incl .tf-su-incl-col { margin-top: 0; display: flex; flex-direction: column; min-width: 0; }
+.tf-su-incl-list { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.tf-su-incl-list > div { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; }
+.tf-su-incl-list > div + div { padding-top: 8px; border-top: 1px dashed var(--tf-border); }
+.tf-su-incl-list dt { color: var(--tf-ink-subtle); min-width: 0; }
+.tf-su-incl-list dd { margin: 0; font-weight: 700; color: var(--tf-ink); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tf-su-incl-feats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tf-su-incl-feats li { display: flex; align-items: flex-start; gap: 7px; font-size: 13px; line-height: 1.35; color: var(--tf-ink-muted); }
+.tf-su-incl-feats svg { flex-shrink: 0; margin-top: 2px; color: var(--tf-success); }
+.tf-su-incl-feats .tf-su-more { padding-left: 20px; color: var(--tf-brand-ink); font-weight: 600; }
+@media (max-width: 420px) { .tf-su-incl { grid-template-columns: 1fr; } }
 .tf-su-box-title { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--tf-ink); }
 .tf-su-rows { margin: 0; display: grid; gap: 7px; }
 .tf-su-rows > div, .tf-su-lines > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; }
@@ -2304,9 +2445,6 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-total small { display: block; margin-top: 4px; font-size: 12.5px; color: var(--tf-ink-subtle); }
 .tf-su-note { display: flex; gap: 10px; margin-top: 18px; padding: 14px; border-radius: var(--tf-radius-sm); background: var(--tf-success-tint); border: 1px solid var(--tf-success-border); color: var(--tf-success-ink); font-size: 13px; line-height: 1.5; }
 .tf-su-muted { margin: 0; font-size: 13px; line-height: 1.55; color: var(--tf-ink-subtle); }
-.tf-su-trust { list-style: none; margin: 18px 0 0; padding: 16px 0 0; border-top: 1px solid var(--tf-border); display: grid; gap: 8px; }
-.tf-su-trust li { display: flex; align-items: flex-start; gap: 8px; font-size: 12.5px; line-height: 1.45; color: var(--tf-ink-subtle); }
-.tf-su-trust svg { flex-shrink: 0; margin-top: 1px; color: var(--tf-brand-ink); }
 
 /* checkout (payment + done in one view) */
 .tf-co { display: flex; flex-direction: column; justify-content: space-evenly; gap: 16px; min-height: 100%; }
@@ -2361,7 +2499,7 @@ const SIGNUP_FLOW_CSS = `
 
 /* Desktop: everything fits one screen. The two columns share the height
    below the top bar; long steps (terms, payment) scroll inside the card. */
-@media (min-width: 1024px) and (min-height: 640px) {
+@media (min-width: 1024px) and (min-height: 480px) {
   .tf-signup-page { --tf-su-top: 63px; }
   .tf-su-shell { height: calc(100dvh - var(--tf-su-top)); padding-top: 20px; padding-bottom: 20px; align-items: stretch; grid-template-rows: minmax(0, 1fr); }
   .tf-su-main { display: flex; flex-direction: column; min-height: 0; }
@@ -2371,17 +2509,66 @@ const SIGNUP_FLOW_CSS = `
   .tf-su-card .tf-auth-subtitle { margin-bottom: 16px; }
   .tf-su-card .tf-auth-field { margin-bottom: 12px; }
   .tf-su-main > .tf-auth-legal { display: none; }
-  .tf-su-summary { position: static; height: 100%; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; scrollbar-width: thin; }
-  .tf-su-trust { margin-top: auto; }
-  .tf-su-summary > .tf-su-actions { margin-bottom: 16px; }
+  /* Same height as the left card, and never scrolls: the price block sits at
+     the bottom, and short-screen rules below keep the content inside. */
+  .tf-su-summary { position: static; align-self: stretch; height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
   .tf-su-summary { padding: 20px 22px; }
   .tf-su-summary .tf-su-total { margin-top: 12px; padding-top: 12px; }
-  .tf-su-summary .tf-su-lines { margin-top: 14px; padding-top: 12px; gap: 6px; }
-  .tf-su-summary .tf-su-trust { padding-top: 12px; gap: 6px; }
-  /* Fields in pairs: company | name, email | phone; the rest span the row. */
-  .tf-su-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 20px; align-items: start; }
-  .tf-su-form > * { grid-column: 1 / -1; }
-  .tf-su-form > .tf-auth-field { grid-column: auto; }
+  .tf-su-summary .tf-su-lines { margin-top: auto; padding-top: 12px; gap: 6px; }
+  /* Fill the summary: the step block grows, and on the form step the two
+     columns stretch with their rows spread evenly — no empty gap. */
+  .tf-su-summary > .tf-su-stepblock { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .tf-su-summary .tf-su-incl { flex: 1 1 auto; }
+  .tf-su-summary .tf-su-incl-list, .tf-su-summary .tf-su-incl-feats { flex: 1; justify-content: space-evenly; }
+  .tf-su-summary .tf-su-lines { margin-top: 14px; }
+  /* Details step fills the card: sections share the free height, the
+     buttons sit at the bottom. Tiny screens fall back to the panel scroll. */
+  .tf-su-card > .tf-signup-panel:has(> .tf-su-form) { display: flex; flex-direction: column; }
+  .tf-su-card .tf-su-form { flex: 1 0 auto; }
+  .tf-signup-panel:has(> .tf-su-form) > .tf-auth-subtitle { display: none; }
+  .tf-signup-panel:has(> .tf-su-form) > .tf-auth-title { margin-bottom: 14px; }
+  .tf-su-sec { flex: 1 0 auto; display: flex; flex-direction: column; }
+  .tf-su-sec-body { flex: 1; align-content: center; }
+  .tf-su-foot { margin-top: auto; }
+}
+
+/* Short desktop screens: compact Details form so the card fits without scrolling. */
+@media (min-width: 1024px) and (max-height: 900px) {
+  .tf-su-steps { margin-bottom: 12px; padding: 8px 14px; }
+  .tf-su-step-dot { width: 34px; height: 34px; }
+  .tf-signup-panel:has(> .tf-su-form) > .tf-auth-title { display: none; }
+  .tf-su-form { gap: 8px; }
+  .tf-su-sec { padding: 10px 16px 0; }
+  .tf-su-sec-head { margin-bottom: 8px; }
+  .tf-su-sec-body .tf-auth-field { margin-bottom: 10px; }
+  .tf-su-sec-body .tf-auth-label { margin-bottom: 6px; }
+  .tf-su-sec-body .tf-auth-input, .tf-su-sec-body .tf-auth-btn { height: 42px; min-height: 42px; }
+  .tf-su-pw, .tf-su-otp { margin-bottom: 10px; padding: 8px 12px; }
+  /* Only the checks still to meet, inline. */
+  .tf-su-pw-reqs { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; }
+  .tf-su-pw-reqs li.is-ok { display: none; }
+  .tf-su-pw:not(:has(.tf-su-pw-reqs li:not(.is-ok))) .tf-su-pw-reqs { display: none; }
+  .tf-su-foot { padding-top: 10px; }
+  .tf-su-foot .tf-auth-btn, .tf-su-foot .tf-su-cancel { height: 42px; min-height: 42px; }
+}
+@media (min-width: 1024px) and (max-height: 760px) {
+  .tf-su-sec-titles p { display: none; }
+  .tf-su-sec-body .tf-auth-input, .tf-su-sec-body .tf-auth-btn { height: 40px; min-height: 40px; }
+  .tf-su-card { padding-top: 16px; padding-bottom: 16px; }
+}
+
+/* Short desktop screens: tighten the summary so it still fits without scrolling. */
+@media (min-width: 1024px) and (max-height: 820px) {
+  .tf-su-summary { padding: 16px 20px; }
+  .tf-su-summary .tf-su-desc { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .tf-su-summary .tf-su-box { margin-top: 10px; padding: 10px 14px; }
+  .tf-su-summary .tf-su-plan { margin-top: 12px; padding-bottom: 12px; }
+  .tf-su-summary .tf-su-total strong { font-size: 24px; }
+}
+@media (min-width: 1024px) and (max-height: 720px) {
+  .tf-su-summary .tf-su-desc, .tf-su-summary .tf-su-features { display: none; }
+  .tf-su-summary .tf-su-eyebrow { margin-top: 10px; }
+  .tf-su-summary .tf-su-actions { margin-top: 10px; }
 }
 
 @media (max-width: 1023px) {
@@ -2394,5 +2581,7 @@ const SIGNUP_FLOW_CSS = `
   .tf-su-step-dot { width: 36px; height: 36px; }
   .tf-su-step-label { display: none; }
   .tf-su-steps-row, .tf-su-step { gap: 8px; }
+  .tf-su-btnrow > * { flex: 1 1 auto; }
+  .tf-su-backlink { font-size: 13px; }
 }
 `;
