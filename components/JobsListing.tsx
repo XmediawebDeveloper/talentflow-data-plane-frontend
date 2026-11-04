@@ -1707,7 +1707,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
             {/* Phones: one "Sort" button that opens a menu — the fields, then the order
                 (worded for the field). From sm the inline Sort control above is used. */}
-            {sortedJobs.length > 0 && (
+            {totalMatching > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button

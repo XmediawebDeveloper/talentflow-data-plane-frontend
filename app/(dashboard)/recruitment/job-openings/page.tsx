@@ -250,10 +250,8 @@ export default function JobOpeningsPage() {
     try {
       await jdService.updateStatus(jobId, status);
       markVersionStatus(jobId, status.toLowerCase());
-      const updated = jobs.find(job => job.id === jobId);
-      toast.success(updated
-        ? `${formatJobSubject({ ...updated, versionNumber: updated.versionNumber ?? 1 })} status updated to ${mapStatus(status)}.`
-        : 'Job status updated');
+      // The page no longer holds the whole job list (the listing pages from the server), so no title here.
+      toast.success(`Job status updated to ${mapStatus(status)}.`);
     } catch (error) {
       toast.error('Failed to update job status');
     }
