@@ -1,6 +1,7 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -48,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -420,6 +422,26 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // itself: the list is server-paginated, so a row picked on page 1 is no
   // longer in `sessions` once the user moves to page 2.
   const [selected, setSelected] = useState<Map<string, AIInterviewResponse>>(() => new Map());
+  const { open: openInvite } = useInviteDialog();
+  /* Actions › Create / Send Assessment | AI Interview: the ticked candidates
+     (one per email) into the invite popup — the host's (Job Details), else
+     the shared one, for their job when they share one. */
+  const inviteSelected = (kind: 'assessment' | 'interview') => {
+    const rows = [...selected.values()];
+    const seen = new Set<string>();
+    const candidates: InviteCandidate[] = rows
+      .filter((r) => r.candidate_email)
+      .filter((r) => { const k = r.candidate_email!.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((r) => ({ id: r.resume_id || r.id, name: r.candidate_name || '', email: r.candidate_email!, resumeId: r.resume_id }));
+    if (onOpenInviteDialog) { onOpenInviteDialog(kind, candidates); return; }
+    const jdIds = [...new Set(rows.map((r) => r.jd_id).filter(Boolean))] as string[];
+    openInvite({
+      kind,
+      job: jdIds.length === 1 ? { jdId: jdIds[0], jdTitle: jdTitle || '', jdCode: jdShortId || undefined, versionNumber: jobVersion } : undefined,
+      candidates,
+      onSent: () => setSelected(new Map()),
+    });
+  };
   const toggleSelected = (session: AIInterviewResponse) =>
     setSelected((prev) => {
       const next = new Map(prev);
@@ -1198,7 +1220,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             of line; h-9 matches the toolbar band. Holds Customize Columns and
             Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
         {portaled && selected.size > 0 && (
-          <div className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -1265,6 +1287,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       : 'Download PDF Reports'}
                   </span>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                <RowInviteItems onInvite={inviteSelected} />
               </DropdownMenuContent>
             </DropdownMenu>
             <button
@@ -1276,7 +1300,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               <X className="w-4 h-4" />
               Clear
             </button>
-          </div>
+          </StickyBulkBar>
         )}
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
@@ -1531,7 +1555,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               onClear={() => setSelected(new Map())}
             />
             {selected.size > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -1586,6 +1610,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         : 'Download PDF Reports'}
                     </span>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                  <RowInviteItems onInvite={inviteSelected} />
                 </DropdownMenuContent>
               </DropdownMenu>
                 <button
@@ -1597,7 +1623,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   <X className="w-4 h-4" />
                   Clear
                 </button>
-              </div>
+              </StickyBulkBar>
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}

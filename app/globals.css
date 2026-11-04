@@ -7,6 +7,24 @@
    recognize and therefore emitted no CSS for. */
 @plugin "tailwindcss-animate";
 
+/* ── Accordion open/close ────────────────────────────────────────────────
+   `animate-accordion-down/up` were used by the Radix accordions but never
+   defined, so panels snapped open. Radix exposes the measured panel height
+   as --radix-accordion-content-height; animate between 0 and that. */
+@theme {
+  --animate-accordion-down: accordion-down 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-accordion-up: accordion-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+
+  @keyframes accordion-down {
+    from { height: 0; opacity: 0; }
+    to { height: var(--radix-accordion-content-height); opacity: 1; }
+  }
+  @keyframes accordion-up {
+    from { height: var(--radix-accordion-content-height); opacity: 1; }
+    to { height: 0; opacity: 0; }
+  }
+}
+
 /* ── Hand cursor on everything clickable ────────────────────────────────
    Tailwind v4's preflight resets <button> to `cursor: default`, so every
    button, pill, chevron and icon button that didn't add `cursor-pointer`

@@ -1,6 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
@@ -693,7 +694,7 @@ export default function ResumeScoringPage({
      job the drill-in or a candidate view is on. null = closed. Rendered in
      each of those views' returns via `inviteDialogEl`. */
   const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
-  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} />;
+  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} openOn="score-resume" />;
   /* THE invite popup, global opener — for the lists that span jobs (View by
      Job's Actions, a create round trip's return). */
   const { open: openInvite } = useInviteDialog();
@@ -1332,6 +1333,7 @@ export default function ResumeScoringPage({
         kind: h.kind,
         job: { jdId: h.jdId, jdTitle: h.jdTitle, jdCode: h.jdCode },
         candidates: scoreRowsToInvitees(rows),
+        openOn: 'score-resume',
         onSent: () => finishHandoffInvite(true),
       });
     })();
@@ -3847,7 +3849,7 @@ export default function ResumeScoringPage({
         {/* Row 3 — only while jobs are ticked: Actions and Clear, on a line
             of their own under Select All. */}
         {selectedJobCount > 0 && (
-          <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="-mt-1 mb-4 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
           {/* Actions — the same menu as View by Candidates', on the ticked
                 jobs' candidates. Fades in with a blinking dot. */}
             {(
@@ -3947,6 +3949,7 @@ export default function ResumeScoringPage({
                         kind,
                         job: singleSelectedJob ? inviteJobOf(singleSelectedJob) : undefined,
                         candidates: scoreRowsToInvitees(jobViewExportRows),
+                        openOn: 'score-resume',
                         onSent: () => clearJobSelection(),
                       });
                       return (
@@ -3954,6 +3957,7 @@ export default function ResumeScoringPage({
                           {renderInviteTargetItems({
                             kind: 'assessment',
                             target: { state: 'ready' },
+                            label: 'Create / Send Assessment',
                             itemClass: itemCls,
                             allowed: assessmentAllowed,
                             deniedReason: assessmentReason,
@@ -3968,6 +3972,7 @@ export default function ResumeScoringPage({
                           {renderInviteTargetItems({
                             kind: 'interview',
                             target: { state: 'ready' },
+                            label: 'Create / Send AI Interview',
                             itemClass: itemCls,
                             allowed: interviewAllowed,
                             deniedReason: interviewReason,
@@ -4002,7 +4007,7 @@ export default function ResumeScoringPage({
                 Clear
               </button>
             )}
-          </div>
+          </StickyBulkBar>
         )}
 
         {/* History List or Empty State */}

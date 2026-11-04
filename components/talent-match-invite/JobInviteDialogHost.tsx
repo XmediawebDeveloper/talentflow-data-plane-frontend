@@ -21,11 +21,14 @@ export default function JobInviteDialogHost({
   onClose,
   onSent,
   inviteGate,
+  openOn,
 }: {
   request: InviteDialogRequest | null;
   onClose: () => void;
   onSent?: (kind: InviteKind) => void;
   inviteGate?: (kind: InviteKind) => { allowed: boolean; reason?: string };
+  /** The page's own list tab, opened first (AI Talent Match / Score Resume). */
+  openOn?: 'talent-match' | 'score-resume';
 }) {
   if (!request) return null;
   return (
@@ -36,6 +39,7 @@ export default function JobInviteDialogHost({
         candidates: request.candidates,
         inviteGate: inviteGate?.(request.kind),
         onSent: (k) => onSent?.(k),
+        openOn,
       }}
       onClose={onClose}
     />

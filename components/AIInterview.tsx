@@ -2482,13 +2482,18 @@ export default function AIInterview() {
                 left: Math.max(8, menuAnchor.right - 208),
               }}
             >
-              <button
-                onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
-                className={VERSION_MENU_ITEM_CLASS}
-              >
-                <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
-                <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-              </button>
+              {/* Not on a Draft: a draft is opened through Continue Editing
+                  below, on the Configure page it is still being built on —
+                  the Assessments View Details rule. */}
+              {config.status !== 'draft' && (
+                <button
+                  onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
+                  className={VERSION_MENU_ITEM_CLASS}
+                >
+                  <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
+                  <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                </button>
+              )}
               {/* Continue Editing — moved here from the job row, which now
                   reports the job as a whole, as the Assessments Job List does.
                   A disabled job lists the same items as a live one, greyed with

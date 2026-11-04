@@ -21,6 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import PermissionLockedOverlay from '@/components/shared/PermissionLockedOverlay';
+import { useRouter } from 'next/navigation';
+import { inviteUnitsReturnUrl, useInviteUnitsHandoff } from '@/lib/utils/inviteUnitsHandoff';
 
 // Addon interface
 interface Addon {
@@ -225,6 +227,21 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
   const canPurchaseAddons = canUpgradePlan;
   const { openCheckout, isProcessing: razorpayProcessing } = useRazorpay();
   const { loading: planFeaturesLoading } = usePlanFeatures();
+  /* Opened from the invite popup's Add units (?from=invite): the trail is
+     that page's own, then Usage & Quotas, and a banner leads back to the
+     popup — "Continue to invite" once units were bought here. */
+  const router = useRouter();
+  const inviteHandoff = useInviteUnitsHandoff();
+  const [boughtForInvite, setBoughtForInvite] = useState(false);
+  const inviteBackUrl = inviteHandoff ? inviteUnitsReturnUrl(inviteHandoff) : null;
+  const breadcrumbItems = inviteHandoff && inviteBackUrl
+    ? [
+        ...(inviteHandoff.crumbs.length
+          ? inviteHandoff.crumbs.map((c, i, all) => (i === all.length - 1 ? { label: c.label, href: inviteBackUrl } : c))
+          : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Back to invite', href: inviteBackUrl }]),
+        { label: 'Usage & Quotas' },
+      ]
+    : [{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }];
 
   // "Is this feature in the PLAN at all?" — read from the raw is_enabled flags,
   // NOT hasPlanFeature(), which also turns false when the feature's quota is
@@ -935,10 +952,12 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
 
       if (result.status === 'pending') {
         setAddonPurchaseSuccess('Payment received! Your credits are being activated in the background and will appear shortly.');
+        setBoughtForInvite(true);
         return;
       }
 
       setAddonPurchaseSuccess(`Successfully added ${totalCredits} Units to your ${cleanName}!`);
+      setBoughtForInvite(true);
 
       // Queue audit verification for addon purchase (non-blocking)
       try {
@@ -974,7 +993,40 @@ export default function UsageDashboard({ onBack, hideSubscriptionSummary = false
     <main ref={rootRef} className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="tf-page-sheet">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Usage & Quotas' }]} />
+        <PageBreadcrumb className="mb-4 md:mb-6" items={breadcrumbItems} />
+
+        {inviteHandoff && inviteBackUrl && (
+          <div
+            role="status"
+            className={`mb-5 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 rounded-xl border px-4 py-3 text-sm ${
+              boughtForInvite ? 'border-success-line bg-success-subtle text-success-strong' : 'border-info-line bg-info-subtle text-info-strong'
+            }`}
+          >
+            <span className="flex min-w-0 flex-1 basis-64 items-start gap-2.5">
+              {boughtForInvite
+                ? <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
+                : <Info className="h-5 w-5 shrink-0" aria-hidden="true" />}
+              <span className="min-w-0">
+                <span className="block font-semibold">
+                  {boughtForInvite ? 'Units added — continue your invite' : `Adding ${inviteHandoff.noun} units for your invite`}
+                </span>
+                <span className="block font-medium text-foreground">
+                  {boughtForInvite
+                    ? 'The invite popup reopens where you left it.'
+                    : `${inviteHandoff.candidateCount > 0 ? `${inviteHandoff.candidateCount.toLocaleString()} candidate${inviteHandoff.candidateCount === 1 ? '' : 's'} selected. ` : ''}Buy ${inviteHandoff.noun} units below, then go back — the invite popup reopens where you left it.`}
+                </span>
+              </span>
+            </span>
+            <Button
+              variant={boughtForInvite ? 'primary' : 'secondary'}
+              size="md"
+              onClick={() => router.push(inviteBackUrl)}
+              className="shrink-0 w-full sm:w-auto"
+            >
+              {boughtForInvite ? 'Continue to invite' : 'Back to invite'}
+            </Button>
+          </div>
+        )}
 
         <div className="space-y-5">
         {/* Subscription Summary Card */}

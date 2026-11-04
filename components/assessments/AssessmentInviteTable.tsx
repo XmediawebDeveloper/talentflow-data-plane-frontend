@@ -17,7 +17,13 @@ import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterv
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
-import { timelineEvents, buildInvitationRowActions, InvitationActionsMenu } from '@/components/AssessmentInviteActions';
+import {
+  timelineEvents,
+  buildInvitationRowActions,
+  InvitationActionsMenu,
+  isRevocableInvitation,
+  canResendInvite,
+} from '@/components/AssessmentInviteActions';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -64,19 +70,16 @@ export const isInviteExpired = (inv: any): boolean => {
    its stat cards. Two copies is how a row's checkbox and its action menu came
    to disagree about whether it could be resent. */
 
-/** Resendable, and therefore bulk-selectable: an invite that went out or
- *  lapsed, and that the candidate has neither started nor finished. This
- *  table's own per-row menu (below) treats Invited the same way — direct
- *  Resend, no Revoke step — so the bulk rule here has to match: it is a
- *  DIFFERENT, deliberately simpler action model than AssessmentInviteActions'
- *  (used by the Invite Tracking popup / Invitation Status tab), not a copy of
- *  it. */
-export const isBulkResendable = (inv: any): boolean =>
-  // 'pending' = a Copy Link invite (link minted, no email yet). It shows as
-  // Invited, so it gets a checkbox like any other invite that went out.
-  ['sent', 'pending', 'expired'].includes(inv.status)
-  && !inv.started_at
-  && !inv.completed_at;
+/** Bulk-selection eligibility: an invite this table's own per-row menu
+ *  (below, via buildInvitationRowActions) can revoke or resend. Reuses that
+ *  menu's own rules — isRevocableInvitation (Invited/pending) and
+ *  canResendInvite (Expired/Failed) — so a row's checkbox and its "..." menu
+ *  can never disagree about what clicking that row can do, and the bulk bar
+ *  can offer the same action the row itself offers. Matches the Invite
+ *  Tracking popup's isBulkRevocable/isBulkResendable/isBulkActionable split. */
+export const isBulkRevocable = isRevocableInvitation;
+export const isBulkResendable = canResendInvite;
+export const isBulkActionable = (inv: any): boolean => isBulkRevocable(inv) || isBulkResendable(inv);
 
 /** Has a result to open. Only Completed / Auto Completed rows do — every other
  *  status has no attempt behind it, so the row does not navigate. */
@@ -366,11 +369,11 @@ export default function AssessmentInviteTable({
                   >
                     {/* stopPropagation: Complete rows navigate on click —
                         ticking a checkbox must never also open the row.
-                        Only bulk-resendable rows (Invited/Expired) get a
-                        checkbox; the rest keep a fixed-width slot so the
+                        Only bulk-actionable rows (Invited/Expired/Failed) get
+                        a checkbox; the rest keep a fixed-width slot so the
                         columns stay aligned. */}
                     <td className="tf-td pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                      {isBulkResendable(invitation) && !archived && !jdDisabled ? (
+                      {isBulkActionable(invitation) && !archived && !jdDisabled ? (
                         <button
                           type="button"
                           role="checkbox"

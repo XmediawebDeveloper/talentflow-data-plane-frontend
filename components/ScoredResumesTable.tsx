@@ -1,4 +1,5 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
 import { Mail, Phone, Calendar, Search, Download, FileDown, CheckSquare, Square, MinusSquare, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronRight, ChevronDown, ChevronsUpDown, ChevronsDownUp, Plus, Video, BarChart3 } from 'lucide-react';
 import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
@@ -1286,6 +1287,7 @@ Best regards`);
           }
         : undefined,
       candidates: people.map((r) => ({ ...toInvitee(r), source: 'score-resume', inviteSource: 'Resume Scoring' })),
+      openOn: 'score-resume',
       // A bulk send clears the ticks, as the old bulk invite did.
       onSent: rows.length > 1 ? () => clearSelection() : undefined,
     });
@@ -2158,7 +2160,7 @@ Best regards`);
             {renderInviteTargetItems({
               kind: 'assessment',
               target: { state: 'ready' },
-              label: onOpenInviteDialog ? 'Create / Send Assessment' : undefined,
+              label: 'Create / Send Assessment',
               itemClass: scoredResumesMenuItemClass,
               allowed: assessmentAllowed,
               deniedReason: assessmentReason,
@@ -2173,7 +2175,7 @@ Best regards`);
             {renderInviteTargetItems({
               kind: 'interview',
               target: { state: 'ready' },
-              label: onOpenInviteDialog ? 'Create / Send AI Interview' : undefined,
+              label: 'Create / Send AI Interview',
               itemClass: scoredResumesMenuItemClass,
               allowed: interviewAllowed,
               deniedReason: interviewReason,
@@ -2441,9 +2443,9 @@ Best regards`);
             shrink-wrapped box with Select All and wrapped out of line; h-9
             matches the Job Details toolbar band. */}
         {embedded && selectionActions && (
-          <div className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>button]:h-9 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
-          </div>
+          </StickyBulkBar>
         )}
 
         {/* Advanced Filters */}
@@ -2665,9 +2667,9 @@ Best regards`);
             on a line of its own under Select All once rows are ticked, as
             View by Job shows it. */}
         {!embedded && selectionActions && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="mt-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
-          </div>
+          </StickyBulkBar>
         )}
 
         </div>

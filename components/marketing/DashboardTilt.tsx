@@ -13,7 +13,7 @@ import {
   Settings,
   Sparkles,
   Users,
-  Video,
+  Mic,
 } from "lucide-react";
 import { gsap, useGSAP } from "@/lib/gsap";
 import { DISPLAY } from "./fonts";
@@ -34,7 +34,7 @@ const FLAT = { rotateY: 0, rotateX: 0, rotateZ: 0 };
 const STATS = [
   { label: "Resumes scored", value: "1,284", delta: "12%", up: true, good: true },
   { label: "Active jobs", value: "36", delta: "8%", up: true, good: true },
-  { label: "Avg. time to hire", value: "18 days", delta: "20%", up: false, good: true },
+  { label: "AI interviews", value: "64", delta: "20%", up: true, good: true },
 ];
 
 const PIPELINE = [
@@ -316,9 +316,9 @@ export function DashboardTilt() {
               <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
             <span className={`${DISPLAY} text-[11px] font-bold leading-tight text-mkt-ink sm:text-sm`}>
-              AI resume
+              Resume
               <br />
-              scoring
+              Scoring
             </span>
             <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
           </div>
@@ -327,9 +327,9 @@ export function DashboardTilt() {
         <Layer z={130} className="absolute bottom-10 left-4 sm:-left-8 sm:bottom-16">
           <div data-float className="flex items-center gap-2 rounded-2xl border border-slate-900/[0.08] bg-mkt-surface/95 px-3 py-2 shadow-[0_24px_44px_-20px_rgba(15,60,153,0.55)] dark:border-white/10 sm:gap-3 sm:px-4 sm:py-3">
             <span className="grid h-7 w-7 place-items-center rounded-xl bg-mkt-accent-solid text-white sm:h-9 sm:w-9">
-              <Video className="h-4 w-4 sm:h-5 sm:w-5" />
+              <Mic className="h-4 w-4 sm:h-5 sm:w-5" />
             </span>
-            <span className={`${DISPLAY} text-[11px] font-bold text-mkt-ink sm:text-sm`}>AI interview</span>
+            <span className={`${DISPLAY} text-[11px] font-bold text-mkt-ink sm:text-sm`}>AI Interviews</span>
             <ChevronRight className="h-3.5 w-3.5 text-slate-400" />
           </div>
         </Layer>

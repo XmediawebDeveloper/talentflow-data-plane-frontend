@@ -19,8 +19,8 @@ const VISIBLE_FEATURES = 4;
  * One plan: price, quotas, features and the signup link. Shared by the landing
  * page and the pricing page so the two always show the same thing.
  *
- * A featured plan is set in inverse (ink background) — the one card on the row
- * that reads as the recommendation. The price rolls when the billing period
+ * A featured plan keeps the same light surface as the others and is marked out
+ * by an accent border, its "Recommended" label and the primary CTA. The price rolls when the billing period
  * changes, so the eye sees which numbers moved.
  */
 export function PlanCard({
@@ -43,7 +43,7 @@ export function PlanCard({
   const shownFeatures = expanded ? plan.features : plan.features.slice(0, VISIBLE_FEATURES);
   const hiddenCount = plan.features.length - shownFeatures.length;
 
-  const inverse = plan.featured && !plan.isTrial;
+  const featured = plan.featured && !plan.isTrial;
   const primaryCta = plan.isTrial || plan.featured;
   const label = plan.isTrial ? "Free trial" : plan.featured ? "Recommended" : plan.tier || null;
 
@@ -64,38 +64,28 @@ export function PlanCard({
     { dependencies: [isYearly] }
   );
 
-  const tone = inverse
-    ? {
-        card: "bg-mkt-ink text-mkt-canvas border-transparent shadow-[0_30px_60px_-30px_rgba(8,19,46,0.55)]",
-        title: "text-mkt-canvas",
-        body: "text-mkt-canvas/70",
-        muted: "text-mkt-canvas/55",
-        rule: "border-mkt-canvas/15",
-        check: "text-mkt-cyan",
-        label: "bg-mkt-canvas/15 text-mkt-canvas",
-        link: "text-mkt-canvas hover:text-mkt-canvas/80",
-      }
-    : {
-        card: "bg-mkt-surface text-mkt-ink border-slate-900/[0.08] dark:border-white/10",
-        title: "text-mkt-ink",
-        body: "text-slate-600 dark:text-slate-400",
-        muted: "text-slate-500 dark:text-slate-400",
-        rule: "border-slate-900/[0.07] dark:border-white/10",
-        check: "text-mkt-cyan",
-        label: plan.isTrial
-          ? "bg-mkt-amber/15 text-mkt-amber-ink"
-          : "bg-slate-900/[0.05] text-slate-600 dark:bg-white/10 dark:text-slate-300",
-        link: "text-mkt-accent hover:underline",
-      };
+  const tone = {
+    card: featured
+      ? "bg-mkt-surface text-mkt-ink border-mkt-accent-solid/45 ring-1 ring-mkt-accent-solid/20"
+      : "bg-mkt-surface text-mkt-ink border-slate-900/[0.08] dark:border-white/10",
+    title: "text-mkt-ink",
+    body: "text-slate-600 dark:text-slate-400",
+    muted: "text-slate-500 dark:text-slate-400",
+    rule: "border-slate-900/[0.07] dark:border-white/10",
+    check: "text-mkt-cyan",
+    label: plan.isTrial
+      ? "bg-mkt-amber/15 text-mkt-amber-ink"
+      : featured
+        ? "bg-mkt-accent-solid/10 text-mkt-accent"
+        : "bg-slate-900/[0.05] text-slate-600 dark:bg-white/10 dark:text-slate-300",
+    link: "text-mkt-accent hover:underline",
+  };
 
   const ctaBase =
     "mt-5 inline-flex h-10 items-center justify-center rounded-full px-5 text-sm font-semibold sm:mt-7 sm:h-11 transition-[scale,background-color,border-color,color] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid focus-visible:ring-offset-2 focus-visible:ring-offset-mkt-surface active:scale-[0.98] group/cta gap-2";
-  const ctaPrimary = inverse
-    ? "bg-mkt-canvas text-mkt-ink hover:bg-mkt-canvas/90"
-    : "bg-mkt-accent-solid text-white hover:bg-mkt-accent-solid-hover";
-  const ctaSecondary = inverse
-    ? "border border-mkt-canvas/25 text-mkt-canvas hover:border-mkt-canvas/50"
-    : "border border-slate-900/15 text-mkt-ink hover:border-slate-900/30 dark:border-white/15 dark:hover:border-white/30";
+  const ctaPrimary = "bg-mkt-accent-solid text-white hover:bg-mkt-accent-solid-hover";
+  const ctaSecondary =
+    "border border-slate-900/15 text-mkt-ink hover:border-slate-900/30 dark:border-white/15 dark:hover:border-white/30";
 
   return (
     <article

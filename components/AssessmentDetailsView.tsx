@@ -34,6 +34,8 @@ import InviteFilterBar, {
 } from '@/components/InviteFilterBar';
 import { RevokeInvitationDialog, EditInvitationModal } from '@/components/AssessmentInviteActions';
 import AssessmentInviteTable, {
+  isBulkActionable,
+  isBulkRevocable,
   isBulkResendable,
   isTrackedInviteCompleted,
   opensTrackedInviteDetails,
@@ -179,7 +181,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
 /* A tab's page heading — icon-tile + title, the same shape the AI Interview
    Details page's View JD tab opens with (`TabHeading` in
    AIInterviewDetailsView.tsx), so the two View JD tabs read as one screen. */
-function TabHeading({ icon: Icon, title }: { icon: (props: { className?: string }) => JSX.Element; title: string }) {
+function TabHeading({ icon: Icon, title }: { icon: React.ComponentType<{ className?: string }>; title: string }) {
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2.5">
@@ -1036,9 +1038,17 @@ export default function AssessmentDetailsView({
 
   const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status))
     ? []
-    : inviteRows.filter(isBulkResendable).map((inv: any) => inv.id);
+    : inviteRows.filter(isBulkActionable).map((inv: any) => inv.id);
   const allInvitesSelected =
     inviteSelectableIds.length > 0 && inviteSelectableIds.every((id: string) => inviteSelectedIds.has(id));
+  /* The bulk bar offers Resend/Revoke only when EVERY selected row is
+     uniformly that action-eligible — same rule as the Invite Tracking popup
+     (Assessments.tsx's allTrackingResendable/allTrackingRevocable): a mixed
+     selection (one Invited, one Expired) gets neither button, since there is
+     no single action that would apply to both rows at once. */
+  const inviteSelectedRows = inviteRows.filter((inv: any) => inviteSelectedIds.has(inv.id));
+  const allInviteSelectedResendable = inviteSelectedRows.length > 0 && inviteSelectedRows.every(isBulkResendable);
+  const allInviteSelectedRevocable = inviteSelectedRows.length > 0 && inviteSelectedRows.every(isBulkRevocable);
   const toggleInviteSelectAll = () =>
     setInviteSelectedIds(() => (allInvitesSelected ? new Set<string>() : new Set<string>(inviteSelectableIds)));
   const toggleInviteSelectOne = (id: string) =>
@@ -1120,7 +1130,7 @@ export default function AssessmentDetailsView({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInviteSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(inviteRows.filter(isBulkResendable).map((inv: any) => inv.id));
+      const valid = new Set(inviteRows.filter(isBulkActionable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
@@ -1227,6 +1237,40 @@ export default function AssessmentDetailsView({
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
     setIsBulkResendingInvites(false);
     setShowInviteBulkResend(false);
+    setInviteSelectedIds(new Set());
+    await reloadInvites();
+  };
+
+  /* Bulk Revoke — mirrors Bulk Resend above (and the Track Invites popup's
+     handleTrackingBulkRevoke): sequential, re-derives eligibility at send
+     time since a row's status can have moved since it was ticked. */
+  const [showInviteBulkRevoke, setShowInviteBulkRevoke] = useState(false);
+  const [isBulkRevokingInvites, setIsBulkRevokingInvites] = useState(false);
+
+  const handleInviteBulkRevoke = async () => {
+    const targets = inviteRows.filter(
+      (inv: any) => inviteSelectedIds.has(inv.id) && isBulkRevocable(inv)
+    );
+    if (targets.length === 0) {
+      setShowInviteBulkRevoke(false);
+      return;
+    }
+    setIsBulkRevokingInvites(true);
+    let revoked = 0;
+    let failedCount = 0;
+    for (const invitation of targets) {
+      try {
+        await assessmentService.revokeInvitation(assessment.id, invitation.id);
+        revoked += 1;
+      } catch (error) {
+        console.error('Failed to revoke invitation:', invitation.id, error);
+        failedCount += 1;
+      }
+    }
+    if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
+    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    setIsBulkRevokingInvites(false);
+    setShowInviteBulkRevoke(false);
     setInviteSelectedIds(new Set());
     await reloadInvites();
   };
@@ -3051,7 +3095,11 @@ export default function AssessmentDetailsView({
                   </span>
                   Select All ({inviteSelectableIds.length})
                 </button>
-                {inviteSelectedIds.size > 0 && (
+                {/* Resend / Revoke — mutually exclusive, and only when EVERY
+                    selected row is uniformly that action's status (a mixed
+                    selection shows neither), matching the Track Invites
+                    popup's allTrackingResendable/allTrackingRevocable. */}
+                {allInviteSelectedResendable && (
                   <Button
                     type="button"
                     variant="primary"
@@ -3064,6 +3112,21 @@ export default function AssessmentDetailsView({
                       : <Mail className="w-3.5 h-3.5" />}
                   >
                     {isBulkResendingInvites ? 'Sending…' : `Resend (${inviteSelectedIds.size})`}
+                  </Button>
+                )}
+                {allInviteSelectedRevocable && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setShowInviteBulkRevoke(true)}
+                    disabled={isBulkRevokingInvites}
+                    className="whitespace-nowrap"
+                    icon={isBulkRevokingInvites
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Ban className="w-3.5 h-3.5" />}
+                  >
+                    {isBulkRevokingInvites ? 'Revoking…' : `Revoke (${inviteSelectedIds.size})`}
                   </Button>
                 )}
               </div>
@@ -3810,6 +3873,19 @@ export default function AssessmentDetailsView({
         confirmText={isBulkResendingInvites ? 'Sending…' : `Yes, resend to ${inviteSelectedIds.size}`}
         cancelText="Cancel"
         variant="warning"
+      />
+
+      {/* Bulk revoke confirmation — selected Invited candidates only. Same
+          wording as the Track Invites popup's bulk revoke. */}
+      <ConfirmationDialog
+        isOpen={showInviteBulkRevoke}
+        onClose={() => { if (!isBulkRevokingInvites) setShowInviteBulkRevoke(false); }}
+        onConfirm={handleInviteBulkRevoke}
+        title="Revoke selected invitations?"
+        description={`This will immediately expire the invitation link${inviteSelectedIds.size === 1 ? '' : 's'} for ${inviteSelectedIds.size} selected candidate${inviteSelectedIds.size === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
+        confirmText={isBulkRevokingInvites ? 'Revoking…' : `Yes, revoke ${inviteSelectedIds.size}`}
+        cancelText="Cancel"
+        variant="danger"
       />
 
       {/* Configure-settings preview for a New Versions card.

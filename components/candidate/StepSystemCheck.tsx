@@ -1730,19 +1730,23 @@ export default function StepSystemCheck({
 
   // Mark camera-dependent checks as unverified after the selected camera
   // changes — same rule and reason as markAudioChecksUnverified below:
-  // picking a device must never auto-verify it, only "Run Check" (first run)
-  // or a per-row "Retry" click may. The Camera Preview intentionally keeps
-  // showing the PREVIOUS device's feed until Retry actually swaps the stream
-  // via runWebcam() — that swap IS the verification, so it's deferred too.
+  // picking a device must never auto-verify it, only "Run Check" may. The
+  // Camera Preview intentionally keeps showing the PREVIOUS device's feed
+  // until Run Check actually swaps the stream via runWebcam() — that swap IS
+  // the verification, so it's deferred too.
+  //
+  // A device change re-opens the full "Run Check" flow (checksCompleted →
+  // false) instead of leaving per-row Retry buttons: the candidate re-runs
+  // every check against the new device in one click.
   const markCameraChecksUnverified = useCallback(() => {
     if (lightingIntervalRef.current) { clearInterval(lightingIntervalRef.current); lightingIntervalRef.current = null; }
     stopFacePoll();
-    if (!checksCompleted) return;
-    updateSystemCheck('webcam', { status: 'fail', detail: 'Click Retry to verify this camera' });
-    updateSystemCheck('lighting', { status: 'fail', detail: 'Click Retry to re-check lighting' });
-    updateSystemCheck('face', { status: 'fail', detail: 'Click Retry to re-check face detection' });
-    updateSystemCheck('multiple', { status: 'fail', detail: 'Click Retry to re-check for other people' });
-  }, [checksCompleted, updateSystemCheck, stopFacePoll]);
+    setChecksCompleted(false);
+    updateSystemCheck('webcam', { status: 'pending', detail: 'Click Run Check to verify this camera' });
+    updateSystemCheck('lighting', { status: 'pending', detail: 'Click Run Check to re-check lighting' });
+    updateSystemCheck('face', { status: 'pending', detail: 'Click Run Check to re-check face detection' });
+    updateSystemCheck('multiple', { status: 'pending', detail: 'Click Run Check to re-check for other people' });
+  }, [updateSystemCheck, stopFacePoll]);
 
   const switchCamera = useCallback((deviceId: string) => {
     if (deviceId === selectedCameraId) return;
@@ -1770,7 +1774,7 @@ export default function StepSystemCheck({
   // Neither check may run — let alone pass — as a side effect of a device
   // merely being selected or plugged in. That's why this only sets row state
   // and never calls runMicrophone()/runNoise(): verification happens solely
-  // on an explicit "Run Check" (first run) or per-row "Retry" click.
+  // on an explicit "Run Check" click.
   //
   // Background Noise is a ONE-SHOT check (runNoise samples a few times and
   // stops — no ongoing polling interval), so there's nothing left running to
@@ -1778,15 +1782,14 @@ export default function StepSystemCheck({
   // interval from before that change.
   const markAudioChecksUnverified = useCallback(() => {
     if (noiseIntervalRef.current) { clearInterval(noiseIntervalRef.current); noiseIntervalRef.current = null; }
-    // Before the first "Run Check", leave both rows at their initial 'pending'
-    // state — that button still exists and will run (and correctly pass) them
-    // against the freshly selected device. After the first run, "Run Check" is
-    // gone and only per-row Retry remains, so mark them unverified/'fail' here
-    // to surface that Retry control.
-    if (!checksCompleted) return;
-    updateSystemCheck('microphone', { status: 'fail', detail: 'Click Retry to verify this microphone' });
-    updateSystemCheck('noise', { status: 'fail', detail: 'Click Retry to re-check background noise' });
-  }, [checksCompleted, updateSystemCheck]);
+    // Re-open the full "Run Check" flow (it reappears whenever
+    // checksCompleted is false) rather than leaving per-row Retry buttons.
+    // Applied unconditionally so a mic change can never leave a stale
+    // "Microphone active" pass from the previous device on screen.
+    setChecksCompleted(false);
+    updateSystemCheck('microphone', { status: 'pending', detail: 'Click Run Check to verify this microphone' });
+    updateSystemCheck('noise', { status: 'pending', detail: 'Click Run Check to re-check background noise' });
+  }, [updateSystemCheck]);
 
   // Candidate picked a different microphone — drop the cached analyser so
   // ensureAudioAnalyser is forced to re-acquire on the newly selected device.
@@ -2829,8 +2832,13 @@ export default function StepSystemCheck({
                         .tf-run-check-pulse { animation: tfRunCheckPulse 1.2s ease-in-out infinite; }
                         @media (prefers-reduced-motion: reduce) { .tf-run-check-pulse { animation: none; } }
                       `}</style>
+                      {/* After a mic change the voiceprint is reset, so Run Check
+                          stays disabled until the new voice sample is recorded
+                          (handleRunChecks would otherwise be a dead click). */}
                       <button
                         type="button"
+                        disabled={!voiceGateOk}
+                        title={!voiceGateOk ? 'Record your voice sample first' : undefined}
                         onClick={() => {
                           // After the click's re-render, bring the checks into
                           // view — on any screen, but only when they aren't
@@ -2839,10 +2847,10 @@ export default function StepSystemCheck({
                           revealAfterPaint(() => checksListRef.current, 'start');
                           void handleRunChecks();
                         }}
-                        className="tf-run-check-pulse flex-shrink-0 inline-flex items-center justify-center gap-2 font-bold min-h-11 py-2.5 px-5 rounded-lg text-sm transition-colors bg-success hover:bg-success-strong text-white shadow-lg w-full xs:w-auto"
+                        className={`flex-shrink-0 inline-flex items-center justify-center gap-2 font-bold min-h-11 py-2.5 px-5 rounded-lg text-sm transition-colors w-full xs:w-auto ${voiceGateOk ? 'tf-run-check-pulse bg-success hover:bg-success-strong text-white shadow-lg' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                       >
                         <Play className="w-4 h-4" />
-                        Run Check
+                        {voiceGateOk ? 'Run Check' : 'Record your voice to run check'}
                       </button>
                     </>
                   )}

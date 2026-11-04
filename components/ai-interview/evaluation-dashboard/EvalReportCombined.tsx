@@ -22,8 +22,9 @@ import { labelOfViolation, recruiterSeverity, summarizeViolations, type Violatio
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
-import { pdfSafe, hasNonLatinScript } from '@/lib/utils/pdfText';
+import { pdfSafe } from '@/lib/utils/pdfText';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { isNonEnglishAnswer, NON_ENGLISH_ANSWER_TEXT } from './nonEnglishAnswer';
 
 /** Session facts the PDF shows that aren't part of DashboardData. */
 export interface ReportSessionDetails {
@@ -38,9 +39,8 @@ export interface ReportSessionDetails {
   resultUrl?: string | null;
 }
 
-// pdfSafe / hasNonLatinScript: see lib/utils/pdfText (shared with the assessment report PDF).
-// The backend prefixes answers it couldn't score as English with this tag.
-const NON_ENGLISH_TAG = /^\s*\[non-English[^\]]*\]\s*/i;
+// pdfSafe: see lib/utils/pdfText (shared with the assessment report PDF).
+// Non-English answers: see ./nonEnglishAnswer (shown only in the Transcript tab).
 interface Props {
   data: DashboardData;
   aiConfidence?: number | null;
@@ -271,7 +271,7 @@ export async function exportEvalReportPDF(
       const _hasAnswer = !!_rawAns && _rawAns.toUpperCase() !== '[SKIPPED]' && _rawAns.toUpperCase() !== '[NOT ASKED]';
       // Non-English answers can't be drawn in Helvetica (they print as
       // garbage), so they're named rather than reproduced.
-      const _nonEnglish = _hasAnswer && (NON_ENGLISH_TAG.test(_rawAns) || hasNonLatinScript(_rawAns));
+      const _nonEnglish = _hasAnswer && isNonEnglishAnswer(_rawAns);
 
       let status: { label: string; color: RGB; isScore: boolean };
       if (key === 'hr') status = { label: 'For Reference', color: faint, isScore: false };
@@ -290,7 +290,7 @@ export async function exportEvalReportPDF(
       if (q.notDelivered) {
         answerDisplay = 'Not asked — the interview ended before this question was reached.';
       } else if (_nonEnglish) {
-        answerDisplay = 'Answered in a language other than English — not scored. The original answer is in the interview transcript.';
+        answerDisplay = NON_ENGLISH_ANSWER_TEXT;
       } else if (!_hasAnswer) {
         answerDisplay = _src === 'candidate'
           ? 'Skipped — candidate moved to the next question.'
@@ -1302,10 +1302,13 @@ export function EvalReportCombined({
               const rawAns = String(q.answer || '').trim();
               const rtL = (q.responseType || '').toLowerCase();
               const srcL = (q.skipSource || '').toLowerCase();
-              const ansIsPlaceholder = q.notDelivered || !rawAns
+              const ansNonEnglish = !q.notDelivered && isNonEnglishAnswer(rawAns);
+              const ansIsPlaceholder = q.notDelivered || !rawAns || ansNonEnglish
                 || rawAns.toUpperCase() === '[SKIPPED]' || rawAns.toUpperCase() === '[NOT ASKED]';
               const answerText = q.notDelivered
                 ? 'Not asked — the interview ended before this question was reached.'
+                : ansNonEnglish
+                  ? NON_ENGLISH_ANSWER_TEXT
                 : ansIsPlaceholder
                   ? (srcL === 'candidate'
                       ? 'Skipped — candidate moved to the next question.'

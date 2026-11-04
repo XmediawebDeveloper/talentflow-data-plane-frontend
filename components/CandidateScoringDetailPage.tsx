@@ -1175,6 +1175,7 @@ Best regards`);
         ? { jdId: jobId, jdTitle: jobTitle, jdCode: resume.jobCode || jdDetails?.job_id, versionNumber: resume.jobVersion }
         : undefined,
       candidates: [{ ...candidate, source: 'score-resume', inviteSource: 'Resume Scoring' }],
+      openOn: 'score-resume',
     });
   };
 
