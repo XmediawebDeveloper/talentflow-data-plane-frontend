@@ -4,11 +4,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 // vertical list of ~3 API-key cards inside the max-w-[1400px] white card shell.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Hero */}
-          <section className="relative mb-4 sm:mb-6 overflow-hidden rounded-xl bg-white border border-gray-100 p-4 sm:p-6">
+          <section className="tf-panel relative mb-4 sm:mb-6 overflow-hidden p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex items-start gap-3">
                 <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
@@ -24,7 +24,7 @@ export default function Loading() {
           {/* API key cards */}
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-6">
+              <div key={i} className="tf-panel p-4 sm:p-6">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">

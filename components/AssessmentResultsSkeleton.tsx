@@ -9,9 +9,9 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function AssessmentResultsSkeleton() {
   return (
-    <div className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <div className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 flex items-center gap-2">
             <Skeleton className="h-3.5 w-20" />
@@ -33,9 +33,9 @@ export default function AssessmentResultsSkeleton() {
           </div>
 
           {/* Statistics Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+          <div className="tf-grid-stats mb-4 sm:mb-6">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+              <div key={i} className="tf-card-soft p-3 sm:p-4">
                 <div className="flex items-center justify-between">
                   <div className="space-y-2">
                     <Skeleton className="h-3.5 w-24" />
@@ -53,7 +53,7 @@ export default function AssessmentResultsSkeleton() {
           </div>
 
           {/* Search + filter bar */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
+          <div className="tf-card-soft p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
             <Skeleton className="h-10 w-full rounded-lg" />
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Skeleton className="h-9 w-32 rounded-lg" />
@@ -63,40 +63,40 @@ export default function AssessmentResultsSkeleton() {
           </div>
 
           {/* Results table */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <div className="tf-card-soft overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full min-w-[2040px] table-fixed">
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800">
                   <tr>
-                    <th className="px-4 py-3 w-10"><Skeleton className="h-4 w-4 rounded" /></th>
+                    <th className="tf-th-cell w-10"><Skeleton className="h-4 w-4 rounded" /></th>
                     {['w-24', 'w-48', 'w-64', 'w-56', 'w-36', 'w-36', 'w-28', 'w-28', 'w-28', 'w-96', 'w-32', 'w-28'].map((w, i) => (
                       <th key={i} className={`text-xs font-semibold text-gray-600 dark:text-slate-300 ${w} text-left px-4 py-3`}><Skeleton className="h-3 w-20" /></th>
                     ))}
-                    <th className="w-32 px-4 py-3"><Skeleton className="h-3 w-16 mx-auto" /></th>
+                    <th className="tf-th-cell w-32"><Skeleton className="h-3 w-16 mx-auto" /></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                   {Array.from({ length: 8 }).map((_, r) => (
                     <tr key={r}>
-                      <td className="px-4 py-4 w-10"><Skeleton className="h-4 w-4 rounded" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-16" /></td>
-                      <td className="px-4 py-4">
+                      <td className="tf-td w-10"><Skeleton className="h-4 w-4 rounded" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-16" /></td>
+                      <td className="tf-td">
                         <div className="flex items-center gap-2">
                           <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
                           <Skeleton className="h-4 w-28" />
                         </div>
                       </td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-48" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full mx-auto" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-72" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
-                      <td className="px-4 py-4"><Skeleton className="h-4 w-16 mx-auto" /></td>
-                      <td className="px-4 py-4">
+                      <td className="tf-td"><Skeleton className="h-4 w-48" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-12 mx-auto" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-12 mx-auto" /></td>
+                      <td className="tf-td"><Skeleton className="h-5 w-20 rounded-full mx-auto" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-72" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                      <td className="tf-td"><Skeleton className="h-4 w-16 mx-auto" /></td>
+                      <td className="tf-td">
                         <div className="flex items-center justify-center gap-2">
                           <Skeleton className="h-7 w-7 rounded-md" />
                           <Skeleton className="h-7 w-7 rounded-md" />

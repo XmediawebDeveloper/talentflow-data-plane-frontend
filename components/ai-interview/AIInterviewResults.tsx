@@ -1,6 +1,7 @@
 'use client';
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -24,6 +25,7 @@ import type { InviteCandidate } from '@/components/talent-match-invite/inviteVer
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { DateField } from '@/components/ui/date-field';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -47,6 +49,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -419,6 +422,26 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // itself: the list is server-paginated, so a row picked on page 1 is no
   // longer in `sessions` once the user moves to page 2.
   const [selected, setSelected] = useState<Map<string, AIInterviewResponse>>(() => new Map());
+  const { open: openInvite } = useInviteDialog();
+  /* Actions › Create / Send Assessment | AI Interview: the ticked candidates
+     (one per email) into the invite popup — the host's (Job Details), else
+     the shared one, for their job when they share one. */
+  const inviteSelected = (kind: 'assessment' | 'interview') => {
+    const rows = [...selected.values()];
+    const seen = new Set<string>();
+    const candidates: InviteCandidate[] = rows
+      .filter((r) => r.candidate_email)
+      .filter((r) => { const k = r.candidate_email!.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((r) => ({ id: r.resume_id || r.id, name: r.candidate_name || '', email: r.candidate_email!, resumeId: r.resume_id }));
+    if (onOpenInviteDialog) { onOpenInviteDialog(kind, candidates); return; }
+    const jdIds = [...new Set(rows.map((r) => r.jd_id).filter(Boolean))] as string[];
+    openInvite({
+      kind,
+      job: jdIds.length === 1 ? { jdId: jdIds[0], jdTitle: jdTitle || '', jdCode: jdShortId || undefined, versionNumber: jobVersion } : undefined,
+      candidates,
+      onSent: () => setSelected(new Map()),
+    });
+  };
   const toggleSelected = (session: AIInterviewResponse) =>
     setSelected((prev) => {
       const next = new Map(prev);
@@ -1001,14 +1024,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div>
               {/* JD ID, then the job title — one line. The subtitle that
                   repeated the title underneath is gone. */}
-              <h1 className="flex flex-wrap items-center gap-3 tf-page-title">
+              <h1 className="tf-page-title flex flex-wrap items-center gap-3">
                 {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || configTitle || 'AI Interview'}</span>
                 {/* One version's results: the table has no version columns, so
                     the title names the version — "App development - V1
                     Interview Version - V1", the Track popup's header. */}
                 {hideVersionDetails && (jobVersion != null || interviewVersion != null) && (
-                  <span className="flex items-center gap-3 text-sm font-medium text-gray-500 whitespace-nowrap">
+                  <span className="flex items-center gap-3 tf-label whitespace-nowrap">
                     {jobVersion != null && (
                       <span className="inline-flex items-center gap-1.5">
                         -
@@ -1065,7 +1088,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           />
         );
         const toolbarBlock = (
-        <div className={toolbarPortal ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4'}>
+        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-4'}>
         <ListToolbar
           searchValue={search.query}
           onSearchChange={search.setQuery}
@@ -1197,7 +1220,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             of line; h-9 matches the toolbar band. Holds Customize Columns and
             Export plus the bulk ops — Revoke / Resend / Download PDF Reports. */}
         {portaled && selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -1264,6 +1287,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       : 'Download PDF Reports'}
                   </span>
                 </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                <RowInviteItems onInvite={inviteSelected} />
               </DropdownMenuContent>
             </DropdownMenu>
             <button
@@ -1275,7 +1300,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               <X className="w-4 h-4" />
               Clear
             </button>
-          </div>
+          </StickyBulkBar>
         )}
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
@@ -1333,7 +1358,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   onChange={(e) => search.setFilter('scoreMin', e.target.value)}
                   className={portaled ? `${JOB_TAB_FILTER_CONTROL_CLASS} min-w-0` : "w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"}
                 />
-                <span className="text-gray-400 text-sm">to</span>
+                <span className="tf-body-muted">to</span>
                 <input
                   type="number"
                   placeholder="Max"
@@ -1355,7 +1380,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     onChange={(v) => search.setFilter('dateFrom', v)}
                     className="sm:flex-1 sm:min-w-0"
                   />
-                  <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                  <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                   <DateField
                     aria-label="Completion date to"
                     value={search.filters.dateTo}
@@ -1414,7 +1439,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             toolbar's Reset clears them all. */}
         {showFilters && !portaled && (
           <div className="mt-3 pt-3 border-t border-brand-blue/10">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+            <div className="tf-grid-4 [&>div]:min-w-0">
               <div>
                 <label className={filterLabelClass}>Score Range (%)</label>
                 <div className="flex items-center gap-2">
@@ -1428,7 +1453,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     aria-label="Minimum score"
                     className={SCORE_INPUT_CLASS}
                   />
-                  <span className="text-gray-400 text-sm">to</span>
+                  <span className="tf-body-muted">to</span>
                   <input
                     type="number"
                     placeholder="Max"
@@ -1530,12 +1555,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               onClear={() => setSelected(new Map())}
             />
             {selected.size > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
                     type="button"
-                    className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                    className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                     aria-label={`Actions for ${selected.size} selected`}
                   >
                     <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -1585,18 +1610,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         : 'Download PDF Reports'}
                     </span>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                  <RowInviteItems onInvite={inviteSelected} />
                 </DropdownMenuContent>
               </DropdownMenu>
                 <button
                   type="button"
                   onClick={() => setSelected(new Map())}
                   title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
                 >
                   <X className="w-4 h-4" />
                   Clear
                 </button>
-              </div>
+              </StickyBulkBar>
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
@@ -1624,7 +1651,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       {/* Table — the card is only drawn once there is something to invite the
           user into. Unstarted, the empty state stands on its own like the AI
           Talent Match tab's does. */}
-      <div className={isUnstarted ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
+      <div className={isUnstarted ? '' : 'tf-card overflow-hidden'}>
         {isLoading ? (
           /* Skeleton matches the results table structure (no double border — the
              parent card already provides it) instead of a bare spinner. */
@@ -1657,7 +1684,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           />
         ) : displayMode === 'grid' ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            <div className="tf-grid-4 p-4">
               {paginatedSessions.map((session) => {
                 const risk = getProctoringRisk(session);
                 const sc = session.status === 'in_progress' ? session.skill_coverage : undefined;
@@ -1707,7 +1734,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     </div>
 
                     {((col('inviteSource') && inviteSourceLabel(session)) || (col('interviewVersion') && rowInterviewVersion(session) != null)) && (
-                      <div className="flex items-center justify-between gap-2 tf-meta-strong">
+                      <div className="flex items-center justify-between gap-2 tf-meta">
                         {col('inviteSource') && inviteSourceLabel(session) ? (
                           <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
                         ) : <span />}
@@ -1728,7 +1755,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
                         </Badge>
                         {session.status === 'in_progress' && (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                          <span className="tf-badge flex bg-destructive text-white text-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                             LIVE
                           </span>
@@ -1743,7 +1770,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       {sc && (
                         <div className="mt-1.5">
                           <div className="flex items-center gap-1 mb-0.5">
-                            <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                            <span className="tf-micro-hint">{sc.questions_asked}/{sc.total_questions} Q</span>
                             <span className="text-2xs text-success font-medium ml-auto">{scCoveredPct}% covered</span>
                           </div>
                           <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-full">
@@ -1762,7 +1789,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       <div className="rounded-lg bg-gray-50 ring-1 ring-gray-100 px-3 py-2.5">
                         <div className="flex items-end justify-between gap-2">
                           <div className="min-w-0">
-                            <p className="text-2xs font-medium uppercase tracking-wide text-gray-500">Score</p>
+                            <p className="tf-micro-hint uppercase tracking-wide">Score</p>
                             <p className="text-xl font-semibold leading-tight tabular-nums text-gray-900">
                               {score}<span className="text-sm font-medium text-gray-400">%</span>
                             </p>
@@ -1809,91 +1836,90 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
           </>
         ) : belowLg ? (
-          /* List view below lg: one compact row-card per candidate, the way
-             Scored Resumes lists them on phones / tablets — not the Grid cards.
-             Same data as the table row. */
-          <div className="space-y-3 p-3">
+          /* List view below lg: one compact row-card per candidate (the shared
+             MobileRecordCard), not the Grid cards. Same data as the table row. */
+          <div className="tf-record-list p-3">
             {paginatedSessions.map((session) => {
               const risk = getProctoringRisk(session);
               const score = displayInviteScore(session);
               const result = inviteResult(session, score);
               const isSelected = selected.has(session.id);
               return (
-                <div
+                <MobileRecordCard
                   key={session.id}
                   onClick={() => handleViewDetails(session)}
-                  className={`rounded-xl border p-4 cursor-pointer transition-all hover:shadow-md ${
-                    isSelected ? 'border-brand-blue/30 bg-blue-50/60 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                  }`}
-                >
-                  <div className="flex items-start gap-3">
+                  selected={isSelected}
+                  select={
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelected(session)}
                       onClick={(e) => e.stopPropagation()}
                       aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
-                      className="mt-1 w-4 h-4 rounded border-gray-300 shrink-0"
+                      className="tf-checkbox"
                     />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-2">
-                        <p className="min-w-0 font-medium text-blue-600 dark:text-blue-400 [overflow-wrap:anywhere]">
-                          {showName(session.candidate_name) || 'Unknown'}
-                        </p>
-                        <Badge variant={getStatusVariant(session.status)} className="shrink-0">
-                          {getStatusIcon(session.status)}
-                          {getStatusLabel(session.status)}
-                        </Badge>
-                      </div>
-                      {session.candidate_email && (
-                        <p className="tf-meta [overflow-wrap:anywhere]">{session.candidate_email}</p>
+                  }
+                  title={
+                    <span className="flex min-w-0 items-center gap-2">
+                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
+                      <span className="min-w-0 [overflow-wrap:anywhere]">{showName(session.candidate_name) || 'Unknown'}</span>
+                    </span>
+                  }
+                  badges={
+                    <>
+                      {col('interviewVersion') && rowInterviewVersion(session) != null && (
+                        <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
                       )}
-                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm">
+                      <Badge variant={getStatusVariant(session.status)} className="shrink-0">
+                        {getStatusIcon(session.status)}
+                        {getStatusLabel(session.status)}
+                      </Badge>
+                    </>
+                  }
+                  meta={[
+                    { icon: <Mail />, label: session.candidate_email ? <span className="[overflow-wrap:anywhere]">{session.candidate_email}</span> : null },
+                    {
+                      icon: <CalendarDays />,
+                      label: session.completed_at
+                        ? <>Completed {formatIST(session.completed_at)}</>
+                        : session.started_at
+                          ? <>Started {formatIST(session.started_at)}</>
+                          : null,
+                    },
+                  ]}
+                  footer={
+                    (col('score') || (col('result') && result) || (col('proctoring') && session.status === 'completed')) ? (
+                      <>
                         {col('score') && (
-                          <span className="text-gray-500">
-                            Score{' '}
-                            {score != null
-                              ? <span className={`font-semibold ${score >= 60 ? 'text-success' : 'text-destructive'}`}>{score}%</span>
-                              : <span className="text-gray-400">—</span>}
-                          </span>
+                          <MobileStatChip tone={score == null ? 'neutral' : score >= 60 ? 'success' : 'danger'}>
+                            Score {score != null ? `${score}%` : '—'}
+                          </MobileStatChip>
                         )}
                         {col('result') && result && <ResultBadge result={result} />}
                         {col('proctoring') && session.status === 'completed' && (
                           <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
                         )}
-                        {col('interviewVersion') && rowInterviewVersion(session) != null && (
-                          <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
-                        )}
-                      </div>
-                      {/* Date on its own line, then View Details as a
-                          full-width row — sharing a line, the date was squeezed
-                          into a ~45px column at 320px. Download beside it, as
-                          in the table; Create / Send lives in the toolbar's Actions. */}
-                      {(session.completed_at || session.started_at) && (
-                        <p className="mt-2 tf-meta [overflow-wrap:anywhere]">
-                          {session.completed_at
-                            ? <>Completed {formatIST(session.completed_at)}</>
-                            : <>Started {formatIST(session.started_at!)}</>}
-                        </p>
-                      )}
-                      <div className="mt-3 flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => handleViewDetails(session)}
-                          className="flex-1 inline-flex items-center justify-center gap-1.5 h-9 px-3 text-sm font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg"
-                        >
-                          <Eye className="w-4 h-4" />
-                          View Details
-                        </button>
-                        {/* Download Report — the table's own button (same
-                            permission / not-evaluated rules), sized to the row. */}
-                        <div className="shrink-0 [&_button]:!h-9 [&_button]:!w-9">
-                          <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                      </>
+                    ) : undefined
+                  }
+                  actions={
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleViewDetails(session)}
+                        title="View Details"
+                        aria-label="View Details"
+                        className="tf-icon-btn-outline"
+                      >
+                        <Eye />
+                      </button>
+                      {/* Download Report — the table's own button (same
+                          permission / not-evaluated rules). Create / Send lives
+                          in the toolbar's Actions. */}
+                      <ResultRowActions session={session} onView={() => handleViewDetails(session)} hideView />
+                    </>
+                  }
+                />
               );
             })}
           </div>
@@ -1906,7 +1932,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     wider tracking, dark mode. */}
                 <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                   <tr>
-                    <th className="text-left px-4 py-3 w-10 align-middle tf-sticky-col-left tf-th">
+                    <th className="tf-th-cell text-left w-10 tf-sticky-col-left tf-th">
                       {/* Embedded in Job Details, Select All already lives in
                           the toolbar above (the reference pattern) — this
                           header checkbox would duplicate it, so it's empty
@@ -1922,16 +1948,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         />
                       )}
                     </th>
-                    {col('candidate') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Candidate</th>}
-                    {col('timeline') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Timeline</th>}
-                    {col('status') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Status</th>}
-                    {col('score') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Score</th>}
-                    {col('result') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Result</th>}
-                    {col('proctoring') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Proctoring Risk</th>}
-                    {col('inviteSource') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Invite Source</th>}
-                    {col('cid') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">CID</th>}
-                    {col('jobVersion') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Job Version</th>}
-                    {col('interviewVersion') && <th className="text-left px-4 py-3 tf-th whitespace-nowrap align-middle">Interview Version</th>}
+                    {col('candidate') && <th className="tf-th-cell text-left tf-th">Candidate</th>}
+                    {col('timeline') && <th className="tf-th-cell text-left tf-th">Timeline</th>}
+                    {col('status') && <th className="tf-th-cell text-left tf-th">Status</th>}
+                    {col('score') && <th className="tf-th-cell text-left tf-th">Score</th>}
+                    {col('result') && <th className="tf-th-cell text-left tf-th">Result</th>}
+                    {col('proctoring') && <th className="tf-th-cell text-left tf-th">Proctoring Risk</th>}
+                    {col('inviteSource') && <th className="tf-th-cell text-left tf-th">Invite Source</th>}
+                    {col('cid') && <th className="tf-th-cell text-left tf-th">CID</th>}
+                    {col('jobVersion') && <th className="tf-th-cell text-left tf-th">Job Version</th>}
+                    {col('interviewVersion') && <th className="tf-th-cell text-left tf-th">Interview Version</th>}
                     {/* Job Details: no ⋮ in the row, so the column only needs
                         the View / Download pair — w-px + px-3 shrink it to that. */}
                     <th className={`text-right ${portaled ? 'w-px px-3' : 'px-4'} py-3 text-xs font-semibold text-gray-600 dark:text-slate-300 whitespace-nowrap align-middle tf-sticky-col`}>Actions</th>
@@ -1960,7 +1986,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           selected.has(session.id) ? 'bg-blue-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-900'
                         }`}
                       >
-                        <td className="px-4 py-3 w-10 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                        <td className="tf-td w-10 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={selected.has(session.id)}
@@ -1970,7 +1996,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           />
                         </td>
                         {col('candidate') && (
-                          <td className="px-4 py-3">
+                          <td className="tf-td">
                             <div className="flex items-center gap-2">
                               <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
@@ -1987,7 +2013,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('timeline') && (
-                          <td className="px-4 py-3 align-top whitespace-nowrap text-gray-600">
+                          <td className="tf-td align-top whitespace-nowrap text-gray-600">
                             {/* The Track Invites timeline (Invited, System Check,
                                 Started, Completed) plus this table's Duration. */}
                             <InviteTimelineLines inv={session} duration={formatDuration(session)} limit={RESULTS_TIMELINE_LIMIT} />
@@ -2001,7 +2027,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
                               <Badge variant={getStatusVariant(session.status)}>
                                 {getStatusIcon(session.status)}
@@ -2009,7 +2035,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                                 {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
                               </Badge>
                               {session.status === 'in_progress' && (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                                   LIVE
                                 </span>
@@ -2023,7 +2049,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                               return (
                                 <div className="mt-1.5">
                                   <div className="flex items-center gap-1 mb-0.5">
-                                    <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                                    <span className="tf-micro-hint">{sc.questions_asked}/{sc.total_questions} Q</span>
                                     <span className="text-2xs text-success font-medium ml-auto">{coveredPct}% covered</span>
                                   </div>
                                   <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-28">
@@ -2037,7 +2063,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('score') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {displayInviteScore(session) != null ? (
                               <span className={`${SCORE_CELL_TEXT} ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
                                 {displayInviteScore(session)}%
@@ -2048,7 +2074,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('result') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {inviteResult(session, displayInviteScore(session)) ? (
                               <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
                             ) : (
@@ -2057,7 +2083,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('proctoring') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {session.status === 'completed' ? (
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
                                 {risk.level}
@@ -2068,14 +2094,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('inviteSource') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                          <td className="tf-td whitespace-nowrap text-gray-700">
                             {inviteSourceLabel(session)
                               ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                               : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         {col('cid') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {session.candidate_cid ? (
                               <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
                                 {session.candidate_cid}
@@ -2086,12 +2112,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         {col('jobVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {rowJobVersion(session) != null ? <VersionPill kind="job" version={rowJobVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         {col('interviewVersion') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {rowInterviewVersion(session) != null ? <VersionPill kind="interview" version={rowInterviewVersion(session)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
@@ -2184,16 +2210,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             selector, but the card, the "Showing X to Y of N" line and the
             Go to / page-nav controls match the master. */}
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
-          <div className="rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4">
+          <div className="tf-panel p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="tf-card-desc">
+              <span className="tf-body-secondary">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates
               </span>
               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                 <div className="flex items-center gap-1.5">
-                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -2208,7 +2234,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-9 px-1.5 text-sm text-center border border-gray-200 rounded-xl bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    className="tf-input w-14 px-1.5 text-center rounded-xl"
                   />
                 </div>
                 <button
@@ -2223,7 +2249,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-sm font-medium text-gray-700 whitespace-nowrap px-1">
+                <span className="tf-label whitespace-nowrap px-1">
                   <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
                 </span>
                 <button
@@ -2285,9 +2311,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   if (embedded) return body;
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={breadcrumbItems ?? [

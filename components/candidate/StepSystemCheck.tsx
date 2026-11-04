@@ -2332,13 +2332,13 @@ export default function StepSystemCheck({
           </p>
         </div>
 
-        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+        <div className="tf-card-soft overflow-hidden">
           {/* Card body: Loading */}
           <div className="p-8 flex flex-col items-center justify-center min-h-[200px] space-y-4">
             <div className="bg-gray-100 rounded-full p-3">
               <Zap className="w-8 h-8 text-gray-600" />
             </div>
-            <p className="text-lg font-semibold text-gray-900">Checking Device Requirements...</p>
+            <p className="tf-section-title">Checking Device Requirements...</p>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
               <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -2386,7 +2386,7 @@ export default function StepSystemCheck({
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white shadow-lg">
+        <div className="tf-card-soft">
           <div className="p-5 sm:p-6 space-y-5">
             {blockedBrowserName && (
               <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-start gap-3">
@@ -2403,7 +2403,7 @@ export default function StepSystemCheck({
             {/* Two cards side by side, then the verdict merged across both columns
                 beneath them. items-stretch + h-full keeps the two cards level.
                 Each card fades in from its own side, one after the other. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
+            <div className="tf-grid-split items-stretch">
               {/* ═══ LEFT: Device Type ═══ */}
               <div className="min-w-0">
                 <div className="relative h-full border border-gray-200 rounded-xl overflow-hidden">
@@ -2411,7 +2411,7 @@ export default function StepSystemCheck({
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <Monitor className="w-5 h-5 text-brand-blue" />
                     </span>
-                    <h3 className="tf-card-title">Device Type</h3>
+                    <h3 className="tf-section-title">Device Type</h3>
                     {!deviceInfo.isMobile
                       ? <CheckCircle className="w-5 h-5 text-success" />
                       : <XCircle className="w-5 h-5 text-destructive" />}
@@ -2447,7 +2447,7 @@ export default function StepSystemCheck({
                     <span className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <Globe className="w-5 h-5 text-brand-blue" />
                     </span>
-                    <h3 className="tf-card-title">Browser Compatibility</h3>
+                    <h3 className="tf-section-title">Browser Compatibility</h3>
                     {deviceInfo.browser.supported
                       ? <CheckCircle className="w-5 h-5 text-success" />
                       : <XCircle className="w-5 h-5 text-destructive" />}
@@ -2463,7 +2463,7 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="tf-body-muted">Supported Browsers</p>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div className="tf-grid-3">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
                         return (
@@ -2475,7 +2475,7 @@ export default function StepSystemCheck({
                           >
                             <Image src={BROWSER_LOGOS[b.name]} alt="" width={36} height={36} unoptimized className="flex-shrink-0" />
                             <div className="min-w-0">
-                              <p className="tf-cell-name truncate">{b.name}</p>
+                              <p className="tf-row-title truncate">{b.name}</p>
                               <p className="tf-meta truncate">{b.minVersion}</p>
                             </div>
                           </div>
@@ -2506,12 +2506,12 @@ export default function StepSystemCheck({
                     {deviceAllPass ? (
                       <>
                         <p className="text-lg font-bold text-success-strong leading-tight">All Requirements Met!</p>
-                        <p className="tf-card-desc mt-0.5">Your device and browser are compatible for the interview.</p>
+                        <p className="tf-body-secondary mt-0.5">Your device and browser are compatible for the interview.</p>
                       </>
                     ) : (
                       <>
                         <p className="text-lg font-bold text-destructive-strong leading-tight">Requirements Not Met</p>
-                        <p className="tf-card-desc mt-0.5">Fix the items marked above to continue with the interview.</p>
+                        <p className="tf-body-secondary mt-0.5">Fix the items marked above to continue with the interview.</p>
                       </>
                     )}
                   </div>
@@ -2528,7 +2528,7 @@ export default function StepSystemCheck({
                   variant="primary"
                   size="lg"
                   onClick={() => setPhase('system_checks')}
-                  className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2 text-center"
+                  className="w-full sm:w-auto h-auto min-h-11 py-2 text-center"
                 >
                   Continue to System Checks
                   <ArrowRight className="w-4 h-4" />
@@ -2587,14 +2587,14 @@ export default function StepSystemCheck({
         {/* One full-width card, top to bottom: voice verification (read
             aloud, record, tips) → camera & devices → once the voice sample is
             in, the environment checks fade in → Continue. */}
-        <section ref={systemChecksCardRef} className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
+        <section ref={systemChecksCardRef} className="tf-card-soft overflow-hidden">
           <div className="p-5 sm:p-6 space-y-6">
             {/* ── 1. Voice Verification: read aloud → record → tips ── */}
             {onEnrollVoice && (
               <div ref={voiceSectionRef} className="space-y-4">
                 <div className="flex items-center gap-2">
                   <Mic className="w-6 h-6 text-brand-blue" />
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">Voice Verification</h3>
+                  <h3 className="tf-section-title sm:text-xl">Voice Verification</h3>
                   <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
                     voiceEnrollStatus === 'success' ? 'bg-brand-blue/10 text-brand-blue' : 'bg-destructive text-white'
                   }`}>
@@ -2616,8 +2616,8 @@ export default function StepSystemCheck({
                         <p className="text-sm font-semibold text-brand-blue">
                           Read this aloud — or just speak naturally:
                         </p>
-                        <p className="mt-1 text-sm italic text-gray-800 leading-relaxed">&ldquo;{ENROLL_PASSAGE}&rdquo;</p>
-                        <p className="text-2xs text-gray-500 mt-1.5">
+                        <p className="mt-1 tf-body italic leading-relaxed">&ldquo;{ENROLL_PASSAGE}&rdquo;</p>
+                        <p className="tf-micro-hint mt-1.5">
                           You don&apos;t have to read this exactly — we only check that you spoke.
                         </p>
                       </div>
@@ -2642,7 +2642,7 @@ export default function StepSystemCheck({
                         <span className="relative w-4 h-4 rounded-full bg-destructive animate-pulse" />
                       </span>
                     </FadePresence>
-                    <p className="tf-cell-name text-center inline-flex items-center justify-center gap-2">
+                    <p className="tf-row-title text-center inline-flex items-center justify-center gap-2">
                       {voiceEnrollStatus === 'verifying' && <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />}
                       {voiceEnrollStatus === 'recording' ? 'Recording — keep speaking…'
                         : voiceEnrollStatus === 'verifying' ? 'Checking your voice sample…'
@@ -2671,7 +2671,7 @@ export default function StepSystemCheck({
                         );
                       })}
                     </div>
-                    <span className="tf-card-desc tabular-nums whitespace-nowrap">
+                    <span className="tf-body-secondary tabular-nums whitespace-nowrap">
                       {/* During playback the clock counts up from 0:00 with the playhead. */}
                       {fmtClock(voicePlaying
                         ? Math.floor(voicePlayProgress * (voiceDurationRef.current || VOICE_CAPTURE_SECONDS))
@@ -2682,7 +2682,7 @@ export default function StepSystemCheck({
                         <button
                           type="button"
                           onClick={startVoiceEnroll}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                          className="tf-btn tf-btn-primary gap-1.5 text-sm font-semibold px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue hover:bg-brand-blue-2 whitespace-normal shadow-none justify-start"
                         >
                           <Mic className="w-4 h-4" />
                           Start recording
@@ -2692,7 +2692,7 @@ export default function StepSystemCheck({
                         <button
                           type="button"
                           onClick={startVoiceEnroll}
-                          className="inline-flex items-center gap-1.5 text-sm font-semibold rounded-lg px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue text-white hover:bg-brand-blue-2"
+                          className="tf-btn tf-btn-primary gap-1.5 text-sm font-semibold px-4 py-2 min-h-11 sm:min-h-0 transition-colors bg-brand-blue hover:bg-brand-blue-2 whitespace-normal shadow-none justify-start"
                         >
                           <RefreshCw className="w-4 h-4" />
                           Retry
@@ -2814,7 +2814,7 @@ export default function StepSystemCheck({
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <Shield className="w-6 h-6 text-brand-blue" />
-                    <h3 className="text-lg sm:text-xl font-bold text-gray-900">Environment Checks</h3>
+                    <h3 className="tf-section-title sm:text-xl">Environment Checks</h3>
                   </div>
                   {/* Only the initial "Run Check" lives here. After the run, a
                       FAILED check is retried from its own row, and a
@@ -2847,7 +2847,7 @@ export default function StepSystemCheck({
                           revealAfterPaint(() => checksListRef.current, 'start');
                           void handleRunChecks();
                         }}
-                        className={`flex-shrink-0 inline-flex items-center justify-center gap-2 font-bold min-h-11 py-2.5 px-5 rounded-lg text-sm transition-colors w-full min-[400px]:w-auto ${voiceGateOk ? 'tf-run-check-pulse bg-success hover:bg-success-strong text-white shadow-lg' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
+                        className={`flex-shrink-0 inline-flex items-center justify-center gap-2 font-bold min-h-11 py-2.5 px-5 rounded-lg text-sm transition-colors w-full xs:w-auto ${voiceGateOk ? 'tf-run-check-pulse bg-success hover:bg-success-strong text-white shadow-lg' : 'bg-gray-200 text-gray-500 cursor-not-allowed'}`}
                       >
                         <Play className="w-4 h-4" />
                         {voiceGateOk ? 'Run Check' : 'Record your voice to run check'}
@@ -2900,14 +2900,14 @@ export default function StepSystemCheck({
                 <div className="rounded-xl border border-gray-200 overflow-hidden">
                   <div className="px-4 py-3 flex items-center gap-2 border-b border-gray-100">
                     <Settings className="w-5 h-5 text-brand-blue" />
-                    <h3 className="tf-card-title">Device Settings</h3>
+                    <h3 className="tf-section-title">Device Settings</h3>
                     {isSwitchingDevice && <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />}
                   </div>
                   <div className="p-4 space-y-5">
                     <div className="flex items-start gap-3">
                       <Camera className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
                       <div className="min-w-0 flex-1">
-                        <label htmlFor="tf-camera-select" className="block text-sm font-semibold text-gray-900 mb-1">Camera</label>
+                        <label htmlFor="tf-camera-select" className="block tf-row-title mb-1">Camera</label>
                         <FilterSelect
                           id="tf-camera-select"
                           value={selectedCameraId}
@@ -2932,7 +2932,7 @@ export default function StepSystemCheck({
                     <div className="flex items-start gap-3">
                       <Mic className="w-5 h-5 text-brand-blue flex-shrink-0 mt-6" />
                       <div className="min-w-0 flex-1">
-                        <label htmlFor="tf-mic-select" className="block text-sm font-semibold text-gray-900 mb-1">
+                        <label htmlFor="tf-mic-select" className="block tf-row-title mb-1">
                           Microphone <span className="text-destructive">*</span>
                         </label>
                         <FilterSelect
@@ -2976,7 +2976,7 @@ export default function StepSystemCheck({
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-success-strong leading-tight">Everything Looks Good</p>
-                          <p className="tf-meta-strong leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
+                          <p className="tf-meta leading-snug">Your device and system have passed the required checks. You&apos;re all set for the interview.</p>
                         </div>
                       </div>
                     )}
@@ -2987,7 +2987,7 @@ export default function StepSystemCheck({
                         </span>
                         <div className="min-w-0">
                           <p className="text-sm font-bold text-destructive leading-tight">Some checks failed</p>
-                          <p className="tf-meta-strong leading-snug">
+                          <p className="tf-meta leading-snug">
                             {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                               ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
                               : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
@@ -3022,7 +3022,7 @@ export default function StepSystemCheck({
                       {/* Label + detail (the "Pending..." placeholder stays
                           hidden until a check actually runs) */}
                       <div className="flex-1 min-w-[8rem]">
-                        <p className="tf-cell-name">{check.label}</p>
+                        <p className="tf-row-title">{check.label}</p>
                         {check.detail && check.detail !== 'Pending...' && (
                           <p className="tf-meta line-clamp-2 break-words sm:line-clamp-1" title={check.detail}>{check.detail}</p>
                         )}
@@ -3040,7 +3040,7 @@ export default function StepSystemCheck({
                         )}
                         {check.status === 'fail' && (
                           <>
-                            <span className="inline-flex items-center gap-1.5 bg-destructive/10 text-destructive text-xs font-semibold px-3 py-1 rounded-full">
+                            <span className="tf-badge gap-1.5 bg-destructive/10 text-destructive">
                               <XCircle className="w-3.5 h-3.5" />
                               Failed
                             </span>
@@ -3068,7 +3068,7 @@ export default function StepSystemCheck({
                           <Loader2 className="w-5 h-5 text-brand-blue animate-spin" />
                         )}
                         {check.status === 'pending' && (
-                          <span className="text-xs font-medium text-gray-400">Pending</span>
+                          <span className="tf-caption">Pending</span>
                         )}
                       </div>
                     </div>
@@ -3095,7 +3095,7 @@ export default function StepSystemCheck({
                         onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                         disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
                         title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : !allSystemPassed ? 'Fix the failed checks above (click Retry on each)' : undefined}
-                        className="w-full md:w-auto md:min-w-[240px] shrink-0 whitespace-normal h-auto min-h-11 py-2 text-center"
+                        className="w-full md:w-auto md:min-w-[240px] shrink-0 h-auto min-h-11 py-2 text-center"
                       >
                         {isProceedLoading ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>
@@ -3132,7 +3132,7 @@ export default function StepSystemCheck({
                 <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
-                <h3 className="tf-subsection-title mb-0.5">No microphone detected.</h3>
+                <h3 className="tf-row-title mb-0.5">No microphone detected.</h3>
                 <p className="tf-meta leading-relaxed">
                   Please connect a microphone. This is detected automatically — if it&apos;s a
                   different device, you can also select it from Device Settings.
@@ -3154,7 +3154,7 @@ export default function StepSystemCheck({
                 <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
-                <h3 className="tf-subsection-title mb-0.5">Your device removed</h3>
+                <h3 className="tf-row-title mb-0.5">Your device removed</h3>
                 <p className="tf-meta leading-relaxed">
                   Your microphone device was removed — switched to your system&apos;s default
                   microphone automatically. You can keep going.

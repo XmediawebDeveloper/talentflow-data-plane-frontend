@@ -804,7 +804,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
           height={brandLogo.height}
           // h-6 below 360px: at 320 the icon cluster on the right was
           // clipped by a few px.
-          className="h-6 min-[360px]:h-7 sm:h-10 lg:h-12 w-auto"
+          className="h-6 2xs:h-7 sm:h-10 lg:h-12 w-auto"
         />
       </Link>
 
@@ -835,7 +835,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             size="sm"
             onClick={onOpenTour}
             icon={<Zap className="w-4 h-4" />}
-            className="hidden lg:inline-flex"
+            className="lg:inline-flex"
             aria-label="Take a quick tour" title="Take a quick tour"
           >
             Quick Tour
@@ -865,7 +865,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && (
                   <div className="flex items-center gap-1 leading-tight">
                     <span className="text-2xs lg:text-xs font-bold text-brand-blue tabular-nums">{totalUnits.remaining.toLocaleString()}</span>
-                    <span className="text-2xs lg:text-2xs text-gray-500 dark:text-slate-400">units left</span>
+                    <span className="tf-micro-hint lg:text-2xs">units left</span>
                   </div>
                 )}
                 {isPendingStatus && (
@@ -917,7 +917,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       </div>
                       <div className="min-w-0">
                         <h3 className="text-sm font-bold text-gray-900 truncate">{planName}</h3>
-                        <div className="flex items-center gap-1 flex-wrap text-2xs text-gray-500 mt-0.5">
+                        <div className="flex items-center gap-1 flex-wrap tf-micro-hint mt-0.5">
                           {planPeriodLabel && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-gray-400" />
@@ -980,7 +980,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="tf-cell-name truncate">{meta.label}</div>
+                            <div className="tf-row-title truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
                               <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -994,7 +994,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="tf-meta-strong tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
@@ -1023,13 +1023,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="tf-cell-name">Users</div>
+                            <div className="tf-row-title">Users</div>
                           </div>
                           {isUnlimited ? (
                             <span className="text-xs font-semibold text-success-strong">Unlimited</span>
                           ) : (
                             <>
-                              <span className="tf-meta-strong tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="tf-meta tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
@@ -1049,7 +1049,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                     <div className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                       <Info className="w-3.5 h-3.5" />
                     </div>
-                    <span className="flex-1 min-w-0 text-sm font-medium text-gray-900">Need extra units right away?</span>
+                    <span className="flex-1 min-w-0 tf-row-name">Need extra units right away?</span>
                     <Button
                       variant="primary"
                       size="sm"
@@ -1127,7 +1127,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       Notifications
                     </h3>
                     {unreadCount > 0 && (
-                      <span className="bg-white/20 px-2 py-0.5 rounded-full text-xs">{unreadCount} new</span>
+                      <span className="tf-badge bg-white/20">{unreadCount} new</span>
                     )}
                   </div>
                   <p className="text-sm text-white/80 mt-1">Stay updated with latest activities</p>
@@ -1137,20 +1137,20 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                 <div className="flex border-b border-gray-200 bg-gray-50">
                   <button
                     onClick={() => setActiveNotificationTab('all')}
-                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`tf-tab-line flex-1 ${
                       activeNotificationTab === 'all'
-                        ? 'text-brand-blue border-b-2 border-brand-blue bg-white'
-                        : 'text-gray-600 hover:text-brand-blue'
+                        ? 'tf-tab-line-active bg-white'
+                        : ''
                     }`}
                   >
                     All ({totalCount})
                   </button>
                   <button
                     onClick={() => setActiveNotificationTab('unread')}
-                    className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
+                    className={`tf-tab-line flex-1 ${
                       activeNotificationTab === 'unread'
-                        ? 'text-brand-blue border-b-2 border-brand-blue bg-white'
-                        : 'text-gray-600 hover:text-brand-blue'
+                        ? 'tf-tab-line-active bg-white'
+                        : ''
                     }`}
                   >
                     Unread ({unreadCount})
@@ -1177,7 +1177,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       <p className="text-sm">
                         {activeNotificationTab === 'unread' ? 'No unread notifications' : 'No notifications'}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">You're all caught up!</p>
+                      <p className="tf-hint mt-1">You're all caught up!</p>
                     </div>
                   ) : (
                     <div ref={notificationListRef} className="p-2 space-y-1">
@@ -1203,7 +1203,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                                   </p>
                                   <span className="tf-meta whitespace-nowrap">{notification.time_ago}</span>
                                 </div>
-                                <p className="tf-meta-strong">{notification.message}</p>
+                                <p className="tf-meta">{notification.message}</p>
                                 {user.role === 'tenant_admin' && notification.action_label && (
                                   <div className="flex items-center gap-2 mt-2">
                                     <span className={`text-xs ${style.labelColor} font-medium`}>{notification.action_label}</span>
@@ -1274,7 +1274,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
             <NameAvatar name={user.name} fallback={user.email} src={user.avatarUrl} size="md" />
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-2xs lg:text-xs text-gray-500">{user.roleDisplay || prettyRole(user.role)}</div>
+              <div className="tf-micro-hint lg:text-xs">{user.roleDisplay || prettyRole(user.role)}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1315,7 +1315,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                           pills fit side by side for most names, and drop to a
                           second line rather than squashing when they do not. */}
                       <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white/15 text-white ring-1 ring-white/15">
+                        <span className="tf-badge bg-white/15 text-white ring-1 ring-white/15">
                           {/* A crown for the account owner, a shield for everyone
                               else. The role is spelled out beside it, so the icon
                               only has to mark the one role that outranks the
@@ -1366,8 +1366,8 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                         <Building2 className="w-4 h-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-2xs leading-tight text-gray-500">Organization</p>
-                        <p className="tf-cell-name truncate">{tenant.name || 'N/A'}</p>
+                        <p className="tf-micro-hint leading-tight">Organization</p>
+                        <p className="tf-row-title truncate">{tenant.name || 'N/A'}</p>
                       </div>
                     </div>
                   </div>
@@ -1401,7 +1401,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                             <ItemIcon className="w-4 h-4" />
                           </span>
                           <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-medium text-gray-900 truncate">{title}</span>
+                            <span className="block tf-row-name truncate">{title}</span>
                             <span className="block tf-meta truncate">{subtitle}</span>
                           </span>
                           <ChevronRight className="w-3.5 h-3.5 shrink-0 text-gray-300 transition-colors group-hover:text-brand-blue" />

@@ -814,8 +814,8 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               <UserCog className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-slate-50">Users</h1>
-              <p className="tf-card-desc">Manage users and their permissions</p>
+              <h1 className="tf-page-title">Users</h1>
+              <p className="tf-body-secondary">Manage users and their permissions</p>
             </div>
           </div>
           <button
@@ -849,31 +849,31 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 focus:border-transparent dark:bg-slate-900 dark:text-slate-50"
+            className="tf-input pl-10 pr-4"
           />
         </div>
       </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-          <p className="tf-card-desc">Total Users</p>
+        <div className="tf-card-soft p-6">
+          <p className="tf-body-secondary">Total Users</p>
           <p className="text-3xl font-semibold text-gray-900 dark:text-slate-50 mt-1">{users.length}</p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-          <p className="tf-card-desc">Admins</p>
+        <div className="tf-card-soft p-6">
+          <p className="tf-body-secondary">Admins</p>
           <p className="text-3xl font-semibold text-gray-800 dark:text-slate-100 mt-1">
             {users.filter(u => u.role === 'tenant_admin').length}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-          <p className="tf-card-desc">Recruiters</p>
+        <div className="tf-card-soft p-6">
+          <p className="tf-body-secondary">Recruiters</p>
           <p className="text-3xl font-semibold text-gray-800 dark:text-slate-100 mt-1">
             {users.filter(u => u.role === 'recruiter').length}
           </p>
         </div>
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 p-6">
-          <p className="tf-card-desc">Viewers</p>
+        <div className="tf-card-soft p-6">
+          <p className="tf-body-secondary">Viewers</p>
           <p className="text-3xl font-semibold text-gray-600 dark:text-slate-400 mt-1">
             {users.filter(u => u.role === 'viewer').length}
           </p>
@@ -881,7 +881,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
       </div>
 
       {/* Users Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         {isLoading ? (
           <div className="flex items-center justify-center py-12 tf-loader-center">
             <Loader2 className="w-8 h-8 text-gray-800 dark:text-slate-100 animate-spin" />
@@ -891,22 +891,22 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     User
                   </th>
-                  <th className="px-6 py-4 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Role
                   </th>
-                  <th className="px-6 py-4 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Permissions
                   </th>
-                  <th className="px-6 py-4 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Status
                   </th>
-                  <th className="px-6 py-4 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Last Login
                   </th>
-                  <th className="px-6 py-4 text-right tf-th tf-sticky-col">
+                  <th className="tf-th-cell text-right tf-th tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -914,7 +914,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               <tbody className="divide-y divide-gray-200 dark:divide-slate-700/60">
                 {filteredUsers.map((user) => (
                   <tr key={user.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                           user.role === 'tenant_admin'
@@ -928,7 +928,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                           </span>
                         </div>
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{user.name || user.email || 'Unknown'}</div>
+                          <div className="tf-row-name">{user.name || user.email || 'Unknown'}</div>
                           <div className="tf-meta flex items-center gap-1">
                             <Mail className="w-3 h-3" />
                             {user.email}
@@ -936,12 +936,12 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       <span className={`px-2.5 py-1 text-xs font-medium rounded-full ${roleBadgeColors[user.role]}`}>
                         {roleLabels[user.role]}
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       <div className="flex flex-wrap gap-1 max-w-xs">
                         {Object.entries(user.permissions)
                           .filter(([_, value]) => value)
@@ -949,19 +949,19 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                           .map(([key]) => (
                             <span
                               key={key}
-                              className="px-2 py-0.5 tf-meta-strong bg-gray-100 dark:bg-slate-800 rounded"
+                              className="px-2 py-0.5 tf-meta bg-gray-100 dark:bg-slate-800 rounded"
                             >
                               {permissionLabels[key as keyof UserPermissions]}
                             </span>
                           ))}
                         {Object.values(user.permissions).filter(v => v).length > 3 && (
-                          <span className="px-2 py-0.5 tf-meta-strong bg-gray-100 dark:bg-slate-800 rounded">
+                          <span className="px-2 py-0.5 tf-meta bg-gray-100 dark:bg-slate-800 rounded">
                             +{Object.values(user.permissions).filter(v => v).length - 3} more
                           </span>
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       <button
                         onClick={() => handleToggleActive(user)}
                         className={`px-2.5 py-1 text-xs font-medium rounded-full ${
@@ -973,13 +973,13 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                         {user.is_active ? 'Active' : 'Inactive'}
                       </button>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       <div className="flex items-center gap-2 tf-body-muted">
                         <Calendar className="w-4 h-4" />
                         {user.last_login && user.last_login !== '-' ? formatISTDate(user.last_login) : '-'}
                       </div>
                     </td>
-                    <td className="px-6 py-4 tf-sticky-col">
+                    <td className="tf-td tf-sticky-col">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => {
@@ -1059,7 +1059,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
                   placeholder="Enter full name"
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 dark:bg-slate-900 dark:text-slate-50"
+                  className="tf-input px-4"
                 />
               </div>
               <div>
@@ -1071,7 +1071,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
                   placeholder="user@company.com"
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 dark:bg-slate-900 dark:text-slate-50"
+                  className="tf-input px-4"
                 />
               </div>
               <div>
@@ -1083,7 +1083,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   placeholder="Min. 6 characters"
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 dark:bg-slate-900 dark:text-slate-50"
+                  className="tf-input px-4"
                 />
               </div>
               <div>
@@ -1112,7 +1112,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                         </div>
                         <p className="tf-meta line-clamp-2 flex-1">{role.description}</p>
                         {role.permission_count > 0 && (
-                          <div className="mt-1.5 text-xs text-gray-400 dark:text-slate-500">{role.permission_count} permissions</div>
+                          <div className="mt-1.5 tf-hint">{role.permission_count} permissions</div>
                         )}
                         {role.id > 0 && (
                           <button
@@ -1213,7 +1213,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   type="text"
                   value={editingUser.name}
                   onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })}
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-600 dark:bg-slate-900 dark:text-slate-50"
+                  className="tf-input px-4"
                 />
               </div>
               <div>
@@ -1224,7 +1224,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   type="email"
                   value={editingUser.email}
                   disabled
-                  className="w-full px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500"
+                  className="w-full px-4 h-9 border border-gray-300 dark:border-slate-700 rounded-lg bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500"
                 />
               </div>
               <div>
@@ -1330,20 +1330,20 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             <div className="p-3 sm:p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                 <div>
-                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="tf-meta uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
                   <div className="font-medium text-gray-900 dark:text-slate-50 text-base truncate">{viewingRole.code}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="tf-meta uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
                   <div className="font-medium text-gray-900 dark:text-slate-50 text-base">{viewingRole.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="tf-meta uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
                   <div className="font-medium text-gray-900 dark:text-slate-50 text-base">{viewingRolePermissions.length}</div>
                 </div>
               </div>
 
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50 uppercase tracking-wide mb-3 sm:mb-4">
+              <h3 className="tf-row-title uppercase tracking-wide mb-3 sm:mb-4">
                 Allocated Permissions ({viewingRolePermissions.length})
               </h3>
 
@@ -1368,11 +1368,11 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   ).map(([module, perms]) => (
                     <div key={module} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                       <div className="bg-gray-100 dark:bg-slate-800 px-3 sm:px-4 py-2 border-b border-gray-200 dark:border-slate-700">
-                        <h4 className="tf-subsection-title capitalize">
+                        <h4 className="tf-row-title capitalize">
                           {module.replace(/_/g, ' ')} ({perms.length})
                         </h4>
                       </div>
-                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                      <div className="tf-grid-2 p-2 sm:p-4">
                         {perms.map((perm) => (
                           <div
                             key={perm.id}
@@ -1388,7 +1388,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                               <span className="text-xs font-bold uppercase">{perm.action[0]}</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
+                              <div className="tf-row-name">{perm.name}</div>
                             </div>
                           </div>
                         ))}
@@ -1403,7 +1403,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             <div className="bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
               <div className="tf-body-muted">
                 {viewingRole.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-full text-xs font-medium">
+                  <span className="tf-badge gap-1.5 sm:px-2.5 sm:py-1 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">
                     <Lock className="w-3 h-3" />
                     System Role (Read-Only)
                   </span>

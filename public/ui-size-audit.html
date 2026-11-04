@@ -1,0 +1,962 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>TalentFlow UI Size Audit</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (max 1080px) of numbered audit sections; each section = finding table + live specimen + recommendation box. */
+:root {
+  --bg: #f6f7fb;
+  --panel: #ffffff;
+  --panel-2: #f1f4f9;
+  --fg: #0f172a;
+  --fg-2: #475569;
+  --fg-3: #64748b;
+  --line: #dde3ec;
+  --line-2: #cbd5e1;
+  --brand: #0f3c99;
+  --brand-2: #0e3b98;
+  --brand-soft: rgba(15, 60, 153, 0.09);
+  --cyan: #079cc4;
+  --teal: #099ab6;
+  --orange: #ed881c;
+  --orange-deep: #d76011;
+  --ok: #16a34a; --ok-bg: #dcfce7; --ok-ink: #166534;
+  --warn: #d97706; --warn-bg: #fef3c7; --warn-ink: #92400e;
+  --bad: #dc2626; --bad-bg: #fee2e2; --bad-ink: #991b1b;
+  --bar: #0f3c99;
+  --bar-drift: #d76011;
+  --on-brand: #ffffff;
+  --sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0b1120; --panel: #111a2e; --panel-2: #17223a; --fg: #e8edf6; --fg-2: #b4c0d3; --fg-3: #8a98ae;
+    --line: #233150; --line-2: #2f3f62; --brand: #5b86ea; --brand-2: #6c92f0; --brand-soft: rgba(91, 134, 234, 0.16);
+    --cyan: #38bdf8; --teal: #2dd4bf; --orange: #f5a04a; --orange-deep: #f08a3c;
+    --ok: #4ade80; --ok-bg: rgba(74, 222, 128, 0.14); --ok-ink: #86efac;
+    --warn: #fbbf24; --warn-bg: rgba(251, 191, 36, 0.14); --warn-ink: #fcd34d;
+    --bad: #f87171; --bad-bg: rgba(248, 113, 113, 0.14); --bad-ink: #fca5a5;
+    --bar: #5b86ea; --bar-drift: #f08a3c; --on-brand: #0b1120;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0b1120; --panel: #111a2e; --panel-2: #17223a; --fg: #e8edf6; --fg-2: #b4c0d3; --fg-3: #8a98ae;
+  --line: #233150; --line-2: #2f3f62; --brand: #5b86ea; --brand-2: #6c92f0; --brand-soft: rgba(91, 134, 234, 0.16);
+  --cyan: #38bdf8; --teal: #2dd4bf; --orange: #f5a04a; --orange-deep: #f08a3c;
+  --ok: #4ade80; --ok-bg: rgba(74, 222, 128, 0.14); --ok-ink: #86efac;
+  --warn: #fbbf24; --warn-bg: rgba(251, 191, 36, 0.14); --warn-ink: #fcd34d;
+  --bad: #f87171; --bad-bg: rgba(248, 113, 113, 0.14); --bad-ink: #fca5a5;
+  --bar: #5b86ea; --bar-drift: #f08a3c; --on-brand: #0b1120;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 15px; line-height: 1.6;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 0 64px;
+}
+.wrap { max-width: 1080px; margin: 0 auto; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.25; margin: 0; letter-spacing: -0.01em; }
+p { margin: 0; }
+code, .mono { font-family: var(--mono); font-size: 0.86em; }
+code { background: var(--panel-2); border: 1px solid var(--line); padding: 1px 5px; border-radius: 4px; white-space: nowrap; }
+a { color: var(--brand); }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* header */
+header.top { padding-block: 40px 28px; display: grid; gap: 14px; }
+.eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--brand); }
+header.top h1 { font-size: clamp(28px, 4.6vw, 40px); font-weight: 700; }
+header.top .lede { color: var(--fg-2); max-width: 68ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.fact { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 13px; color: var(--fg-2); }
+.fact b { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+nav.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+nav.toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+nav.toc a { display: inline-block; text-decoration: none; font-size: 13px; font-weight: 500; color: var(--fg-2); padding: 5px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel); }
+nav.toc a:hover { color: var(--brand); border-color: var(--brand); }
+
+section { padding-block: 28px; border-top: 1px solid var(--line); display: grid; gap: 18px; }
+section > header { display: grid; gap: 6px; }
+section h2 { font-size: 24px; font-weight: 700; display: flex; gap: 10px; align-items: baseline; }
+section h2 .num { font-family: var(--mono); font-size: 14px; color: var(--fg-3); font-weight: 500; }
+section > header p { color: var(--fg-2); max-width: 72ch; }
+h3 { font-size: 16px; font-weight: 600; }
+
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; min-width: 0; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .grid3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 640px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+/* verdict boxes */
+.rec { border-radius: 12px; padding: 14px 16px; border: 1px solid; display: grid; gap: 6px; }
+.rec h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; }
+.rec ul { margin: 0; padding-left: 18px; display: grid; gap: 4px; }
+.rec.ok { background: var(--ok-bg); border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.rec.ok h3 { color: var(--ok-ink); }
+.rec.warn { background: var(--warn-bg); border-color: color-mix(in srgb, var(--warn) 35%, transparent); }
+.rec.warn h3 { color: var(--warn-ink); }
+.rec.use { background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 35%, transparent); }
+.rec.use h3 { color: var(--brand); }
+
+/* tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--fg-3); background: var(--panel-2); padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+td.n { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+th.n { text-align: right; }
+.barcell { min-width: 120px; width: 26%; }
+.bar { height: 8px; border-radius: 4px; background: var(--bar); min-width: 2px; }
+.bar.drift { background: var(--bar-drift); }
+
+.pill { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.keep { background: var(--ok-bg); color: var(--ok-ink); }
+.pill.drift { background: var(--warn-bg); color: var(--warn-ink); }
+.pill.drop { background: var(--bad-bg); color: var(--bad-ink); }
+
+/* type specimens */
+.spec-row { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 12px; align-items: baseline; padding-block: 8px; border-bottom: 1px dashed var(--line); }
+.spec-row:last-child { border-bottom: 0; }
+.spec-row .meta { font-family: var(--mono); font-size: 12px; color: var(--fg-3); }
+.spec-row .sample { font-family: 'Inter', sans-serif; overflow-wrap: anywhere; }
+
+/* swatches */
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.sw { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+.sw .chip { height: 54px; }
+.sw .info { padding: 8px 10px; font-size: 12px; display: grid; gap: 1px; }
+.sw .info b { font-size: 13px; }
+.sw .info span { color: var(--fg-3); font-family: var(--mono); font-size: 11.5px; }
+
+/* demo components — these mimic the app's own classes (fixed brand values, shown as in the light app) */
+.demo { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.demo-surface { background: #ffffff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; color: #111827; font-family: 'Inter', sans-serif; }
+.b { font-family: 'Inter', sans-serif; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 8px; font-weight: 500; white-space: nowrap; cursor: pointer; border: 1px solid transparent; transition: background-color .15s; }
+.b:focus-visible { outline: 2px solid #0f3c99; outline-offset: 2px; }
+.b.pri { background: #0f3c99; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.b.pri:hover { background: #0e3b98; }
+.b.sec { background: #f9fafb; color: #111827; border-color: #e5e7eb; }
+.b.sec:hover { background: #f3f4f6; }
+.b.des { background: #dc2626; color: #fff; }
+.b.sm { height: 32px; padding: 0 12px; font-size: 12px; }
+.b.md { height: 40px; padding: 0 16px; font-size: 14px; }
+.b.lg { height: 44px; padding: 0 24px; font-size: 16px; }
+.b.raw36 { height: 36px; padding: 0 16px; font-size: 14px; }
+.b.raw38 { height: 38px; padding: 0 12px; font-size: 14px; }
+.b.raw28 { height: 28px; padding: 0 10px; font-size: 12px; }
+.sizecap { display: grid; gap: 4px; justify-items: start; }
+.sizecap small { font-family: var(--mono); font-size: 11.5px; color: var(--fg-3); }
+
+.tabs-pill { display: flex; gap: 6px; flex-wrap: wrap; }
+.tabs-pill button { font-family: 'Inter', sans-serif; border: 0; background: transparent; color: #374151; padding: 6px 12px; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; }
+.tabs-pill button:hover { background: #f3f4f6; }
+.tabs-pill button[aria-selected="true"] { background: #0f3c99; color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.tabs-pill .cnt { margin-left: 6px; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px; background: #e5e7eb; color: #374151; }
+.tabs-pill button[aria-selected="true"] .cnt { background: rgba(255,255,255,.2); color: #fff; }
+.tabs-seg { display: inline-flex; height: 36px; padding: 2px; background: #f3f4f6; border-radius: 12px; max-width: 100%; overflow-x: auto; }
+.tabs-seg button { font-family: 'Inter', sans-serif; border: 1px solid transparent; background: transparent; color: #171717; padding: 4px 10px; border-radius: 12px; font-size: 14px; font-weight: 500; cursor: pointer; white-space: nowrap; }
+.tabs-seg button[aria-selected="true"] { background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+.tabs-line { display: flex; gap: 20px; border-bottom: 1px solid #e5e7eb; flex-wrap: wrap; }
+.tabs-line button { font-family: 'Inter', sans-serif; border: 0; background: transparent; color: #6b7280; padding: 8px 0; font-size: 14px; font-weight: 500; border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer; }
+.tabs-line button[aria-selected="true"] { color: #0f3c99; border-bottom-color: #0f3c99; }
+
+.ctl { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: center; }
+.ctl label { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: #374151; padding-block: 6px; cursor: pointer; }
+.ctl input { width: 16px; height: 16px; accent-color: #0f3c99; margin: 0; }
+.ctl.big input { width: 18px; height: 18px; }
+.ctl.big label { padding-block: 10px; }
+.sw-toggle { position: relative; width: 32px; height: 18px; border-radius: 999px; background: #cbd5e1; border: 0; cursor: pointer; padding: 0; }
+.sw-toggle::after { content: ""; position: absolute; top: 1px; left: 1px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .15s; }
+.sw-toggle[aria-checked="true"] { background: #0f3c99; }
+.sw-toggle[aria-checked="true"]::after { transform: translateX(14px); }
+.sw-toggle.lg { width: 44px; height: 24px; }
+.sw-toggle.lg::after { width: 20px; height: 20px; top: 2px; left: 2px; }
+.sw-toggle.lg[aria-checked="true"]::after { transform: translateX(20px); }
+
+.inp { font-family: 'Inter', sans-serif; border: 1px solid #d1d5db; border-radius: 8px; padding: 0 12px; font-size: 14px; color: #111827; background: #fff; width: 200px; max-width: 100%; }
+.inp:focus { outline: none; border-color: rgba(15,60,153,.4); box-shadow: 0 0 0 2px rgba(15,60,153,.4); }
+
+.states { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.state { display: grid; gap: 8px; justify-items: start; }
+.state small { font-size: 12px; color: #6b7280; }
+.ring-grey { box-shadow: 0 0 0 2px #fff, 0 0 0 4px #374151; }
+.ring-blue { box-shadow: 0 0 0 2px rgba(15,60,153,.4); }
+
+.radius-row { display: flex; flex-wrap: wrap; gap: 14px; }
+.rbox { width: 92px; display: grid; gap: 6px; justify-items: center; text-align: center; font-size: 12px; }
+.rbox div { width: 72px; height: 52px; background: var(--brand-soft); border: 2px solid var(--brand); }
+.rbox b { font-family: var(--mono); font-size: 11.5px; }
+.rbox span { color: var(--fg-3); }
+
+/* device picker */
+.devices { display: flex; flex-wrap: wrap; gap: 6px; }
+.devices button { font-family: var(--sans); font-size: 13px; font-weight: 500; border: 1px solid var(--line-2); background: var(--panel); color: var(--fg-2); border-radius: 8px; padding: 7px 12px; cursor: pointer; min-height: 36px; }
+.devices button[aria-pressed="true"] { background: var(--brand); border-color: var(--brand); color: var(--on-brand); }
+.devspec { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.devspec .kv { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 2px; }
+.devspec .kv span { font-size: 12px; color: var(--fg-3); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.devspec .kv b { font-size: 15px; font-weight: 600; }
+.devspec .kv code { font-size: 12px; white-space: normal; }
+.devhead { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; }
+.devhead h3 { font-size: 18px; }
+.devhead p { color: var(--fg-2); font-size: 14px; }
+
+.list { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.small { font-size: 13px; color: var(--fg-3); }
+footer { padding-block: 28px 0; border-top: 1px solid var(--line); color: var(--fg-3); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="eyebrow">talentflow-data-plane-frontend · UI audit</div>
+    <h1>TalentFlow UI Size Audit</h1>
+    <p class="lede">Every size, color and control state the app actually uses today, counted from the source, next to the one value each role should use. The last section gives the recommended size for each screen width, from a 320px phone to a 1536px desktop.</p>
+    <div class="facts">
+      <span class="fact"><b>889</b> .tsx / .ts files scanned</span>
+      <span class="fact">Font: <b>Inter</b> (one family)</span>
+      <span class="fact">Tailwind <b>v4</b> · tokens in <code>app/globals.css</code></span>
+      <span class="fact"><b>711</b> &lt;Button&gt; vs <b>2,016</b> raw &lt;button&gt;</span>
+      <span class="fact">Scanned 31 Oct 2026</span>
+    </div>
+  </header>
+
+  <nav class="toc" aria-label="Sections">
+    <ul>
+      <li><a href="#findings">Key findings</a></li>
+      <li><a href="#summary">Summary</a></li>
+      <li><a href="#type">Fonts</a></li>
+      <li><a href="#color">Colors</a></li>
+      <li><a href="#buttons">Buttons</a></li>
+      <li><a href="#inputs">Inputs</a></li>
+      <li><a href="#tabs">Tabs</a></li>
+      <li><a href="#controls">Radio · Checkbox · Switch</a></li>
+      <li><a href="#states">Active &amp; focus</a></li>
+      <li><a href="#radius">Radius &amp; spacing</a></li>
+      <li><a href="#breakpoints">Breakpoints</a></li>
+      <li><a href="#screens">Size per screen</a></li>
+      <li><a href="#not-responsive">Responsive fixes</a></li>
+      <li><a href="#fixes">Global classes</a></li>
+    </ul>
+  </nav>
+
+  <section id="findings" style="border-top:0;padding-top:0">
+    <header>
+      <h2><span class="num">00</span>Key findings &amp; recommended sizes</h2>
+      <p>The short version of everything on this page. The standards below are now global classes in <code>app/globals.css</code> (see section 13), and the fixes marked <b>Fixed</b> are applied in the code.</p>
+    </header>
+    <div class="grid2">
+      <div class="rec warn">
+        <h3>What I found</h3>
+        <ul>
+          <li><b>Buttons:</b> heights of 24, 28, 32, 36, 38, 40 and 44px are all in use. The shared button token is 36px but <code>&lt;Button size="md"&gt;</code> is 40px.</li>
+          <li><b>Inputs:</b> 36px, 38px and 42px were mixed. <b>Fixed:</b> all hand-written fields and the 38px toggles beside them are now 36px.</li>
+          <li><b>13px text on phones:</b> 278 uses in the Organization module. <b>Fixed:</b> removed, so phones show 14px like the JD module.</li>
+          <li><b>Off-scale text:</b> 11px, 10px, 9px, 13px, 14px written by hand. <b>Fixed:</b> mapped to <code>text-xs</code>, <code>text-2xs</code>, <code>text-sm</code>.</li>
+          <li><b>Switch:</b> turned grey when on. <b>Fixed:</b> brand blue, like checkboxes.</li>
+          <li><b>Focus ring:</b> buttons grey, inputs blue. <b>Fixed:</b> one brand-blue ring.</li>
+          <li><b>Radio buttons:</b> the shared RadioGroup component is never used; all radios are hand-built.</li>
+          <li><b>Components:</b> 711 <code>&lt;Button&gt;</code> vs 2,016 raw <code>&lt;button&gt;</code>; 48 <code>&lt;Input&gt;</code> vs 418 raw <code>&lt;input&gt;</code>.</li>
+        </ul>
+      </div>
+      <div class="rec use">
+        <h3>Recommended sizes (all devices)</h3>
+        <ul>
+          <li><b>Font:</b> Inter only. Page title 18px phone → 20px from 640px. Card title 16px. Body, inputs, tabs, buttons 14px everywhere. Meta 12px. Micro 10px only in dense tables.</li>
+          <li><b>Buttons:</b> <code>&lt;Button&gt;</code> md 40px default (full width in phone modal footers), sm 32px for rows and toolbars, lg 44px for login and candidate pages.</li>
+          <li><b>Inputs / selects / search / date:</b> 36px (<code>h-9</code>), the size every shared form component already uses.</li>
+          <li><b>Tabs:</b> pill tabs on list pages (32px), underline tabs on detail pages (job-details pattern).</li>
+          <li><b>Radio / checkbox:</b> 16px on every screen, inside a clickable label.</li>
+          <li><b>Colors:</b> brand blue <code>#0f3c99</code> for every CTA, active and focus state; gray for light, slate for dark.</li>
+          <li><b>Radius:</b> 8px controls, 12px cards, 16px modals, full for pills.</li>
+          <li><b>Spacing:</b> page padding 16px phone, 24px from 640px, 32px from 1536px. Card padding 16 → 20px.</li>
+          <li><b>Breakpoints (global only):</b> 2xs 360 · xs 400 · sm 640 · md 768 · lg 1024 (sidebar appears) · xl 1280 · 2xl 1536. Test at 320px first.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SUMMARY -->
+  <section id="summary">
+    <header>
+      <h2><span class="num">01</span>Summary</h2>
+      <p>The project already has a written standard: the type scale comment in <code>globals.css</code>, <code>components/ui/design-tokens.ts</code>, and the <code>&lt;Button&gt;</code> component with three variants. Most screens follow it. The drift is in hand-written markup that doesn't use the shared components.</p>
+    </header>
+    <div class="grid2">
+      <div class="rec ok">
+        <h3>Already consistent</h3>
+        <ul>
+          <li>One font family (Inter) and two main text sizes: 14px (<code>text-sm</code>, 5,444 uses) and 12px (<code>text-xs</code>, 4,460).</li>
+          <li>Brand blue <code>#0f3c99</code> is the single CTA and active color (2,224 <code>bg-brand-blue</code>).</li>
+          <li>8px radius (<code>rounded-lg</code>) is the default for controls: 3,094 uses.</li>
+          <li>Modals share one shell (<code>AppModal</code>) with a full-screen sheet on phones.</li>
+        </ul>
+      </div>
+      <div class="rec warn">
+        <h3>Where it drifts</h3>
+        <ul>
+          <li>Button heights: 24, 28, 32, 36, <b>38</b>, 40 and 44px are all in use. <code>tokens.buttonPrimary</code> is 36px while <code>&lt;Button size="md"&gt;</code> is 40px.</li>
+          <li>Input heights: 36px (<code>&lt;Input&gt;</code>), 38px (raw <code>py-2</code>), 42px (raw <code>py-2.5</code>). <b>Fixed</b> to 36px.</li>
+          <li>13px text on phones (<code>max-sm:text-[13px]</code>, 278 uses) in the Organization module. <b>Fixed</b> to 14px.</li>
+          <li>Focus ring: <code>&lt;Button&gt;</code> grey, inputs blue. <b>Fixed</b> to one brand-blue ring.</li>
+          <li>Zero uses of the shared <code>RadioGroup</code>; radios are native. Use <code>tf-radio</code>.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- TYPOGRAPHY -->
+  <section id="type">
+    <header>
+      <h2><span class="num">02</span>Fonts &amp; text sizes</h2>
+      <p>Family: <b>Inter</b>, loaded through <code>next/font/google</code> in <code>app/layout.tsx</code>, fallback <code>ui-sans-serif, system-ui</code>. Monospace is the system stack. The bar shows how often each size appears.</p>
+    </header>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Class</th><th class="n">px</th><th class="n">Uses</th><th class="barcell">Share</th><th>Role in the standard</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td><code>text-2xs</code></td><td class="n">10</td><td class="n">932</td><td class="barcell"><div class="bar" style="width:17%"></div></td><td>Micro: badges and counts inside dense tables only</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-xs</code></td><td class="n">12</td><td class="n">4,460</td><td class="barcell"><div class="bar" style="width:82%"></div></td><td>Meta, helper text, table header, badge, small button</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-sm</code></td><td class="n">14</td><td class="n">5,444</td><td class="barcell"><div class="bar" style="width:100%"></div></td><td>Body, table cell, input, button, tab, form label</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-base</code></td><td class="n">16</td><td class="n">700</td><td class="barcell"><div class="bar" style="width:12.9%"></div></td><td>Card / section title, popup title on phone</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-lg</code></td><td class="n">18</td><td class="n">590</td><td class="barcell"><div class="bar" style="width:10.8%"></div></td><td>Page title on phone, popup title on desktop</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-xl</code></td><td class="n">20</td><td class="n">378</td><td class="barcell"><div class="bar" style="width:6.9%"></div></td><td>Page title ≥640px, inline stat value</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-2xl</code></td><td class="n">24</td><td class="n">327</td><td class="barcell"><div class="bar" style="width:6%"></div></td><td>Stat card number</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-3xl</code></td><td class="n">30</td><td class="n">152</td><td class="barcell"><div class="bar" style="width:2.8%"></div></td><td>Big stat / score ring only</td><td><span class="pill keep">Keep</span></td></tr>
+          <tr><td><code>text-4xl … 6xl</code></td><td class="n">36–60</td><td class="n">81</td><td class="barcell"><div class="bar" style="width:1.5%"></div></td><td>Marketing / landing pages only</td><td><span class="pill keep">Marketing only</span></td></tr>
+          <tr><td><code>text-[13px]</code></td><td class="n">13</td><td class="n">290</td><td class="barcell"><div class="bar drift" style="width:5.3%"></div></td><td>278 of these are <code>max-sm:text-[13px]</code> in Organization screens</td><td><span class="pill drift">Replace with text-sm</span></td></tr>
+          <tr><td><code>text-[11px]</code></td><td class="n">11</td><td class="n">64</td><td class="barcell"><div class="bar drift" style="width:1.2%"></div></td><td>Off-scale</td><td><span class="pill drift">→ text-xs or text-2xs</span></td></tr>
+          <tr><td><code>text-[10px]</code></td><td class="n">10</td><td class="n">32</td><td class="barcell"><div class="bar drift" style="width:0.6%"></div></td><td>Same as <code>text-2xs</code></td><td><span class="pill drift">→ text-2xs</span></td></tr>
+          <tr><td><code>text-[9px]</code>, <code>[14px]</code>, rem one-offs</td><td class="n">9–74</td><td class="n">~35</td><td class="barcell"><div class="bar drift" style="width:0.6%"></div></td><td>One-off values</td><td><span class="pill drop">Remove</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid2">
+      <div class="panel">
+        <h3 style="margin-bottom:8px">Live specimen, one size per role</h3>
+        <div class="spec-row"><span class="meta">20 / 600</span><span class="sample" style="font-size:20px;font-weight:600;letter-spacing:-0.01em">Job Openings</span></div>
+        <div class="spec-row"><span class="meta">16 / 600</span><span class="sample" style="font-size:16px;font-weight:600">Senior Backend Engineer</span></div>
+        <div class="spec-row"><span class="meta">14 / 500</span><span class="sample" style="font-size:14px;font-weight:500">Experience level</span></div>
+        <div class="spec-row"><span class="meta">14 / 400</span><span class="sample" style="font-size:14px">Score resumes against this JD using the default weights.</span></div>
+        <div class="spec-row"><span class="meta">12 / 600 caps</span><span class="sample" style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.08em">Candidate · Score · Status</span></div>
+        <div class="spec-row"><span class="meta">12 / 400</span><span class="sample" style="font-size:12px;color:var(--fg-3)">priya.n@example.com · Updated 2h ago</span></div>
+        <div class="spec-row"><span class="meta">10 / 600</span><span class="sample" style="font-size:10px;font-weight:600">87% MATCH</span></div>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:8px">Font weights in use</h3>
+        <div class="tbl" style="border:0">
+          <table>
+            <tbody>
+              <tr><td><code>font-semibold</code> 600</td><td class="n">3,423</td><td class="barcell"><div class="bar" style="width:100%"></div></td></tr>
+              <tr><td><code>font-medium</code> 500</td><td class="n">2,865</td><td class="barcell"><div class="bar" style="width:84%"></div></td></tr>
+              <tr><td><code>font-bold</code> 700</td><td class="n">728</td><td class="barcell"><div class="bar" style="width:21%"></div></td></tr>
+              <tr><td><code>font-normal</code> 400</td><td class="n">82</td><td class="barcell"><div class="bar" style="width:2.4%"></div></td></tr>
+              <tr><td><code>font-extrabold</code> 800</td><td class="n">9</td><td class="barcell"><div class="bar drift" style="width:0.3%"></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small" style="margin-top:10px">Use 400 for body, 500 for buttons/tabs/labels, 600 for titles and table headers, 700 for stat numbers and popup titles. Drop 800.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- COLORS -->
+  <section id="color">
+    <header>
+      <h2><span class="num">03</span>Colors</h2>
+      <p>All brand colors are CSS variables in <code>app/globals.css</code> and exposed as Tailwind utilities (<code>bg-brand-blue</code>, <code>text-brand-cyan</code> …). Counts include bg, text and border uses.</p>
+    </header>
+
+    <h3>Brand</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#0f3c99"></div><div class="info"><b>brand-blue</b><span>#0f3c99 · 5,508 uses</span>Primary CTA, active tab, links</div></div>
+      <div class="sw"><div class="chip" style="background:#0e3b98"></div><div class="info"><b>brand-blue-2</b><span>#0e3b98 · 223 uses</span>Hover of primary</div></div>
+      <div class="sw"><div class="chip" style="background:#079cc4"></div><div class="info"><b>brand-cyan</b><span>#079cc4 · 630 uses</span>Progress, AI, download</div></div>
+      <div class="sw"><div class="chip" style="background:#099ab6"></div><div class="info"><b>brand-teal</b><span>#099ab6 · 200 uses</span>Share, score icons</div></div>
+      <div class="sw"><div class="chip" style="background:#ed881c"></div><div class="info"><b>brand-orange</b><span>#ed881c · 698 uses</span>Highlights, archive</div></div>
+      <div class="sw"><div class="chip" style="background:#d76011"></div><div class="info"><b>brand-orange-deep</b><span>#d76011 · 390 uses</span>Edit, expired status</div></div>
+    </div>
+
+    <h3>Semantic status</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#16a34a"></div><div class="info"><b>success</b><span>#16a34a / bg #dcfce7</span>Completed, passed</div></div>
+      <div class="sw"><div class="chip" style="background:#d97706"></div><div class="info"><b>warning</b><span>#d97706 / bg #fef3c7</span>Pending, quota near</div></div>
+      <div class="sw"><div class="chip" style="background:#dc2626"></div><div class="info"><b>destructive</b><span>#dc2626 / bg #fee2e2</span>Delete, failed</div></div>
+      <div class="sw"><div class="chip" style="background:#2563eb"></div><div class="info"><b>info</b><span>#2563eb / bg #dbeafe</span>Notices</div></div>
+    </div>
+
+    <h3>Neutrals</h3>
+    <div class="swatches">
+      <div class="sw"><div class="chip" style="background:#111827"></div><div class="info"><b>gray-900</b><span>2,880 · headings</span>Light theme text</div></div>
+      <div class="sw"><div class="chip" style="background:#4b5563"></div><div class="info"><b>gray-600</b><span>2,587 · muted text</span></div></div>
+      <div class="sw"><div class="chip" style="background:#6b7280"></div><div class="info"><b>gray-500</b><span>2,483 · subtle text</span></div></div>
+      <div class="sw"><div class="chip" style="background:#9ca3af"></div><div class="info"><b>gray-400</b><span>1,755 · icons, placeholder</span></div></div>
+      <div class="sw"><div class="chip" style="background:#e5e7eb"></div><div class="info"><b>gray-200</b><span>2,107 border uses</span>Dividers</div></div>
+      <div class="sw"><div class="chip" style="background:#f8fafc"></div><div class="info"><b>slate-50</b><span>Page background</span></div></div>
+      <div class="sw"><div class="chip" style="background:#0f172a"></div><div class="info"><b>slate-900</b><span>1,138 · dark surface</span></div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="rec use">
+        <h3>Rule</h3>
+        <ul>
+          <li><b>gray</b> scale for light theme, <b>slate</b> for dark theme (that's how <code>design-tokens.ts</code> pairs them). Keep it.</li>
+          <li>Text: gray-900 heading · gray-700 body · gray-600 muted · gray-500 subtle. Don't use gray-400 for readable text (fails 4.5:1 on white).</li>
+          <li>Only brand-blue is "action". Cyan/teal/orange are accents for icons and charts, not buttons.</li>
+        </ul>
+      </div>
+      <div class="rec warn">
+        <h3>Drift</h3>
+        <ul>
+          <li>Raw Tailwind hues used beside the semantic tokens: <code>text-red-600</code> 185, <code>text-blue-600</code> 119, <code>bg-emerald-500</code> 61, indigo / purple / violet ~200 combined.</li>
+          <li>~40 distinct hex literals in .tsx (e.g. <code>#7c3aed</code>, <code>#e11d48</code>, <code>#0891b2</code>). Map them to the tokens above.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- BUTTONS -->
+  <section id="buttons">
+    <header>
+      <h2><span class="num">04</span>Buttons</h2>
+      <p><code>components/ui/button.tsx</code> defines three variants (primary, secondary, destructive) and three sizes. Only 711 buttons use it; 2,016 are raw <code>&lt;button&gt;</code> with their own padding.</p>
+    </header>
+
+    <div class="demo-surface">
+      <div class="demo" style="margin-bottom:14px">
+        <div class="sizecap"><button class="b pri sm" type="button">Create JD</button><small>sm · 32px · text-xs</small></div>
+        <div class="sizecap"><button class="b pri md" type="button">Create JD</button><small>md · 40px · text-sm</small></div>
+        <div class="sizecap"><button class="b pri lg" type="button">Create JD</button><small>lg · 44px · text-base</small></div>
+      </div>
+      <div class="demo">
+        <div class="sizecap"><button class="b pri md" type="button">Upload</button><small>primary</small></div>
+        <div class="sizecap"><button class="b sec md" type="button">Download</button><small>secondary</small></div>
+        <div class="sizecap"><button class="b des md" type="button">Delete</button><small>destructive</small></div>
+        <div class="sizecap"><button class="b pri md" type="button" disabled style="opacity:.5;cursor:not-allowed">Saving</button><small>disabled · 50%</small></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Height actually used</th><th class="n">Approx. uses</th><th>Where</th></tr></thead>
+          <tbody>
+            <tr><td>24px <code>h-6</code></td><td class="n">25</td><td>Icon buttons in rows</td></tr>
+            <tr><td>28px <code>h-7</code> / <code>py-1 text-xs</code></td><td class="n">80+</td><td>Chips, inline actions</td></tr>
+            <tr><td>32px <code>h-8</code> / <code>py-1.5 text-xs</code></td><td class="n">440</td><td><code>&lt;Button size="sm"&gt;</code> (308), toolbars</td></tr>
+            <tr><td>36px <code>py-2 text-sm</code> / <code>h-9</code></td><td class="n">300+</td><td><code>tokens.buttonPrimary</code>, most raw buttons</td></tr>
+            <tr><td>38px <code>h-[38px]</code></td><td class="n">7</td><td>Matching a 38px input</td></tr>
+            <tr><td>40px <code>h-10</code> / <code>py-2.5 text-sm</code></td><td class="n">270+</td><td><code>&lt;Button size="md"&gt;</code>, modal footers</td></tr>
+            <tr><td>44px <code>h-11</code> / <code>py-3</code></td><td class="n">90</td><td><code>size="lg"</code>, auth, candidate pages</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="demo-surface">
+        <p style="font-size:13px;color:#4b5563;margin-bottom:10px">The same "primary" action at three heights that ship today:</p>
+        <div class="demo">
+          <div class="sizecap"><button class="b pri raw36" type="button">Save</button><small>36 · tokens</small></div>
+          <div class="sizecap"><button class="b pri raw38" type="button">Save</button><small>38 · h-[38px]</small></div>
+          <div class="sizecap"><button class="b pri md" type="button">Save</button><small>40 · Button md</small></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="rec use">
+      <h3>Use only these</h3>
+      <ul>
+        <li><b>sm 32px</b> (<code>h-8 px-3 text-xs</code>): table row actions, toolbar filters, chips. Global class <code>tf-btn tf-btn-sm</code>.</li>
+        <li><b>md 40px</b> (<code>h-10 px-4 text-sm</code>): default everywhere, including every phone button. Global class <code>tf-btn tf-btn-md</code>.</li>
+        <li><b>lg 44px</b> (<code>h-11 px-6 text-base</code>): candidate-facing pages, login, single main CTA on a phone screen.</li>
+        <li>Icon-only: 32×32 (<code>tf-icon-btn</code>) with a 16px icon. Gap between adjacent buttons 8px (<code>gap-2</code>).</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- INPUTS -->
+  <section id="inputs">
+    <header>
+      <h2><span class="num">05</span>Inputs &amp; selects</h2>
+      <p>48 fields use <code>&lt;Input&gt;</code> (36px). 418 are raw <code>&lt;input&gt;</code>, most with <code>py-2 text-sm</code> (38px) or <code>py-2.5</code> (42px).</p>
+    </header>
+    <div class="demo-surface">
+      <div class="demo">
+        <div class="sizecap"><input id="i36" class="inp" style="height:36px" placeholder="Standard" aria-label="36px input"><small>36 · standard tf-input / &lt;Input&gt;</small></div>
+        <div class="sizecap"><input id="i38" class="inp" style="height:38px" placeholder="Raw py-2" aria-label="38px input"><small>38 · raw py-2 (toolbar search)</small></div>
+        <div class="sizecap"><input id="i40" class="inp" style="height:42px" placeholder="Raw py-2.5" aria-label="42px input"><small>42 · raw py-2.5 (now 36)</small></div>
+      </div>
+      <div class="demo" style="margin-top:16px">
+        <input id="irow" class="inp" style="height:36px;width:240px" placeholder="Search jobs…" aria-label="Search example">
+        <button class="b sec raw36" type="button">Filters</button>
+        <button class="b pri md" type="button">Create Job</button>
+        <small style="font-size:12px;color:#6b7280">← 36px search and filters, 40px main action</small>
+      </div>
+    </div>
+    <div class="rec use">
+      <h3>Use only these</h3>
+      <ul>
+        <li>Input, select, date field, search: <b>36px</b> (<code>tf-input</code> = <code>h-9 px-3 text-sm rounded-lg</code>), the same as <code>&lt;Input&gt;</code>, <code>&lt;Select&gt;</code>, <code>&lt;SearchableSelect&gt;</code>, <code>&lt;DateField&gt;</code>. Dense table filters: 32px (<code>tf-input tf-input-sm</code>).</li>
+        <li>Textarea: <code>tf-textarea</code> (<code>px-3 py-2 text-sm</code>), min 3 rows.</li>
+        <li>Label <code>text-sm font-medium</code>, 6px above the field; helper/error <code>text-xs</code>, 4px below.</li>
+        <li>Keep 14px text on phones. The <code>&lt;Input&gt;</code> comment notes iOS zoom is handled by the viewport's <code>maximumScale</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- TABS -->
+  <section id="tabs">
+    <header>
+      <h2><span class="num">06</span>Tabs</h2>
+      <p>Three tab styles ship today. Click them; they work.</p>
+    </header>
+    <div class="grid3">
+      <div class="panel" style="display:grid;gap:10px">
+        <h3>A · Pill (PageToolbar.Tabs)</h3>
+        <div class="demo-surface" style="padding:12px">
+          <div class="tabs-pill" role="tablist" aria-label="Pill tabs example">
+            <button role="tab" aria-selected="true" type="button">Active<span class="cnt">24</span></button>
+            <button role="tab" aria-selected="false" type="button">Draft<span class="cnt">6</span></button>
+            <button role="tab" aria-selected="false" type="button">Archived<span class="cnt">3</span></button>
+          </div>
+        </div>
+        <p class="small"><code>tf-tab-pill</code> + <code>tf-tab-pill-active</code> = <code>px-3 py-1.5 text-sm rounded-lg</code>, 32px. Used on job openings, the approved reference.</p>
+        <span class="pill keep">Standard · list pages</span>
+      </div>
+      <div class="panel" style="display:grid;gap:10px">
+        <h3>B · Segmented (ui/tabs.tsx)</h3>
+        <div class="demo-surface" style="padding:12px">
+          <div class="tabs-seg" role="tablist" aria-label="Segmented tabs example">
+            <button role="tab" aria-selected="true" type="button">Overview</button>
+            <button role="tab" aria-selected="false" type="button">Skills</button>
+            <button role="tab" aria-selected="false" type="button">History</button>
+          </div>
+        </div>
+        <p class="small">Radix <code>TabsList h-9</code>, grey track, white active (7 uses). Good for 2–4 view switches inside a card.</p>
+        <span class="pill keep">Inside cards only</span>
+      </div>
+      <div class="panel" style="display:grid;gap:10px">
+        <h3>C · Underline</h3>
+        <div class="demo-surface" style="padding:12px">
+          <div class="tabs-line" role="tablist" aria-label="Underline tabs example">
+            <button role="tab" aria-selected="true" type="button">Details</button>
+            <button role="tab" aria-selected="false" type="button">Scorecard</button>
+            <button role="tab" aria-selected="false" type="button">Notes</button>
+          </div>
+        </div>
+        <p class="small"><code>tf-tab-line</code> + <code>tf-tab-line-active</code>. The approved job-details pattern (<code>detailTabClass</code>): <code>px-3 sm:px-4 py-3 text-sm border-b-2</code>.</p>
+        <span class="pill keep">Standard · detail pages</span>
+      </div>
+    </div>
+    <div class="rec use">
+      <h3>Responsive rule for tabs</h3>
+      <ul>
+        <li>List pages use pill tabs (A); detail pages use underline tabs (C); segmented (B) only for 2–4 view switches inside a card.</li>
+        <li>Same size on every screen. When tabs don't fit, the row scrolls sideways (<code>overflow-x-auto scrollbar-hide</code>), exactly as on job-details.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- CONTROLS -->
+  <section id="controls">
+    <header>
+      <h2><span class="num">07</span>Radio buttons, checkboxes, switches</h2>
+      <p>The app draws these natively and tints them with <code>accent-color: var(--control-accent)</code> (brand blue). Counts: radio 20 native + 17 custom <code>role="radio"</code> + <b>0</b> <code>&lt;RadioGroupItem&gt;</code>; checkbox 104 native + 7 <code>&lt;Checkbox&gt;</code>; switch 2.</p>
+    </header>
+    <div class="grid2">
+      <div class="demo-surface" style="display:grid;gap:12px">
+        <p style="font-size:13px;font-weight:600;color:#111827">Desktop · 16px control, 8px gap, text-sm label</p>
+        <div class="ctl" role="radiogroup" aria-label="Currency desktop">
+          <label><input type="radio" name="cur" id="cur-inr" checked> INR (₹)</label>
+          <label><input type="radio" name="cur" id="cur-usd"> USD ($)</label>
+        </div>
+        <div class="ctl">
+          <label><input type="checkbox" id="cb1" checked> Include archived</label>
+          <label><input type="checkbox" id="cb2"> Only shortlisted</label>
+        </div>
+        <div class="ctl"><label><button class="sw-toggle" role="switch" aria-checked="true" type="button" aria-label="Email alerts"></button> Email alerts · 32×18</label></div>
+      </div>
+      <div class="demo-surface" style="display:grid;gap:12px">
+        <p style="font-size:13px;font-weight:600;color:#111827">Larger touch variant (only if a screen asks for it)</p>
+        <div class="ctl big" role="radiogroup" aria-label="Currency phone">
+          <label><input type="radio" name="cur2" id="cur2-inr" checked> INR (₹)</label>
+          <label><input type="radio" name="cur2" id="cur2-usd"> USD ($)</label>
+        </div>
+        <div class="ctl big">
+          <label><input type="checkbox" id="cb3" checked> Include archived</label>
+        </div>
+        <div class="ctl big"><label><button class="sw-toggle lg" role="switch" aria-checked="false" type="button" aria-label="Email alerts phone"></button> Email alerts · 44×24</label></div>
+      </div>
+    </div>
+    <div class="rec use">
+      <h3>Use only these</h3>
+      <ul>
+        <li>Radio &amp; checkbox: 16px on every screen (<code>tf-radio</code> / <code>tf-checkbox</code>, brand-blue tint). Checkbox radius 4px; radio round.</li>
+        <li>Always wrap in a <code>&lt;label class="tf-choice"&gt;</code> so the text is clickable too.</li>
+        <li>Checked = brand blue fill with white mark. Unchecked border gray-300. Disabled 50% opacity.</li>
+        <li>Switch 32×18. <b>Fixed:</b> <code>&lt;Switch&gt;</code> is now brand blue when on.</li>
+        <li>Option cards (choose a plan, choose a template): <code>tf-option-card</code>, selected adds <code>tf-option-card-active</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- STATES -->
+  <section id="states">
+    <header>
+      <h2><span class="num">08</span>Active, hover, focus, selected</h2>
+      <p>Which state style is used for what, with counts.</p>
+    </header>
+    <div class="demo-surface">
+      <div class="states">
+        <div class="state"><button class="b pri sm" type="button">Active</button><small>Strong active: bg-brand-blue text-white · 176</small></div>
+        <div class="state"><span class="b sm" style="background:rgba(15,60,153,.1);color:#0f3c99">Selected row / menu</span><small>Soft active: bg-brand-blue/10 text-brand-blue · 247</small></div>
+        <div class="state"><button class="b sec sm" type="button" style="background:#f3f4f6">Hover</button><small>Hover: bg-gray-100 (secondary, tabs)</small></div>
+        <div class="state"><input class="inp ring-blue" id="focus-demo" style="height:32px;width:170px;border-color:rgba(15,60,153,.4)" value="Focused input" aria-label="Focused input example"><small>Input focus: ring-2 brand-blue/40 · 182</small></div>
+        <div class="state"><button class="b pri sm ring-grey" type="button">Button focus</button><small>Button focus: grey ring (--ring #374151)</small></div>
+        <div class="state"><button class="b pri sm" type="button" disabled style="opacity:.5;cursor:not-allowed">Disabled</button><small>Disabled: opacity-50, not-allowed</small></div>
+      </div>
+    </div>
+    <div class="rec use">
+      <h3>Rule</h3>
+      <ul>
+        <li>One active color: brand blue. Strong (filled) for tabs and segmented choices, soft (10% tint) for selected rows, sidebar items and menu items.</li>
+        <li>One focus ring for everything. <b>Fixed:</b> <code>--ring</code> is now brand blue, so <code>&lt;Button&gt;</code>, tabs and inputs match. Class: <code>tf-focus</code>.</li>
+        <li>Classes: <code>tf-active</code> (strong) and <code>tf-selected</code> (soft).</li>
+        <li>Hover never changes size or weight, only background.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- RADIUS & SPACING -->
+  <section id="radius">
+    <header>
+      <h2><span class="num">09</span>Radius &amp; spacing</h2>
+    </header>
+    <div class="panel">
+      <div class="radius-row">
+        <div class="rbox"><div style="border-radius:4px"></div><b>rounded · 4</b><span>798 · table chips</span></div>
+        <div class="rbox"><div style="border-radius:6px"></div><b>md · 6</b><span>601 · drift</span></div>
+        <div class="rbox"><div style="border-radius:8px"></div><b>lg · 8</b><span>3,094 · controls</span></div>
+        <div class="rbox"><div style="border-radius:12px"></div><b>xl · 12</b><span>2,129 · cards</span></div>
+        <div class="rbox"><div style="border-radius:16px"></div><b>2xl · 16</b><span>592 · modals</span></div>
+        <div class="rbox"><div style="border-radius:999px"></div><b>full</b><span>2,230 · pills, avatars</span></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Spacing</th><th>Most used</th><th>Standard</th></tr></thead>
+          <tbody>
+            <tr><td>Gap between items</td><td><code>gap-2</code> 2,990 · <code>gap-3</code> 2,009</td><td>8px inside groups, 12px / 16px between groups</td></tr>
+            <tr><td>Card padding</td><td><code>p-4</code> 1,548 · <code>p-6</code> 749</td><td><code>p-4 sm:p-5</code> (16 → 20)</td></tr>
+            <tr><td>Page padding</td><td>—</td><td><code>px-4 py-4 sm:px-6 sm:py-6</code></td></tr>
+            <tr><td>Modal body</td><td><code>p-4 sm:p-6</code></td><td>16 phone → 24 desktop</td></tr>
+            <tr><td>Table cell</td><td><code>px-3 py-2.5</code></td><td>12 × 10 → 44px rows</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="rec use">
+        <h3>Use only these radii</h3>
+        <ul>
+          <li>4px: badges inside dense tables, checkbox</li>
+          <li>8px: buttons, inputs, tabs, dropdowns</li>
+          <li>12px: cards, panels, toolbars</li>
+          <li>16px: modals, large hero cards</li>
+          <li>full: status pills, avatars, switches</li>
+          <li>Fold <code>rounded-md</code> (6px) into 8px.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- BREAKPOINTS -->
+  <section id="breakpoints">
+    <header>
+      <h2><span class="num">10</span>Breakpoints in use</h2>
+      <p>All screen sizes are now declared once, in the <code>@theme</code> block of <code>app/globals.css</code> (<code>--breakpoint-2xs</code> … <code>--breakpoint-2xl</code>), and used only by name. The 33 hand-written widths in components were converted, and the raw <code>@media (…px)</code> rules in <code>globals.css</code> now read <code>theme(--breakpoint-*)</code>. Exceptions: the login/sign-up theme (<code>components/auth/authTheme.ts</code>) keeps its own widths, and <code>useIsMobile()</code> keeps 768px in JavaScript (same value as <code>md</code>). The app shell switches at <b>lg 1024px</b>: below it the sidebar becomes a drawer behind the hamburger in <code>Header.tsx</code>. <code>useIsMobile()</code> uses 768px.</p>
+    </header>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Prefix</th><th>Width</th><th class="n">Uses</th><th class="barcell">Share</th><th>Verdict</th></tr></thead>
+        <tbody>
+          <tr><td><code>sm:</code></td><td>≥ 640px</td><td class="n">9,761</td><td class="barcell"><div class="bar" style="width:100%"></div></td><td><span class="pill keep">Main phone → tablet switch</span></td></tr>
+          <tr><td><code>md:</code></td><td>≥ 768px</td><td class="n">1,079</td><td class="barcell"><div class="bar" style="width:11%"></div></td><td><span class="pill keep">Tablet portrait</span></td></tr>
+          <tr><td><code>lg:</code></td><td>≥ 1024px</td><td class="n">1,562</td><td class="barcell"><div class="bar" style="width:16%"></div></td><td><span class="pill keep">Sidebar appears</span></td></tr>
+          <tr><td><code>xl:</code></td><td>≥ 1280px</td><td class="n">214</td><td class="barcell"><div class="bar" style="width:2.2%"></div></td><td><span class="pill keep">Wider grids</span></td></tr>
+          <tr><td><code>2xl:</code></td><td>≥ 1536px</td><td class="n">49</td><td class="barcell"><div class="bar" style="width:0.5%"></div></td><td><span class="pill keep">Large desktop</span></td></tr>
+          <tr><td><code>max-sm:</code></td><td>&lt; 640px</td><td class="n">619</td><td class="barcell"><div class="bar" style="width:6.3%"></div></td><td><span class="pill keep">Phone-only overrides</span></td></tr>
+          <tr><td><code>2xs:</code> / <code>max-2xs:</code></td><td>≥ 360px</td><td class="n">8</td><td class="barcell"><div class="bar" style="width:0.2%"></div></td><td><span class="pill keep">New global · small phones</span></td></tr>
+          <tr><td><code>xs:</code> / <code>max-xs:</code></td><td>≥ 400px</td><td class="n">21</td><td class="barcell"><div class="bar" style="width:0.3%"></div></td><td><span class="pill keep">New global · large phones</span></td></tr>
+          <tr><td>Hand-written <code>min-[…px]:</code> / <code>max-[…px]:</code></td><td>360–480 mixed</td><td class="n">0</td><td class="barcell"></td><td><span class="pill keep">Fixed · 33 replaced</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SCREENS -->
+  <section id="screens">
+    <header>
+      <h2><span class="num">11</span>Recommended size for each screen</h2>
+      <p>Pick a screen to see the values to use there. These follow the JD module (the approved responsive reference) and the type scale in <code>globals.css</code>. Test at 320px first: if it works there, it works on every phone.</p>
+    </header>
+    <div class="panel" style="display:grid;gap:16px">
+      <div class="devices" role="group" aria-label="Screen size">
+        <button type="button" data-dev="0" aria-pressed="true">320 · small phone</button>
+        <button type="button" data-dev="1" aria-pressed="false">375–430 · phone</button>
+        <button type="button" data-dev="2" aria-pressed="false">640 · large phone / landscape</button>
+        <button type="button" data-dev="3" aria-pressed="false">768 · tablet</button>
+        <button type="button" data-dev="4" aria-pressed="false">1024 · tablet landscape / laptop</button>
+        <button type="button" data-dev="5" aria-pressed="false">1280 · laptop</button>
+        <button type="button" data-dev="6" aria-pressed="false">1536+ · desktop</button>
+      </div>
+      <div class="devhead"><h3 id="dev-name"></h3><p id="dev-note"></p></div>
+      <div class="devspec" id="dev-spec"></div>
+    </div>
+
+    <h3>All screens side by side</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Element</th><th>&lt; 640 phone</th><th>640–1023 tablet</th><th>1024–1279 laptop</th><th>≥ 1280 desktop</th></tr></thead>
+        <tbody>
+          <tr><td>Page title</td><td>18px / 600</td><td>20px / 600</td><td>20px / 600</td><td>20px / 600</td></tr>
+          <tr><td>Popup title</td><td>16px / 700</td><td>18px / 700</td><td>18px / 700</td><td>18px / 700</td></tr>
+          <tr><td>Card / section title</td><td>16px / 600</td><td>16px / 600</td><td>16px / 600</td><td>16px / 600</td></tr>
+          <tr><td>Body, table, input, tab</td><td>14px</td><td>14px</td><td>14px</td><td>14px</td></tr>
+          <tr><td>Meta / helper / badge</td><td>12px</td><td>12px</td><td>12px</td><td>12px</td></tr>
+          <tr><td>Primary button</td><td>40px, full width in footers</td><td>40px, auto width</td><td>40px</td><td>40px</td></tr>
+          <tr><td>Compact button</td><td>32px</td><td>32px</td><td>32px</td><td>32px</td></tr>
+          <tr><td>Input / select</td><td>36px</td><td>36px</td><td>36px</td><td>36px</td></tr>
+          <tr><td>Tabs</td><td>Pill 32px / underline 44px, row scrolls sideways</td><td>Same</td><td>Same</td><td>Same</td></tr>
+          <tr><td>Radio / checkbox</td><td>16px</td><td>16px</td><td>16px</td><td>16px</td></tr>
+          <tr><td>Page padding</td><td>16px</td><td>24px</td><td>24px</td><td>24px (32 at ≥1536)</td></tr>
+          <tr><td>Card padding</td><td>16px</td><td>20px</td><td>20px</td><td>20px</td></tr>
+          <tr><td>Grid columns (cards)</td><td>1</td><td>2</td><td>3</td><td>3–4</td></tr>
+          <tr><td>Stat cards</td><td>2 per row</td><td>2–3</td><td>4</td><td>4</td></tr>
+          <tr><td>Modal</td><td>Full-screen sheet</td><td>Centered, max 448 / 672 / 896</td><td>Same</td><td>Same</td></tr>
+          <tr><td>Table</td><td>Card list or sideways scroll</td><td>Sideways scroll, sticky first column</td><td>Full table</td><td>Full table</td></tr>
+          <tr><td>Sidebar</td><td>Drawer</td><td>Drawer</td><td>Visible</td><td>Visible</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="small">Why these sizes work on phones: WCAG 2.2 AA requires touch targets of at least 24px. 32–40px controls with an 8px gap clear that on every device, and keeping one size per role on all screens matches the approved JD module.</p>
+  </section>
+
+  <!-- NOT RESPONSIVE -->
+  <section id="not-responsive">
+    <header>
+      <h2><span class="num">12</span>Responsive fixes, page by page</h2>
+      <p>I scanned the 536 components that are actually used (113 unused files skipped) and checked every flag by hand. Everything marked <b>Fixed</b> is now in the code. Only classes changed: no handlers, options or behaviour. Desktop (≥1024px) looks the same as before; the changes apply below that.</p>
+    </header>
+
+    <div class="facts">
+      <span class="fact"><span class="pill keep">Fixed</span> <b>17</b> components that broke below 640px</span>
+      <span class="fact"><span class="pill keep">Fixed</span> <b>1</b> more from the 320px check (expired-account screen)</span>
+      <span class="fact"><span class="pill keep">Fixed</span> <b>278</b> 13px phone texts · <b>123</b> off-scale sizes · <b>182</b> 38/42px controls</span>
+      <span class="fact"><span class="pill keep">OK</span> <b>10</b> flags turned out fine on closer look</span>
+    </div>
+
+    <h3>A · Fixed: broke on phone or tablet</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Page (URL)</th><th>File</th><th>Was</th><th>Now</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="6"><b>AI Interview: candidate result details</b><br><code>/recruitment/ai-interviews/[id]/results/details</code><br><span class="small">also opened from AI Interviews list and Job details</span></td>
+            <td><code>evaluation-dashboard/OverviewSection.tsx</code></td><td>No responsive classes. 2- and 3-column grids, 32px card padding, 36px name at 320px.</td><td><code>tf-grid-2</code> / <code>tf-grid-3</code>; padding 16 → 24 → 32; name 24 → 30 → 36px</td></tr>
+          <tr><td><code>evaluation-dashboard/ReportView.tsx</code></td><td>No responsive classes. 2-column grids.</td><td><code>tf-grid-2</code>; padding and headings scale</td></tr>
+          <tr><td><code>evaluation-dashboard/AnalysisView.tsx</code></td><td>4 stat tiles in one row.</td><td><code>tf-grid-stats</code> (2 → 4); skills list 1 → 2 columns</td></tr>
+          <tr><td><code>EvaluationBreakdown</code> · <code>TimedEvaluationBreakdown</code> · <code>SkillRadarChart</code> · <code>OverallSummary</code></td><td>Fixed 3- and 2-column grids.</td><td>Stack below 400px / 640px</td></tr>
+          <tr><td><code>tabs/EvaluationTab.tsx</code></td><td>24px padding on phones.</td><td>16px on phones, 24px from 640px</td></tr>
+          <tr><td><code>DetailedSkillsTable.tsx</code> · <code>SkillCard.tsx</code></td><td>24px padding, 24px heading.</td><td>16 → 24px padding; 18 → 24px heading</td></tr>
+          <tr><td rowspan="2"><b>Job details: Applicants tab</b><br><code>/recruitment/job-details</code></td>
+            <td><code>JobApplicants.tsx</code></td><td>5 stat cards in one row, header and search row side by side.</td><td><code>tf-grid-stats-5</code> (2 → 3 → 5); header and search stack on phones</td></tr>
+          <tr><td><code>ResumeAnalysis.tsx</code></td><td>4-column score grid, score panel beside it, tabs row.</td><td><code>tf-grid-stats</code>; score panel stacks below 1024px; tabs scroll; resume preview padding 48 → 16px on phones</td></tr>
+          <tr><td><b>Resume detail</b><br><code>/recruitment/resume-database</code> → open a resume</td>
+            <td><code>ResumeDetailView.tsx</code></td><td>3-, 2- and 4-column grids.</td><td><code>tf-grid-3</code>, <code>tf-grid-2</code>, metadata 2 → 4</td></tr>
+          <tr><td><b>Team management: usage analytics</b><br><code>/organization/team-management</code></td>
+            <td><code>teams/TeamUsageAnalytics.tsx</code></td><td>Loading rows: fixed 224px name + 5 columns.</td><td>Stack on phones, 3 → 5 columns</td></tr>
+          <tr><td><b>Audits: verification</b><br><code>/audits/verification</code></td>
+            <td><code>audits/verification/page.tsx</code></td><td>Expected / actual side by side.</td><td><code>tf-grid-2</code>; padding 16 → 24px</td></tr>
+          <tr><td><b>AI Interview config: clusters</b></td>
+            <td><code>ai-interview/AIInterviewClusters.tsx</code></td><td>440px popover.</td><td><code>tf-fit-screen</code> (never wider than screen − 32px)</td></tr>
+          <tr><td><b>AI Talent Match</b><br><code>/recruitment/ai-talent-match</code></td>
+            <td><code>AITalentMatchPage.tsx</code></td><td>320px popover.</td><td><code>tf-fit-screen</code></td></tr>
+          <tr><td><b>All dashboard pages</b> (plan expired)</td>
+            <td><code>subscription/ExpiredAccountBlock.tsx</code></td><td>32px side padding on phones.</td><td>16px on phones, 32px from 640px</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>B · Checked and already fine</h3>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Where</th><th>Why it's fine</th></tr></thead>
+        <tbody>
+          <tr><td>Login, Sign up, Forgot password</td><td>Styled by <code>components/auth/authTheme.ts</code>, which has its own phone breakpoints down to 380px.</td></tr>
+          <tr><td>Candidate proctoring warnings (AI interview and assessment)</td><td>Already <code>w-[calc(100%-2rem)]</code>, so they fit any phone.</td></tr>
+          <tr><td>Invite dialog tables</td><td>Email and Source columns already hide below 640/768px.</td></tr>
+          <tr><td>Question distribution popover, assessment progress legend</td><td>Narrow content; fits at 320px.</td></tr>
+          <tr><td>Team unit activity log</td><td>Single column list.</td></tr>
+          <tr><td>Tab rows with <code>scrollbar-hide</code></td><td>Same sideways-scrolling pattern as the approved job-details tabs, so left as is.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rec ok">
+      <h3>Already fine before</h3>
+      <ul>
+        <li>Job openings, JD creation, JD list and job details (the approved reference).</li>
+        <li>Resume scoring, resume database list, AI talent match list, Assessments, Settings, Subscription, Reports, Masters, Dashboard: wide tables already scroll inside their own wrapper.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- GLOBAL CLASSES -->
+  <section id="fixes">
+    <header>
+      <h2><span class="num">13</span>Global classes &amp; what changed</h2>
+      <p>Every standard on this page is now a named class at the end of <code>app/globals.css</code> ("TALENTFLOW UI STANDARD"). They sit in <code>@layer components</code>, so a Tailwind utility next to them still wins (<code>tf-input w-48</code>). <code>&lt;Button&gt;</code>, <code>&lt;Input&gt;</code>, <code>&lt;Select&gt;</code> and <code>&lt;DateField&gt;</code> stay the first choice; use the classes on hand-written elements.</p>
+    </header>
+
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Role</th><th>Class</th><th>Size</th></tr></thead>
+        <tbody>
+          <tr><td>Page title / description</td><td><code>tf-page-title</code> · <code>tf-page-desc</code></td><td>18 → 20px / 14px</td></tr>
+          <tr><td>Popup title / subtitle</td><td><code>tf-popup-title</code> · <code>tf-popup-subtitle</code></td><td>16 → 18px / 12 → 14px</td></tr>
+          <tr><td>Section / card title</td><td><code>tf-section-title</code></td><td>16px 600</td></tr>
+          <tr><td>Row / card name</td><td><code>tf-row-title</code> (600) · <code>tf-row-name</code> (500)</td><td>14px</td></tr>
+          <tr><td>Eyebrow</td><td><code>tf-eyebrow</code></td><td>12px caps</td></tr>
+          <tr><td>Table header · small bold label</td><td><code>tf-th</code> (inside &lt;th&gt;) · <code>tf-caption</code></td><td>12px 600, as job-openings</td></tr>
+          <tr><td>Form label</td><td><code>tf-label</code></td><td>14px 500</td></tr>
+          <tr><td>Body text</td><td><code>tf-body</code> (gray-700) · <code>tf-body-secondary</code> (gray-600) · <code>tf-body-muted</code> (gray-500)</td><td>14px</td></tr>
+          <tr><td>Meta · hint</td><td><code>tf-meta</code> (gray-500) · <code>tf-hint</code> (gray-400)</td><td>12px</td></tr>
+          <tr><td>Micro</td><td><code>tf-micro</code> (600) · <code>tf-micro-hint</code> (gray-400)</td><td>10px</td></tr>
+          <tr><td>Stat number</td><td><code>tf-stat-value</code></td><td>20px bold</td></tr>
+          <tr><td>Button</td><td><code>tf-btn</code> + <code>tf-btn-primary | secondary | destructive</code> + <code>tf-btn-sm | md | lg</code> (what <code>&lt;Button&gt;</code> renders)</td><td>32 / 40 / 44px</td></tr>
+          <tr><td>Icon button</td><td><code>tf-icon-btn</code></td><td>32×32</td></tr>
+          <tr><td>Input · small input · textarea</td><td><code>tf-input</code> · <code>tf-input tf-input-sm</code> · <code>tf-textarea</code></td><td>36 / 32px</td></tr>
+          <tr><td>Radio · checkbox · its label</td><td><code>tf-radio</code> · <code>tf-checkbox</code> · <code>tf-choice</code></td><td>16px</td></tr>
+          <tr><td>Option card</td><td><code>tf-option-card</code> + <code>tf-option-card-active</code></td><td></td></tr>
+          <tr><td>Pill tab (list pages)</td><td><code>tf-tab-pill</code> + <code>tf-tab-pill-active</code></td><td>32px</td></tr>
+          <tr><td>Underline tab (detail pages)</td><td><code>tf-tab-line</code> + <code>tf-tab-line-active</code> / <code>tf-tab-line-disabled</code> · count <code>tf-tab-count</code> + <code>tf-tab-count-active</code></td><td>44px</td></tr>
+          <tr><td>Active · selected · focus</td><td><code>tf-active</code> · <code>tf-selected</code> · <code>tf-focus</code></td><td></td></tr>
+          <tr><td>Card surfaces</td><td><code>tf-card</code> (gray-300 hairline) · <code>tf-card-soft</code> (gray-100 hairline) · <code>tf-panel</code> (plain bordered, no shadow) · <code>tf-card-muted</code> (nested, slate-50)</td><td>12px radius</td></tr>
+          <tr><td>Page shell (job-openings layout)</td><td><code>tf-page</code> (grey page area) · <code>tf-page-sheet</code> (white sheet) · <code>tf-page-pad</code> (page padding without a sheet)</td><td>16 → 32px padding</td></tr>
+          <tr><td>Card padding</td><td><code>tf-card-pad</code></td><td>16 → 20px</td></tr>
+          <tr><td>Table cells</td><td><code>tf-td</code> · <code>tf-th-cell</code> (+ <code>tf-th</code> for header text)</td><td>12 × 10px</td></tr>
+          <tr><td>Tables on phones and tablets (below 1024px)</td><td><code>&lt;MobileRecordList&gt;</code> + <code>&lt;MobileRecordCard&gt;</code> (<code>components/ui/mobile-record-card.tsx</code>) · classes <code>tf-record-*</code>, <code>tf-stat-chip-info | success | warning | danger | neutral</code>, <code>tf-icon-btn-outline</code> · table wrapper <code>DESKTOP_TABLE_ONLY</code> (<code>hidden lg:block</code>) · ID chips <code>tf-id-chip</code> or the existing badge components in <code>idBadge</code></td><td>job-openings card</td></tr>
+          <tr><td>Badge</td><td><code>tf-badge</code></td><td>12px</td></tr>
+          <tr><td>Responsive grids</td><td><code>tf-grid-2</code> (1 → 2 at 640) · <code>tf-grid-split</code> (1 → 2 at 1024, main + side) · <code>tf-grid-3</code> (1 → 2 → 3) · <code>tf-grid-4</code> (1 → 2 → 4) · <code>tf-grid-stats</code> (2 → 4) · <code>tf-grid-stats-3</code> · <code>tf-grid-stats-5</code> (2 → 3 → 5)</td><td>gap 16px</td></tr>
+          <tr><td>Popover width</td><td><code>tf-fit-screen</code></td><td>max screen − 32px</td></tr>
+          <tr><td>Screen sizes</td><td><code>2xs:</code> · <code>xs:</code> · <code>sm:</code> · <code>md:</code> · <code>lg:</code> · <code>xl:</code> · <code>2xl:</code> (and <code>max-*:</code>) · in CSS <code>theme(--breakpoint-*)</code></td><td>360 / 400 / 640 / 768 / 1024 / 1280 / 1536</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Changed across the app</h3>
+    <ol class="list">
+      <li><b>Focus ring:</b> <code>--ring</code> is brand blue (dark: lifted blue), so buttons, tabs and inputs show one ring.</li>
+      <li><b>Switch:</b> on-state is brand blue.</li>
+      <li><b>13px phone text:</b> 278 <code>max-sm:text-[13px]</code> removed (Organization module now 14px like JD).</li>
+      <li><b>Off-scale text:</b> <code>text-[11px]</code> → <code>text-xs</code> (64), <code>text-[10px]</code>/<code>[9px]</code> → <code>text-2xs</code> (39), <code>text-[13px]</code>/<code>[14px]</code> → <code>text-sm</code> (20).</li>
+      <li><b>Control height:</b> 120 hand-written fields from 38/42px to 36px (<code>h-9</code>), and 62 <code>h-[38px]</code> toggles/buttons beside them to <code>h-9</code>.</li>
+      <li><b>Responsive:</b> the 18 components in table A.</li>
+      <li><b>Organization module converted to global classes:</b> 540 text styles in 33 files (<code>tf-meta</code> 113, <code>tf-th</code> 83, <code>tf-hint</code> 60, <code>tf-label</code> 52, <code>tf-section-title</code> 46, <code>tf-row-title</code> 46, <code>tf-body-muted</code> 42, <code>tf-body-secondary</code> 30, <code>tf-row-name</code> 21, <code>tf-body</code> 20, <code>tf-micro-hint</code> 19, <code>tf-eyebrow</code> 5, <code>tf-caption</code> 3) and 12 hand-written inputs/textareas → <code>tf-input</code> / <code>tf-textarea</code>. Same look in light and dark; the only visible change is the inputs' focus ring, now the standard brand-blue one.</li>
+      <li><b>Assessments module converted to global classes:</b> 511 text styles in 25 files (<code>tf-meta</code> 88, <code>tf-body-secondary</code> 82, <code>tf-th</code> 67, <code>tf-row-name</code> 65, <code>tf-body-muted</code> 54, <code>tf-body</code> 45, <code>tf-label</code> 34, <code>tf-hint</code> 30, <code>tf-row-title</code> 28, <code>tf-section-title</code> 21, <code>tf-caption</code> 1, <code>tf-micro-hint</code> 1) and 19 hand-written inputs/textarea → <code>tf-input</code> / <code>tf-textarea</code> (pager boxes keep their 32/36px size). Buttons were left for a separate button pass. Covers the list, create, details, results, result details, audit trail, edit/configure/assign/preview modals and <code>components/assessments/*</code>. The candidate-facing test screens are not part of this module.</li>
+      <li><b>AI Interviews module converted to global classes:</b> 723 text styles in 49 files (<code>tf-meta</code> 159, <code>tf-th</code> 108, <code>tf-hint</code> 90, <code>tf-body-muted</code> 83, <code>tf-row-title</code> 70, <code>tf-body-secondary</code> 61, <code>tf-micro-hint</code> 53, <code>tf-body</code> 25, <code>tf-row-name</code> 24, <code>tf-section-title</code> 20, <code>tf-label</code> 12, <code>tf-caption</code> 12, <code>tf-eyebrow</code> 6) and 19 hand-written inputs/textarea → <code>tf-input</code> / <code>tf-textarea</code>. Covers the list, JD selection, config wizard (clusters, preview), details, results, candidate result details with the evaluation dashboards, audit trail and invite tracking. The 9 candidate-facing interview screens (live interview, webcam, avatar, proctoring overlays) are not part of this module.</li>
+      <li><b>JD module converted to global classes:</b> 362 text styles in 26 files (<code>tf-body-secondary</code> 74, <code>tf-meta</code> 51, <code>tf-body</code> 49, <code>tf-body-muted</code> 46, <code>tf-th</code> 40, <code>tf-row-title</code> 35, <code>tf-label</code> 26, <code>tf-row-name</code> 22, <code>tf-section-title</code> 11, <code>tf-micro-hint</code> 7, <code>tf-hint</code> 1) and 24 hand-written inputs → <code>tf-input</code>. Covers job openings (and config), job details with its tabs and applicants, JD creation, JD details, JD list, version history and the archive / delete / disable / edit-blocked popups.</li>
+      <li><b>Resume scoring module converted to global classes:</b> 255 text styles in 13 files (<code>tf-meta</code> 51, <code>tf-th</code> 49, <code>tf-body-secondary</code> 37, <code>tf-section-title</code> 28, <code>tf-body-muted</code> 23, <code>tf-body</code> 20, <code>tf-row-name</code> 19, <code>tf-label</code> 13, <code>tf-row-title</code> 8, <code>tf-hint</code> 5, <code>tf-micro-hint</code> 2) and 7 hand-written inputs/textareas → <code>tf-input</code> / <code>tf-textarea</code>. Covers resume scoring, its JD selection, scored resumes table, candidate scoring detail, detailed scorecard, scored resume detail and the scoring progress, export and score-table popups.</li>
+      <li><b>Resumes module converted to global classes:</b> 401 text styles in 35 files (<code>tf-meta</code> 87, <code>tf-body</code> 77, <code>tf-body-secondary</code> 56, <code>tf-body-muted</code> 48, <code>tf-section-title</code> 38, <code>tf-row-name</code> 27, <code>tf-label</code> 21, <code>tf-row-title</code> 20, <code>tf-th</code> 14, <code>tf-hint</code> 9, <code>tf-eyebrow</code> 2, <code>tf-caption</code> 1, <code>tf-micro-hint</code> 1) and 16 hand-written inputs/textareas → <code>tf-input</code> / <code>tf-textarea</code>. Covers resume database, my resumes, resume detail, resume view, folders, upload and upload history, versions and version compare, duplicates, contact candidate and apply-to-job popups.</li>
+      <li><b>AI Talent Match module converted to global classes:</b> 201 text styles in 14 files (<code>tf-th</code> 48, <code>tf-meta</code> 45, <code>tf-body</code> 25, <code>tf-body-secondary</code> 20, <code>tf-label</code> 18, <code>tf-body-muted</code> 12, <code>tf-section-title</code> 10, <code>tf-row-title</code> 10, <code>tf-row-name</code> 6, <code>tf-hint</code> 3, <code>tf-micro-hint</code> 3, <code>tf-caption</code> 1) and 8 hand-written inputs → <code>tf-input</code>. Covers the AI Talent Match page, jobs list, settings, progress panel, version history, the select-job / select-source / confirm popups and the shared invite dialog (<code>components/talent-match-invite</code>).</li>
+      <li><b>Dashboard module converted to global classes:</b> 152 text styles in 8 files (<code>tf-meta</code> 47, <code>tf-body-secondary</code> 32, <code>tf-row-name</code> 22, <code>tf-th</code> 18, <code>tf-row-title</code> 17, <code>tf-section-title</code> 6, <code>tf-body-muted</code> 3, <code>tf-body</code> 3, <code>tf-micro-hint</code> 2, <code>tf-label</code> 1, <code>tf-hint</code> 1). No hand-written inputs. Covers the dashboard page, <code>components/dashboard</code> and the Admin, Recruiter, Billing manager, Standard user, Viewer and Enhanced dashboards.</li>
+      <li><b>Reports module converted to global classes:</b> 233 text styles in 9 files (<code>tf-th</code> 47, <code>tf-meta</code> 38, <code>tf-body-muted</code> 36, <code>tf-body-secondary</code> 29, <code>tf-row-name</code> 27, <code>tf-body</code> 18, <code>tf-hint</code> 12, <code>tf-label</code> 12, <code>tf-eyebrow</code> 5, <code>tf-row-title</code> 4, <code>tf-caption</code> 3, <code>tf-section-title</code> 1, <code>tf-micro-hint</code> 1) and 6 hand-written inputs → <code>tf-input</code>. Covers reports (activity logs, performance reports / Analytics, team usage), audits (activity, trail, verification) and the compliance logs.</li>
+      <li><b>Subscription module converted to global classes:</b> 367 text styles in 20 files (<code>tf-meta</code> 67, <code>tf-row-title</code> 65, <code>tf-th</code> 55, <code>tf-body-secondary</code> 41, <code>tf-label</code> 24, <code>tf-body</code> 23, <code>tf-body-muted</code> 22, <code>tf-row-name</code> 17, <code>tf-micro-hint</code> 17, <code>tf-section-title</code> 16, <code>tf-hint</code> 9, <code>tf-caption</code> 6, <code>tf-eyebrow</code> 5) and 17 hand-written inputs/textarea → <code>tf-input</code> / <code>tf-textarea</code>. Fields with a deliberate green (usage form) or red (dispute) focus colour keep it. Covers current plan, billing history, payment methods, refund / dispute / unit-dispute history, usage & quotas, the usage dashboards, invoice and downgrade popups, admin-assigned plan, plan-change review and the expired / suspended account screens.</li>
+      <li><b>Settings module converted to global classes:</b> 122 text styles in 7 files (<code>tf-body-secondary</code> 27, <code>tf-section-title</code> 24, <code>tf-meta</code> 19, <code>tf-row-title</code> 16, <code>tf-body-muted</code> 12, <code>tf-label</code> 7, <code>tf-row-name</code> 6, <code>tf-th</code> 6, <code>tf-body</code> 3, <code>tf-hint</code> 2) and 5 hand-written inputs → <code>tf-input</code>. Covers general settings, security, permissions, integrations, branding, API management and legal.</li>
+      <li><b>Help module converted to global classes:</b> 326 text styles in 10 files (<code>tf-body-secondary</code> 102, <code>tf-th</code> 53, <code>tf-meta</code> 44, <code>tf-row-name</code> 30, <code>tf-body</code> 25, <code>tf-row-title</code> 20, <code>tf-body-muted</code> 19, <code>tf-section-title</code> 13, <code>tf-label</code> 9, <code>tf-hint</code> 8, <code>tf-caption</code> 3) and 11 hand-written inputs/textareas → <code>tf-input</code> / <code>tf-textarea</code> (their grey / indigo focus rings now the standard brand blue). Covers help, help desk, notifications, support tickets, the floating help button, feature tour and keyboard-shortcut helper.</li>
+      <li><b>Shared pieces converted to global classes:</b> 313 text styles in 67 files (header, sidebar, global search, global popups, HR question bank, Masters, pagination, search/filter bars and <code>components/ui</code>) and 31 hand-written inputs/textareas → <code>tf-input</code> / <code>tf-textarea</code>. The job-openings toolbar search (<code>components/ui/page-toolbar.tsx</code>) is left as it was, so the approved JD screen keeps its border.</li>
+      <li><b>&lt;Button&gt; now uses the global classes:</b> <code>components/ui/button.tsx</code> renders <code>tf-btn</code> + <code>tf-btn-primary | secondary | destructive</code> + <code>tf-btn-sm | md | lg</code> for all 703 buttons. To keep every button looking the same, 135 classes that never took effect (mostly <code>px-2</code> / <code>px-0</code> losing to the size padding, plus a <code>hidden</code>, shadows and fonts) were removed from 122 buttons, and 44 buttons got the component’s <code>disabled:</code> / <code>hover:</code> / <code>focus-visible:</code> class re-added so their states stay as they are. Deliberate change: 36 permission-locked buttons now actually show the “not allowed” cursor their code asked for.</li>
+      <li><b>Hand-written CTA buttons use the global classes:</b> 140 <code>&lt;button&gt;</code>s (71 primary, 63 secondary, 6 destructive) now carry <code>tf-btn tf-btn-&lt;variant&gt;</code>. Each keeps its own height, padding, shadow, background, radius and hover as extra classes (they override the global ones), and neutral classes (<code>whitespace-normal</code>, <code>shadow-none</code>, <code>gap-0</code>, <code>justify-start</code>, <code>font-normal</code>) cancel anything <code>tf-btn</code> would otherwise add, so they look as before. New on them: the standard brand-blue focus ring and 50% fade when disabled where they had none.</li>
+      <li><b>Tabs, radios, checkboxes and cards use the global classes:</b> job-openings pill tabs (<code>PageToolbar.Tabs</code>) → <code>tf-tab-pill</code>; job-details underline tabs and their count chips → <code>tf-tab-line</code> / <code>tf-tab-count</code>; the active state of 19 other underline tab strips → <code>tf-tab-line-active</code> (their own sizes and idle colours kept); 43 checkboxes and 10 radios → <code>tf-checkbox</code> / <code>tf-radio</code> (native controls: light mode keeps the browser accent as before, dark mode keeps the custom-drawn box); 387 card surfaces → <code>tf-card</code> 51, <code>tf-card-soft</code> 190, <code>tf-panel</code> 136, <code>tf-card-muted</code> 10. All global classes copy the dark-mode layer’s exact colours, so light and dark look as before; the one dark-mode difference is that clickable cards with a hover border now show it in dark mode too (it was always overridden before).</li>
+      <li><b>Candidate portal converted to global classes:</b> 184 text styles in 33 files, 2 inputs/textareas, 14 CTA buttons (5 primary, 9 destructive, own size and colour kept), 2 checkboxes and 1 card panel. Covers the assessment and AI-interview portals (<code>/assessment/…</code>, <code>/ai-interview/[token]</code>), mobile verification (<code>/verify/[token]</code>), <code>components/candidate</code> with the question views, and the live interview screen, webcam, avatar and proctoring overlays.</li>
+      <li><b>Login screens converted where Tailwind is used:</b> 3 text styles (plan selection) and the terms checkbox → <code>tf-checkbox</code>. The rest of the login, sign-up, reset- and set-password screens is styled by their own theme (<code>components/auth/authTheme.ts</code>, 213 <code>tf-auth-*</code> class uses written as plain CSS), which global Tailwind classes cannot reach; it stays as it is.</li>
+      <li><b>Marketing site converted where it uses the product’s grey styles:</b> 28 text styles in 11 files and 4 panels → <code>tf-panel</code> (pricing page and the public home page). Its navy design palette (111 <code>mkt-*</code> class uses) and button-style links stay as they are.</li>
+      <li><b>Preview and style-guide pages converted:</b> 76 text styles, 1 textarea and 2 buttons across <code>/style-guide</code>, <code>/ui-reference</code>, <code>/tmp-invite-preview</code>, <code>/tmp-coding-picker-preview</code> and <code>/tmp-modal-preview</code>.</li>
+      <li><b>Uniform pass — every page now follows the one design (looks changed where pages differed):</b> page titles 96 → <code>tf-page-title</code>; page shell 273 → <code>tf-page</code> / <code>tf-page-sheet</code> / <code>tf-page-pad</code>; responsive grids 364 → <code>tf-grid-*</code> (one column pattern per column count, gap 16px); table cells 1,753 → <code>tf-td</code> / <code>tf-th-cell</code> (one-sided indents kept); status badges 351 → <code>tf-badge</code> (own colours kept); unique cards 489 → <code>tf-card-soft</code> 305 / <code>tf-panel</code> 184; underline tab strips 22 → full <code>tf-tab-line</code>; remaining grey text 1,651 → nearest role. The app now has 10,816 uses of the global classes.</li>
+      <li><b>One card design on phones and tablets:</b> the shared card now follows the job-openings card exactly (checkbox column on the left; ID chip · title · pills on one wrapping line; icon lines; “Label: value” fields; small coloured count chips; 28px outlined eye / ⋮ buttons bottom-right; expanded panels under them), and every table shows cards below 1024px and the table from 1024px. All the older hand-built phone lists (job details, JD details, resume table, scored resumes, resume scoring, assessment results and version history, AI talent match, AI match / interview invites, track invites, AI interview results, support tickets, roles, teams, users, usage history, billing, audit trail, timeline popup) were rebuilt on it — 62 files use it. Grid-view display options are unchanged.</li>
+      <li><b>Tables become cards on phones:</b> every data table now shows its rows as job-openings-style cards below 768px (checkbox, ID chip and status pills, title with the row’s own buttons/menu, icon details, “Label: value” fields, coloured stat chips) and the table from 768px. 50 tables converted across 42 files; the rest already had a phone list or are loading skeletons, export templates, popover or nested detail tables. Same data, handlers, menus and permissions as the table.</li>
+      <li><b>Status (before the uniform pass):</b> a final app-wide dry run found 0 remaining text styles that can convert without changing the look; the app now has 5,798 uses of the global classes.</li>
+      <li><b>Not converted (on purpose):</b> tab strips with their own active colour (resume analysis) and step indicators; cards that also set a competing background, radius, border, shadow or ring; the candidate portal and login screens, the marketing site and the preview / style-guide pages (separate designs); text with a hover or conditional colour.</li>
+      <li><b>Screen sizes:</b> declared once in <code>@theme</code>; 33 hand-written widths converted (<code>min-[360/375px]</code> → <code>2xs</code>, <code>min-[380/400/420px]</code> → <code>xs</code>, <code>min-[480px]</code> → <code>sm</code>, <code>max-[359px]</code> → <code>max-2xs</code>, <code>max-[399/400px]</code> → <code>max-xs</code>); 15 raw <code>@media</code> rules in <code>globals.css</code> now use <code>theme(--breakpoint-*)</code>.</li>
+    </ol>
+    <p class="small">Not changed on purpose: <code>&lt;Button&gt;</code> sizes, raw button paddings, raw colours and radius. Changing those touches the look of the approved JD screens, so ask before doing them.</p>
+  </section>
+
+  <footer>
+    Counts come from a static scan of <code>app/</code> and <code>components/</code> (excluding <code>node_modules</code>, <code>.next</code>, tests). A class counted once can render many times, and a few dynamic class strings may be missed, so treat counts as relative sizes.
+  </footer>
+</div>
+
+<script>
+(function () {
+  var devices = [
+    { name: '320px · small phone', note: 'iPhone SE (1st gen), small Androids. The width you test in Chrome DevTools first.',
+      kv: [['Page title','18px / 600','text-lg'],['Body & inputs','14px','text-sm'],['Button','40px, full width in footers','h-10 w-full'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','Row scrolls sideways','overflow-x-auto scrollbar-hide'],['Radio / checkbox','16px','tf-radio / tf-checkbox'],['Page padding','16px','px-4'],['Card padding','16px','p-4'],['Grid','1 column; stat cards 2','grid-cols-1 / grid-cols-2'],['Modal','Full-screen sheet','AppModal mobileSheet'],['Table','Card list or sideways scroll','overflow-x-auto']] },
+    { name: '375–430px · phone', note: 'iPhone 12–16, Pixel, Galaxy S. Most real phone traffic lands here.',
+      kv: [['Page title','18px / 600','text-lg'],['Body & inputs','14px','text-sm'],['Button','40px, full width in footers','h-10'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','Row scrolls sideways','overflow-x-auto scrollbar-hide'],['Radio / checkbox','16px','tf-radio / tf-checkbox'],['Page padding','16px','px-4'],['Card padding','16px','p-4'],['Grid','1 column; stat cards 2','min-[400px]: can go 2 for small tiles'],['Modal','Full-screen sheet','max-sm:h-[100dvh]'],['Table','Card list or sideways scroll','tf-table-shell']] },
+    { name: '640px · large phone / landscape', note: 'The sm breakpoint. Phones in landscape, small tablets. Layout starts to go side by side.',
+      kv: [['Page title','20px / 600','sm:text-xl'],['Body & inputs','14px','text-sm'],['Button','40px, auto width','sm:w-auto'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','32px pill / underline','tf-tab-pill / tf-tab-line'],['Radio / checkbox','16px','tf-radio'],['Page padding','24px','sm:px-6'],['Card padding','20px','sm:p-5'],['Grid','2 columns','sm:grid-cols-2'],['Modal','Centered, 448 / 672 / 896 max','sm:max-w-md / 2xl / 4xl'],['Toolbar','Search + filters in one row','sm:flex-row']] },
+    { name: '768px · tablet', note: 'iPad portrait. useIsMobile() turns false here. Sidebar is still a drawer.',
+      kv: [['Page title','20px / 600','text-xl'],['Body & inputs','14px','text-sm'],['Button','40px','h-10'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','32px pill / underline','tf-tab-pill / tf-tab-line'],['Radio / checkbox','16px','tf-radio'],['Page padding','24px','px-6'],['Card padding','20px','p-5'],['Grid','2 columns; stat cards 3','md:grid-cols-3 for stats'],['Modal','Centered','sm:max-w-*'],['Table','Sideways scroll, sticky first column','sticky left-0']] },
+    { name: '1024px · tablet landscape / small laptop', note: 'The lg breakpoint. Sidebar becomes visible, so content width drops by the sidebar width.',
+      kv: [['Page title','20px / 600','text-xl'],['Body & inputs','14px','text-sm'],['Button','40px','h-10'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','32px pill / underline','tf-tab-pill / tf-tab-line'],['Radio / checkbox','16px','tf-radio'],['Page padding','24px','px-6'],['Card padding','20px','p-5'],['Grid','3 columns; stat cards 4','lg:grid-cols-3 / 4'],['Sidebar','Visible','lg:flex'],['Table','Full table','—']] },
+    { name: '1280px · laptop', note: 'Most office laptops (1366 and 1440 included).',
+      kv: [['Page title','20px / 600','text-xl'],['Body & inputs','14px','text-sm'],['Button','40px','h-10'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','32px pill / underline','tf-tab-pill / tf-tab-line'],['Radio / checkbox','16px','tf-radio'],['Page padding','24px','px-6'],['Card padding','20px','p-5'],['Grid','3–4 columns','xl:grid-cols-4'],['Detail pages','Two panes (list + detail)','xl:grid-cols-[minmax(0,1fr)_360px]'],['Table','Full table','—']] },
+    { name: '1536px+ · desktop', note: 'Full HD monitors. Cap the content width instead of making text bigger.',
+      kv: [['Page title','20px / 600 (24 allowed)','2xl:text-2xl optional'],['Body & inputs','14px','text-sm'],['Button','40px','h-10'],['Compact button','32px','tf-btn-sm'],['Input / select','36px','tf-input'],['Tabs','32px pill / underline','tf-tab-pill / tf-tab-line'],['Radio / checkbox','16px','tf-radio'],['Page padding','32px','2xl:px-8'],['Card padding','20–24px','p-5 / p-6'],['Grid','4 columns','2xl:grid-cols-4'],['Content width','Max ~1600px, centered','max-w-[1600px] mx-auto'],['Table','Full table','—']] }
+  ];
+  var btns = document.querySelectorAll('.devices button');
+  function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
+  function show(i) {
+    var d = devices[i];
+    document.getElementById('dev-name').textContent = d.name;
+    document.getElementById('dev-note').textContent = d.note;
+    document.getElementById('dev-spec').innerHTML = d.kv.map(function (k) {
+      return '<div class="kv"><span>' + esc(k[0]) + '</span><b>' + esc(k[1]) + '</b><code>' + esc(k[2]) + '</code></div>';
+    }).join('');
+    btns.forEach(function (b) { b.setAttribute('aria-pressed', b.dataset.dev === String(i) ? 'true' : 'false'); });
+    try { localStorage.setItem('tf-dev', String(i)); } catch (e) {}
+  }
+  btns.forEach(function (b) { b.addEventListener('click', function () { show(+b.dataset.dev); }); });
+  var start = 0;
+  try { var s = localStorage.getItem('tf-dev'); if (s !== null && devices[+s]) start = +s; } catch (e) {}
+  show(start);
+
+  document.querySelectorAll('[role="tablist"]').forEach(function (list) {
+    list.querySelectorAll('[role="tab"]').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        list.querySelectorAll('[role="tab"]').forEach(function (t) { t.setAttribute('aria-selected', t === tab ? 'true' : 'false'); });
+      });
+    });
+  });
+  document.querySelectorAll('.sw-toggle').forEach(function (t) {
+    t.addEventListener('click', function (e) { e.preventDefault(); t.setAttribute('aria-checked', t.getAttribute('aria-checked') === 'true' ? 'false' : 'true'); });
+  });
+})();
+</script>
+</body>
+</html>

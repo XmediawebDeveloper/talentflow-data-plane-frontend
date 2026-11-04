@@ -30,7 +30,7 @@ const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModa
         </div>
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-slate-950">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm p-5 mb-6">
+          <div className="tf-card-soft p-5 mb-6">
             <div className="flex items-center gap-3 mb-4">
               <Skeleton className="w-10 h-10 rounded-full" />
               <div className="space-y-2">
@@ -257,13 +257,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 size="sm"
                 onClick={onBack}
                 aria-label="Back"
-                className="px-2 flex-shrink-0"
+                className="flex-shrink-0"
               >
                 <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
               </Button>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload Details</h2>
-                <p className="tf-card-desc truncate">
+                <p className="tf-body-secondary truncate">
                   {fileName} • {formatDate(uploadDate)}
                 </p>
               </div>
@@ -273,7 +273,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               size="sm"
               onClick={onClose}
               aria-label="Close"
-              className="px-2 flex-shrink-0"
+              className="flex-shrink-0"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
@@ -291,7 +291,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-success rounded-lg flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Completed</span>
+                <span className="tf-meta lg:text-sm truncate">Completed</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-success">{completed.length}</div>
             </div>
@@ -306,7 +306,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-warning rounded-lg flex items-center justify-center flex-shrink-0">
                   <Copy className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Duplicates</span>
+                <span className="tf-meta lg:text-sm truncate">Duplicates</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-warning">{duplicated.length}</div>
             </div>
@@ -321,7 +321,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <GitBranch className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Versioned</span>
+                <span className="tf-meta lg:text-sm truncate">Versioned</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-purple-700">{versioned.length}</div>
             </div>
@@ -336,7 +336,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-destructive rounded-lg flex items-center justify-center flex-shrink-0">
                   <AlertCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Errors</span>
+                <span className="tf-meta lg:text-sm truncate">Errors</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-destructive">{errors.length}</div>
             </div>
@@ -351,7 +351,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Pending</span>
+                <span className="tf-meta lg:text-sm truncate">Pending</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-gray-700">{pending.length}</div>
             </div>
@@ -361,7 +361,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-xs lg:text-sm text-gray-700 truncate">Success Rate</span>
+                <span className="tf-meta lg:text-sm truncate">Success Rate</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-blue-700">{successRate}%</div>
             </div>
@@ -369,7 +369,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
 
           {/* Active Filter Indicator */}
           {activeFilter && (
-            <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-white border border-gray-200 rounded-lg">
+            <div className="tf-panel flex items-center gap-2 mt-3 px-3 py-2">
               <span className="tf-meta">Filtering by:</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                 activeFilter === 'completed' ? 'bg-success-subtle text-success' :
@@ -430,7 +430,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
           })()}
 
           <div className="flex items-center justify-between mb-4 sm:mb-6">
-            <h3 className="text-sm sm:text-base lg:text-lg text-gray-900">File-by-File Status</h3>
+            <h3 className="tf-body sm:text-base lg:text-lg">File-by-File Status</h3>
             <Button
               variant="secondary"
               size="sm"
@@ -467,21 +467,21 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedCompleted.includes(item.fileName)}
                           onChange={() => handleCompletedSelect(item.fileName)}
-                          className="w-4 h-4 text-success border-gray-300 rounded focus:ring-success-line cursor-pointer flex-shrink-0"
+                          className="tf-checkbox focus:ring-success-line"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="tf-body truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-xs text-success px-2 sm:px-3 py-0.5 sm:py-1 bg-success-subtle rounded-full">
+                        <span className="tf-badge text-success sm:px-3 sm:py-1 bg-success-subtle">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
+                        <Button variant="secondary" size="sm" aria-label="View">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </Button>
                       </div>
@@ -526,13 +526,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedDuplicated.includes(item.fileName)}
                           onChange={() => handleDuplicatedSelect(item.fileName)}
-                          className="w-4 h-4 text-warning border-gray-300 rounded focus:ring-warning-line cursor-pointer flex-shrink-0"
+                          className="tf-checkbox focus:ring-warning-line"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="tf-body truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
                             <div className="text-xs text-warning mt-1 truncate">
@@ -542,10 +542,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-xs text-warning px-2 sm:px-3 py-0.5 sm:py-1 bg-warning-subtle rounded-full">
+                        <span className="tf-badge text-warning sm:px-3 sm:py-1 bg-warning-subtle">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
+                        <Button variant="secondary" size="sm" aria-label="View">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </Button>
                       </div>
@@ -590,13 +590,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedVersioned.includes(item.fileName)}
                           onChange={() => handleVersionedSelect(item.fileName)}
-                          className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500 cursor-pointer flex-shrink-0"
+                          className="tf-checkbox focus:ring-purple-500"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="tf-body truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
                             <div className="text-xs text-purple-700 mt-1 truncate">
@@ -611,10 +611,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-xs text-purple-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 rounded-full">
+                        <span className="tf-badge text-purple-700 sm:px-3 sm:py-1 bg-purple-100">
                           {getStatusText(item.status)}
                         </span>
-                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
+                        <Button variant="secondary" size="sm" aria-label="View">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </Button>
                       </div>
@@ -648,17 +648,17 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedErrors.includes(item.fileName)}
                           onChange={() => handleErrorSelect(item.fileName)}
-                          className="w-4 h-4 text-destructive border-gray-300 rounded focus:ring-destructive-line cursor-pointer flex-shrink-0"
+                          className="tf-checkbox focus:ring-destructive-line"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="tf-body truncate">{item.fileName}</div>
                           {item.errorMessage && (
                             <div className="tf-error mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>
-                      <span className="tf-error px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="tf-badge text-destructive sm:px-3 sm:py-1 bg-destructive-subtle mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -674,7 +674,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                   <div className="w-6 h-6 bg-gray-500 rounded-md flex items-center justify-center">
                     <Clock className="w-4 h-4 text-white" />
                   </div>
-                  <h4 className="text-sm sm:text-base text-gray-700">
+                  <h4 className="tf-body sm:text-base">
                     Pending Uploads ({pending.length})
                   </h4>
                 </div>
@@ -691,17 +691,17 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedPending.includes(item.fileName)}
                           onChange={() => handlePendingSelect(item.fileName)}
-                          className="w-4 h-4 text-gray-600 border-gray-300 rounded focus:ring-gray-500 cursor-pointer flex-shrink-0"
+                          className="tf-checkbox focus:ring-gray-500"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-900 truncate">{item.fileName}</div>
+                          <div className="tf-body truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="tf-meta-strong mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="tf-meta mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-xs text-gray-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="tf-badge text-gray-700 sm:px-3 sm:py-1 bg-gray-100 mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -719,8 +719,8 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                       <AlertCircle className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h4 className="text-sm sm:text-base text-gray-900 font-medium">Retry Failed or Pending Uploads</h4>
-                      <p className="tf-card-desc mt-0.5">
+                      <h4 className="tf-row-name sm:text-base">Retry Failed or Pending Uploads</h4>
+                      <p className="tf-body-secondary mt-0.5">
                         {errors.length > 0 && pending.length > 0
                           ? `${errors.length} failed and ${pending.length} pending upload${pending.length > 1 ? 's' : ''}`
                           : errors.length > 0
@@ -731,7 +731,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                <div className="tf-grid-2">
                   {/* Select All Failed */}
                   {errors.length > 0 && (
                     <Button
@@ -868,7 +868,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
         {/* Footer */}
         <div className="border-t border-gray-200 px-4 sm:px-6 lg:px-8 py-3 sm:py-5 bg-white">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-2 sm:gap-0">
-            <p className="tf-card-desc text-center sm:text-left">
+            <p className="tf-body-secondary text-center sm:text-left">
               Showing detailed status for <span className="text-gray-900">{totalProcessed}</span> file{totalProcessed !== 1 ? 's' : ''}
             </p>
           </div>

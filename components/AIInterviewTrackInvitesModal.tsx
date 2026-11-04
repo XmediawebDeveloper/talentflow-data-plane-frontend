@@ -479,7 +479,7 @@ export default function AIInterviewTrackInvitesModal({
                 <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                <h2 className="tf-section-title truncate tracking-tight">
                   {embedded ? (
                     // Embedded as the details page's Invitation Status tab —
                     // headed with that tab's own name.
@@ -535,7 +535,7 @@ export default function AIInterviewTrackInvitesModal({
                 variant="secondary"
                 size="sm"
                 onClick={onClose}
-                className="px-2"
+               
                 aria-label="Close"
               >
                 <X className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -703,7 +703,7 @@ export default function AIInterviewTrackInvitesModal({
               className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
               aria-live="polite"
             >
-              <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+              <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 tf-body-secondary shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                 <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                 Refreshing invite statuses...
               </span>
@@ -814,7 +814,7 @@ export default function AIInterviewTrackInvitesModal({
             {totalPages > 1 && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -829,13 +829,13 @@ export default function AIInterviewTrackInvitesModal({
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="tf-input w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-center"
                   />
                 </div>
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className={pageBtn}>
                   Prev
                 </button>
-                <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
+                <span className="px-1 sm:px-2 tf-body-secondary whitespace-nowrap">
                   Page {page} of {totalPages}
                 </span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={pageBtn}>
@@ -855,7 +855,7 @@ export default function AIInterviewTrackInvitesModal({
                 onClick={() => { if (onInviteMore) onInviteMore(); }}
                 disabled={jdDisabled}
                 aria-disabled={!onInviteMore || undefined}
-                className={!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined}
+                className={`${(!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
                 title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !onInviteMore ? inviteMoreDeniedReason : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
@@ -907,8 +907,8 @@ export default function AIInterviewTrackInvitesModal({
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
         <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
-          <h3 className="tf-section-title">Edit Invitation</h3>
-          <Button variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} aria-label="Close" className="px-2">
+          <h3 className="tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
+          <Button variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} aria-label="Close" className="">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -917,13 +917,13 @@ export default function AIInterviewTrackInvitesModal({
             Update the candidate&apos;s details below. Saving will send them a fresh invitation link automatically.
           </p>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+            <label className="block tf-caption mb-1">Candidate name</label>
             <input
               type="text"
               value={editForm.candidate_name}
               onChange={(e) => setEditForm((f) => ({ ...f, candidate_name: e.target.value }))}
               aria-invalid={editNameError ? 'true' : undefined}
-              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full px-3 h-9 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 editNameError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -932,13 +932,13 @@ export default function AIInterviewTrackInvitesModal({
             {editNameError && <p className="mt-1 tf-error">{editNameError}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+            <label className="block tf-caption mb-1">Candidate email</label>
             <input
               type="email"
               value={editForm.candidate_email}
               onChange={(e) => setEditForm((f) => ({ ...f, candidate_email: e.target.value }))}
               aria-invalid={editEmailError ? 'true' : undefined}
-              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full px-3 h-9 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 editEmailError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'

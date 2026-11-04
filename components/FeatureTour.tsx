@@ -113,7 +113,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
                 {currentStep === 3 && '📊'}
                 {currentStep === 4 && '⌨️'}
               </div>
-              <p className="tf-card-desc">Feature illustration</p>
+              <p className="tf-body-secondary">Feature illustration</p>
             </div>
           </div>
 

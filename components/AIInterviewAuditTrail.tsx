@@ -300,7 +300,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
     <>
       {/* Same heading treatment as every other tab's — title + count, right
           above the search/filter bar. */}
-      <h2 className="tf-section-title mb-3">
+      <h2 className="tf-section-title sm:text-lg tracking-tight mb-3">
         Activity Log ({total})
       </h2>
 
@@ -318,7 +318,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
       className="mb-0"
       filterPanel={
       <div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        <div className="tf-grid-4">
           <div>
             <label htmlFor="audit-date-from" className="block tf-label mb-1.5">Date From</label>
             <DateField
@@ -455,7 +455,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
             <div>
               <h2 className="tf-section-title">Activity Log</h2>
-              <p className="tf-card-desc mt-1">
+              <p className="tf-body-secondary mt-1">
                 Complete activity log for AI interviews and candidates
               </p>
             </div>
@@ -466,7 +466,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               disabled={activities.length === 0}
               aria-disabled={!canExport || undefined}
               title={canExport ? undefined : 'You do not have permission to export AI interviews'}
-              className={canExport ? undefined : 'opacity-50 cursor-not-allowed'}
+              className={`${(canExport ? undefined : 'opacity-50 cursor-not-allowed') ?? ''} disabled:opacity-50`}
               icon={<Download className="w-4 h-4" />}
             >
               Export Logs{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
@@ -499,7 +499,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="relative flex items-start gap-4 p-4 rounded-lg border border-gray-100 bg-white"
+                  className="tf-panel relative flex items-start gap-4 p-4"
                 >
                   {i < 5 && (
                     <div className="absolute left-[26px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
@@ -569,7 +569,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                 /* Card view — one card per entry, the Candidate Results grid's
                    card shell. Clicking a card opens its Details inside it, the
                    same toggle the timeline row uses. */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+                <div className="tf-grid-4 pt-2">
                   {activities.map((activity, index) => {
                     const colors = ACTIVITY_COLORS[activity.activity_type] || ACTIVITY_COLORS.config_created;
                     const icon = ACTIVITY_ICONS[activity.activity_type] || <Activity className="w-4 h-4" />;
@@ -607,7 +607,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                           </div>
                         </div>
 
-                        <p className="tf-meta-strong line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
+                        <p className="tf-meta line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
                           {activity.description}
                         </p>
 
@@ -711,7 +711,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                                 {getCategoryLabel(activity.category)}
                               </span>
                             </div>
-                            <p className="tf-card-desc [overflow-wrap:anywhere]">{activity.description}</p>
+                            <p className="tf-body-secondary [overflow-wrap:anywhere]">{activity.description}</p>
                             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 tf-meta">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
@@ -746,7 +746,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
                     {isExpanded && (
                       <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm [overflow-wrap:anywhere]">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="tf-grid-2">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
                             <span className="ml-2 text-gray-900">{activity.activity_type.replace(/_/g, ' ')}</span>
@@ -785,13 +785,13 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
 
         {/* Footer with Pagination */}
         <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="tf-card-desc">
+          <div className="tf-body-secondary">
             Showing {activities.length} of {total} activity entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline tf-card-desc whitespace-nowrap">Go to</span>
+                <span className="hidden sm:inline tf-body-secondary whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -806,7 +806,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
                   }}
                   onBlur={commitGoToPage}
                   aria-label="Go to page"
-                  className="w-14 h-8 px-2 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  className="tf-input w-14 h-8 px-2 text-center rounded-md"
                 />
               </div>
               <button
@@ -817,7 +817,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               >
                 <ChevronLeft className="w-4 h-4" />
               </button>
-              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+              <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
               </span>
               <button

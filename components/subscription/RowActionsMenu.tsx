@@ -52,7 +52,7 @@ export type RowAction = {
 export function RowActions({
   actions,
   menuLabel = "Actions",
-  emptyFallback = <span className="text-xs text-gray-400 dark:text-slate-500">—</span>,
+  emptyFallback = <span className="tf-hint">—</span>,
 }: {
   actions: RowAction[];
   menuLabel?: string;
@@ -89,7 +89,7 @@ export function RowActions({
               type="button"
               onClick={a.onClick}
               disabled={a.disabled || a.loading}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue disabled:opacity-50"
+              className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue whitespace-normal gap-0 font-normal"
               aria-label={a.label}
               title={a.label}
             >
@@ -105,7 +105,7 @@ export function RowActions({
           <DropdownMenuTrigger asChild>
             <button
               type="button"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-colors hover:border-brand-blue/25 hover:bg-brand-blue/[0.04] hover:text-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+              className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-colors hover:border-brand-blue/25 hover:bg-brand-blue/[0.04] hover:text-brand-blue focus:ring-2 focus:ring-brand-blue/30 whitespace-normal gap-0 font-normal"
               aria-label={menuLabel}
               title={menuLabel}
             >
@@ -124,7 +124,7 @@ export function RowActions({
                   disabled={a.disabled || a.loading}
                   variant={a.variant === "destructive" ? "destructive" : "default"}
                   onSelect={() => a.onClick()}
-                  className="gap-2 text-sm text-gray-700 dark:text-slate-200"
+                  className="gap-2 tf-body"
                 >
                   <Icon className={`h-4 w-4 ${a.loading ? "animate-spin" : ""}`} />
                   {a.label}

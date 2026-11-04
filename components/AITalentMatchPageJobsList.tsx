@@ -72,9 +72,9 @@ export default function AITalentMatchPageJobsList({
 
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -91,7 +91,7 @@ export default function AITalentMatchPageJobsList({
               variant="secondary"
               size="sm"
               onClick={onBack}
-              className="px-2"
+             
               aria-label="Back to Dashboard" title="Back to Dashboard"
             >
               <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
@@ -101,8 +101,8 @@ export default function AITalentMatchPageJobsList({
             <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 truncate tracking-tight">AI Talent Match - Select Job</h1>
-            <p className="tf-card-desc truncate">Choose a job to find the best matching candidates using AI</p>
+            <h1 className="tf-page-title tf-section-title truncate">AI Talent Match - Select Job</h1>
+            <p className="tf-body-secondary truncate">Choose a job to find the best matching candidates using AI</p>
           </div>
         </div>
       </div>
@@ -119,7 +119,7 @@ export default function AITalentMatchPageJobsList({
       </div>
 
       {/* Job list */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5">
+      <div className="tf-card-soft p-3 sm:p-4 lg:p-5">
         <JobEligibilityNote className="mb-3" description={MATCH_ELIGIBILITY} />
         <JobOpeningPickerList
           excludeDraftsOnly

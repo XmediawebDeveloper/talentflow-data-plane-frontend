@@ -86,7 +86,7 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
               <div className="p-6 overflow-y-auto max-h-[calc(80dvh-100px)]">
                 {Object.entries(groupedShortcuts).map(([category, categoryShortcuts]) => (
                   <div key={category} className="mb-6 last:mb-0">
-                    <h3 className="text-sm font-semibold text-gray-900 mb-3 uppercase tracking-wider">
+                    <h3 className="tf-row-title mb-3 uppercase tracking-wider">
                       {category}
                     </h3>
                     <div className="space-y-2">
@@ -99,11 +99,11 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
                           <div className="flex items-center gap-1">
                             {shortcut.keys.map((key, keyIndex) => (
                               <div key={keyIndex} className="flex items-center gap-1">
-                                <kbd className="px-2.5 py-1 text-xs font-semibold text-gray-700 bg-gray-100 border border-gray-300 rounded-md shadow-sm min-w-[2rem] text-center">
+                                <kbd className="px-2.5 py-1 tf-caption bg-gray-100 border border-gray-300 rounded-md shadow-sm min-w-[2rem] text-center">
                                   {key}
                                 </kbd>
                                 {keyIndex < shortcut.keys.length - 1 && (
-                                  <span className="text-gray-400 text-xs">+</span>
+                                  <span className="tf-hint">+</span>
                                 )}
                               </div>
                             ))}
@@ -117,8 +117,8 @@ export default function KeyboardShortcutHelper({ isOpen, onClose }: KeyboardShor
 
               {/* Footer */}
               <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <p className="tf-meta-strong text-center">
-                  Press <kbd className="px-2 py-0.5 text-xs font-semibold text-gray-700 bg-white border border-gray-300 rounded shadow-sm">Esc</kbd> to close
+                <p className="tf-meta text-center">
+                  Press <kbd className="px-2 py-0.5 tf-caption bg-white border border-gray-300 rounded shadow-sm">Esc</kbd> to close
                 </p>
               </div>
             </div>

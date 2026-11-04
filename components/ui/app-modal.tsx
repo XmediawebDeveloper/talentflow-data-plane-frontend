@@ -265,7 +265,7 @@ export default function AppModal({
 
         {showFooter && (footer ?? (
           <div className="flex shrink-0 flex-col gap-3 border-t border-gray-100 bg-slate-50/50 px-4 py-3 dark:border-slate-700/60 dark:bg-slate-800/50 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4">
-            {footerStart && <div className="min-w-0 text-sm text-gray-500 dark:text-slate-500">{footerStart}</div>}
+            {footerStart && <div className="min-w-0 tf-body-muted">{footerStart}</div>}
             <AppModalFooterButtons
               onCancel={onCancel}
               cancelLabel={cancelLabel}

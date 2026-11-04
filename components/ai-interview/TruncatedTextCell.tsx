@@ -66,7 +66,7 @@ export default function TruncatedTextCell({ text, expanded, children, textClassN
       <span
         onMouseEnter={show}
         onMouseLeave={hide}
-        className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default not-italic"
+        className="tf-badge bg-gray-100 text-gray-700 border border-gray-300 cursor-default not-italic"
       >
         {words.slice(0, WORD_LIMIT).join(' ')}…
       </span>

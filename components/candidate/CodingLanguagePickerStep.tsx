@@ -97,7 +97,7 @@ export default function CodingLanguagePickerStep({
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
           Choose your coding language
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-5">
+        <p className="tf-body-secondary mb-5">
           This assessment supports multiple languages. Pick the one you're most comfortable with —
           your coding questions will be generated for this language and it will be locked for the
           rest of the coding round.
@@ -135,7 +135,7 @@ export default function CodingLanguagePickerStep({
                   <LanguageLogo language={logoLabelForId(lang.id, lang.name)} />
                   {/* The label stays dark when selected. Turning it brand-blue
                       as well left the row with no plain text in it. */}
-                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                  <span className="tf-row-name truncate">
                     {lang.name}
                   </span>
                 </span>
@@ -170,7 +170,7 @@ export default function CodingLanguagePickerStep({
             <p className="text-sm font-semibold text-brand-blue">
               Your choice cannot be changed once confirmed.
             </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+            <p className="tf-body-secondary mt-0.5">
               All coding questions will be generated in the selected language for this round.
             </p>
           </div>

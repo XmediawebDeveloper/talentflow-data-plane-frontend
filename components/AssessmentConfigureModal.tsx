@@ -106,7 +106,7 @@ export default function AssessmentConfigureModal({
                   cannot change anything here" is stated rather than left to be
                   discovered by pressing a control that does not respond. */}
               <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 sm:truncate max-sm:basis-full max-sm:pr-10">
+                <h2 className="tf-section-title sm:text-xl tracking-tight min-w-0 sm:truncate max-sm:basis-full max-sm:pr-10">
                   Configure Assessment
                 </h2>
                 {readOnly && (
@@ -136,7 +136,7 @@ export default function AssessmentConfigureModal({
               {/* The job as JD ID · role · version, from the record's own
                   binding — the same row the Configure page's subtitle shows.
                   Wraps instead of truncating, so the version is never cut. */}
-              <p className="tf-card-desc min-w-0 break-words max-sm:mt-2 max-sm:leading-relaxed">
+              <p className="tf-body-secondary min-w-0 break-words max-sm:mt-2 max-sm:leading-relaxed">
                 {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
                 {assessment.jd_short_id || assessment.jd_title || assessment.job?.title || assessment.jd_version != null ? (
                   <AssessmentJobBinding
@@ -156,7 +156,7 @@ export default function AssessmentConfigureModal({
             type="button"
             onClick={() => assessmentCreationRef.current?.requestClose()}
             aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
-            className="px-2 flex-shrink-0 max-sm:absolute max-sm:top-2.5 max-sm:right-3"
+            className="flex-shrink-0 max-sm:absolute max-sm:top-2.5 max-sm:right-3"
           >
             <X className="w-5 h-5" />
           </Button>

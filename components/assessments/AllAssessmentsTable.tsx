@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   X, ClipboardList, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
-  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet, Send, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -23,6 +23,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 /* The app's one list search/filter layout — the same row and the same panel
@@ -224,7 +225,7 @@ function CreatedBy({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate tf-card-desc" title={name}>
+      <span className="truncate tf-body-secondary" title={name}>
         {name}
       </span>
     </span>
@@ -1390,10 +1391,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         Unable to load assessments
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         Something went wrong while loading the assessment list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1416,14 +1417,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'
@@ -1480,9 +1481,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
   return (
-    <div className={embedded ? 'w-full' : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <div className={embedded ? 'w-full' : 'tf-page'}>
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? 'w-full' : 'tf-page-sheet'}>
           {!embedded && (
             <PageBreadcrumb
               className="mb-4 md:mb-6"
@@ -1515,7 +1516,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               <h1 className="tf-page-title mb-0.5">
                 {heading}
               </h1>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {subheading}
               </p>
             </div>
@@ -1631,7 +1632,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="all-assessments-created-from"
-                    className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
+                    className="block tf-caption mb-1.5"
                   >
                     Created On
                   </label>
@@ -1642,15 +1643,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       value={draftFilters.createdFrom}
                       max={draftFilters.createdTo || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
-                    <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                    <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                     <DateField
                       aria-label="Created to"
                       value={draftFilters.createdTo}
                       min={draftFilters.createdFrom || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
                   </div>
                 </div>
@@ -1675,9 +1676,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           {/* ── Card view ── the Candidate Results tab's card grid: one card
               per row, carrying the same fields the table shows. */}
           {displayMode === 'grid' ? (
-          <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+          <div className="tf-card overflow-hidden">
             {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              <div className="tf-grid-4 p-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={`skeleton-${i}`} className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col gap-3">
                     <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
@@ -1691,7 +1692,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             ) : pageRows.length === 0 ? (
               emptyPanel
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              <div className="tf-grid-4 p-4">
                 {pageRows.map((row) => {
                   const openable = opensView(row);
                   const isSelected = selectedIds.has(row.id);
@@ -1741,11 +1742,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       <div className="flex items-center gap-4 text-sm">
                         <span>
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.invitations.toLocaleString()}</span>
-                          <span className="text-xs text-gray-400 ml-1">sent</span>
+                          <span className="tf-hint ml-1">sent</span>
                         </span>
                         <span>
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.completed.toLocaleString()}</span>
-                          <span className="text-xs text-gray-400 ml-1">Completed</span>
+                          <span className="tf-hint ml-1">Completed</span>
                         </span>
                       </div>
 
@@ -1760,14 +1761,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             )}
           </div>
           ) : (
-          <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+          <>
+          <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
                 {hasBodyRows && (
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {/* Select All — this page's rows. */}
-                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle tf-th">
+                    <th scope="col" className="tf-th-cell pl-3 sm:pl-4 lg:pl-6 pr-0 w-10 tf-th">
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
@@ -1819,7 +1821,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right tf-th tf-sticky-col"
+                      className="tf-th-cell text-right tf-th tf-sticky-col"
                     >
                       {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
@@ -1834,7 +1836,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {isLoading &&
                     Array.from({ length: 8 }).map((_, i) => (
                       <tr key={`skeleton-${i}`}>
-                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10">
+                        <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10">
                           <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                         </td>
                         {COLUMNS.map((col) => (
@@ -1848,7 +1850,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             />
                           </td>
                         ))}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                        <td className="tf-td tf-sticky-col">
                           <div className="h-6 w-6 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                         </td>
                       </tr>
@@ -1880,7 +1882,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedIds.has(row.id) ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : ''}`}
                       >
                         {/* 0. Select — its own click, never the row's open. */}
-                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => toggleSelected(row.id)}
@@ -1897,18 +1899,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
                             reference rather than as the row's headline. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           {row.jobId ? (
                             <JobIdBadge>{row.jobId}</JobIdBadge>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
 
                         {/* 2. Job Name — the row's anchor, so it carries the
                             weight. The job name only, truncated with the full
                             name in `title`. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           {/* Fixed width on the span (a table cell's own
                               max-width is ignored): same column width on every
                               row, longer names end in "…", full name on hover. */}
@@ -1924,23 +1926,23 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 3. Job Version — its own column, blue chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <VersionPill kind="job" version={row.jobVersion} />
                         </td>
 
                         {/* 4. Assessment Version — its own column, cyan chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <VersionPill kind="assessment" version={row.assessmentVersion} />
                         </td>
 
                         {/* 5. Status */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           <StatusBadge status={row.status} />
                         </td>
 
                         {/* 6. Invitations Sent — the number alone (the header
                             names it), centred, tabular figures. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.invitations.toLocaleString()}
                           </span>
@@ -1950,14 +1952,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             assessment (`completed_count`), in the same
                             centred tabular figures as Invitations Sent
                             beside it — the number alone. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center whitespace-nowrap">
+                        <td className="tf-td text-center whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.completed.toLocaleString()}
                           </span>
                         </td>
 
                         {/* 7. Created — date and time, with who created it underneath. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           <div className="flex flex-col gap-1 min-w-0">
                             <span className="text-gray-600 dark:text-slate-400 tabular-nums">
                               {formatISTStamp(row.createdAt)}
@@ -1973,7 +1975,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             by them, which a hand-rolled absolute menu inside
                             an overflow:auto shell would be. */}
                         <td
-                          className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right tf-sticky-col"
+                          className="tf-td text-right tf-sticky-col"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {actionsCell(row)}
@@ -1984,6 +1986,67 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </table>
             </div>
           </div>
+          <MobileRecordList
+            empty={
+              isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`skeleton-${i}`} className="tf-record-card flex flex-col gap-3">
+                    <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-1/2 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-3/4 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                  </div>
+                ))
+              ) : error ? (
+                <div className="tf-card overflow-hidden">{errorPanel}</div>
+              ) : (
+                <div className="tf-card overflow-hidden">{emptyPanel}</div>
+              )
+            }
+          >
+            {!isLoading && !error && pageRows.map((row) => (
+              <MobileRecordCard
+                key={row.id}
+                selected={selectedIds.has(row.id)}
+                onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
+                select={
+                  <button
+                    type="button"
+                    onClick={() => toggleSelected(row.id)}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                    aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
+                  >
+                    {selectedIds.has(row.id) ? (
+                      <CheckSquare className="w-4 h-4 text-brand-blue" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                }
+                idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
+                badges={<StatusBadge status={row.status} />}
+                title={<span title={row.jobName}>{row.jobName}</span>}
+                titleAddon={jobBadge(row)}
+                actions={actionsCell(row)}
+                fields={[
+                  { label: 'Job Version', value: <VersionPill kind="job" version={row.jobVersion} /> },
+                  { label: 'Assessment Version', value: <VersionPill kind="assessment" version={row.assessmentVersion} /> },
+                  { label: 'Created', value: <span className="tabular-nums">{formatISTStamp(row.createdAt)}</span> },
+                  { label: 'By', value: <CreatedBy name={row.createdBy} /> },
+                ]}
+                footer={
+                  <>
+                    <MobileStatChip tone="info" icon={<Send className="w-3.5 h-3.5" />}>
+                      {row.invitations.toLocaleString()} Sent
+                    </MobileStatChip>
+                    <MobileStatChip tone="success" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                      {row.completed.toLocaleString()} Completed
+                    </MobileStatChip>
+                  </>
+                }
+              />
+            ))}
+          </MobileRecordList>
+          </>
           )}
 
           {/* ── 6. Pagination ── The shared control, on this screen's ladder.
@@ -2033,8 +2096,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </p>
               {skipped.size > 0 && (
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700 p-3">
-                  <p className="text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1.5">Skipped</p>
-                  <ul className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                  <p className="tf-caption mb-1.5">Skipped</p>
+                  <ul className="space-y-1 tf-meta">
                     {[...skipped.entries()].map(([reason, count]) => (
                       <li key={reason}>{count} — {reason}</li>
                     ))}

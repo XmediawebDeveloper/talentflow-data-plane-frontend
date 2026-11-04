@@ -119,7 +119,7 @@ export function MiniPagination({
                 {item}
               </button>
             ) : (
-              <span key={item} aria-hidden className="inline-flex h-7 w-7 items-center justify-center text-sm text-gray-400">…</span>
+              <span key={item} aria-hidden className="inline-flex h-7 w-7 items-center justify-center tf-body-muted">…</span>
             ),
           )}
         </div>

@@ -82,6 +82,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { Tooltip } from '@/components/ui/tooltip';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from '@/components/ui/sortable-header';
 
 // Types
@@ -1212,7 +1213,7 @@ export default function UserManagement() {
   // "Allocated Permissions" list shared by the role and user permission popups.
   const renderAllocatedPermissions = () => (
     <>
-      <h3 className="text-xs font-semibold text-gray-700 dark:text-slate-300 uppercase tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
+      <h3 className="tf-eyebrow tracking-wide mb-3 sm:mb-4 flex items-center gap-1.5">
         <Shield className="w-3.5 h-3.5 text-brand-blue" />
         Allocated Permissions ({viewingRolePopupShownCount})
       </h3>
@@ -2867,8 +2868,8 @@ export default function UserManagement() {
       className="flex items-center gap-2 p-2 sm:p-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 opacity-60 cursor-not-allowed select-none"
     >
       <Lock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-      <span className="text-sm max-sm:text-[13px] font-medium text-gray-500 dark:text-slate-400 flex-1 min-w-0 truncate">{name}</span>
-      <span className="text-xs font-medium text-gray-500 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
+      <span className="tf-label flex-1 min-w-0 truncate">{name}</span>
+      <span className="tf-caption bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 rounded whitespace-nowrap">Not in plan</span>
     </div>
   );
 
@@ -2955,7 +2956,7 @@ export default function UserManagement() {
       {/* One section for the list's controls. Top row: status pills (these were
           the Total / Active / Inactive stat cards — same counts, same filter on
           click) and seat usage. Bottom row: search and the result count. */}
-      <div className="mb-4 sm:mb-5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+      <div className="tf-card-soft mb-4 sm:mb-5 p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div role="group" aria-label="Filter users by status" className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {([
@@ -2997,7 +2998,7 @@ export default function UserManagement() {
 
           {limits && limits.max_users > 0 && (
             <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
-              <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap"><span className="sm:hidden">Seats</span><span className="hidden sm:inline">Seat usage</span></span>
+              <span className="tf-caption whitespace-nowrap"><span className="sm:hidden">Seats</span><span className="hidden sm:inline">Seat usage</span></span>
               <div className="flex items-center gap-2">
                 <div className="h-1.5 w-28 sm:w-36 overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800">
                   <div
@@ -3011,7 +3012,7 @@ export default function UserManagement() {
                     style={{ width: `${Math.min(limits.usage_percentage, 100)}%` }}
                   />
                 </div>
-                <span className="tf-cell-name max-sm:text-[13px] tabular-nums">
+                <span className="tf-row-title tabular-nums">
                   {Math.min(limits.usage_percentage, 100)}%
                 </span>
               </div>
@@ -3092,7 +3093,7 @@ export default function UserManagement() {
       {pageView === 'list' && (
       <>
       {/* Users Table */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+      <div className="tf-card tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
              Role, Permissions, Status, Created / Last Login, Actions.
@@ -3100,7 +3101,7 @@ export default function UserManagement() {
              hides below 2xl, Permissions below lg, Created / Last Login below xl
              (both shown under the user's name instead); below lg, cards. */
           <>
-          <div className="grid grid-cols-1 gap-3 overflow-hidden rounded-xl p-3 sm:grid-cols-2 lg:hidden">
+          <div className="tf-grid-2 overflow-hidden rounded-xl p-3 lg:hidden">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="space-y-3 rounded-xl border border-gray-200 p-4 dark:border-slate-700">
                 <div className="flex items-start gap-3">
@@ -3167,25 +3168,25 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden 2xl:table-cell whitespace-nowrap" aria-sort={ariaSort(userSort, 'id')}>
+                  <th className="tf-th-cell text-left tf-th hidden 2xl:table-cell" aria-sort={ariaSort(userSort, 'id')}>
                     <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'user')}>
+                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'user')}>
                     <SortableHeader label="User" column="user" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'role')}>
+                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'role')}>
                     <SortableHeader label="Role" column="role" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
+                  <th className="tf-th-cell text-left tf-th hidden lg:table-cell" aria-sort={ariaSort(userSort, 'permissions')}>
                     <SortableHeader label="Permissions" column="permissions" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th" aria-sort={ariaSort(userSort, 'status')}>
+                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'status')}>
                     <SortableHeader label="Status" column="status" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-left tf-th hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
+                  <th className="tf-th-cell text-left tf-th hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
                     <SortableHeader label="Created / Last Login" column="created" sort={userSortWithReset} />
                   </th>
-                  <th className="px-3 xl:px-4 2xl:px-5 py-3 lg:py-3.5 text-center tf-th tf-sticky-col">
+                  <th className="tf-th-cell text-center tf-th tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -3204,16 +3205,16 @@ export default function UserManagement() {
                           {user.user_display_id}
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                        <span className="tf-hint">—</span>
                       )}
                     </td>
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                    <td className="tf-td">
                       {/* Inactive users read faded (identity only — toggle/actions stay full strength). */}
                       <div className={`flex items-center gap-2 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
                         <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
                         <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
                           <div className="flex min-w-0 items-center gap-1.5">
-                            <span className="truncate tf-cell-name max-sm:text-[13px]" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
+                            <span className="truncate tf-row-title" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
                             {renderYouTag(user)}
                           </div>
                           {user.email && (
@@ -3247,7 +3248,7 @@ export default function UserManagement() {
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
-                    <td className="tf-wrap px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden lg:table-cell">
+                    <td className="tf-td tf-wrap hidden lg:table-cell">
                       {/* One permission shown, the rest as a "+N more" count (opens the full list). */}
                       <div className="flex items-center gap-1 max-w-[170px] 2xl:max-w-xs">
                         {(() => {
@@ -3277,13 +3278,13 @@ export default function UserManagement() {
                         })()}
                       </div>
                     </td>
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3">
+                    <td className="tf-td">
                       {renderUserStatus(user, true)}
                     </td>
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden xl:table-cell">
+                    <td className="tf-td hidden xl:table-cell">
                       {renderUserDates(user, false)}
                     </td>
-                    <td className="px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 tf-sticky-col">
+                    <td className="tf-td tf-sticky-col">
                       {renderUserActions(user)}
                     </td>
                   </tr>
@@ -3316,75 +3317,81 @@ export default function UserManagement() {
               child, so tf-round-edges never rounds this list and its white rows
               squared off the card's corners. Bottom too unless pagination
               (shown above 5 users) closes the card. */}
-          <div className={`grid grid-cols-1 divide-y divide-gray-100 overflow-hidden rounded-t-xl dark:divide-slate-700/60 sm:grid-cols-2 sm:gap-3 sm:divide-y-0 sm:p-3 lg:hidden ${filteredUsers.length <= 5 ? "rounded-b-xl" : ""}`}>
-            {paginatedUsers.map((user) => (
-              <div key={user.id} className="flex min-w-0 flex-col gap-2 bg-white p-3 dark:bg-slate-900 sm:gap-3 sm:rounded-xl sm:border sm:border-gray-200 sm:p-4 sm:dark:border-slate-700">
-                {/* Identity left, status toggle top-right */}
-                <div className="flex items-start gap-2.5 sm:gap-3">
-                  {/* Inactive users read faded (identity only — the toggle stays full strength). */}
-                  <div className={`flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
-                  <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" className="sm:h-9 sm:w-9 sm:text-sm" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-                      <span className="truncate tf-cell-name max-sm:text-[13px]">{user.name || user.email || 'Unknown'}</span>
-                      {renderYouTag(user)}
-                      {user.user_display_id && (
-                        <button
-                          type="button"
-                          onClick={() => copyText(user.user_display_id!, 'User ID')}
-                          title="Copy User ID"
-                          className="shrink-0 px-1 py-px text-[0.5625rem] leading-tight font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 sm:px-1.5 sm:py-0.5 sm:text-2xs"
-                        >
-                          {user.user_display_id}
-                        </button>
-                      )}
-                    </div>
-                    {user.email && (
+          <MobileRecordList className={`p-3 ${filteredUsers.length <= 5 ? 'rounded-b-xl' : ''}`}>
+            {paginatedUsers.map((user) => {
+              // Inactive users read faded (identity only — the toggle stays full strength).
+              const fade = user.is_active ? '' : 'opacity-60';
+              // Same count the desktop "+N more" badge comes from; opens the same popup.
+              const permCount = getUserPermissionPills(user.permissions).length;
+              return (
+                <MobileRecordCard
+                  key={user.id}
+                  idBadge={
+                    user.user_display_id ? (
                       <button
                         type="button"
-                        onClick={() => copyText(user.email, 'Email')}
-                        title={`Copy ${user.email}`}
-                        className="flex max-w-full items-center gap-1 text-left text-xs text-gray-500 transition-colors hover:text-brand-blue dark:text-slate-500"
+                        onClick={() => copyText(user.user_display_id!, 'User ID')}
+                        title="Copy User ID"
+                        className={`shrink-0 px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 ${fade}`}
                       >
-                        <Mail className="w-3 h-3 flex-shrink-0" />
-                        <span className="truncate">{user.email}</span>
+                        {user.user_display_id}
                       </button>
-                    )}
-                  </div>
-                  </div>
-                  {/* Toggle only — its colour says Active/Inactive; the word cost
-                      the width that was pushing the card off-screen. */}
-                  <div className="shrink-0 pt-0.5">{renderUserStatus(user, true)}</div>
-                </div>
-                {/* Dates (icons, no labels) — indented under the name */}
-                <div className={`pl-[2.625rem] sm:pl-12 ${user.is_active ? '' : 'opacity-60'}`}>{renderUserDates(user, false)}</div>
-                {/* Role + permissions count, then actions — one row */}
-                <div className="flex items-center justify-between gap-2 pl-[2.625rem] sm:mt-auto sm:border-t sm:border-gray-100 sm:pl-0 sm:pt-2 sm:dark:border-slate-700/60">
-                  <div className={`flex min-w-0 items-center gap-1.5 ${user.is_active ? '' : 'opacity-60'}`}>
-                    <span title={getRoleLabel(user.role, availableRoles)} className={`min-w-0 truncate px-2 py-0.5 text-2xs font-semibold rounded-full ring-1 ring-inset ring-black/5 sm:px-2.5 sm:py-1 sm:text-xs ${getRoleBadgeColor(user.role, availableRoles)}`}>
-                      {getRoleLabel(user.role, availableRoles)}
+                    ) : undefined
+                  }
+                  title={
+                    <span className={`flex min-w-0 items-center gap-2 ${fade}`}>
+                      <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
+                      <span className="min-w-0 truncate">{user.name || user.email || 'Unknown'}</span>
                     </span>
-                    {(() => {
-                      // Same count the desktop "+N more" badge comes from; opens the same popup.
-                      const count = getUserPermissionPills(user.permissions).length;
-                      return count > 0 ? (
+                  }
+                  badges={
+                    <>
+                      {renderYouTag(user)}
+                      <span title={getRoleLabel(user.role, availableRoles)} className={`min-w-0 truncate px-2 py-0.5 text-2xs font-semibold rounded-full ring-1 ring-inset ring-black/5 sm:px-2.5 sm:py-1 sm:text-xs ${getRoleBadgeColor(user.role, availableRoles)} ${fade}`}>
+                        {getRoleLabel(user.role, availableRoles)}
+                      </span>
+                      {permCount > 0 && (
                         <button
                           type="button"
                           onClick={() => handleViewUserPermissions(user)}
-                          title={`${count} permissions — view all`}
-                          aria-label={`${count} permissions, view all`}
+                          title={`${permCount} permissions — view all`}
+                          aria-label={`${permCount} permissions, view all`}
                           className="shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-2xs font-medium bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/15 transition-colors hover:bg-brand-cyan/10 hover:ring-brand-cyan/30 sm:px-2 sm:text-xs"
                         >
-                          +{count}
+                          +{permCount}
                         </button>
-                      ) : null;
-                    })()}
-                  </div>
-                  <div className="shrink-0 [&_button]:p-1.5 sm:[&_button]:p-2.5">{renderUserActions(user)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+                      )}
+                    </>
+                  }
+                  meta={[
+                    {
+                      label: user.email ? (
+                        <button
+                          type="button"
+                          onClick={() => copyText(user.email, 'Email')}
+                          title={`Copy ${user.email}`}
+                          className={`flex max-w-full items-center gap-1 text-left transition-colors hover:text-brand-blue ${fade}`}
+                        >
+                          <Mail className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
+                          <span className="truncate">{user.email}</span>
+                        </button>
+                      ) : null,
+                    },
+                  ]}
+                  actions={
+                    <>
+                      {/* Toggle only — its colour says Active/Inactive. */}
+                      <div className="shrink-0">{renderUserStatus(user, true)}</div>
+                      <div className="shrink-0 [&_button]:p-1.5 sm:[&_button]:p-2.5">{renderUserActions(user)}</div>
+                    </>
+                  }
+                >
+                  {/* Dates (icons, no labels) */}
+                  <div className={`mt-2 ${fade}`}>{renderUserDates(user, false)}</div>
+                </MobileRecordCard>
+              );
+            })}
+          </MobileRecordList>
           </>
         )}
 
@@ -3468,7 +3475,7 @@ export default function UserManagement() {
 
                 {/* Email validation feedback */}
                 {isCheckingEmail && (
-                  <div className="mt-2 flex items-center gap-2 tf-body-muted max-sm:text-[13px]">
+                  <div className="mt-2 flex items-center gap-2 tf-body-muted">
                     <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     <span>Validating email...</span>
                   </div>
@@ -3479,7 +3486,7 @@ export default function UserManagement() {
                     <div className="flex items-start gap-2">
                       <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm max-sm:text-[13px] text-destructive-strong font-medium">
+                        <p className="text-sm text-destructive-strong font-medium">
                           {emailCheckResult.error}
                         </p>
                       </div>
@@ -3488,16 +3495,16 @@ export default function UserManagement() {
                 )}
               </div>
               {/* Password is auto-generated — user receives invite email */}
-              <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/20 rounded-lg text-sm max-sm:text-[13px] text-brand-blue ring-1 ring-brand-blue/10">
+              <div className="flex items-start gap-2.5 p-3 bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/20 rounded-lg text-sm text-brand-blue ring-1 ring-brand-blue/10">
                 <Info className="w-4 h-4 mt-0.5 flex-shrink-0 text-brand-blue" />
-                <span className="text-sm max-sm:text-[13px]">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
+                <span className="text-sm">A temporary password will be auto-generated and emailed to the user. They will be asked to set a new password on first login.</span>
               </div>
               <div>
                 <Label className="mb-2">
                   Role <span className="text-destructive">*</span>
                 </Label>
                 {/* Role Selection Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="tf-grid-2">
                   {availableRoles.map(role => {
                     const isSelected = selectedRoleId === role.id;
                     const isSystemRole = role.is_system;
@@ -3515,7 +3522,7 @@ export default function UserManagement() {
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className={`font-semibold truncate text-sm max-sm:text-[13px] ${isSelected ? 'text-brand-blue' : 'text-gray-800 dark:text-slate-100'}`}>
+                            <span className={`font-semibold truncate text-sm ${isSelected ? 'text-brand-blue' : 'text-gray-800 dark:text-slate-100'}`}>
                               {role.name}
                             </span>
                             {isSystemRole && (
@@ -3563,7 +3570,7 @@ export default function UserManagement() {
                   })}
                 </div>
                 {availableRoles.length === 0 && (
-                  <div className="text-center py-6 px-4 tf-body-muted max-sm:text-[13px] border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
+                  <div className="text-center py-6 px-4 tf-body-muted border border-dashed border-gray-300 dark:border-slate-700 rounded-lg bg-slate-50 dark:bg-slate-800/50">
                     No roles available. Create roles in Role Management first.
                   </div>
                 )}
@@ -3573,7 +3580,7 @@ export default function UserManagement() {
               {false && selectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <label className="block tf-label max-sm:text-[13px]">
+                    <label className="block tf-label">
                       Role Permissions
                     </label>
                     <span className="tf-meta">
@@ -3583,11 +3590,11 @@ export default function UserManagement() {
                   {isLoadingPermissions ? (
                     <div className="flex items-center justify-center py-3 border border-gray-200 dark:border-slate-700 rounded-lg bg-gray-50 dark:bg-slate-800/50">
                       <Loader2 className="w-4 h-4 animate-spin text-gray-500 dark:text-slate-500" />
-                      <span className="ml-2 tf-body-muted max-sm:text-[13px]">Loading...</span>
+                      <span className="ml-2 tf-body-muted">Loading...</span>
                     </div>
                   ) : (
                     selectedPermissionCodes.size === 0 ? (
-                      <div className="text-center py-4 tf-body-muted max-sm:text-[13px]">
+                      <div className="text-center py-4 tf-body-muted">
                         No permissions assigned to this role yet.
                         <br />
                         <span className="text-xs">Configure permissions in Role Management.</span>
@@ -3641,10 +3648,10 @@ export default function UserManagement() {
             {/* Body - Scrollable (AppModal) */}
             <div className="space-y-4 sm:space-y-5">
               {/* User Details Row */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+              <div className="tf-grid-2">
                 <div>
                   <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                    <label className="block tf-label max-sm:text-[13px]">Name</label>
+                    <label className="block tf-label">Name</label>
                     <span className={`text-xs tabular-nums ${editingUser.name.length >= 50 ? 'text-brand-orange' : 'text-gray-400'}`}>
                       {editingUser.name.length}/50
                     </span>
@@ -3657,7 +3664,7 @@ export default function UserManagement() {
                   />
                 </div>
                 <div>
-                  <label className="block tf-label max-sm:text-[13px] mb-1.5">Email</label>
+                  <label className="block tf-label mb-1.5">Email</label>
                   <Input
                     type="email"
                     value={editingUser.email}
@@ -3669,7 +3676,7 @@ export default function UserManagement() {
               {identityChanges.length > 0 ? (
                 <div className="flex gap-3 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3 sm:p-4">
                   <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
-                  <div className="space-y-1 tf-body max-sm:text-[13px]">
+                  <div className="space-y-1 tf-body">
                     <p className="font-semibold text-gray-900 dark:text-slate-50">
                       Changing the {identityChanges.map(c => c.field.toLowerCase()).join(' and ')}{' '}needs the user&apos;s confirmation
                     </p>
@@ -3689,7 +3696,7 @@ export default function UserManagement() {
 
               {/* Role Selection - Compact Pills */}
               <div>
-                <label className="block tf-label max-sm:text-[13px] mb-2">Role</label>
+                <label className="block tf-label mb-2">Role</label>
                 <div className="flex flex-wrap gap-2">
                   {availableRoles.map(role => {
                     const isSelected = editSelectedRoleId === role.id;
@@ -3726,7 +3733,7 @@ export default function UserManagement() {
               {editSelectedRoleId && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <label className="text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <label className="tf-caption uppercase tracking-wider flex items-center gap-1.5">
                       <Shield className="w-3.5 h-3.5 text-brand-blue" />
                       Permissions
                     </label>
@@ -3755,13 +3762,13 @@ export default function UserManagement() {
                           ? 'Deselect all'
                           : 'Select all'}
                       </Button>
-                      <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
+                      <span className="tf-badge text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">
                         {/* Count only permissions shown as tiles below — a role's defaults can
                             include legacy codes that have no checkbox. */}
                         {getAllCustomPermissionCodes().filter(code => editSelectedPermissionCodes.has(code)).length} active
                       </span>
                       <span
-                        className="text-xs font-medium text-gray-500 dark:text-slate-500 whitespace-nowrap"
+                        className="tf-caption whitespace-nowrap"
                         title="View Analytics and View Support are included for every user and can't be switched off"
                       >
                         incl. {MANDATORY_PERMISSION_CODES.size} always on
@@ -3898,7 +3905,7 @@ export default function UserManagement() {
                         const selectedCount = allCodes.filter(c => editSelectedPermissionCodes.has(c)).length;
 
                         return (
-                          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm">
+                          <div key={category.id} className="tf-card-soft overflow-hidden">
                             {/* Module Header */}
                             <div
                               className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5 select-none"
@@ -3913,19 +3920,19 @@ export default function UserManagement() {
                                   />
                                 )}
                                 <div>
-                                  <h4 className="tf-card-title max-sm:text-sm">
+                                  <h4 className="tf-section-title max-sm:text-sm">
                                     {category.name}
                                   </h4>
                                   <p className="tf-meta">{allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}</p>
                                 </div>
                                 {category.isMenuToggle && selectedCount > 0 && (
-                                  <span className="text-xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
+                                  <span className="tf-badge text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20">
                                     Menu
                                   </span>
                                 )}
                               </div>
                               <div className="flex shrink-0 items-center gap-1">
-                                <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+                                <span className="tf-caption">{selectedCount} selected</span>
                                 {/* Phones only: expand/collapse. Stops the click so it
                                     doesn't also toggle the whole module's permissions. */}
                                 <button
@@ -3944,7 +3951,7 @@ export default function UserManagement() {
                                 scroll of every module otherwise); always open from sm up. */}
                             <div className={phonePermOpen.has(category.id) ? "" : "max-sm:hidden"}>
                             {/* Permission Cards Grid */}
-                            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="tf-grid-3 p-4">
                               {/* View card */}
                               {category.viewCode && (() => {
                                 const badge = getActionBadge(category.viewCode);
@@ -3963,7 +3970,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="tf-cell-name max-sm:text-[13px]">
+                                      <div className="tf-row-title">
                                         View {category.name}
                                         {isMandatory && (
                                           <span className="ml-1.5 text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
@@ -3991,7 +3998,7 @@ export default function UserManagement() {
                                       <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="tf-cell-name max-sm:text-[13px] flex items-center gap-1.5">
+                                      <div className="tf-row-title flex items-center gap-1.5">
                                         {action.label}
                                         {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
                                       </div>
@@ -4084,14 +4091,14 @@ export default function UserManagement() {
                                   >
                                     <div className="flex items-center gap-2">
                                       <GroupCheckbox size="sm" state={groupCheckState(isSubActive, subSelectedCount)} label={sub.name} />
-                                      <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">
+                                      <span className="tf-caption">
                                         {sub.name}
                                       </span>
                                     </div>
-                                    <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
+                                    <span className="tf-caption">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
-                                  <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                                  <div className="tf-grid-3 p-4">
                                     {sub.viewCode && (() => {
                                       const badge = getActionBadge(sub.viewCode);
                                       const isOn = editSelectedPermissionCodes.has(sub.viewCode);
@@ -4118,7 +4125,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="tf-cell-name max-sm:text-[13px]">View {sub.name}</div>
+                                            <div className="tf-row-title">View {sub.name}</div>
                                           </div>
                                         </div>
                                       );
@@ -4166,7 +4173,7 @@ export default function UserManagement() {
                                             <span className="text-xs font-semibold uppercase">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
-                                            <div className="tf-cell-name max-sm:text-[13px]">{action.label}</div>
+                                            <div className="tf-row-title">{action.label}</div>
                                           </div>
                                         </div>
                                       );
@@ -4236,7 +4243,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-3">
                       <Mail className="w-5 h-5 text-warning flex-shrink-0" />
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Email a temporary password</p>
+                        <p className="tf-row-name">Email a temporary password</p>
                         <p className="tf-meta mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
                       </div>
                     </div>
@@ -4250,7 +4257,7 @@ export default function UserManagement() {
                     <div className="flex items-center gap-3">
                       <KeyRound className="w-5 h-5 text-brand-blue flex-shrink-0" />
                       <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-50 text-sm max-sm:text-[13px]">Set a password directly</p>
+                        <p className="tf-row-name">Set a password directly</p>
                         <p className="tf-meta mt-0.5">You type a new password and hand it to the user. No email, no OTP.</p>
                       </div>
                     </div>
@@ -4259,7 +4266,7 @@ export default function UserManagement() {
               ) : (
                 <>
                   <div>
-                    <label className="block tf-label max-sm:text-[13px] mb-1">New password</label>
+                    <label className="block tf-label mb-1">New password</label>
                     <div className="relative">
                       <Input
                         type={directPwShow ? 'text' : 'password'}
@@ -4275,7 +4282,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <div>
-                    <label className="block tf-label max-sm:text-[13px] mb-1">Confirm password</label>
+                    <label className="block tf-label mb-1">Confirm password</label>
                     <Input
                       type={directPwShow ? 'text' : 'password'}
                       value={directPwConfirm}
@@ -4290,7 +4297,7 @@ export default function UserManagement() {
                       onCheckedChange={(v) => setDirectPwForceChange(!!v)}
                       className="mt-0.5"
                     />
-                    <span className="tf-card-desc max-sm:text-[13px]">Require the user to change this password on next login</span>
+                    <span className="tf-body-secondary">Require the user to change this password on next login</span>
                   </label>
                 </>
               )}
@@ -4355,7 +4362,7 @@ export default function UserManagement() {
           bodyClassName="bg-slate-50/30 dark:bg-slate-800/30"
           footerStart={
             viewingRolePopup.is_system ? (
-              <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-semibold">
+              <span className="tf-badge gap-1.5 sm:px-2.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                 <Lock className="w-3 h-3" />
                 Default Role (Read-Only)
               </span>
@@ -4363,17 +4370,17 @@ export default function UserManagement() {
           }
         >
             <div>
-              <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
+              <div className="tf-card-soft grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4">
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="tf-eyebrow tracking-wide mb-0.5 sm:mb-1">Role Code</div>
                   <div className="font-semibold text-brand-blue text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="tf-eyebrow tracking-wide mb-0.5 sm:mb-1">Users</div>
                   <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl max-sm:text-lg">{viewingRolePopup.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="tf-eyebrow tracking-wide mb-0.5 sm:mb-1">Permissions</div>
                   <div className="font-semibold text-gray-900 dark:text-slate-50 text-xl max-sm:text-lg">{viewingRolePopupShownCount}</div>
                 </div>
               </div>
@@ -4403,13 +4410,13 @@ export default function UserManagement() {
           },
         ]}
       >
-        <div className="space-y-4 tf-body max-sm:text-[13px]">
+        <div className="space-y-4 tf-body">
           {identityChanges.length > 0 && (
             <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-500">What will change</p>
+              <p className="mb-2 tf-eyebrow tracking-wide">What will change</p>
               <div className="space-y-1.5">
                 {identityChanges.map(c => (
-                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm max-sm:text-[13px]">
+                  <div key={c.field} className="grid grid-cols-[3.5rem_1fr] gap-2 text-sm">
                     <span className="font-medium text-gray-500 dark:text-slate-400">{c.field}</span>
                     <span className="min-w-0 break-words">
                       <span className="text-gray-400 line-through dark:text-slate-500">{c.from}</span>
@@ -4441,7 +4448,7 @@ export default function UserManagement() {
           </ol>
 
           <div>
-            <label className="mb-1.5 block tf-label max-sm:text-[13px]">6-digit code</label>
+            <label className="mb-1.5 block tf-label">6-digit code</label>
             <Input
               autoFocus
               inputMode="numeric"

@@ -103,11 +103,11 @@ export default function JDEditBlockedModal({
           <div className="min-w-0 flex-1">
             <h3
               id="jd-edit-blocked-title"
-              className="tf-section-title"
+              className="tf-section-title sm:text-lg"
             >
               Cannot Edit Job Description
             </h3>
-            <p className="tf-meta-strong leading-relaxed mt-1">
+            <p className="tf-meta leading-relaxed mt-1">
               This job description is actively used in one or more modules and cannot be
               modified to maintain data integrity.
             </p>
@@ -118,7 +118,7 @@ export default function JDEditBlockedModal({
               size="sm"
               onClick={onClose}
               disabled={creating}
-              className="px-2 -mt-0.5 -mr-0.5 shrink-0"
+              className="-mt-0.5 -mr-0.5 shrink-0"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
@@ -137,7 +137,7 @@ export default function JDEditBlockedModal({
                   <h4 className="text-xs font-semibold uppercase tracking-wide text-warning">
                     Active in ({modules.length})
                   </h4>
-                  <p className="tf-meta-strong leading-relaxed mt-0.5">
+                  <p className="tf-meta leading-relaxed mt-0.5">
                     This JD is currently linked to the following active modules.
                   </p>
                 </div>
@@ -153,7 +153,7 @@ export default function JDEditBlockedModal({
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                          <span className="tf-row-name truncate">
                             {module.name}
                           </span>
                           <span className="px-1.5 py-px text-2xs font-medium rounded bg-brand-blue/10 text-brand-blue shrink-0">
@@ -188,7 +188,7 @@ export default function JDEditBlockedModal({
                           <ChevronRight className="w-4 h-4 text-gray-400 dark:text-slate-500 shrink-0" />
                         </button>
                       ) : (
-                        <div className="flex items-center gap-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
+                        <div className="tf-panel flex items-center gap-3 px-3 py-2.5">
                           {rowBody}
                         </div>
                       )}
@@ -201,7 +201,7 @@ export default function JDEditBlockedModal({
             /* Blocked for a reason the usage breakdown does not name — show
                whatever the backend said rather than inventing a module. */
             <div className="rounded-lg border border-warning-line bg-warning-subtle/60 p-3">
-              <p className="text-xs text-gray-700 dark:text-slate-300 leading-relaxed">
+              <p className="tf-meta leading-relaxed">
                 {reason || 'This JD cannot be edited because it is already in use.'}
               </p>
             </div>
@@ -216,7 +216,7 @@ export default function JDEditBlockedModal({
                 <h4 className="text-xs font-semibold text-blue-700 dark:text-blue-400">
                   Why can&apos;t I edit?
                 </h4>
-                <p className="tf-meta-strong leading-relaxed mt-0.5">
+                <p className="tf-meta leading-relaxed mt-0.5">
                   Editing is disabled to prevent issues in active processes and ensure
                   consistency across modules.
                 </p>
@@ -234,7 +234,7 @@ export default function JDEditBlockedModal({
                   <h4 className="text-xs font-semibold text-red-700 dark:text-red-400">
                     Maximum versions reached
                   </h4>
-                  <p className="tf-meta-strong leading-relaxed mt-0.5">
+                  <p className="tf-meta leading-relaxed mt-0.5">
                     This JD already has 5 versions, the maximum allowed. &quot;Create New
                     Version&quot; is unavailable for it — use &quot;Create New JD&quot; instead
                     to start an independent one.
@@ -257,9 +257,9 @@ export default function JDEditBlockedModal({
               <div className="w-6 h-6 rounded-full bg-warning-subtle flex items-center justify-center shrink-0">
                 <Lightbulb className="w-3.5 h-3.5 text-warning" />
               </div>
-              <h4 className="text-xs font-semibold text-gray-900 dark:text-slate-100 leading-none">Tip:</h4>
+              <h4 className="tf-caption leading-none">Tip:</h4>
             </div>
-            <ol className="mt-2 pl-8 space-y-1 text-xs text-gray-600 dark:text-slate-400 leading-relaxed">
+            <ol className="mt-2 pl-8 space-y-1 tf-meta leading-relaxed">
               <li className="flex gap-1.5">
                 <span className="font-medium text-gray-500 dark:text-slate-500 shrink-0">1.</span>
                 <span>
@@ -291,7 +291,7 @@ export default function JDEditBlockedModal({
             disabled={creating}
             aria-disabled={!canCreate || undefined}
             title={!canCreate ? 'You do not have permission to create job descriptions' : undefined}
-            className={!canCreate ? 'text-gray-400 cursor-not-allowed opacity-60' : undefined}
+            className={`${(!canCreate ? 'text-gray-400 cursor-not-allowed opacity-60' : undefined) ?? ''} disabled:opacity-50`}
           >
             Create New JD
           </Button>
@@ -301,7 +301,7 @@ export default function JDEditBlockedModal({
             disabled={creating || atMaxVersions}
             aria-disabled={!canCreate || undefined}
             title={!canCreate ? 'You do not have permission to create job descriptions' : atMaxVersions ? 'This JD has reached the maximum of 5 versions' : undefined}
-            className={!canCreate ? 'cursor-not-allowed opacity-60 grayscale' : undefined}
+            className={`${(!canCreate ? 'cursor-not-allowed opacity-60 grayscale' : undefined) ?? ''} disabled:opacity-50`}
           >
             {creating ? (
               <>

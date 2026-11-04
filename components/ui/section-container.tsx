@@ -18,7 +18,7 @@ export function PageContainer({
   return (
     <div
       className={cn(
-        'relative flex-1 flex flex-col overflow-x-clip bg-slate-50 dark:bg-slate-950',
+        'tf-page relative flex flex-col',
         className,
       )}
     >
@@ -45,7 +45,7 @@ export function SurfaceCard({
   return (
     <div
       className={cn(
-        'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5',
+        'tf-card',
         padded && 'p-4 sm:p-5',
         className,
       )}
@@ -73,11 +73,11 @@ export function SectionHeading({
   return (
     <div className={cn('flex items-start justify-between gap-3 mb-3', className)}>
       <div className="min-w-0">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+        <h2 className="tf-section-title tracking-tight">
           {title}
         </h2>
         {description && (
-          <p className="mt-0.5 text-sm text-gray-600 dark:text-slate-400">{description}</p>
+          <p className="mt-0.5 tf-body-secondary">{description}</p>
         )}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}

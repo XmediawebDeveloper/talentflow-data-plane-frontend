@@ -74,7 +74,7 @@ export default function UnsavedChangesModal({
             </h2>
           </div>
 
-          <p className="mt-4 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+          <p className="mt-4 tf-body-secondary sm:text-base">
             {description}
           </p>
 
@@ -87,14 +87,14 @@ export default function UnsavedChangesModal({
             <button
               onClick={onDiscard}
               disabled={isSaving}
-              className="px-5 py-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-secondary px-5 py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors whitespace-normal gap-0"
             >
               {discardLabel}
             </button>
             <button
               onClick={onSave}
               disabled={isSaving}
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-brand-blue hover:bg-brand-blue-2 text-white text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-primary px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-sm font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal"
             >
               {isSaving ? (
                 <>

@@ -64,14 +64,14 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
   ];
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
-      <div className="p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <main className="tf-page">
+      <div className="tf-page-pad w-full max-w-[1400px] mx-auto">
         <div className="mb-8">
           <WelcomeBanner user={user} tenant={tenant} />
         </div>
 
         {/* Quick stats — compact, scoped to user */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+        <div className="tf-grid-stats mb-6">
           <MiniStat label="My tasks" value={tasks.length} accent="bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/15" icon={<CheckSquare className="w-4 h-4" />} />
           <MiniStat label="Assigned JDs" value={assignedJDs.length} accent="bg-brand-blue/10 text-brand-blue ring-brand-blue/15" icon={<Briefcase className="w-4 h-4" />} />
           <MiniStat label="Today" value={schedule.length} accent="bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/15" icon={<Calendar className="w-4 h-4" />} />
@@ -79,14 +79,14 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
         </div>
 
         {/* Main grid: Tasks (lg:2) + Schedule (lg:1) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="tf-section-title">My tasks</h2>
                 <p className="tf-meta mt-0.5">Items assigned to you</p>
               </div>
-              <span className="px-2.5 py-0.5 rounded-full bg-brand-orange/10 text-brand-orange-deep text-xs font-medium ring-1 ring-brand-orange/15">
+              <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/15">
                 {tasks.length} open
               </span>
             </div>
@@ -106,8 +106,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                       <CheckSquare className="w-4 h-4 text-gray-500" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{t.title}</div>
-                      <div className="text-2xs text-gray-500 mt-0.5">
+                      <div className="tf-row-name truncate">{t.title}</div>
+                      <div className="tf-micro-hint mt-0.5">
                         Due <span className="font-medium">{t.due}</span>
                       </div>
                     </div>
@@ -121,7 +121,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
           </div>
 
           {/* Today's schedule */}
-          <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+          <div className="tf-card-soft">
             <div className="p-6 border-b border-gray-100">
               <h2 className="tf-section-title">Today</h2>
               <p className="tf-meta mt-0.5">Your schedule</p>
@@ -129,11 +129,11 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
             <div className="p-6 space-y-4">
               {schedule.map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <div className="text-2xs font-medium text-gray-500 w-16 pt-1.5 flex-shrink-0">{item.time}</div>
+                  <div className="tf-micro-hint w-16 pt-1.5 flex-shrink-0">{item.time}</div>
                   <div className="flex-1 min-w-0 border-l-2 border-brand-cyan pl-3">
                     <div className="flex items-center gap-2">
                       <span className="text-brand-cyan">{item.icon}</span>
-                      <div className="text-sm text-gray-900 truncate">{item.title}</div>
+                      <div className="tf-body truncate">{item.title}</div>
                     </div>
                   </div>
                 </div>
@@ -149,9 +149,9 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
         </div>
 
         {/* Quick actions (permission-aware) + Help */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-6">
-            <h3 className="tf-subsection-title mb-4">Quick actions</h3>
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2 p-6">
+            <h3 className="tf-row-title mb-4">Quick actions</h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {canUploadResumes && (
                 <ActionTile
@@ -209,8 +209,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
               <div className="w-10 h-10 rounded-xl bg-brand-cyan/15 ring-1 ring-brand-cyan/25 flex items-center justify-center mb-3">
                 <HelpCircle className="w-5 h-5 text-brand-cyan" />
               </div>
-              <h3 className="tf-card-title mb-1">New to TalentFlow?</h3>
-              <p className="tf-meta-strong mb-4">
+              <h3 className="tf-section-title mb-1">New to TalentFlow?</h3>
+              <p className="tf-meta mb-4">
                 Walk through the basics and learn how to make the most of your account.
               </p>
               <div className="space-y-2">
@@ -240,8 +240,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
         </div>
 
         {/* Assigned JDs + Recent activity */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          <div className="lg:col-span-2 bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+        <div className="tf-grid-3 mb-6">
+          <div className="tf-card-soft lg:col-span-2">
             <div className="p-6 border-b border-gray-100 flex items-center justify-between">
               <div>
                 <h2 className="tf-section-title">Assigned JDs</h2>
@@ -266,19 +266,19 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                     <Briefcase className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{jd.title}</div>
-                    <div className="text-2xs text-gray-500">{jd.dept}</div>
+                    <div className="tf-row-name truncate">{jd.title}</div>
+                    <div className="tf-micro-hint">{jd.dept}</div>
                   </div>
                   <div className="text-right">
-                    <div className="tf-cell-name tabular-nums">{jd.applicants}</div>
-                    <div className="text-2xs text-gray-500 uppercase tracking-wide">applicants</div>
+                    <div className="tf-row-title tabular-nums">{jd.applicants}</div>
+                    <div className="tf-micro-hint uppercase tracking-wide">applicants</div>
                   </div>
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+          <div className="tf-card-soft">
             <div className="p-6 border-b border-gray-100">
               <h2 className="tf-section-title">Recent activity</h2>
               <p className="tf-meta mt-0.5">Your last actions</p>
@@ -290,11 +290,11 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                     <Activity className={`w-3.5 h-3.5 text-${a.tone}`} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-sm text-gray-900">
+                    <div className="tf-body">
                       <span className="font-medium">{a.action}</span>
                     </div>
-                    <div className="text-2xs text-gray-500 truncate">{a.target}</div>
-                    <div className="text-2xs text-gray-400 mt-0.5">{a.time}</div>
+                    <div className="tf-micro-hint truncate">{a.target}</div>
+                    <div className="tf-micro-hint mt-0.5">{a.time}</div>
                   </div>
                 </div>
               ))}
@@ -318,12 +318,12 @@ function MiniStat({
   icon: React.ReactNode;
 }) {
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4">
+    <div className="tf-card-soft p-4">
       <div className="flex items-center justify-between mb-2">
         <div className={`w-8 h-8 rounded-lg ring-1 flex items-center justify-center ${accent}`}>{icon}</div>
       </div>
       <div className="text-2xl font-bold text-gray-900 tabular-nums">{value}</div>
-      <div className="tf-meta-strong mt-0.5">{label}</div>
+      <div className="tf-meta mt-0.5">{label}</div>
     </div>
   );
 }
@@ -351,7 +351,7 @@ function ActionTile({
       className={`flex flex-col items-start gap-2 p-4 rounded-xl ring-1 transition-all hover:-translate-y-0.5 ${map[tone]}`}
     >
       <div className="w-9 h-9 rounded-lg bg-white/60 flex items-center justify-center">{icon}</div>
-      <span className="text-sm font-medium text-gray-900">{label}</span>
+      <span className="tf-row-name">{label}</span>
     </button>
   );
 }

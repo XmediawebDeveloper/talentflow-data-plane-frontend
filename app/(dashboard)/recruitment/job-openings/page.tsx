@@ -62,9 +62,9 @@ const JD_BATCH_SIZE = 100;
 // beside the layout it shadows and can't drift from it.
 function JobOpeningsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 h-4 w-56 rounded bg-gray-200 animate-pulse" />
 
@@ -85,9 +85,9 @@ function JobOpeningsSkeleton() {
             </div>
 
             {/* Stat cards — 4-up grid (matches StatsCardGrid columns=4) */}
-            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="tf-grid-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                <div key={i} className="relative overflow-hidden tf-panel px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-2.5">
                       <div className="h-9 w-9 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
@@ -778,7 +778,7 @@ export default function JobOpeningsPage() {
 
   /* The "Cannot Delete" popup's module chips: one job's "Active in" list. */
   const renderUsageChips = (usageDetails: string[]) => (
-    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+    <div className="tf-grid-2 mt-3">
       {usageDetails.map((usage, index) => {
         const UsageIcon = usageModuleIcon(usage);
         return (
@@ -876,7 +876,7 @@ export default function JobOpeningsPage() {
   }
 
   return (
-    <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+    <div ref={rootRef} className="tf-page relative flex flex-col">
       <JobsListing
         jobs={jobs}
         onRefresh={fetchJobs}
@@ -994,10 +994,10 @@ export default function JobOpeningsPage() {
                 <AlertTriangle className="w-6 h-6 sm:w-7 sm:h-7 text-red-600 fill-red-600/15" />
               </div>
               <div className="flex-1 pt-1">
-                <AlertDialogTitle className="text-lg sm:text-xl font-bold text-gray-900">
+                <AlertDialogTitle className="tf-section-title sm:text-xl">
                   Cannot Delete Job Description
                 </AlertDialogTitle>
-                <AlertDialogDescription className="mt-1 text-sm text-gray-500">
+                <AlertDialogDescription className="mt-1 tf-body-muted">
                   {deleteWarningJobs
                     ? `These ${deleteWarningJobs.length} job descriptions are actively used and cannot be deleted.`
                     : 'This job description is actively used and cannot be deleted.'}
@@ -1028,7 +1028,7 @@ export default function JobOpeningsPage() {
                 <ul className="mt-3 space-y-3 max-h-64 overflow-y-auto">
                   {deleteWarningJobs.map((job, jobIndex) => (
                     <li key={jobIndex} className="min-w-0">
-                      <p className="tf-cell-name [overflow-wrap:anywhere]">{job.title}</p>
+                      <p className="tf-row-title [overflow-wrap:anywhere]">{job.title}</p>
                       {renderUsageChips(job.usageDetails)}
                     </li>
                   ))}
@@ -1050,7 +1050,7 @@ export default function JobOpeningsPage() {
                       ? <><span className="font-bold text-brand-blue">These {deleteWarningJobs.length} job descriptions</span> are linked to the active modules above.</>
                       : <><span className="font-bold text-brand-blue">&quot;{deleteWarningDialog.jobTitle}&quot;</span> is linked to the active modules above.</>}
                   </p>
-                  <p className="mt-1 tf-card-desc">
+                  <p className="mt-1 tf-body-secondary">
                     Deleting it could affect existing data and processes.
                   </p>
                 </div>
@@ -1066,7 +1066,7 @@ export default function JobOpeningsPage() {
                   <p className="tf-body">
                     <span className="font-bold text-brand-blue">We recommend disabling</span> {deleteWarningJobs ? 'them' : 'the job description'} instead.
                   </p>
-                  <p className="mt-1 tf-card-desc">
+                  <p className="mt-1 tf-body-secondary">
                     This will stop new applications while keeping existing data safe.
                   </p>
                 </div>

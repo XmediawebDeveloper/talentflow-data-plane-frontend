@@ -6,9 +6,11 @@ import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, B
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
+import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { useCenteredMenuOnPhone } from '@/lib/hooks/useCenteredMenuOnPhone';
 import { useRouter } from 'next/navigation';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
@@ -41,6 +43,9 @@ interface ScoredResume {
   candidateName: string;
   email: string;
   phone: string;
+  // Whether the underlying resume has been archived — blocks inviting this
+  // candidate, same rule as the Scored Resumes table (ScoredResumesTable.tsx).
+  isArchived?: boolean;
   matchStatus: string;
   scorePercentage: number;
   // Human-readable breakdown of how scorePercentage was derived (Required/
@@ -136,6 +141,10 @@ const HEADER_ACTION_BTN_LOCKED =
 /** Create / Send / candidate action button when the user lacks the permission. */
 const CREATE_SEND_BUTTON_LOCKED_CLASS =
   'flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium whitespace-nowrap bg-gray-50 border border-gray-200 text-gray-400 cursor-not-allowed opacity-60';
+
+/** Same wording as ScoredResumesTable.tsx's ARCHIVED_RESUME_MESSAGE — kept in
+ *  sync so the reason reads identically wherever this candidate is invited from. */
+const ARCHIVED_RESUME_MESSAGE = 'This resume is archived — unarchive it first to use this action';
 
 /** Email / phone / location chip — the resume view's contact badge
  *  (resume-view/[id]), on this card's white instead of its tinted one. */
@@ -338,15 +347,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const jdStatusLower = String(jdDetails?.status || '').toLowerCase();
   const jdLocked = jdStatusLower === 'disabled' || jdStatusLower === 'archived';
   const jdLockReason = jdStatusLower === 'archived' ? 'JD is archived' : 'JD is disabled';
+  // An archived resume can't be invited either — same rule as the Scored
+  // Resumes table (ScoredResumesTable.tsx's rowCanInviteAssessment / AIInterview).
+  // Checked ahead of the JD lock below so its own message always wins when both
+  // are true, matching the table's precedence.
+  const resumeArchived = !!resume.isArchived;
+  const inviteBlockedByRecord = resumeArchived || jdLocked;
+  const inviteBlockedByRecordReason = resumeArchived ? ARCHIVED_RESUME_MESSAGE : jdLockReason;
   const canInviteAssessment =
-    !jdLocked && mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
+    !inviteBlockedByRecord && mayInviteAssessment && !assessmentPlanLocked && (viaInviteDialog || !inviteTargets.known || assessmentLive);
   const canInviteAIInterview =
-    !jdLocked && mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
+    !inviteBlockedByRecord && mayInviteAIInterview && !aiInterviewPlanLocked && (viaInviteDialog || !inviteTargets.known || aiInterviewLive);
   /* Permitted, in the plan, and the job settled as having none yet -> the
      entry greys out with "+ Create ..." under it (Resume Scoring hosts only). */
   const inviteTargetsSettled = inviteTargets.known && !inviteTargets.loading;
-  const assessmentMissing = !jdLocked && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
-  const aiInterviewMissing = !jdLocked && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
+  const assessmentMissing = !inviteBlockedByRecord && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAssessment && !assessmentPlanLocked && inviteTargetsSettled && !assessmentLive;
+  const aiInterviewMissing = !inviteBlockedByRecord && !viaInviteDialog && !!allowCreateInviteTarget && mayInviteAIInterview && !aiInterviewPlanLocked && inviteTargetsSettled && !aiInterviewLive;
   // Every option the user is permitted to pick is outside the plan.
   const invitePlanLocked = canInvite &&
     (!mayInviteAssessment || assessmentPlanLocked) && (!mayInviteAIInterview || aiInterviewPlanLocked);
@@ -358,7 +374,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
      and why it is disabled, as a tooltip. */
   const flatHeaderActions = inlineHeaderActions && viaInviteDialog;
   const inviteBlockedReason = (may: boolean, planLocked: boolean) =>
-    !may ? 'You do not have permission to invite candidates' : jdLocked ? jdLockReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
+    !may ? 'You do not have permission to invite candidates' : inviteBlockedByRecord ? inviteBlockedByRecordReason : planLocked ? PLAN_LOCKED_MESSAGE : undefined;
 
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   const inviteMenuRef = useRef<HTMLDivElement>(null);
@@ -438,6 +454,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [scoredResumeId, setScoredResumeId] = useState<string | null>(null);
   const [showVersionMenu, setShowVersionMenu] = useState(false);
   const versionMenuRef = useRef<HTMLDivElement>(null);
+  const versionDropdownRef = useRef<HTMLDivElement>(null);
+  /* Phones only: the version menu opens centred on the screen, not hard against one edge. */
+  useCenteredMenuOnPhone(showVersionMenu, versionMenuRef, versionDropdownRef);
   // Version comparison, mirroring resume-view: tick two versions, diff them
   // old-vs-new. Holds ids in click order; a third tick evicts the oldest so the
   // pair keeps moving rather than making the user untick something first.
@@ -999,6 +1018,8 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (below < needed && a.top > below) setInviteMenuUp(true);
     else if (below < needed) menu.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }, [showInviteMenu]);
+  /* Phones only: the Invite menu opens centred on the screen, not hard against one edge. */
+  useCenteredMenuOnPhone(showInviteMenu, inviteMenuRef, inviteDropdownRef);
 
   // The resume this score belongs to — the API returns the score id as `id`
   // and the resume id separately, so prefer the explicit resume id.
@@ -1154,6 +1175,7 @@ Best regards`);
         ? { jdId: jobId, jdTitle: jobTitle, jdCode: resume.jobCode || jdDetails?.job_id, versionNumber: resume.jobVersion }
         : undefined,
       candidates: [{ ...candidate, source: 'score-resume', inviteSource: 'Resume Scoring' }],
+      openOn: 'score-resume',
     });
   };
 
@@ -1246,7 +1268,7 @@ Best regards`);
           </span>
           <span className="min-w-0">
             <span className="block text-sm font-medium text-gray-400">{kind === 'assessment' ? 'Assessment' : 'AI Interview'}</span>
-            <span className="block text-xs text-gray-400">{inviteJobName} has no {what} yet</span>
+            <span className="block tf-hint">{inviteJobName} has no {what} yet</span>
           </span>
         </button>
         <button
@@ -1373,9 +1395,9 @@ Best regards`);
   // replaces it rather than being a generic block.
   if (!isDataReady) {
     return (
-      <main className="flex-1 min-w-0 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="tf-page min-w-0">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             {/* Breadcrumb */}
             <div className="flex items-center gap-2 mb-4 md:mb-6">
               <Skeleton className="h-3 w-16" />
@@ -1386,7 +1408,7 @@ Best regards`);
             </div>
 
             {/* Header card — identity, contact badges, score display bar */}
-            <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+            <div className="tf-card p-4 sm:p-5">
               <div className="flex items-start justify-between gap-4 mb-3">
                 <div className="min-w-0 space-y-2">
                   <Skeleton className="h-7 w-56" />
@@ -1429,7 +1451,7 @@ Best regards`);
               {/* Overview tab section cards */}
               <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-4 sm:p-6 lg:p-8 space-y-6">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 space-y-3">
+                  <div key={i} className="tf-panel p-6 space-y-3">
                     <Skeleton className="h-5 w-40" />
                     <Skeleton className="h-3.5 w-full" />
                     <Skeleton className="h-3.5 w-5/6" />
@@ -1445,9 +1467,9 @@ Best regards`);
   }
 
   return (
-    <main className="flex-1 min-w-0 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page min-w-0">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           {/* The resume is a modal now, so the trail always names the candidate —
               no "› Resume" leaf, and the pager keeps its place (the backdrop
               covers it while the modal is open). */}
@@ -1491,14 +1513,17 @@ Best regards`);
         {/* Entity hero card — neutral card chrome + leading icon disc, matching
             the Job Openings master header and the Job Details hero so the detail
             pages read as siblings (was a heavier border-2/shadow-lg card). */}
-        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+        <div className="tf-card p-4 sm:p-5">
           {/* Row 1: candidate identity. The record pager that used to sit on
               the right moved into the breadcrumb bar, as on job-details. */}
           <div className="flex items-start justify-between gap-4 mb-3">
             {/* No inset: the name, years and version badge start on the same
                 left edge as the contact badges and action buttons below. */}
             <div className="min-w-0">
-              <h1 className="tf-page-title mb-2 truncate">{resume.candidateName}</h1>
+              <h1 className="tf-page-title mb-2 truncate flex items-center gap-2">
+                <span className="truncate">{resume.candidateName}</span>
+                {resumeArchived && <ResumeArchivedBadge />}
+              </h1>
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                 <p className="text-base sm:text-lg text-gray-700 font-medium">{resume.title || resume.experience || 'Candidate'}</p>
                 {resume.resumeVersion && (versionReadOnly || resumeVersions.length === 0 ? (
@@ -1535,6 +1560,7 @@ Best regards`);
 
                     {showVersionMenu && (
                       <div
+                        ref={versionDropdownRef}
                         role="menu"
                         aria-label="Resume versions"
                         className="absolute left-0 top-full mt-2 w-52 sm:w-64 max-w-[calc(100vw-2rem)] max-h-72 overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50"
@@ -1559,18 +1585,18 @@ Best regards`);
                               className={`w-full px-3 py-2 text-left transition-colors ${isSelected ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5 cursor-pointer'}`}
                             >
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-semibold text-gray-900">Version {versionNumber}</span>
+                                <span className="tf-caption">Version {versionNumber}</span>
                                 <div className="flex items-center gap-1">
                                   {isSelected ? (
-                                    <span className="text-2xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">Selected</span>
+                                    <span className="tf-badge text-2xs bg-blue-100 text-blue-700">Selected</span>
                                   ) : null}
                                   {index === 0 ? (
-                                    <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success-subtle text-success">Latest</span>
+                                    <span className="tf-badge text-2xs bg-success-subtle text-success">Latest</span>
                                   ) : null}
                                   {versionPreviewLoadingId === version.id && <Loader2 className="w-3 h-3 animate-spin text-gray-400" />}
                                 </div>
                               </div>
-                              <div className="text-2xs text-gray-500 truncate">
+                              <div className="tf-micro-hint truncate">
                                 {score
                                   ? `Scored${score.rating != null ? ` ${Number(score.rating).toFixed(1)}/10` : ''}${score.scoredAt ? ` • ${formatIST(score.scoredAt)}` : ''}`
                                   : 'Not scored for this job • Preview'}
@@ -1609,7 +1635,7 @@ Best regards`);
 
           {/* Row 2: contact badges and actions share one line — badges left,
               actions right (Invite primary > View Resume > Download quiet). */}
-          <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 tf-card-desc">
+          <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6 tf-body-secondary">
             {/* Compact contact badges — the resume view's own chip
                 (resume-view/[id]), not button-sized boxes. */}
             <span className={`${CONTACT_BADGE} min-w-0 max-w-full`}>
@@ -1694,8 +1720,8 @@ Best regards`);
                     inviteDisabled
                       ? (!canInvite
                           ? 'You do not have permission to invite candidates'
-                          : jdLocked
-                            ? jdLockReason
+                          : inviteBlockedByRecord
+                            ? inviteBlockedByRecordReason
                           : invitePlanLocked
                             ? PLAN_LOCKED_MESSAGE
                             : 'No published assessment or AI interview for this job yet')
@@ -1732,7 +1758,7 @@ Best regards`);
                         onClick={() => { if (!mayInviteAssessment) return; handleInviteForAssessment(); }}
                         disabled={mayInviteAssessment && !canInviteAssessment}
                         aria-disabled={!mayInviteAssessment}
-                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        title={!mayInviteAssessment ? 'You do not have permission to invite candidates to an assessment' : inviteBlockedByRecord ? inviteBlockedByRecordReason : assessmentPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAssessment ? 'No published assessment for this job yet' : undefined}
                         className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
                           mayInviteAssessment ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
                         }`}
@@ -1741,7 +1767,7 @@ Best regards`);
                           <ClipboardList className="w-4 h-4 text-brand-blue" />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send Assessment' : 'Assessment'}</span>
+                          <span className="block tf-row-name">{viaInviteDialog ? 'Create / Send Assessment' : 'Assessment'}</span>
                         </span>
                       </button>
                     )}
@@ -1752,7 +1778,7 @@ Best regards`);
                         onClick={() => { if (!mayInviteAIInterview) return; handleInviteForAIInterview(); }}
                         disabled={mayInviteAIInterview && !canInviteAIInterview}
                         aria-disabled={!mayInviteAIInterview}
-                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        title={!mayInviteAIInterview ? 'You do not have permission to invite candidates to an AI interview' : inviteBlockedByRecord ? inviteBlockedByRecordReason : aiInterviewPlanLocked ? PLAN_LOCKED_MESSAGE : !canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
                         className={`w-full flex items-start gap-3 px-3 py-2.5 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent ${
                           mayInviteAIInterview ? 'hover:bg-brand-blue/5' : 'opacity-60 cursor-not-allowed'
                         }`}
@@ -1761,7 +1787,7 @@ Best regards`);
                           <Video className="w-4 h-4 text-brand-cyan" />
                         </span>
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">{viaInviteDialog ? 'Create / Send AI Interview' : 'AI Interview'}</span>
+                          <span className="block tf-row-name">{viaInviteDialog ? 'Create / Send AI Interview' : 'AI Interview'}</span>
                         </span>
                       </button>
                     )}
@@ -1859,7 +1885,7 @@ Best regards`);
                   {jobTitle}
                 </button>
                 {(resume.jobVersion ?? jdDetails?.version_number) != null && (
-                  <span className="inline-flex items-center px-2.5 py-0.5 ml-1.5 bg-brand-orange-deep text-white rounded-full text-xs font-medium align-middle whitespace-nowrap">
+                  <span className="tf-badge ml-1.5 bg-brand-orange-deep text-white align-middle">
                     v{resume.jobVersion ?? jdDetails?.version_number}.0
                   </span>
                 )}
@@ -1875,7 +1901,7 @@ Best regards`);
                 )}
               </span>
             </div>
-            <div className="tf-card-desc whitespace-nowrap">
+            <div className="tf-body-secondary whitespace-nowrap">
               {fullResumeData.scoredDate && !isNaN(new Date(fullResumeData.scoredDate).getTime())
                 ? formatIST(fullResumeData.scoredDate)
                 : fullResumeData.scoredDate}
@@ -2030,7 +2056,7 @@ Best regards`);
                   ? 'bg-warning-subtle border-warning-line'
                   : 'bg-destructive-subtle border-destructive-line'
               }`}>
-                <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <h4 className="tf-section-title mb-3 flex items-center gap-2">
                   <Award className="w-5 h-5" />
                   Overall Recommendation
                 </h4>
@@ -2052,29 +2078,29 @@ Best regards`);
               {/* AI Analysis Summary — leads the tab: it's the verdict the rest
                   of the sections break down. */}
               {aiReasoning && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4 sm:p-5">
+                <div className="tf-panel p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <MessageSquare className="w-5 h-5 text-gray-700" />
-                    <h3 className="tf-section-title">AI Analysis</h3>
+                    <h3 className="tf-section-title sm:text-lg">AI Analysis</h3>
                   </div>
                   <p className="tf-body leading-relaxed">{aiReasoning}</p>
                 </div>
               )}
 
               {/* Strengths & Weaknesses */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="tf-grid-2">
                 {/* Strengths */}
                 <div className="bg-success-subtle border border-success-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsUp className="w-5 h-5 text-success" />
-                    <h3 className="tf-section-title">Strengths</h3>
+                    <h3 className="tf-section-title sm:text-lg">Strengths</h3>
                   </div>
                   {keyStrengths.length > 0 ? (
                     <ul className="space-y-3">
                       {keyStrengths.map((strength: string, idx: number) => (
                         <li key={idx} className="flex items-start gap-3">
                           <CheckCircle className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-gray-800">{strength}</span>
+                          <span className="tf-body">{strength}</span>
                         </li>
                       ))}
                     </ul>
@@ -2087,20 +2113,20 @@ Best regards`);
                 <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <ThumbsDown className="w-5 h-5 text-destructive" />
-                    <h3 className="tf-section-title">Weaknesses</h3>
+                    <h3 className="tf-section-title sm:text-lg">Weaknesses</h3>
                   </div>
                   {(improvementAreas.length > 0 || missingSkills.length > 0) ? (
                     <ul className="space-y-3">
                       {improvementAreas.map((gap: string, idx: number) => (
                         <li key={`gap-${idx}`} className="flex items-start gap-3">
                           <XCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-gray-800">{gap}</span>
+                          <span className="tf-body">{gap}</span>
                         </li>
                       ))}
                       {missingSkills.length > 0 && (
                         <li className="flex items-start gap-3">
                           <AlertCircle className="w-4 h-4 text-orange-500 mt-0.5 flex-shrink-0" />
-                          <span className="text-sm text-gray-800">
+                          <span className="tf-body">
                             Missing skills: {missingSkills.join(', ')}
                           </span>
                         </li>
@@ -2179,12 +2205,12 @@ Best regards`);
 
               {/* Professional Summary - Only show actual resume summary, NOT AI scoring summary */}
               {fullResumeData.professionalSummary && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Professional Summary</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Professional Summary</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
                     {fullResumeData.professionalSummary}
@@ -2193,12 +2219,12 @@ Best regards`);
               )}
 
               {/* Work Experience */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+              <div className="tf-card-soft p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <Briefcase className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="tf-section-title">Work Experience</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">Work Experience</h3>
                 </div>
                 {fullResumeData.experienceDetails && fullResumeData.experienceDetails.length > 0 ? (
                   <div className="space-y-6">
@@ -2213,7 +2239,7 @@ Best regards`);
                                 <Building2 className="w-4 h-4" />
                                 <span>{exp.company || 'Company'}</span>
                               </div>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-card-desc">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-body-secondary">
                                 {exp.location && (
                                   <span className="flex items-center gap-1">
                                     <MapPin className="w-3 h-3" />
@@ -2271,12 +2297,12 @@ Best regards`);
               </div>
 
               {/* Education */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+              <div className="tf-card-soft p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <GraduationCap className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="tf-section-title">Education</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">Education</h3>
                 </div>
                 {fullResumeData.educationDetails && fullResumeData.educationDetails.length > 0 ? (
                   <div className="space-y-4">
@@ -2289,7 +2315,7 @@ Best regards`);
                         {(edu.institution || edu.school) && (
                           <div className="text-gray-700 mb-1">{edu.institution || edu.school}</div>
                         )}
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-card-desc">
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 tf-body-secondary">
                           {edu.location && (
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3" />
@@ -2344,12 +2370,12 @@ Best regards`);
                 ].filter((g) => g.items.length > 0);
                 if (groups.length === 0) return null;
                 return (
-                  <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                  <div className="tf-card-soft p-4 sm:p-5">
                     <div className="flex items-center gap-2 mb-4 sm:mb-6">
                       <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Code className="w-4 h-4 text-brand-blue" />
                       </div>
-                      <h3 className="tf-section-title">Skills</h3>
+                      <h3 className="tf-section-title sm:text-lg tracking-tight">Skills</h3>
                     </div>
                     <div className="space-y-5">
                       {groups.map((group) => (
@@ -2369,12 +2395,12 @@ Best regards`);
 
               {/* Certifications */}
               {fullResumeData.certifications && fullResumeData.certifications.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="tf-section-title">Certifications</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Certifications</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.certifications.map((cert, index) => {
@@ -2389,7 +2415,7 @@ Best regards`);
                             <div className="min-w-0">
                               <h4 className="font-semibold text-gray-900 mb-1">{certName}</h4>
                               {certIssuer && <div className="tf-body mb-1">{certIssuer}</div>}
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta-strong">
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta">
                                 {certDate && (
                                   <span className="flex items-center gap-1">
                                     <Calendar className="w-3 h-3" />
@@ -2410,14 +2436,14 @@ Best regards`);
 
               {/* Languages */}
               {fullResumeData.languages && fullResumeData.languages.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Languages className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="tf-section-title">Languages</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Languages</h3>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 sm:gap-3">
+                  <div className="tf-grid-3">
                     {fullResumeData.languages.map((language: any, index: number) => {
                       // Handle both string and object formats
                       const langName = typeof language === 'string' ? language : (language.name || language.language || 'Unknown');
@@ -2425,7 +2451,7 @@ Best regards`);
                       return (
                         <div key={index} className="p-3 sm:p-4 min-w-0 [overflow-wrap:anywhere] bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg text-center">
                           <div className="font-medium text-gray-900 mb-1">{langName}</div>
-                          <div className="tf-card-desc">{proficiency}</div>
+                          <div className="tf-body-secondary">{proficiency}</div>
                         </div>
                       );
                     })}
@@ -2435,12 +2461,12 @@ Best regards`);
 
               {/* Projects */}
               {fullResumeData.projects && fullResumeData.projects.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Code className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Projects</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Projects</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.projects.map((project: any, index: number) => (
@@ -2456,7 +2482,7 @@ Best regards`);
                         {project.description && (
                           <p className="tf-body mb-2">{project.description}</p>
                         )}
-                        <div className="flex flex-wrap gap-2 tf-meta-strong">
+                        <div className="flex flex-wrap gap-2 tf-meta">
                           {project.duration && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3" />
@@ -2477,12 +2503,12 @@ Best regards`);
 
               {/* Awards */}
               {fullResumeData.awards && fullResumeData.awards.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center">
                       <Award className="w-4 h-4 text-brand-orange" />
                     </div>
-                    <h3 className="tf-section-title">Awards &amp; Honors</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Awards &amp; Honors</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.awards.map((award: any, index: number) => (
@@ -2492,13 +2518,13 @@ Best regards`);
                             <h4 className="font-semibold text-gray-900 mb-1">{award.name}</h4>
                             {award.issuer && <div className="tf-body">{award.issuer}</div>}
                             {award.date && (
-                              <div className="tf-meta-strong flex items-center gap-1 mt-1">
+                              <div className="tf-meta flex items-center gap-1 mt-1">
                                 <Calendar className="w-3 h-3" />
                                 {award.date}
                               </div>
                             )}
                             {award.description && (
-                              <p className="tf-card-desc mt-2">{award.description}</p>
+                              <p className="tf-body-secondary mt-2">{award.description}</p>
                             )}
                           </div>
                           <Award className="w-6 h-6 text-brand-orange flex-shrink-0" />
@@ -2511,12 +2537,12 @@ Best regards`);
 
               {/* Achievements */}
               {fullResumeData.achievements && fullResumeData.achievements.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Achievements</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Achievements</h3>
                   </div>
                   <div className="space-y-2">
                     {fullResumeData.achievements.map((achievement: any, index: number) => (
@@ -2531,12 +2557,12 @@ Best regards`);
 
               {/* Hobbies & Interests */}
               {fullResumeData.hobbies && fullResumeData.hobbies.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="tf-section-title">Hobbies &amp; Interests</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Hobbies &amp; Interests</h3>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {fullResumeData.hobbies.map((hobby: any, index: number) => (
@@ -2550,14 +2576,14 @@ Best regards`);
 
               {/* Social Links */}
               {(fullResumeData.linkedinUrl || fullResumeData.githubUrl || fullResumeData.portfolioUrl) && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Social &amp; Portfolio Links</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Social &amp; Portfolio Links</h3>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                  <div className="tf-grid-3">
                     {fullResumeData.linkedinUrl && (
                       <a href={fullResumeData.linkedinUrl} target="_blank" rel="noopener noreferrer"
                          className="flex items-center justify-center gap-2 p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors">
@@ -2582,12 +2608,12 @@ Best regards`);
 
               {/* Notice Period */}
               {fullResumeData.noticePeriod && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Clock className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Notice Period</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Notice Period</h3>
                   </div>
                   <p className="text-gray-700">{fullResumeData.noticePeriod}</p>
                 </div>
@@ -2595,12 +2621,12 @@ Best regards`);
 
               {/* Volunteer Experience */}
               {fullResumeData.volunteerExperience && fullResumeData.volunteerExperience.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6">
                     <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                       <Star className="w-4 h-4 text-brand-cyan" />
                     </div>
-                    <h3 className="tf-section-title">Volunteer Experience</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Volunteer Experience</h3>
                   </div>
                   <div className="space-y-4">
                     {fullResumeData.volunteerExperience.map((vol: any, index: number) => (
@@ -2608,12 +2634,12 @@ Best regards`);
                         <h4 className="font-semibold text-gray-900 mb-1">{vol.role || vol.title}</h4>
                         {vol.organization && <div className="tf-body mb-1">{vol.organization}</div>}
                         {vol.duration && (
-                          <div className="tf-meta-strong flex items-center gap-1 mb-2">
+                          <div className="tf-meta flex items-center gap-1 mb-2">
                             <Calendar className="w-3 h-3" />
                             {vol.duration}
                           </div>
                         )}
-                        {vol.description && <p className="tf-card-desc">{vol.description}</p>}
+                        {vol.description && <p className="tf-body-secondary">{vol.description}</p>}
                       </div>
                     ))}
                   </div>
@@ -2622,12 +2648,12 @@ Best regards`);
 
               {/* Objective */}
               {fullResumeData.objective && fullResumeData.objective !== fullResumeData.professionalSummary && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Career Objective</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Career Objective</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed">{fullResumeData.objective}</p>
                 </div>
@@ -2635,12 +2661,12 @@ Best regards`);
 
               {/* Additional Information */}
               {fullResumeData.additionalInfo && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Additional Information</h3>
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Additional Information</h3>
                   </div>
                   <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">{fullResumeData.additionalInfo}</p>
                 </div>
@@ -2649,13 +2675,13 @@ Best regards`);
               {/* Version History — tick two uploads to diff them, same flow as
                   resume-view. */}
               {resumeVersions.length > 0 && (
-                <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+                <div className="tf-card-soft p-4 sm:p-5">
                   <div className="flex items-center gap-2 mb-4 sm:mb-6 flex-wrap">
                     <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <History className="w-4 h-4 text-brand-blue" />
                     </div>
-                    <h3 className="tf-section-title">Version History</h3>
-                    <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20">
+                    <h3 className="tf-section-title sm:text-lg tracking-tight">Version History</h3>
+                    <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                       {resumeVersions.length} version{resumeVersions.length !== 1 ? 's' : ''}
                     </span>
                     {resumeVersions.length > 1 && (
@@ -2707,7 +2733,7 @@ Best regards`);
                                       type="checkbox"
                                       checked={compareChecked.includes(version.id)}
                                       onChange={() => handleCompareCheck(version.id)}
-                                      className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 cursor-pointer"
+                                      className="tf-checkbox focus:ring-brand-blue/40"
                                     />
                                   </label>
                                 )}
@@ -2728,7 +2754,7 @@ Best regards`);
                                   {version.fileName && (
                                     <div className="tf-body truncate max-lg:whitespace-normal max-lg:[overflow-wrap:anywhere]" title={version.fileName}>{version.fileName}</div>
                                   )}
-                                  <div className="flex items-center gap-x-4 gap-y-1 tf-meta-strong mt-1 flex-wrap">
+                                  <div className="flex items-center gap-x-4 gap-y-1 tf-meta mt-1 flex-wrap">
                                     {version.uploadDate && (
                                       <span className="flex items-center gap-1">
                                         <Calendar className="w-3 h-3" />
@@ -2746,7 +2772,7 @@ Best regards`);
                                   resume-view's View Changes / view / download
                                   cluster. */}
                               <div className="flex flex-wrap items-center justify-end gap-2 flex-shrink-0 max-lg:justify-between max-lg:pt-3 max-lg:border-t max-lg:border-gray-200/70">
-                                <span className="tf-meta-strong whitespace-nowrap max-lg:mr-auto">{version.size}</span>
+                                <span className="tf-meta whitespace-nowrap max-lg:mr-auto">{version.size}</span>
                                 {previousVersion ? (
                                   <button
                                     onClick={() => handleViewVersionChanges(previousVersion.id, version.id)}
@@ -2757,7 +2783,7 @@ Best regards`);
                                     View Changes
                                   </button>
                                 ) : (
-                                  <span className="px-3 py-1.5 text-xs text-gray-400 italic">First version</span>
+                                  <span className="px-3 py-1.5 tf-hint italic">First version</span>
                                 )}
                                 <button
                                   onClick={() => handleVersionPreview(version, versionNumber)}
@@ -2797,14 +2823,14 @@ Best regards`);
               )}
 
               {/* File Properties */}
-              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-5">
+              <div className="tf-card-soft p-4 sm:p-5">
                 <div className="flex items-center gap-2 mb-4 sm:mb-6">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <File className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="tf-section-title">File Properties</h3>
+                  <h3 className="tf-section-title sm:text-lg tracking-tight">File Properties</h3>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="tf-grid-2">
                   <div className="space-y-4">
                     <div className="flex items-start gap-3">
                       <div className="p-2 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg">
@@ -2812,7 +2838,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">File Name</div>
-                        <div className="text-sm text-gray-900 break-all">
+                        <div className="tf-body break-all">
                           {fullResumeData.fileName || `${(fullResumeData.candidateName || 'Candidate').replace(/\s+/g, '_')}_Resume.pdf`}
                         </div>
                       </div>
@@ -2823,7 +2849,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">File Size</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
+                        <div className="tf-body [overflow-wrap:anywhere]">
                           {fullResumeData.fileSizeKb
                             ? `${fullResumeData.fileSizeKb} KB`
                             : (resumeVersions[0]?.size || 'Unknown')}
@@ -2836,7 +2862,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">File Type</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{(fullResumeData.fileType || 'PDF').toUpperCase()} Document</div>
+                        <div className="tf-body [overflow-wrap:anywhere]">{(fullResumeData.fileType || 'PDF').toUpperCase()} Document</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -2845,7 +2871,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">Upload Date</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
+                        <div className="tf-body [overflow-wrap:anywhere]">
                           {fullResumeData.uploadDate ? formatIST(fullResumeData.uploadDate) : 'Unknown'}
                         </div>
                       </div>
@@ -2858,7 +2884,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">Last Modified</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
+                        <div className="tf-body [overflow-wrap:anywhere]">
                           {fullResumeData.lastUpdated ? formatIST(fullResumeData.lastUpdated) : 'Never'}
                         </div>
                       </div>
@@ -2869,7 +2895,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">Uploaded By</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">{fullResumeData.uploadedBy || 'Unknown'}</div>
+                        <div className="tf-body [overflow-wrap:anywhere]">{fullResumeData.uploadedBy || 'Unknown'}</div>
                       </div>
                     </div>
                     <div className="flex items-start gap-3">
@@ -2878,7 +2904,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">Total Attachments</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
+                        <div className="tf-body [overflow-wrap:anywhere]">
                           {resumeVersions.length || 1} file{(resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
                       </div>
@@ -2889,7 +2915,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="tf-meta mb-1">Version Count</div>
-                        <div className="text-sm text-gray-900 [overflow-wrap:anywhere]">
+                        <div className="tf-body [overflow-wrap:anywhere]">
                           {(fullResumeData.versionCount || resumeVersions.length || 1)} version{(fullResumeData.versionCount || resumeVersions.length || 1) !== 1 ? 's' : ''}
                         </div>
                       </div>
@@ -2934,7 +2960,7 @@ Best regards`);
 
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
                     <Skeleton className="h-5 w-48 mb-4" />
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                    <div className="tf-grid-2">
                       {Array.from({ length: 2 }).map((_, col) => (
                         <div key={col} className="space-y-3">
                           <Skeleton className="h-4 w-32" />
@@ -2955,7 +2981,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => setShowJdNavConfirm(true)}
-                          className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-brand-blue-2 transition-colors cursor-pointer"
+                          className="tf-btn tf-btn-primary px-2 py-0.5 bg-brand-blue rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-brand-blue-2 transition-colors whitespace-normal shadow-none gap-0 justify-start"
                         >
                           {jdDetails.job_id}
                         </button>
@@ -2972,14 +2998,14 @@ Best regards`);
                         </span>
                       )}
                       {jdDetails.creation_method === 'ai_generated' && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-50 text-blue-700 border border-blue-200">
+                        <span className="tf-badge bg-blue-50 text-blue-700 border border-blue-200">
                           <Zap className="w-3 h-3" />
                           AI-Generated
                         </span>
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
+                    <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                       {jdLocationGroups.length > 0 && (
                         <>
                           {jdLocationGroups.map((label) => (
@@ -2992,13 +3018,13 @@ Best regards`);
                         </>
                       )}
                       {jdDetails.department && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 tf-meta rounded-md">
                           <Building2 className="w-3.5 h-3.5" />
                           {jdDetails.department}
                         </span>
                       )}
                       {jdExperienceBadge && (
-                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 tf-meta rounded-md">
                           {jdExperienceBadge}
                         </span>
                       )}
@@ -3008,12 +3034,12 @@ Best regards`);
                           here repeated it - and the scorecard on this very page graded
                           the two copies separately, with opposite verdicts. */}
                       {jdDetails.employment_type && (
-                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 tf-meta rounded-md">
                           {employmentTypeLabel(jdDetails.employment_type)}
                         </span>
                       )}
                       {jdDetails.remote_type && (
-                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-700 rounded-md text-xs">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 tf-meta rounded-md">
                           {workModeLabel(jdDetails.remote_type)}
                         </span>
                       )}
@@ -3027,7 +3053,7 @@ Best regards`);
                       <span className="text-gray-300">•</span>
                       <span>By {jdDetails.created_by_name || 'System'}</span>
                       <span className="text-gray-300">•</span>
-                      <span className="inline-flex items-center px-2.5 py-1 bg-brand-orange-deep text-white rounded-full text-xs font-medium">
+                      <span className="tf-badge bg-brand-orange-deep text-white">
                         {/* Job version (version_number), not current_version — the republish counter. */}
                         v{jdDetails.version_number && jdDetails.version_number > 0 ? jdDetails.version_number : 1}.0
                       </span>
@@ -3036,7 +3062,7 @@ Best regards`);
 
                   {/* Job Description */}
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
-                    <h4 className="tf-card-title mb-3">Job Description</h4>
+                    <h4 className="tf-section-title mb-3">Job Description</h4>
                     <div className="h-px bg-gray-200 mb-3"></div>
                     {jdDescriptionMarkdown.trim() ? (
                       <div className="markdown-content prose prose-sm max-w-none text-gray-700">
@@ -3053,20 +3079,20 @@ Best regards`);
                   {jdDetails.additional_details && (
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-3">
-                        <h4 className="tf-subsection-title">Additional Details</h4>
+                        <h4 className="tf-row-title">Additional Details</h4>
                         <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded">
                           Visible to candidates
                         </span>
                       </div>
-                      <p className="tf-card-desc whitespace-pre-wrap">{jdDetails.additional_details}</p>
+                      <p className="tf-body-secondary whitespace-pre-wrap">{jdDetails.additional_details}</p>
                     </div>
                   )}
 
                   {/* Internal Recruiter Notes & Assessment Guidance */}
                   <div className={`grid ${jdDetails.assessment_guidance ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
-                      <h4 className="tf-subsection-title mb-3">Internal Recruiter Notes</h4>
-                      <div className="tf-card-desc space-y-2">
+                      <h4 className="tf-row-title mb-3">Internal Recruiter Notes</h4>
+                      <div className="tf-body-secondary space-y-2">
                         {jdInternalNotes.length > 0 ? (
                           <ul className="list-disc list-inside space-y-1">
                             {jdInternalNotes.map((note, index) => (
@@ -3081,8 +3107,8 @@ Best regards`);
 
                     {jdDetails.assessment_guidance && (
                       <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
-                        <h4 className="tf-subsection-title mb-3">Assessment Guidance</h4>
-                        <p className="tf-card-desc whitespace-pre-wrap">{jdDetails.assessment_guidance}</p>
+                        <h4 className="tf-row-title mb-3">Assessment Guidance</h4>
+                        <p className="tf-body-secondary whitespace-pre-wrap">{jdDetails.assessment_guidance}</p>
                       </div>
                     )}
                   </div>
@@ -3141,7 +3167,7 @@ Best regards`);
                         <Mail className="w-5 h-5 text-white" />
                       </div>
                       <div>
-                        <h2 className="text-lg font-semibold text-gray-900 tracking-tight">Share Resume</h2>
+                        <h2 className="tf-section-title tracking-tight">Share Resume</h2>
                         <p className="tf-body-muted">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                       </div>
                     </div>
@@ -3149,7 +3175,7 @@ Best regards`);
                       variant="secondary"
                       size="sm"
                       onClick={closeShareModal}
-                      className="px-2"
+                     
                       aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
@@ -3168,7 +3194,7 @@ Best regards`);
                           </div>
                           <div className="min-w-0 flex-1">
                             <div
-                              className="text-sm font-medium text-gray-900 truncate"
+                              className="tf-row-name truncate"
                               title={fullResumeData.fileName || `${fullResumeData.candidateName}.pdf`}
                             >
                               {fullResumeData.fileName || `${fullResumeData.candidateName}.pdf`}
@@ -3200,7 +3226,7 @@ Best regards`);
                           </div>
                           <div className="min-w-0 flex-1">
                             <div
-                              className="text-sm font-medium text-gray-900 truncate"
+                              className="tf-row-name truncate"
                               title={`Scorecard - ${fullResumeData.candidateName}.pdf`}
                             >
                               Scorecard - {fullResumeData.candidateName}.pdf
@@ -3234,7 +3260,7 @@ Best regards`);
                         value={shareEmail}
                         onChange={(e) => setShareEmail(e.target.value)}
                         placeholder="Enter email address"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                        className="tf-input px-4"
                       />
                     </div>
 
@@ -3245,7 +3271,7 @@ Best regards`);
                         value={shareSubject}
                         onChange={(e) => setShareSubject(e.target.value)}
                         placeholder="Email subject"
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all"
+                        className="tf-input px-4"
                       />
                     </div>
 
@@ -3256,7 +3282,7 @@ Best regards`);
                         onChange={(e) => setShareMessage(e.target.value)}
                         placeholder="Enter your message"
                         rows={8}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue outline-none transition-all resize-none"
+                        className="tf-textarea px-4 py-2.5 resize-none"
                       />
                     </div>
                   </div>
@@ -3298,7 +3324,7 @@ Best regards`);
                       <Eye className="w-5 h-5 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <h2 className="tf-section-title truncate">Scorecard</h2>
+                      <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Scorecard</h2>
                       <p className="tf-body-muted truncate">
                         {fullResumeData.candidateName}
                         {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
@@ -3318,7 +3344,7 @@ Best regards`);
                       variant="secondary"
                       size="sm"
                       onClick={closeScorecardPreview}
-                      className="px-2"
+                     
                       aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
@@ -3434,7 +3460,7 @@ Best regards`);
                         <History className="w-5 h-5 text-white" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="tf-section-title truncate min-w-0">Version Comparison</h2>
+                        <h2 className="tf-section-title sm:text-lg tracking-tight truncate min-w-0">Version Comparison</h2>
                         <p className="tf-body-muted truncate">
                           Version {older.version} vs Version {newer.version}
                         </p>
@@ -3479,7 +3505,7 @@ Best regards`);
                         variant="secondary"
                         size="sm"
                         onClick={closeCompare}
-                        className="px-2"
+                       
                         aria-label="Close"
                       >
                         <X className="w-5 h-5 text-gray-500" />
@@ -3517,7 +3543,7 @@ Best regards`);
                             <p className="tf-error mt-0.5 truncate">{older.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
-                            <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
+                            <div className="tf-panel p-5 max-sm:p-3">
                               {sidePairs.map((pair, idx) => renderLine(pair.left, idx, 'left'))}
                             </div>
                           </div>
@@ -3533,7 +3559,7 @@ Best regards`);
                             <p className="text-xs text-success mt-0.5 truncate">{newer.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4 max-sm:p-2">
-                            <div className="bg-white rounded-lg border border-gray-200 p-5 max-sm:p-3">
+                            <div className="tf-panel p-5 max-sm:p-3">
                               {sidePairs.map((pair, idx) => renderLine(pair.right, idx, 'right'))}
                             </div>
                           </div>
@@ -3542,7 +3568,7 @@ Best regards`);
                     ) : (
                       /* Unified */
                       <div className="h-full overflow-y-auto p-4 sm:p-6">
-                        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 max-sm:p-4 sm:p-8 max-w-3xl mx-auto">
+                        <div className="tf-card-soft p-6 max-sm:p-4 sm:p-8 max-w-3xl mx-auto">
                           {diff.lines.map((line, idx) => {
                             const trimmed = line.text.trim();
                             if (!trimmed) return <div key={idx} className="h-3" />;
@@ -3618,7 +3644,7 @@ Best regards`);
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 min-w-0">
-                          <h2 className="tf-section-title truncate">Version {versionPreview.versionNumber}</h2>
+                          <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
                           {isLatestPreview && (
                             <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                               Latest
@@ -3644,7 +3670,7 @@ Best regards`);
                         variant="secondary"
                         size="sm"
                         onClick={() => setVersionPreview(null)}
-                        className="px-2"
+                        className=""
                         aria-label="Close"
                       >
                         <X className="w-5 h-5 text-gray-500" />
@@ -3655,7 +3681,7 @@ Best regards`);
                   {/* Resume content — document style */}
                   <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
                     {versionPreview.text ? (
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
+                      <div className="tf-card-soft p-4 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
                         {lines.map((line, idx) => {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;
@@ -3667,7 +3693,7 @@ Best regards`);
 
                           if (isHeader) {
                             return (
-                              <h3 key={idx} className="text-base font-bold text-gray-900 mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
+                              <h3 key={idx} className="tf-section-title mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
                                 {trimmed}
                               </h3>
                             );
@@ -3687,9 +3713,9 @@ Best regards`);
                         })}
                       </div>
                     ) : (
-                      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+                      <div className="tf-card-soft p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
                         <FileText className="w-10 h-10 text-gray-400 mb-3" />
-                        <p className="text-sm font-medium text-gray-900">Preview not available</p>
+                        <p className="tf-row-name">Preview not available</p>
                         <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>
                       </div>
                     )}

@@ -66,7 +66,7 @@ export default function TabEmptyState({
       className={cn(
         'flex flex-col items-center justify-center py-12 text-center',
         bordered &&
-          'px-4 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 bg-white dark:bg-slate-900',
+          'px-4 tf-card',
         className,
       )}
     >
@@ -82,7 +82,7 @@ export default function TabEmptyState({
         <Icon className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
       )}
       <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">{title}</h3>
-      <p className="text-sm text-gray-500 dark:text-slate-500 max-w-sm">{description}</p>
+      <p className="tf-body-muted max-w-sm">{description}</p>
       {action && (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{action}</div>
       )}

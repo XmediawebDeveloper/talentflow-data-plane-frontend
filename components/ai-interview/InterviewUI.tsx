@@ -335,6 +335,16 @@ const LONG_TASK_LOG_MS = 200;
 // reads as tightly in sync instead of laggy. Kept small so text never finishes
 // noticeably before the audio.
 const REVEAL_LEAD_MS = 550;
+// Shared speech clock (speechSync.ts): a word is shown this long before the
+// candidate HEARS it start. The clock is the audible sample itself, so this is
+// the whole lead — the typewriter (TYPE_TRAIL_MS) finishes the word inside it.
+// REVEAL_LEAD_MS / DEFAULT_REVEAL_CPS / PHASE_A_* only pace the legacy path
+// (a cached worklet without the clock).
+const CAPTION_LEAD_MS = 150;
+// Caption tick. Cheap: the bubble only re-renders when the revealed text
+// changes (a few times a second), and word-level targets need finer than the
+// old 200 ms quantisation to land on the word they belong to.
+const REVEAL_TICK_MS = 50;
 // Phase A reveal rate (chars/sec) used until `audio_end` tells us the TRUE total
 // audio duration. Prior only — replaced by the previous turn's MEASURED rate
 // (chars ÷ actual audio seconds) from the second turn on, so it self-calibrates
@@ -346,7 +356,10 @@ const REVEAL_LEAD_MS = 550;
 // visible burst on "…for the <role> role. In this position" every interview.
 // Kept a little under the measurement: a slight lag catches up gently, running
 // ahead would freeze the caption until the voice catches up.
-const DEFAULT_REVEAL_CPS = 16;
+// 2026-11-03: that measurement was taken with 0.85 configured but NOT applied
+// (gpt-4o-mini-tts ignores `speed`); the backend now really stretches to 0.85,
+// so 16.9 × 0.85 ≈ 14.4 cps.
+const DEFAULT_REVEAL_CPS = 14;
 // Safety ceiling on Phase A, NOT a pacer (see startRevealingTokens). The rate
 // pacer above governs; this only stops a bad CPS prior from completing the
 // bubble before `audio_end` confirms the total.
@@ -491,7 +504,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
             <p className="text-sm leading-relaxed break-words">{msg.content}</p>
           </div>
           {msg.timestamp && (
-            <p className="text-2xs text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
+            <p className="tf-micro-hint mt-0.5 text-right">{msg.timestamp}</p>
           )}
         </div>
       </div>
@@ -515,7 +528,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
           <p className="text-sm leading-relaxed whitespace-pre-line break-words">{msg.content}</p>
         </div>
         {msg.timestamp && (
-          <p className="text-2xs text-gray-400 mt-0.5">{msg.timestamp}</p>
+          <p className="tf-micro-hint mt-0.5">{msg.timestamp}</p>
         )}
       </div>
     </div>
@@ -568,7 +581,7 @@ interface LiveAIBubbleProps {
 // trailing it by about one tick; after a stall it types the backlog fast but
 // visibly instead of popping it in. Text is written straight to the DOM node,
 // so no React render per letter.
-const TYPE_TRAIL_MS = 220;          // normal lag behind the reveal target
+const TYPE_TRAIL_MS = 110;          // normal lag behind the reveal target (word-level targets: a word types in ~0.1 s, inside CAPTION_LEAD_MS)
 const TYPE_MAX_CPS = 45;            // backlog catch-up: ~2.5x Bina's pace, reads as quick typing, not a fast-forward
 const TYPE_MAX_CATCHUP_MS = 1500;   // never trail a huge backlog longer than this
 
@@ -1729,6 +1742,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Video recording refs
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  // First chunk the live MediaRecorder emitted. It alone carries the WebM
+  // header (EBML + Segment + Tracks); a file assembled without it has
+  // "0 real headers" and will not play. Kept so segment 0 can always start
+  // with it, even if the buffer was trimmed (staging c810f95f, 2026-11-03).
+  const recordingHeaderChunkRef = useRef<Blob | null>(null);
   const webcamStreamRef = useRef<MediaStream | null>(null);
   // Keeps the recording-audio boost graph alive (a GC'd AudioContext would stop
   // the boost). Used to make quiet headset mics clearly audible in the saved video.
@@ -1790,6 +1808,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   })());
   const _saveRecSeg = (next: number) => {
     try { if (typeof window !== 'undefined') window.sessionStorage.setItem(_recSegKey, String(next)); } catch { /* ignore */ }
+  };
+  // Segment 0 is the start of the stored file, so it MUST begin with the
+  // recorder's header chunk. If the buffer lost it, re-attach it rather than
+  // upload a headerless (unplayable) recording. Later segments are mid-stream
+  // continuations and never carry a header.
+  const withRecordingHeader = (chunks: Blob[], segmentIndex: number): Blob[] => {
+    const header = recordingHeaderChunkRef.current;
+    if (segmentIndex !== 0 || !header || chunks.length === 0 || chunks.includes(header)) return chunks;
+    console.warn(`[Recording] Segment 0 buffer is missing the WebM header chunk (${chunks.length} chunks) — re-attaching it so the recording is playable`);
+    return [header, ...chunks];
   };
 
   // Avatar state controller
@@ -3248,7 +3276,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           const staleChunks = recordedChunksRef.current;
           const staleIndex = recordingSegmentIndexRef.current;
           const staleMime = (mediaRecorderRef.current?.mimeType || opts.mimeType || 'video/webm').split(';')[0];
-          const staleBlob = new Blob(staleChunks, { type: staleMime });
+          const staleBlob = new Blob(withRecordingHeader(staleChunks, staleIndex), { type: staleMime });
           candidateAIInterviewService
             .uploadRecording(token, staleBlob, staleIndex, false)
             .then(() => { recordingSegmentIndexRef.current = staleIndex + 1; })
@@ -3258,8 +3286,36 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         recordedChunksRef.current = [];
         let gotData = false;
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) { gotData = true; recordedChunksRef.current.push(e.data); }
+          if (e.data.size > 0) {
+            // A new recorder's first chunk is its stream header.
+            if (!gotData) recordingHeaderChunkRef.current = e.data;
+            gotData = true;
+            recordedChunksRef.current.push(e.data);
+          }
         };
+        // The recorder going inactive on its own (all recorded tracks ended,
+        // UA stop) used to be silent: the checkpoint no-ops on a non-recording
+        // state and the interview just ends with whatever was buffered. Make it
+        // visible in the client log and on the proctor timeline.
+        const describeTracks = () =>
+          recordStream.getTracks().map((t) => `${t.kind}:${t.readyState}`).join(',') || 'none';
+        recorder.onstop = () => {
+          if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+          console.error(
+            `[Recording] MediaRecorder stopped unexpectedly mid-interview (tracks=${describeTracks()}, buffered=${recordedChunksRef.current.length} chunks, segment=${recordingSegmentIndexRef.current}) — recording will not continue`,
+          );
+          candidateAIInterviewService.reportProctorEvent(token, {
+            event_type: 'recording_failed',
+            severity: 'high',
+            details: { error: 'recorder_stopped', tracks: describeTracks(), segment_index: recordingSegmentIndexRef.current },
+          }).catch(() => { /* best-effort */ });
+        };
+        recordStream.getTracks().forEach((t) => {
+          t.addEventListener('ended', () => {
+            if (isFinalizingUploadRef.current || isUnmountedRef.current || mediaRecorderRef.current !== recorder) return;
+            console.error(`[Recording] Recorded ${t.kind} track ended mid-interview (label='${t.label}', recorder=${recorder.state})`);
+          }, { once: true });
+        });
         // Stall watchdog. If the audio mix's AudioContext isn't running, Chrome's
         // MediaRecorder emits nothing for the WHOLE interview and a 0-byte
         // recording is saved (staging ai-d7eff074). keepAudioContextRunning
@@ -3291,6 +3347,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }).catch(() => { /* best-effort */ });
           recorder.ondataavailable = null;
           recorder.onerror = null;
+          recorder.onstop = null; // deliberate stop — not an unexpected one
           try { recorder.stop(); } catch { /* already stopped */ }
           recordStream = rawAudioFallbackStream();
           recordStreamRef.current = recordStream;
@@ -3897,6 +3954,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // DEFAULT_REVEAL_CPS from the second turn on, so pacing self-calibrates to the
   // deployed voice/AI_TTS_SPEED/language rather than trusting a hardcoded prior.
   const measuredRevealCpsRef = useRef<number | null>(null);
+  // Caption ticks served by the shared speech clock vs the legacy pacing —
+  // logged per turn with the sync stats (saveAiMessage).
+  const captionClockTicksRef = useRef(0);
+  const captionLegacyTicksRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
   // kept playing, caption froze for seconds then jumped). Reset at the first
@@ -4987,6 +5048,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       }
       binaStallStatsRef.current = { longTasks: 0, blockedMs: 0, maxTaskMs: 0, captionStalls: 0, maxStallMs: 0, maxJumpChars: 0 };
     }
+    {
+      // Speech-sync summary: which clock paced lips + caption, and how many of
+      // Bina's pauses became word anchors. anchors≈0 with pauses>0 means the
+      // text and the audio disagree (worth a look); clock=legacy means the
+      // browser ran an old cached playback worklet.
+      const sync = talkingHeadRef.current?.getSyncStats();
+      if (text && sync) {
+        console.log('[TalkingHead] speech-sync turn summary', {
+          question: questionNumberRef.current,
+          ...sync,
+          captionClockTicks: captionClockTicksRef.current,
+          captionLegacyTicks: captionLegacyTicksRef.current,
+        });
+      }
+      captionClockTicksRef.current = 0;
+      captionLegacyTicksRef.current = 0;
+    }
     // Learn Bina's real speaking rate from this completed turn so the NEXT
     // turn's Phase A paces off measurement instead of DEFAULT_REVEAL_CPS. Runs
     // here because this is the one place where both the final text length and
@@ -5095,101 +5173,115 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (!binaAudibleRef.current) return;
       const firstPcmAt = firstPcmAtMsRef.current;
       let target = revealedCharsRef.current;
-
-      // Reveal progress. Primary clock: AudioContext's scheduled timeline.
-      // Fallback: wall-clock (used when the tracker context is suspended,
-      // which happens post-fullscreen-exit / cold start — the exact failure
-      // mode where "text appears only after Bina finishes speaking").
-      const pbCtx = playbackTrackerCtxRef.current;
-      // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
-      // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
-      // speakers start `delay` later, so the real voice occupies
-      // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
-      // original bug) leaves the span short by the whole delay, which made the
-      // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
-      // them with different values would reintroduce it — hence one `delaySec`.
-      const delaySec = getAudibleDelayMs() / 1000;
-      const rawStart = firstChunkStartCtxSecRef.current;
-      let ctxStart = rawStart === null ? null : rawStart + delaySec;
-      let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
-      // The voice became audible LATER than the estimate (cold worklet on the
-      // intro): slide the whole span to the real onset — start and end by the
-      // SAME amount, so its length stays the audio's duration.
-      const audibleAt = audibleAtCtxSecRef.current;
-      if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
-        const slip = audibleAt - ctxStart;
-        ctxStart += slip;
-        ctxEnd += slip;
-      }
-      const ctxAvailable =
-        !!pbCtx &&
-        pbCtx.state === "running" &&
-        ctxStart !== null &&
-        Number.isFinite(ctxEnd) &&
-        ctxEnd > ctxStart;
-
-      let progress: number | null = null;
       // Seconds of Bina's voice actually heard so far (negative before she is
-      // audible). Phase A paces off this directly — no division, no inflation.
+      // audible). Legacy Phase A paces off this directly — no division, no inflation.
       let playedSec = 0;
 
-      if (ctxAvailable) {
-        const now = pbCtx!.currentTime;
-        // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
-        // first words are already on screen as Bina starts speaking (fixes
-        // "voice comes before text").
-        if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
-          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
-          return;  // inside buffer delay
+      // Shared speech clock (TalkingHeadAvatar + speechSync.ts): every word
+      // whose start is within CAPTION_LEAD_MS of the sample the candidate is
+      // HEARING. Same clock as the lips; it stops when the voice stops
+      // (network starvation, frozen turn), and word starts come from the
+      // pauses in Bina's own audio — no rate guess, no audio_end phase switch.
+      const clockReveal = talkingHeadRef.current?.getCaptionReveal(fullText, CAPTION_LEAD_MS) ?? null;
+      if (clockReveal === "hold") return;
+      if (typeof clockReveal === "number") {
+        captionClockTicksRef.current += 1;
+        target = Math.max(target, clockReveal);
+      } else {
+        captionLegacyTicksRef.current += 1;
+
+        // Reveal progress. Primary clock: AudioContext's scheduled timeline.
+        // Fallback: wall-clock (used when the tracker context is suspended,
+        // which happens post-fullscreen-exit / cold start — the exact failure
+        // mode where "text appears only after Bina finishes speaking").
+        const pbCtx = playbackTrackerCtxRef.current;
+        // Put BOTH ends of the span on the AUDIBLE timeline using ONE delay lookup.
+        // The silent mirror buffers are scheduled from chunk ARRIVAL, but the
+        // speakers start `delay` later, so the real voice occupies
+        // [mirrorStart + delay, mirrorEnd + delay]. Shifting only the start (the
+        // original bug) leaves the span short by the whole delay, which made the
+        // reveal finish ~2 s before Bina stopped speaking on every turn. Shifting
+        // them with different values would reintroduce it — hence one `delaySec`.
+        const delaySec = getAudibleDelayMs() / 1000;
+        const rawStart = firstChunkStartCtxSecRef.current;
+        let ctxStart = rawStart === null ? null : rawStart + delaySec;
+        let ctxEnd = playbackScheduledEndAtRef.current + delaySec;
+        // The voice became audible LATER than the estimate (cold worklet on the
+        // intro): slide the whole span to the real onset — start and end by the
+        // SAME amount, so its length stays the audio's duration.
+        const audibleAt = audibleAtCtxSecRef.current;
+        if (ctxStart !== null && audibleAt !== null && audibleAt > ctxStart) {
+          const slip = audibleAt - ctxStart;
+          ctxStart += slip;
+          ctxEnd += slip;
         }
-        playedSec = now - ctxStart!;
-        progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
-        // On a slow connection chunks arrive slower than real time and the voice
-        // has gaps; `now - start` counts those gaps as speech, so the caption ran
-        // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
-        // actually HEARD: everything received minus what is still scheduled.
-        const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
-        playedSec = Math.min(playedSec, heardSec);
-        if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
-      } else if (firstPcmAt !== null) {
-        // Fallback: wall-clock math so streaming reveal works even when the
-        // tracker AudioContext is stalled. `audibleStartMs` waits out the active
-        // path's audible delay (0 on TalkingHead's Web Audio fallback); in
-        // Phase B the denominator is the accumulated — and by then total —
-        // audio duration.
-        const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
-        const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
-        if (elapsedMs < 0) {
-          if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+        const ctxAvailable =
+          !!pbCtx &&
+          pbCtx.state === "running" &&
+          ctxStart !== null &&
+          Number.isFinite(ctxEnd) &&
+          ctxEnd > ctxStart;
+
+        let progress: number | null = null;
+
+        if (ctxAvailable) {
+          const now = pbCtx!.currentTime;
+          // Start the reveal REVEAL_LEAD_MS before the audio becomes audible so the
+          // first words are already on screen as Bina starts speaking (fixes
+          // "voice comes before text").
+          if (now < ctxStart! - REVEAL_LEAD_MS / 1000) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] ctx-wait now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)}`);
+            return;  // inside buffer delay
+          }
+          playedSec = now - ctxStart!;
+          progress = (playedSec + REVEAL_LEAD_MS / 1000) / (ctxEnd - ctxStart!);
+          // On a slow connection chunks arrive slower than real time and the voice
+          // has gaps; `now - start` counts those gaps as speech, so the caption ran
+          // ahead of a halting Bina (staging 2026-10-29). Pace Phase A by what was
+          // actually HEARD: everything received minus what is still scheduled.
+          const heardSec = currentTurnAudioMsRef.current / 1000 - Math.max(0, ctxEnd - now);
+          playedSec = Math.min(playedSec, heardSec);
+          if (REVEAL_DEBUG) console.debug(`[Reveal] ctx now=${now.toFixed(3)} start=${ctxStart!.toFixed(3)} end=${ctxEnd.toFixed(3)} delay=${(delaySec * 1000).toFixed(0)}ms played=${playedSec.toFixed(3)} prog=${progress.toFixed(3)}`);
+        } else if (firstPcmAt !== null) {
+          // Fallback: wall-clock math so streaming reveal works even when the
+          // tracker AudioContext is stalled. `audibleStartMs` waits out the active
+          // path's audible delay (0 on TalkingHead's Web Audio fallback); in
+          // Phase B the denominator is the accumulated — and by then total —
+          // audio duration.
+          const audibleStartMs = Math.max(firstPcmAt + getAudibleDelayMs(), audibleAtMsRef.current ?? 0);
+          const elapsedMs = Date.now() - audibleStartMs + REVEAL_LEAD_MS;
+          if (elapsedMs < 0) {
+            if (REVEAL_DEBUG) console.debug(`[Reveal] wc-wait elapsed=${elapsedMs}`);
+            return;
+          }
+          playedSec = (Date.now() - audibleStartMs) / 1000;
+          const receivedMs = currentTurnAudioMsRef.current;
+          if (receivedMs <= 0) return;
+          progress = elapsedMs / receivedMs;
+          if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
+        } else {
+          if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
           return;
         }
-        playedSec = (Date.now() - audibleStartMs) / 1000;
-        const receivedMs = currentTurnAudioMsRef.current;
-        if (receivedMs <= 0) return;
-        progress = elapsedMs / receivedMs;
-        if (REVEAL_DEBUG) console.debug(`[Reveal] wc elapsed=${elapsedMs} received=${receivedMs} prog=${progress.toFixed(3)} ctxState=${pbCtx?.state} ctxStart=${ctxStart}`);
-      } else {
-        if (REVEAL_DEBUG) console.debug(`[Reveal] no-anchor firstPcmAt=${firstPcmAt} ctxAvailable=${ctxAvailable}`);
-        return;
-      }
 
-      if (progress === null) return;
-      if (audioEndReceivedRef.current) {
-        // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
-        // on the audible timeline the span equals the real audio duration, so
-        // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
-        // beyond the natural 1.0.
-        progress = Math.max(0, Math.min(1, progress));
-        target = Math.floor(progress * fullText.length);
-      } else {
-        // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
-        // PARTIAL total and would inflate (see the header note), so it is only
-        // logged, never used to position the text.
-        const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
-        const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
-        // Ceiling is a backstop against a bad CPS prior, not the pacer.
-        target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
-        if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+        if (progress === null) return;
+        if (audioEndReceivedRef.current) {
+          // ── Phase B: totals are final → fraction math is exact. With ctxEnd now
+          // on the audible timeline the span equals the real audio duration, so
+          // this lands REVEAL_LEAD_MS before the voice stops — no cap needed
+          // beyond the natural 1.0.
+          progress = Math.max(0, Math.min(1, progress));
+          target = Math.floor(progress * fullText.length);
+        } else {
+          // ── Phase A: pace by RATE, not fraction. `progress` here divides by a
+          // PARTIAL total and would inflate (see the header note), so it is only
+          // logged, never used to position the text.
+          const cps = measuredRevealCpsRef.current ?? DEFAULT_REVEAL_CPS;
+          const paced = Math.floor(Math.max(0, playedSec + REVEAL_LEAD_MS / 1000) * cps);
+          // Ceiling is a backstop against a bad CPS prior, not the pacer.
+          target = Math.min(paced, Math.floor(fullText.length * PHASE_A_MAX_FRACTION));
+          if (REVEAL_DEBUG) console.debug(`[Reveal] phaseA cps=${cps.toFixed(1)} paced=${paced} target=${target} len=${fullText.length} (unused prog=${progress.toFixed(3)})`);
+        }
       }
       if (target > revealedCharsRef.current) {
         revealedCharsRef.current = target;
@@ -5224,7 +5316,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // drops the LiveAIBubble re-render rate from 12.5 Hz → 5 Hz, which
       // matters for low-end candidates running heavy MediaPipe proctoring
       // alongside Bina's speech.
-    }, 200);
+      // 2026-11-03: REVEAL_TICK_MS (50 ms). The clock path reveals whole words
+      // on the audible timeline; 200 ms quantisation put a word up to 0.2 s
+      // late. The bubble still re-renders only when the text changes.
+    }, REVEAL_TICK_MS);
   }, []);
 
   const stopRevealingTokens = useCallback(() => {
@@ -7903,7 +7998,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       recordedChunksRef.current = [];
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks, { type: mimeType });
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
       try {
         await candidateAIInterviewService.uploadRecording(token, blob, segmentIndex, false);
         recordingSegmentIndexRef.current = segmentIndex + 1;
@@ -7976,7 +8071,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       recordedChunksRef.current = [];
       const segmentIndex = recordingSegmentIndexRef.current;
       const mimeType = (recorder?.mimeType || 'video/webm').split(';')[0];
-      const blob = new Blob(chunks, { type: mimeType });
+      const blob = new Blob(withRecordingHeader(chunks, segmentIndex), { type: mimeType });
       const sizeMb = (blob.size / 1024 / 1024).toFixed(1);
       console.log(`[Recording] Final segment ${segmentIndex}: ${chunks.length} chunks, ${sizeMb} MB, recorder=${recorder?.state ?? 'null'}`);
       // Nothing was ever recorded: no earlier segment and an empty buffer. The
@@ -10034,6 +10129,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // Fresh stream for this utterance — a stale early-end flag from the
           // previous one would re-arm (restart) the worklet on the next chunk.
           talkingHeadEndedEarlyRef.current = false;
+          // New utterance → fresh speech clock + pause analysis (the re-arm
+          // branch below is the SAME utterance and must keep its clock).
+          talkingHeadRef.current?.beginSpeech();
           talkingHeadRef.current?.streamStart(24000, cb);
         } else if (talkingHeadEndedEarlyRef.current) {
           // Recovery path: TalkingHead's worklet ended early (buffer drained
@@ -11115,7 +11213,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </p>
               <button
                 onClick={() => window.location.reload()}
-                className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors"
+                className="tf-btn tf-btn-destructive w-full px-6 py-3 bg-red-600 hover:bg-red-700 font-semibold rounded-xl transition-colors whitespace-normal shadow-none gap-0"
               >
                 Refresh &amp; Reconnect
               </button>
@@ -11181,7 +11279,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             )}
             <div className="flex flex-wrap gap-3 justify-center">
               <button onClick={handleMicPopupYes} className="px-6 py-3 bg-green-600 hover:bg-green-700 rounded-xl font-bold text-white transition-colors">Yes, Resume</button>
-              <button onClick={handleMicPopupNo} className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold text-white transition-colors">No, End Interview</button>
+              <button onClick={handleMicPopupNo} className="tf-btn tf-btn-destructive px-6 py-3 bg-red-600 hover:bg-red-700 rounded-xl font-bold transition-colors whitespace-normal shadow-none gap-0">No, End Interview</button>
             </div>
             <p className="tf-meta mt-3">Auto-closing in 15 seconds...</p>
           </div>
@@ -11425,7 +11523,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {bridgeCaption && (
               <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-2xs font-semibold uppercase tracking-wider text-purple-100">
+                  <span className="tf-badge bg-purple-500/30 border border-purple-400/40 text-2xs uppercase tracking-wider text-purple-100">
                     Bina · Transition
                   </span>
                 </div>
@@ -11670,7 +11768,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <button
                   onClick={() => setShowEndConfirm(true)}
                   disabled={!isConnected}
-                  className="shrink-0 flex items-center gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg shadow-sm transition-all duration-200 font-semibold text-sm"
+                  className="tf-btn tf-btn-destructive shrink-0 flex gap-1.5 px-3 @md:px-4 py-2 bg-red-600 hover:bg-red-700 shadow-sm duration-200 font-semibold text-sm whitespace-normal justify-start"
                 >
                   <LogOut className="w-4 h-4" />
                   <span className="hidden @md:inline">End</span>
@@ -11786,7 +11884,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {messages.length === 0 && !hasAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing
               && (binaHasSpoken || isClosing || isRecording) && (
               <div className="flex items-center justify-center h-full">
-                <p className="text-gray-400 text-sm text-center">Conversation will appear here...</p>
+                <p className="tf-body-muted text-center">Conversation will appear here...</p>
               </div>
             )}
 
@@ -11815,14 +11913,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[260px] w-full">
-                  <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm p-2.5">
+                  <div className="tf-card-soft w-full p-2.5">
                     <div className="flex flex-col gap-1.5">
                       <button
                         type="button"
                         onClick={() => submitStructuredHrAnswer('Yes')}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 text-sm font-semibold hover:bg-emerald-100 dark:hover:bg-emerald-500/15 hover:border-emerald-300 dark:hover:border-emerald-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shrink-0">A</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-2xs font-bold shrink-0">A</span>
                         Yes
                       </button>
                       <button
@@ -11830,7 +11928,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         onClick={() => submitStructuredHrAnswer('No')}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 dark:border-rose-500/30 bg-rose-50 dark:bg-rose-500/10 text-rose-800 dark:text-rose-300 text-sm font-semibold hover:bg-rose-100 dark:hover:bg-rose-500/15 hover:border-rose-300 dark:hover:border-rose-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold shrink-0">B</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-2xs font-bold shrink-0">B</span>
                         No
                       </button>
                       <button
@@ -11859,11 +11957,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         }}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 dark:border-blue-500/30 bg-blue-50 dark:bg-blue-500/10 text-blue-900 dark:text-blue-300 text-sm font-semibold hover:bg-blue-100 dark:hover:bg-blue-500/15 hover:border-blue-300 dark:hover:border-blue-500/40 transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-2xs font-bold shrink-0">C</span>
                         Need to Explain More
                       </button>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-center text-xs font-semibold text-gray-700">
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center tf-caption">
                       Select only one option
                     </div>
                   </div>
@@ -11961,7 +12059,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                                   setShowEndConfirm(true);
                                 }}
                                 disabled={!isConnected || isClosing}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                className="tf-btn tf-btn-destructive flex gap-1.5 px-3 py-1.5 text-xs font-semibold border bg-red-600 hover:bg-red-700 border-red-600 transition-colors whitespace-normal shadow-none justify-start"
                               >
                                 <LogOut className="w-3.5 h-3.5" />
                                 End
@@ -12187,7 +12285,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                         type="button"
                         onClick={() => setShowEndConfirm(true)}
                         disabled={!isConnected || isClosing}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-white text-sm font-semibold shadow-sm hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        className="tf-btn tf-btn-destructive flex-1 gap-1.5 px-5 py-2.5 rounded-xl bg-red-600 text-sm font-semibold shadow-sm hover:bg-red-700 transition-colors whitespace-normal"
                       >
                         <LogOut className="w-4 h-4" />
                         End
@@ -12452,7 +12550,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="text-center">
               <h3 className="text-gray-900 dark:text-white font-bold mb-1.5" style={{ fontSize: 17 }}>End the interview?</h3>
               {questionNumber !== null && totalQuestions !== null && (
-                <p className="mb-2 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-3 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 tabular-nums">
+                <p className="tf-badge mb-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 tabular-nums">
                   You&apos;re on question {questionNumber} of {totalQuestions}
                 </p>
               )}
@@ -12522,7 +12620,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white transition-all duration-200 shadow-sm"
+                className="tf-btn tf-btn-destructive flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 duration-200 shadow-sm whitespace-normal gap-0 font-normal"
                 style={{ fontSize: 13, fontWeight: 600 }}
               >
                 End Interview

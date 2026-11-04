@@ -64,6 +64,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip } from '@/components/ui/tooltip';
 import { PageHeader } from '@/components/ui/page-header';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from '@/components/ui/sortable-header';
 
 type BadgeVariant = React.ComponentProps<typeof Badge>['variant'];
@@ -83,13 +84,32 @@ function UnitBreakdown({ values }: { values: Record<string, number | undefined> 
               <Icon className={`h-3 w-3 shrink-0 ${column.iconClass}`} />
               {column.key}
             </p>
-            <p className={`mt-0.5 truncate text-sm max-sm:text-[13px] font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
+            <p className={`mt-0.5 truncate text-sm font-semibold tabular-nums ${value ? 'text-gray-900 dark:text-slate-100' : 'text-gray-300 dark:text-slate-600'}`}>
               {value ? value.toLocaleString() : '—'}
             </p>
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** The same 4-unit breakdown as count chips, for a record card's footer. */
+function UnitChips({ values }: { values: Record<string, number | undefined> }) {
+  return (
+    <>
+      {CONSUMPTION_COLUMNS.map((column) => {
+        const Icon = column.icon;
+        const value = values[column.key];
+        return (
+          <span key={column.key} title={column.label} className="inline-flex">
+            <MobileStatChip tone={value ? 'info' : 'neutral'} icon={<Icon />}>
+              {column.key} {value ? value.toLocaleString() : '—'}
+            </MobileStatChip>
+          </span>
+        );
+      })}
+    </>
   );
 }
 
@@ -266,13 +286,13 @@ function Pagination({
 
   return (
     <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4 sm:py-3">
-      <p className="text-xs text-gray-500 sm:text-sm">
+      <p className="tf-meta sm:text-sm">
         <span className="hidden sm:inline">Showing </span><span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span><span className="hidden sm:inline"> records</span>
       </p>
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Go to — tablets and up; phones page with ‹ › */}
         <div className="hidden items-center gap-1.5 sm:flex">
-          <span className="tf-card-desc max-sm:text-[13px] whitespace-nowrap">Go to</span>
+          <span className="tf-body-secondary whitespace-nowrap">Go to</span>
           <Input
             type="number"
             min={1}
@@ -294,20 +314,20 @@ function Pagination({
           <button
             onClick={() => onPageChange(page - 1)}
             disabled={page === 1}
-            className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+            className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
             aria-label="Previous page"
           >
             <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
           </button>
         </Tooltip>
-        <span className="text-sm max-sm:text-[13px] font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="tf-label px-1 whitespace-nowrap">
           <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
         </span>
         <Tooltip content="Next page">
           <button
             onClick={() => onPageChange(page + 1)}
             disabled={page === totalPages}
-            className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+            className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
             aria-label="Next page"
           >
             <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -339,14 +359,14 @@ function ExportModal({
       icon={<Download />}
       title="Export Usage History"
       footerStart={isExporting ? (
-        <span className="flex items-center gap-2 text-sm max-sm:text-[13px] text-brand-blue">
+        <span className="flex items-center gap-2 text-sm text-brand-blue">
           <Loader2 className="w-4 h-4 animate-spin" />
           Preparing export…
         </span>
       ) : null}
     >
         <div className="space-y-3">
-          <p className="tf-body-muted max-sm:text-[13px]">Choose export format:</p>
+          <p className="tf-body-muted">Choose export format:</p>
           <button
             onClick={() => onExport('csv')}
             disabled={isExporting}
@@ -356,7 +376,7 @@ function ExportModal({
               <FileText className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="tf-cell-name max-sm:text-[13px] group-hover:text-brand-blue">CSV File</p>
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">CSV File</p>
               <p className="tf-meta">Comma-separated values (.csv)</p>
             </div>
           </button>
@@ -369,7 +389,7 @@ function ExportModal({
               <FileSpreadsheet className="w-5 h-5" />
             </div>
             <div className="text-left">
-              <p className="tf-cell-name max-sm:text-[13px] group-hover:text-brand-blue">Excel Spreadsheet</p>
+              <p className="text-sm font-semibold text-gray-900 group-hover:text-brand-blue">Excel Spreadsheet</p>
               <p className="tf-meta">Microsoft Excel format (.xlsx)</p>
             </div>
           </button>
@@ -424,32 +444,32 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div key={type} className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
                 <Icon className="w-4 h-4" />
               </div>
               <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ${ringByType[type]} ${cfg.bg} ${cfg.color}`}>{type}</span>
             </div>
-            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">{cfg.label}</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">{cfg.label}</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Purchased</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
+                <p className="truncate tf-micro-hint">Purchased</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">{isUnlimited ? '∞' : (purchased?.toLocaleString() ?? '—')}</p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Consumed</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{consumed?.toLocaleString() ?? '—'}</p>
+                <p className="truncate tf-micro-hint">Consumed</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">{consumed?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Remaining</p>
+                <p className="truncate tf-micro-hint">Remaining</p>
                 <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-gray-400">
+              <div className="flex justify-between tf-hint">
                 <span>Usage</span>
                 <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>{isUnlimited ? 'Unlimited' : `${pct}%`}</span>
               </div>
@@ -467,34 +487,34 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                 <FileText className="w-4 h-4" />
               </div>
-              <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
+              <span className="tf-badge text-2xs ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">RU</span>
             </div>
-            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">Resume Storage</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Limit</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">
+                <p className="truncate tf-micro-hint">Limit</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">
                   {ru ? (ru.is_unlimited ? '∞' : ru.limit.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Used</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
+                <p className="truncate tf-micro-hint">Used</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">{ru?.used?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Available</p>
+                <p className="truncate tf-micro-hint">Available</p>
                 <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-gray-400">
+              <div className="flex justify-between tf-hint">
                 <span>Usage</span>
                 <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>
                   {ru?.is_unlimited ? 'Unlimited' : `${pct}%`}
@@ -514,34 +534,34 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group w-[80%] shrink-0 snap-start sm:w-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Users className="w-4 h-4" />
               </div>
-              <span className="text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 ring-gray-200 bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300">MAX</span>
+              <span className="tf-badge tf-micro-hint ring-1 ring-gray-200 bg-gray-100 dark:bg-slate-800">MAX</span>
             </div>
-            <h3 className="text-sm max-sm:text-[13px] font-semibold text-gray-500 mb-2 truncate">User Seats</h3>
+            <h3 className="text-sm font-semibold text-gray-500 mb-2 truncate">User Seats</h3>
             <div className="grid grid-cols-3 gap-1.5 mb-2.5">
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Max Users</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-900 truncate">
+                <p className="truncate tf-micro-hint">Max Users</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">
                   {userLimits ? (isUnlimited ? '∞' : userLimits.max_users.toLocaleString()) : '—'}
                 </p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Active</p>
-                <p className="text-base max-sm:text-sm font-semibold tabular-nums text-gray-700 truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
+                <p className="truncate tf-micro-hint">Active</p>
+                <p className="tf-section-title max-sm:text-sm tabular-nums truncate">{userLimits?.current_users?.toLocaleString() ?? '—'}</p>
               </div>
               <div className="min-w-0">
-                <p className="truncate text-2xs text-gray-400">Available</p>
+                <p className="truncate tf-micro-hint">Available</p>
                 <p className={`text-base max-sm:text-sm font-semibold tabular-nums truncate ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
             </div>
             <div className="space-y-1">
-              <div className="flex justify-between text-xs text-gray-400">
+              <div className="flex justify-between tf-hint">
                 <span>Usage</span>
                 <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>
                   {isUnlimited ? 'Unlimited' : `${pct}%`}
@@ -592,61 +612,86 @@ function FeatureWiseTab({
 
   return (
     <div>
-      <div className="overflow-x-auto tf-table-shell">
-        <table className="w-full text-sm max-sm:text-[13px]">
+      <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 tf-th">Feature</th>
-              <th className="text-left px-4 py-3 tf-th">User</th>
-              <th className="text-left px-4 py-3 tf-th">Entity</th>
-              <th className="text-right px-4 py-3 tf-th">Units</th>
-              <th className="text-left px-4 py-3 tf-th">Status</th>
-              <th className="text-right px-4 py-3 tf-th">Balance After</th>
-              <th className="text-left px-4 py-3 tf-th">Date & Time</th>
+              <th className="tf-th-cell text-left tf-th">Feature</th>
+              <th className="tf-th-cell text-left tf-th">User</th>
+              <th className="tf-th-cell text-left tf-th">Entity</th>
+              <th className="tf-th-cell text-right tf-th">Units</th>
+              <th className="tf-th-cell text-left tf-th">Status</th>
+              <th className="tf-th-cell text-right tf-th">Balance After</th>
+              <th className="tf-th-cell text-left tf-th">Date & Time</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {items.map((entry) => (
               <tr key={entry.id} className="hover:bg-brand-blue/[0.03] transition-colors">
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <UnitTypeBadge type={entry.unit_type} />
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <div className="flex items-center gap-2">
                     <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
                       <User className="w-3.5 h-3.5" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-800 text-sm max-sm:text-[13px] leading-tight">{entry.user_name || '—'}</p>
-                      <p className="text-gray-400 text-xs">{entry.user_email || '—'}</p>
+                      <p className="tf-label leading-tight">{entry.user_name || '—'}</p>
+                      <p className="tf-hint">{entry.user_email || '—'}</p>
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-3">
-                  <p className="text-gray-700 text-sm max-sm:text-[13px] font-medium">{entry.entity_name || '—'}</p>
-                  {entry.entity_type && <p className="text-gray-400 text-xs capitalize">{entry.entity_type.replace(/_/g, ' ')}</p>}
+                <td className="tf-td">
+                  <p className="tf-label">{entry.entity_name || '—'}</p>
+                  {entry.entity_type && <p className="tf-hint capitalize">{entry.entity_type.replace(/_/g, ' ')}</p>}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="tf-td text-right">
                   <span className="font-semibold text-gray-900">{entry.units_consumed}</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <StatusBadge status={entry.status} />
                   {entry.refund_flag === 'YES' && (
                     <Badge variant="secondary" className="ml-1">Refunded</Badge>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right">
-                  <span className="text-gray-600 text-sm max-sm:text-[13px] font-medium">{entry.balance_after?.toLocaleString() ?? '—'}</span>
+                <td className="tf-td text-right">
+                  <span className="tf-label">{entry.balance_after?.toLocaleString() ?? '—'}</span>
                 </td>
-                <td className="px-4 py-3">
-                  <p className="text-gray-700 text-xs">{formatISTDate(entry.created_at)}</p>
-                  <p className="text-gray-400 text-xs">{formatIST(entry.created_at).split(', ')[1] || ''}</p>
+                <td className="tf-td">
+                  <p className="tf-meta">{formatISTDate(entry.created_at)}</p>
+                  <p className="tf-hint">{formatIST(entry.created_at).split(', ')[1] || ''}</p>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      <MobileRecordList>
+        {items.map((entry) => (
+          <MobileRecordCard
+            key={entry.id}
+            badges={
+              <>
+                <UnitTypeBadge type={entry.unit_type} />
+                <StatusBadge status={entry.status} />
+                {entry.refund_flag === 'YES' && <Badge variant="secondary">Refunded</Badge>}
+              </>
+            }
+            title={entry.entity_name || '—'}
+            meta={[
+              { icon: <User className="h-3.5 w-3.5" />, label: entry.user_name || '—' },
+              { label: entry.user_email || '—' },
+              { icon: <Layers className="h-3.5 w-3.5" />, label: entry.entity_type ? <span className="capitalize">{entry.entity_type.replace(/_/g, ' ')}</span> : null },
+            ]}
+            fields={[
+              { label: 'Balance After', value: entry.balance_after?.toLocaleString() ?? '—' },
+              { label: 'Date & Time', value: formatIST(entry.created_at) },
+            ]}
+            footer={<MobileStatChip tone="info">{entry.units_consumed} units</MobileStatChip>}
+          />
+        ))}
+      </MobileRecordList>
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
       )}
@@ -779,37 +824,39 @@ function UserWiseTab({
     <div>
       {/* Below lg: one card per user — name + total, the 4-unit breakdown,
           then success/failed and last active. */}
-      <div className="divide-y divide-gray-100 dark:divide-slate-700/60 lg:hidden">
+      <MobileRecordList className="p-3">
         {paginatedUsers.map((u) => (
-          <div key={u.userId} className="space-y-2.5 px-3 py-3 sm:px-4">
-            <div className="flex items-center gap-2.5">
-              <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate tf-cell-name max-sm:text-[13px]">{u.userName}</p>
-                <p className="truncate text-xs text-gray-400">{u.userEmail}</p>
-              </div>
-              <div className="shrink-0 text-right">
-                <p className="text-base max-sm:text-sm font-semibold leading-tight tabular-nums text-brand-blue">{u.total.toLocaleString()}</p>
-                <p className="text-2xs text-gray-400">units</p>
-              </div>
-            </div>
-            <UnitBreakdown values={u.byType} />
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
+          <MobileRecordCard
+            key={u.userId}
+            title={
+              <span className="flex min-w-0 items-center gap-2">
+                <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
+                <span className="min-w-0 truncate">{u.userName}</span>
+              </span>
+            }
+            badges={
+              <>
                 <Badge variant="success">
                   <CheckCircle2 className="w-3 h-3" />{u.successCount}
                 </Badge>
                 <Badge variant="destructive">
                   <XCircle className="w-3 h-3" />{u.failedCount}
                 </Badge>
-              </div>
-              <span className="truncate text-xs text-gray-400">
-                {u.lastUsed ? `Last active ${formatIST(u.lastUsed)}` : 'No activity yet'}
-              </span>
-            </div>
-          </div>
+              </>
+            }
+            meta={[
+              { icon: <User className="h-3.5 w-3.5" />, label: u.userEmail },
+              { icon: <Clock className="h-3.5 w-3.5" />, label: u.lastUsed ? `Last active ${formatIST(u.lastUsed)}` : 'No activity yet' },
+            ]}
+            footer={
+              <>
+                <MobileStatChip tone="info">{u.total.toLocaleString()} units</MobileStatChip>
+                <UnitChips values={u.byType} />
+              </>
+            }
+          />
         ))}
-      </div>
+      </MobileRecordList>
 
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
       {sort.sortKey && (
@@ -818,18 +865,18 @@ function UserWiseTab({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm max-sm:text-[13px]">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 tf-th">#</th>
-              <th aria-sort={ariaSort(tableSort, 'userName')} className="text-left px-4 py-3 tf-th">
+              <th className="tf-th-cell text-left tf-th">#</th>
+              <th aria-sort={ariaSort(tableSort, 'userName')} className="tf-th-cell text-left tf-th">
                 <SortableHeader label="User" column="userName" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 tf-th">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="tf-th-cell text-right tf-th">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -844,13 +891,13 @@ function UserWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'total')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(tableSort, 'total')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Total" column="total" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'successCount')} className="text-center px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(tableSort, 'successCount')} className="tf-th-cell text-center tf-th">
                 <SortableHeader label="Success / Failed" column="successCount" sort={tableSort} align="center" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="text-left px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(tableSort, 'lastUsed')} className="tf-th-cell text-left tf-th">
                 <SortableHeader label="Last Active" column="lastUsed" sort={tableSort} />
               </th>
             </tr>
@@ -858,25 +905,25 @@ function UserWiseTab({
           <tbody className="divide-y divide-gray-100">
             {paginatedUsers.map((u, idx) => (
               <tr key={u.userId} className="hover:bg-brand-blue/[0.03] transition-colors">
-                <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                <td className="px-4 py-3">
+                <td className="tf-td tf-caption">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                <td className="tf-td">
                   <div className="flex items-center gap-2">
                     <NameAvatar name={u.userName} fallback={u.userEmail} userId={u.userId} size="sm" />
                     <div>
-                      <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{u.userName}</p>
-                      <p className="text-gray-400 text-xs">{u.userEmail}</p>
+                      <p className="tf-label">{u.userName}</p>
+                      <p className="tf-hint">{u.userEmail}</p>
                     </div>
                   </div>
                 </td>
                 {CONSUMPTION_COLUMNS.map((column) => (
-                  <td key={column.key} className="px-4 py-3 text-right text-gray-700 font-medium">
+                  <td key={column.key} className="tf-td text-right text-gray-700 font-medium">
                     {u.byType[column.key]?.toLocaleString() || '—'}
                   </td>
                 ))}
-                <td className="px-4 py-3 text-right">
+                <td className="tf-td text-right">
                   <span className="font-bold text-brand-blue">{u.total.toLocaleString()}</span>
                 </td>
-                <td className="px-4 py-3">
+                <td className="tf-td">
                   <div className="flex items-center justify-center gap-2">
                     <Badge variant="success">
                       <CheckCircle2 className="w-3 h-3" />{u.successCount}
@@ -886,7 +933,7 @@ function UserWiseTab({
                     </Badge>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-gray-500 text-xs">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
+                <td className="tf-td tf-meta">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
               </tr>
             ))}
           </tbody>
@@ -971,39 +1018,47 @@ function TeamWiseTab({
     <div>
       {/* Below lg: one card per team. Tap to open its members (also cards);
           a totals card closes the list. */}
-      <div className="divide-y divide-gray-100 dark:divide-slate-700/60 lg:hidden">
+      <div className="tf-record-list p-3 lg:hidden">
         {paginatedTeams.map((team) => {
           const units = unitsOf(team);
           const totalConsumed = units.RS + units.AS + units.AIU + units.RU;
           const isExpanded = expandedTeamId === team.team_id;
           return (
-            <div key={team.team_id} className={isExpanded ? 'bg-brand-blue/[0.03]' : ''}>
-              <button
-                type="button"
+            <div key={team.team_id} className="space-y-2">
+              <MobileRecordCard
+                selected={isExpanded}
                 onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
-                aria-expanded={isExpanded}
-                className="w-full space-y-2.5 px-3 py-3 text-left sm:px-4"
-              >
-                <div className="flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
-                    <Users className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
-                    <p className="truncate text-xs text-gray-400">
-                      {team.jds_created ?? 0} JDs · {team.assessments_created ?? 0} assessments
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-base max-sm:text-sm font-semibold leading-tight tabular-nums text-brand-blue">{totalConsumed.toLocaleString()}</p>
-                    <p className="text-2xs text-gray-400">units</p>
-                  </div>
-                  <ChevronDown className={`h-4 w-4 shrink-0 text-gray-400 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-brand-blue' : ''}`} />
-                </div>
-                <UnitBreakdown values={units} />
-              </button>
+                title={
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                      <Users className="h-3.5 w-3.5" />
+                    </span>
+                    <span className="min-w-0 truncate">{team.team_name || 'Unnamed Team'}</span>
+                  </span>
+                }
+                meta={[
+                  { icon: <FileText className="h-3.5 w-3.5" />, label: `${team.jds_created ?? 0} JDs · ${team.assessments_created ?? 0} assessments` },
+                ]}
+                footer={
+                  <>
+                    <MobileStatChip tone="info">{totalConsumed.toLocaleString()} units</MobileStatChip>
+                    <UnitChips values={units} />
+                  </>
+                }
+                actions={
+                  <button
+                    type="button"
+                    onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? 'Hide team members' : 'Show team members'}
+                    className="tf-icon-btn-outline"
+                  >
+                    <ChevronDown className={`h-4 w-4 shrink-0 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-brand-blue' : ''}`} />
+                  </button>
+                }
+              />
               {isExpanded && (
-                <div className="px-3 pb-3 sm:px-4">
+                <div className="rounded-xl bg-brand-blue/[0.03] p-2">
                   <InlineTeamMembersUsage
                     teamId={team.team_id}
                     teamName={team.team_name || 'Unnamed Team'}
@@ -1015,8 +1070,8 @@ function TeamWiseTab({
             </div>
           );
         })}
-        <div className="space-y-2 bg-gray-50 px-3 py-3 sm:px-4 dark:bg-slate-800/40">
-          <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+        <div className="space-y-2 rounded-xl bg-gray-50 px-3 py-3 sm:px-4 dark:bg-slate-800/40">
+          <p className="tf-eyebrow">
             {totalTeams} team{totalTeams !== 1 ? 's' : ''} total
           </p>
           <UnitBreakdown values={grandTotals} />
@@ -1030,18 +1085,18 @@ function TeamWiseTab({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm max-sm:text-[13px]">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 tf-th">#</th>
-              <th aria-sort={ariaSort(tableSort, 'team_name')} className="text-left px-4 py-3 tf-th">
+              <th className="tf-th-cell text-left tf-th">#</th>
+              <th aria-sort={ariaSort(tableSort, 'team_name')} className="tf-th-cell text-left tf-th">
                 <SortableHeader label="Team" column="team_name" sort={tableSort} />
               </th>
               {CONSUMPTION_COLUMNS.map((column) => {
                 const Icon = column.icon;
                 const key = column.key as UnitKey;
                 return (
-                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="text-right px-4 py-3 tf-th">
+                  <th key={column.key} aria-sort={ariaSort(tableSort, key)} className="tf-th-cell text-right tf-th">
                     <SortableHeader
                       label={
                         <span className="inline-flex items-center gap-1">
@@ -1056,10 +1111,10 @@ function TeamWiseTab({
                   </th>
                 );
               })}
-              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(tableSort, 'jds_created')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="JDs Created" column="jds_created" sort={tableSort} align="right" />
               </th>
-              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(tableSort, 'assessments_created')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Assessments" column="assessments_created" sort={tableSort} align="right" />
               </th>
             </tr>
@@ -1078,8 +1133,8 @@ function TeamWiseTab({
                     className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${isExpanded ? 'bg-brand-blue/[0.04]' : ''}`}
                     onClick={() => setExpandedTeamId(isExpanded ? null : team.team_id)}
                   >
-                    <td className="px-4 py-3 text-gray-400 text-xs font-medium">{(page - 1) * PAGE_SIZE + idx + 1}</td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td tf-caption">{(page - 1) * PAGE_SIZE + idx + 1}</td>
+                    <td className="tf-td">
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -1092,21 +1147,21 @@ function TeamWiseTab({
                           <Users className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
-                          <p className="text-gray-400 text-xs">{totalConsumed.toLocaleString()} units total</p>
+                          <p className="tf-label">{team.team_name || 'Unnamed Team'}</p>
+                          <p className="tf-hint">{totalConsumed.toLocaleString()} units total</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{rsConsumed ? rsConsumed.toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{asConsumed ? asConsumed.toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiuConsumed ? aiuConsumed.toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-700 font-medium">{ruConsumed ? ruConsumed.toLocaleString() : '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{team.jds_created?.toLocaleString() ?? '—'}</td>
-                    <td className="px-4 py-3 text-right text-gray-600">{team.assessments_created?.toLocaleString() ?? '—'}</td>
+                    <td className="tf-td text-right text-gray-700 font-medium">{rsConsumed ? rsConsumed.toLocaleString() : '—'}</td>
+                    <td className="tf-td text-right text-gray-700 font-medium">{asConsumed ? asConsumed.toLocaleString() : '—'}</td>
+                    <td className="tf-td text-right text-gray-700 font-medium">{aiuConsumed ? aiuConsumed.toLocaleString() : '—'}</td>
+                    <td className="tf-td text-right text-gray-700 font-medium">{ruConsumed ? ruConsumed.toLocaleString() : '—'}</td>
+                    <td className="tf-td text-right text-gray-600">{team.jds_created?.toLocaleString() ?? '—'}</td>
+                    <td className="tf-td text-right text-gray-600">{team.assessments_created?.toLocaleString() ?? '—'}</td>
                   </tr>
                   {isExpanded && (
                     <tr className="bg-gradient-to-b from-brand-blue/[0.03] to-slate-50/70">
-                      <td colSpan={8} className="px-4 py-4">
+                      <td colSpan={8} className="tf-td">
                         <InlineTeamMembersUsage
                           teamId={team.team_id}
                           teamName={team.team_name || 'Unnamed Team'}
@@ -1123,11 +1178,11 @@ function TeamWiseTab({
           <tfoot>
             {/* Totals: plain and calm — the column headers already carry the unit colours. */}
             <tr className="border-t border-gray-200 bg-gray-50">
-              <td className="px-4 py-3" colSpan={2}>
-                <span className="text-xs font-semibold uppercase tracking-wider text-gray-500">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
+              <td className="tf-td" colSpan={2}>
+                <span className="tf-eyebrow">{teamsData.teams.length} team{teamsData.teams.length !== 1 ? 's' : ''} total</span>
               </td>
               {(['RS', 'AS', 'AIU', 'RU'] as const).map((key) => (
-                <td key={key} className="px-4 py-3 text-right tf-cell-name max-sm:text-[13px] tabular-nums">
+                <td key={key} className="tf-td text-right tf-row-title tabular-nums">
                   {grandTotals[key].toLocaleString()}
                 </td>
               ))}
@@ -1192,7 +1247,7 @@ function InlineTeamMembersUsage({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 text-sm max-sm:text-[13px] text-brand-blue tf-loader-center">
+      <div className="flex items-center justify-center gap-2 text-sm text-brand-blue tf-loader-center">
         <Loader2 className="w-4 h-4 animate-spin" />
         Loading team users usage...
       </div>
@@ -1201,7 +1256,7 @@ function InlineTeamMembersUsage({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3 text-sm max-sm:text-[13px] text-destructive ring-1 ring-destructive-line">
+      <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3 text-sm text-destructive ring-1 ring-destructive-line">
         {error}
       </div>
     );
@@ -1221,29 +1276,29 @@ function InlineTeamMembersUsage({
 
   if (!members.length) {
     return (
-      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 tf-body-muted max-sm:text-[13px] shadow-sm">
+      <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 tf-body-muted shadow-sm">
         No usage found for users in {teamName} during the selected date range.
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+    <div className="tf-card-soft overflow-hidden">
       <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-2.5 sm:px-4 sm:py-3">
         <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 sm:h-9 sm:w-9">
             <Users className="w-4 h-4" />
           </div>
           <div className="min-w-0">
-            <p className="truncate text-sm max-sm:text-[13px] font-semibold text-gray-900 sm:text-base">{teamName} Users</p>
+            <p className="truncate tf-row-title sm:text-base">{teamName} Users</p>
             <p className="hidden tf-meta sm:block">Usage details for team members</p>
           </div>
         </div>
-        <span className="shrink-0 text-xs font-medium text-brand-blue px-2.5 py-1 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
+        <span className="tf-badge shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">{members.length} user{members.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Below lg: one row per member */}
-      <div className="divide-y divide-gray-100 lg:hidden">
+      <MobileRecordList className="p-3">
         {members.map((member) => {
           const values = {
             RS: member.by_type?.RS?.total_consumed ?? 0,
@@ -1253,22 +1308,27 @@ function InlineTeamMembersUsage({
           };
           const total = values.RS + values.AS + values.AIU + values.RU;
           return (
-            <div key={member.user_id} className="space-y-2 px-3 py-2.5">
-              <div className="flex items-center gap-2.5">
-                <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate tf-cell-name max-sm:text-[13px]">{member.user_name || 'Unknown User'}</p>
-                  <p className="truncate text-xs text-gray-400">
-                    {member.last_activity ? `Last active ${formatIST(member.last_activity)}` : member.user_email || '—'}
-                  </p>
-                </div>
-                <p className="shrink-0 text-sm max-sm:text-[13px] font-semibold tabular-nums text-brand-blue">{total.toLocaleString()}</p>
-              </div>
-              <UnitBreakdown values={values} />
-            </div>
+            <MobileRecordCard
+              key={member.user_id}
+              title={
+                <span className="flex min-w-0 items-center gap-2">
+                  <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
+                  <span className="min-w-0 truncate">{member.user_name || 'Unknown User'}</span>
+                </span>
+              }
+              meta={[
+                { icon: member.last_activity ? <Clock className="h-3.5 w-3.5" /> : <User className="h-3.5 w-3.5" />, label: member.last_activity ? `Last active ${formatIST(member.last_activity)}` : member.user_email || '—' },
+              ]}
+              footer={
+                <>
+                  <MobileStatChip tone="info">{total.toLocaleString()} units</MobileStatChip>
+                  <UnitChips values={values} />
+                </>
+              }
+            />
           );
         })}
-      </div>
+      </MobileRecordList>
 
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
       {sort.sortKey && (
@@ -1277,28 +1337,28 @@ function InlineTeamMembersUsage({
         </div>
       )}
       <div className="hidden overflow-x-auto tf-table-shell lg:block">
-        <table className="w-full text-sm max-sm:text-[13px]">
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th aria-sort={ariaSort(sort, 'user_name')} className="text-left px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'user_name')} className="tf-th-cell text-left tf-th">
                 <SortableHeader label="User" column="user_name" sort={sort} />
               </th>
-              <th aria-sort={ariaSort(sort, 'RS')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'RS')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Resume Scoring" column="RS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AS')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'AS')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Assessment" column="AS" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'AIU')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'AIU')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="AI Interview" column="AIU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'RU')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'RU')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Resume Storage" column="RU" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'total')} className="text-right px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'total')} className="tf-th-cell text-right tf-th">
                 <SortableHeader label="Total" column="total" sort={sort} align="right" />
               </th>
-              <th aria-sort={ariaSort(sort, 'last_activity')} className="text-left px-4 py-3 tf-th">
+              <th aria-sort={ariaSort(sort, 'last_activity')} className="tf-th-cell text-left tf-th">
                 <SortableHeader label="Last Active" column="last_activity" sort={sort} />
               </th>
             </tr>
@@ -1312,21 +1372,21 @@ function InlineTeamMembersUsage({
               const total = rs + as + aiu + ru;
               return (
                 <tr key={member.user_id} className="hover:bg-brand-blue/[0.03] transition-colors">
-                  <td className="px-4 py-3">
+                  <td className="tf-td">
                     <div className="flex items-center gap-2">
                       <NameAvatar name={member.user_name} fallback={member.user_email} userId={member.user_id} size="sm" />
                       <div>
-                        <p className="font-medium text-gray-800 text-sm max-sm:text-[13px]">{member.user_name || 'Unknown User'}</p>
-                        <p className="text-gray-400 text-xs">{member.user_email || '—'}</p>
+                        <p className="tf-label">{member.user_name || 'Unknown User'}</p>
+                        <p className="tf-hint">{member.user_email || '—'}</p>
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{rs ? rs.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{as ? as.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{aiu ? aiu.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 font-medium">{ru ? ru.toLocaleString() : '—'}</td>
-                  <td className="px-4 py-3 text-right font-bold text-brand-blue">{total.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-gray-500 text-xs">{member.last_activity ? formatIST(member.last_activity) : '—'}</td>
+                  <td className="tf-td text-right text-gray-700 font-medium">{rs ? rs.toLocaleString() : '—'}</td>
+                  <td className="tf-td text-right text-gray-700 font-medium">{as ? as.toLocaleString() : '—'}</td>
+                  <td className="tf-td text-right text-gray-700 font-medium">{aiu ? aiu.toLocaleString() : '—'}</td>
+                  <td className="tf-td text-right text-gray-700 font-medium">{ru ? ru.toLocaleString() : '—'}</td>
+                  <td className="tf-td text-right font-bold text-brand-blue">{total.toLocaleString()}</td>
+                  <td className="tf-td tf-meta">{member.last_activity ? formatIST(member.last_activity) : '—'}</td>
                 </tr>
               );
             })}
@@ -1394,18 +1454,18 @@ function RefundsTab({
 
   return (
     <div>
-      <div className="overflow-x-auto tf-table-shell">
-        <table className="w-full text-sm max-sm:text-[13px]">
+      <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
+        <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-gray-200 bg-white">
-              <th className="text-left px-4 py-3 tf-th">Type</th>
-              <th className="text-left px-4 py-3 tf-th">Feature</th>
-              <th className="text-right px-4 py-3 tf-th">Units</th>
-              <th className="text-right px-4 py-3 tf-th">Before</th>
-              <th className="text-right px-4 py-3 tf-th">After</th>
-              <th className="text-left px-4 py-3 tf-th">Actor</th>
-              <th className="text-left px-4 py-3 tf-th">Reason</th>
-              <th className="text-left px-4 py-3 tf-th">Date</th>
+              <th className="tf-th-cell text-left tf-th">Type</th>
+              <th className="tf-th-cell text-left tf-th">Feature</th>
+              <th className="tf-th-cell text-right tf-th">Units</th>
+              <th className="tf-th-cell text-right tf-th">Before</th>
+              <th className="tf-th-cell text-right tf-th">After</th>
+              <th className="tf-th-cell text-left tf-th">Actor</th>
+              <th className="tf-th-cell text-left tf-th">Reason</th>
+              <th className="tf-th-cell text-left tf-th">Date</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -1414,34 +1474,67 @@ function RefundsTab({
               const isPositive = ['REFUND', 'ADJUST_ADD', 'REPLENISH', 'UPGRADE', 'INIT'].includes(entry.action_type);
               return (
                 <tr key={entry.id} className="hover:bg-brand-blue/[0.03] transition-colors">
-                  <td className="px-4 py-3">
+                  <td className="tf-td">
                     <Badge variant={acfg.variant}>{acfg.label}</Badge>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="tf-td">
                     <UnitTypeBadge type={entry.unit_type} />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="tf-td text-right">
                     <span className={`font-bold ${isPositive ? 'text-success' : 'text-destructive'}`}>
                       {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right text-gray-500 text-sm max-sm:text-[13px]">{entry.balance_before.toLocaleString()}</td>
-                  <td className="px-4 py-3 text-right text-gray-700 text-sm max-sm:text-[13px] font-medium">{entry.balance_after.toLocaleString()}</td>
-                  <td className="px-4 py-3">
-                    <p className="tf-body max-sm:text-[13px]">{entry.actor_name || entry.actor_email || '—'}</p>
-                    <p className="text-gray-400 text-xs capitalize">{entry.actor_type?.toLowerCase()}</p>
+                  <td className="tf-td text-right tf-body-muted">{entry.balance_before.toLocaleString()}</td>
+                  <td className="tf-td text-right tf-label">{entry.balance_after.toLocaleString()}</td>
+                  <td className="tf-td">
+                    <p className="tf-body">{entry.actor_name || entry.actor_email || '—'}</p>
+                    <p className="tf-hint capitalize">{entry.actor_type?.toLowerCase()}</p>
                   </td>
-                  <td className="px-4 py-3">
-                    <p className="tf-card-desc max-sm:text-[13px] max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
-                    {entry.notes && <p className="text-gray-400 text-xs truncate max-w-[200px]" title={entry.notes}>{entry.notes}</p>}
+                  <td className="tf-td">
+                    <p className="tf-body-secondary max-w-[200px] truncate" title={entry.reason}>{entry.reason}</p>
+                    {entry.notes && <p className="tf-hint truncate max-w-[200px]" title={entry.notes}>{entry.notes}</p>}
                   </td>
-                  <td className="px-4 py-3 text-gray-500 text-xs whitespace-nowrap">{formatISTDate(entry.created_at)}</td>
+                  <td className="tf-td tf-meta whitespace-nowrap">{formatISTDate(entry.created_at)}</td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <MobileRecordList>
+        {items.map((entry) => {
+          const acfg = ACTION_CONFIG[entry.action_type] ?? { label: entry.action_type, variant: 'muted' as BadgeVariant };
+          const isPositive = ['REFUND', 'ADJUST_ADD', 'REPLENISH', 'UPGRADE', 'INIT'].includes(entry.action_type);
+          return (
+            <MobileRecordCard
+              key={entry.id}
+              badges={
+                <>
+                  <Badge variant={acfg.variant}>{acfg.label}</Badge>
+                  <UnitTypeBadge type={entry.unit_type} />
+                </>
+              }
+              title={<span title={entry.reason}>{entry.reason}</span>}
+              meta={[
+                { icon: <User className="h-3.5 w-3.5" />, label: entry.actor_name || entry.actor_email || '—' },
+                { icon: <Shield className="h-3.5 w-3.5" />, label: entry.actor_type ? <span className="capitalize">{entry.actor_type.toLowerCase()}</span> : null },
+              ]}
+              fields={[
+                { label: 'Notes', value: entry.notes },
+                { label: 'Before', value: entry.balance_before.toLocaleString() },
+                { label: 'After', value: entry.balance_after.toLocaleString() },
+                { label: 'Date', value: formatISTDate(entry.created_at) },
+              ]}
+              footer={
+                <MobileStatChip tone={isPositive ? 'success' : 'danger'}>
+                  {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()} units
+                </MobileStatChip>
+              }
+            />
+          );
+        })}
+      </MobileRecordList>
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={total} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
       )}
@@ -1557,8 +1650,8 @@ export default function UsageHistory() {
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">
           <Shield className="w-8 h-8 text-brand-blue" />
         </div>
-        <h2 className="text-base max-sm:text-sm font-semibold text-gray-900 mb-2">Access Restricted</h2>
-        <p className="tf-body-muted max-sm:text-[13px] max-w-sm">Usage History is only accessible to Tenant Admins.</p>
+        <h2 className="tf-section-title max-sm:text-sm mb-2">Access Restricted</h2>
+        <p className="tf-body-muted max-w-sm">Usage History is only accessible to Tenant Admins.</p>
       </div>
     );
   }
@@ -1786,12 +1879,12 @@ export default function UsageHistory() {
       />
 
       {/* ── Filters + view toggle + table: one card ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="tf-card-soft overflow-hidden">
         {/* Toolbar: filters left, User-Wise / Team-Wise toggle right */}
         <div className="flex flex-col gap-2.5 border-b border-gray-200 px-3 py-3 sm:gap-3 sm:px-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
             {/* Quick Period */}
-            <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
+            <label className="flex items-center gap-2 tf-label">
               Period
               <FilterSelect
                 value={quickPeriod}
@@ -1825,12 +1918,12 @@ export default function UsageHistory() {
                   { value: 'last_quarter', label: 'Last Quarter' },
                   { value: 'last_year', label: 'Last Year' },
                 ]}
-                className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
+                className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
               />
             </label>
 
             {/* Date Range */}
-            <div className="grid grid-cols-2 gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600 sm:flex sm:items-center">
+            <div className="grid grid-cols-2 gap-2 tf-label sm:flex sm:items-center">
               <span className="hidden sm:inline">From</span>
               <DateField
                 aria-label="From date"
@@ -1852,7 +1945,7 @@ export default function UsageHistory() {
 
             {/* Status */}
             {(activeTab === 'feature') && (
-              <label className="flex items-center gap-2 text-sm max-sm:text-[13px] font-medium text-gray-600">
+              <label className="flex items-center gap-2 tf-label">
                 Status
                 <FilterSelect
                   value={filterStatus}
@@ -1866,7 +1959,7 @@ export default function UsageHistory() {
                     { value: 'ABANDONED', label: 'Abandoned' },
                     { value: 'INTERRUPTED', label: 'Interrupted' },
                   ]}
-                  className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm max-sm:text-[13px] font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
+                  className="h-9 data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 w-auto flex-1 sm:flex-none text-sm font-normal rounded-lg sm:rounded-lg px-3 sm:px-3 text-gray-700 hover:border-brand-blue/40"
                 />
               </label>
             )}
@@ -1878,7 +1971,7 @@ export default function UsageHistory() {
           <div
             role="radiogroup"
             aria-label="Usage view"
-            className="relative grid grid-cols-2 h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
+            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10 order-first w-full shrink-0 sm:w-auto sm:self-start lg:order-none lg:self-auto"
           >
             <span
               aria-hidden
@@ -1953,7 +2046,7 @@ export default function UsageHistory() {
       </div>
 
       {/* ── Audit note ── */}
-      <div className="flex items-start gap-3 tf-meta-strong bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
+      <div className="flex items-start gap-3 tf-meta bg-gradient-to-r from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl p-4 border border-brand-blue/15 ring-1 ring-brand-blue/5">
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
           <Info className="w-3.5 h-3.5" />
         </div>

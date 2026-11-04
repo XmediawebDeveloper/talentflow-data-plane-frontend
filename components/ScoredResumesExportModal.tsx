@@ -243,7 +243,7 @@ export default function ScoredResumesExportModal({
               <FileDown className="w-5 h-5 text-blue-600" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base sm:text-lg font-bold text-gray-900">Export Scored Resumes</h3>
+              <h3 className="tf-section-title sm:text-lg">Export Scored Resumes</h3>
               <p className="tf-body-muted mt-1 flex items-center gap-1.5">
                 {rows.length} {rows.length === 1 ? 'record' : 'records'}
                 <span className="w-1 h-1 rounded-full bg-blue-500" />
@@ -317,14 +317,14 @@ export default function ScoredResumesExportModal({
                 {allExportColumnsOn ? 'Clear all' : 'Select all'}
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+            <div className="tf-grid-2">
               {exportColumnOptions.map(col => (
                 <label key={col.id} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                   <input
                     type="checkbox"
                     checked={col.enabled}
                     onChange={() => toggleExportColumn(col.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    className="tf-checkbox focus:ring-blue-500"
                   />
                   <span className="truncate">{col.label}</span>
                 </label>

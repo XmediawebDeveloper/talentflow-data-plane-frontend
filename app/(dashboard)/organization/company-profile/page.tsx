@@ -249,7 +249,7 @@ function CompanySizeField({
             variant="secondary"
             size="sm"
             onClick={() => { setMode('select'); onChange(''); }}
-            className="px-2"
+            className=""
             aria-label="Switch to dropdown"
           >
             <X className="w-3.5 h-3.5" />
@@ -524,7 +524,7 @@ export default function CompanyProfilePage() {
   const yearsActive = foundedYear !== null ? new Date().getFullYear() - foundedYear : null;
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Company Profile' }]} />
@@ -533,7 +533,7 @@ export default function CompanyProfilePage() {
         <div className="mb-4 flex items-center justify-between gap-3 sm:mb-5">
           <div className="min-w-0">
             <h1 className="tf-page-title">Company Profile</h1>
-            <p className="mt-0.5 text-xs text-gray-500 sm:text-sm dark:text-slate-400">
+            <p className="mt-0.5 tf-meta sm:text-sm">
               {isEditing
                 ? 'Update your organization’s details, then save.'
                 : 'Your organization’s identity, contact info and address.'}
@@ -583,7 +583,7 @@ export default function CompanyProfilePage() {
                 {initials}
               </div>
               <div className="min-w-0 space-y-1 sm:space-y-2">
-                <h2 className="truncate text-base font-bold tracking-tight text-gray-900 sm:text-xl dark:text-slate-50">
+                <h2 className="truncate tf-section-title tracking-tight sm:text-xl">
                   {companyData.name || 'Your company'}
                 </h2>
                 {websiteHref ? (
@@ -598,7 +598,7 @@ export default function CompanyProfilePage() {
                     <ExternalLink className="h-3 w-3 shrink-0 text-gray-400" />
                   </a>
                 ) : (
-                  <p className="text-xs text-gray-400 dark:text-slate-500">No website added</p>
+                  <p className="tf-hint">No website added</p>
                 )}
                 {/* Tags hidden on phones — the details list repeats them. */}
                 {(industryLabel || companyData.size || companyData.founded) && (
@@ -614,7 +614,7 @@ export default function CompanyProfilePage() {
             {/* Completeness */}
             <div className="w-full border-t border-gray-100 pt-3 dark:border-slate-800 sm:rounded-xl sm:border sm:border-gray-200/80 sm:bg-slate-50/80 sm:p-4 lg:w-80 sm:dark:border-slate-700 sm:dark:bg-slate-800/60">
               <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-medium text-gray-600 dark:text-slate-300">Profile completeness</span>
+                <span className="tf-caption">Profile completeness</span>
                 <span className="rounded border border-brand-blue/20 bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-bold tabular-nums text-brand-blue dark:bg-brand-blue/20 dark:text-blue-200">
                   {completeness}%
                 </span>
@@ -625,7 +625,7 @@ export default function CompanyProfilePage() {
                   style={{ width: `${completeness}%` }}
                 />
               </div>
-              <div className="flex items-center justify-between gap-2 text-[11px] font-medium text-gray-500 dark:text-slate-400">
+              <div className="flex items-center justify-between gap-2 tf-caption">
                 {completeness === 100 ? (
                   <span className="flex items-center gap-1 font-semibold text-brand-teal">
                     <Check className="h-3.5 w-3.5" />
@@ -652,7 +652,7 @@ export default function CompanyProfilePage() {
           /* ── Edit mode: the form ── */
           <div className="space-y-4 sm:space-y-5">
             <Section id="cp-edit-basic" icon={Building2} title="Basic information" subtitle="Identity, contact and industry details.">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+              <div className="tf-grid-2">
                 {field('Company Name', 'name', { placeholder: 'Acme Corp', required: true })}
                 {field('Website', 'website', { placeholder: 'https://example.com' })}
                 {field('Contact Email', 'email', { type: 'email', placeholder: 'admin@company.com' })}
@@ -717,7 +717,7 @@ export default function CompanyProfilePage() {
             </Section>
 
             <Section id="cp-edit-address" icon={MapPin} title="Address" subtitle="Where your organization is headquartered.">
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+              <div className="tf-grid-2">
                 <div className="sm:col-span-2">
                   <Label className="mb-1.5">Street Address</Label>
                   {/* "Use current location" sits inside the field, right corner */}
@@ -762,7 +762,7 @@ export default function CompanyProfilePage() {
                 {validationErrors.description
                   ? <p className="text-xs font-medium text-destructive">{validationErrors.description}</p>
                   : <span />}
-                <p className="text-right text-xs tabular-nums text-gray-400 dark:text-slate-500">{companyData.description.length}/2000</p>
+                <p className="text-right tf-hint tabular-nums">{companyData.description.length}/2000</p>
               </div>
             </Section>
 
@@ -846,7 +846,7 @@ export default function CompanyProfilePage() {
 
             <MobileGroup title="About" onEdit={() => openEditAt('cp-edit-about')} editLabel="Update">
               {companyData.description ? (
-                <p className="whitespace-pre-line break-words px-3 py-3 text-xs leading-relaxed text-gray-600 dark:text-slate-300">
+                <p className="whitespace-pre-line break-words px-3 py-3 tf-meta leading-relaxed">
                   {companyData.description}
                 </p>
               ) : (
@@ -955,12 +955,12 @@ export default function CompanyProfilePage() {
             >
               {addressLines.length > 0 ? (
                 <div className="flex items-start gap-3 rounded-xl border border-gray-200/70 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-                  <span className="mt-0.5 shrink-0 rounded-lg border border-gray-200 bg-white p-2 text-brand-blue shadow-sm dark:border-slate-700 dark:bg-slate-900">
+                  <span className="tf-card-soft mt-0.5 shrink-0 p-2 text-brand-blue">
                     <Navigation className="h-4 w-4" />
                   </span>
-                  <address className="min-w-0 space-y-1 break-words text-xs not-italic text-gray-600 dark:text-slate-300">
+                  <address className="min-w-0 space-y-1 break-words tf-meta not-italic">
                     {companyData.address && (
-                      <p className="tf-cell-name">{companyData.address}</p>
+                      <p className="tf-row-title">{companyData.address}</p>
                     )}
                     {(cityLine || companyData.zipCode) && (
                       <p>{[cityLine, companyData.zipCode].filter(Boolean).join(' ')}</p>
@@ -986,7 +986,7 @@ export default function CompanyProfilePage() {
             >
               {companyData.description ? (
                 <div className="rounded-xl border border-gray-200/70 bg-slate-50/70 p-4 dark:border-slate-700 dark:bg-slate-800/50">
-                  <p className="whitespace-pre-line break-words text-xs leading-relaxed text-gray-600 sm:text-[13px] dark:text-slate-300">
+                  <p className="whitespace-pre-line break-words tf-meta leading-relaxed sm:text-sm">
                     {companyData.description}
                   </p>
                 </div>
@@ -1070,7 +1070,7 @@ function Section({
             <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
           </span>
           <div className="min-w-0">
-            <h3 className="tf-subsection-title">{title}</h3>
+            <h3 className="tf-row-title">{title}</h3>
             {subtitle && <p className="tf-meta">{subtitle}</p>}
           </div>
         </div>
@@ -1101,12 +1101,12 @@ function MobileGroup({
   return (
     <section>
       <div className="mb-1.5 flex items-center justify-between px-1">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">{title}</h3>
+        <h3 className="tf-eyebrow">{title}</h3>
         <button type="button" onClick={onEdit} className="text-xs font-semibold text-brand-blue">
           {editLabel}
         </button>
       </div>
-      <div className="divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-200 bg-white dark:divide-slate-800 dark:border-slate-700/60 dark:bg-slate-900">
+      <div className="divide-y divide-gray-100 overflow-hidden tf-panel dark:divide-slate-800">
         {children}
       </div>
     </section>
@@ -1137,7 +1137,7 @@ function MobileRow({
     <>
       <Icon className="h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
       <div className="min-w-0 flex-1">
-        <p className="text-[11px] font-medium text-gray-500 dark:text-slate-400">{label}</p>
+        <p className="tf-caption">{label}</p>
         <p
           className={`text-sm ${wrap ? 'whitespace-pre-line break-words' : 'truncate'} ${
             empty
@@ -1189,7 +1189,7 @@ function SectionEditButton({ onClick, label = 'Edit' }: { onClick: () => void; l
 
 function HeroTag({ icon: Icon, children }: { icon: LucideIcon; children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200/60 bg-slate-100/90 px-2.5 py-1 text-xs font-medium text-gray-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-gray-200/60 bg-slate-100/90 px-2.5 py-1 tf-caption dark:border-slate-700 dark:bg-slate-800">
       <Icon className="h-3.5 w-3.5 text-gray-500 dark:text-slate-400" />
       {children}
     </span>
@@ -1243,7 +1243,7 @@ function CopyButton({ text, label, showText }: { text: string; label: string; sh
       onClick={copy}
       title={`Copy ${label}`}
       aria-label={`Copy ${label}`}
-      className="inline-flex shrink-0 items-center gap-1 text-[11px] font-medium text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-slate-300"
+      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-slate-300"
     >
       {copied ? <Check className="h-3.5 w-3.5 text-brand-teal" /> : <Copy className="h-3.5 w-3.5" />}
       {showText && <span>{copied ? 'Copied' : `Copy ${label}`}</span>}
@@ -1254,7 +1254,7 @@ function CopyButton({ text, label, showText }: { text: string; label: string; sh
 function EmptyHint({ text, onAdd }: { text: string; onAdd: () => void }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-dashed border-gray-200 px-4 py-4 dark:border-slate-700">
-      <span className="text-xs text-gray-400 dark:text-slate-500">{text}</span>
+      <span className="tf-hint">{text}</span>
       <button type="button" onClick={onAdd} className="shrink-0 text-xs font-semibold text-brand-blue hover:underline">
         Add
       </button>

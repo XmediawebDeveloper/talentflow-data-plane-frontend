@@ -15,7 +15,7 @@ const TABS: Array<{ id: ViewMode; label: string; icon: any }> = [
 
 export function ViewToggle({ view, onChange }: ViewToggleProps) {
   return (
-    <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1 shadow-sm">
+    <div className="tf-card-soft inline-flex p-1">
       {TABS.map(({ id, label, icon: Icon }) => (
         <button
           key={id}

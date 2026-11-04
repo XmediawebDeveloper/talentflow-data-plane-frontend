@@ -124,7 +124,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
   };
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       {/* Header */}
       <div className="mb-8">
         <button
@@ -135,14 +135,14 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
           Back to Job Details
         </button>
 
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-6">
           <div>
-            <h1 className="text-gray-900 mb-2">Job Applicants</h1>
-            <p className="tf-card-desc">
+            <h1 className="tf-page-title mb-2">Job Applicants</h1>
+            <p className="tf-body-secondary">
               Managing applicants for: <span className="text-gray-800">{jobTitle}</span>
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Button variant="secondary" size="md" icon={<Download className="w-4 h-4" />}>
               Export
             </Button>
@@ -153,8 +153,8 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-5 gap-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+        <div className="tf-grid-stats-5">
+          <div className="tf-card-soft p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-gray-50 rounded-lg">
                 <Users className="w-5 h-5 text-gray-800" />
@@ -162,10 +162,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <TrendingUp className="w-4 h-4 text-success" />
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.total}</div>
-            <div className="tf-card-desc">Total Applicants</div>
+            <div className="tf-body-secondary">Total Applicants</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="tf-card-soft p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-success-subtle rounded-lg">
                 <Target className="w-5 h-5 text-success" />
@@ -173,10 +173,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">85+</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.exactMatch}</div>
-            <div className="tf-card-desc">Exact Match</div>
+            <div className="tf-body-secondary">Exact Match</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="tf-card-soft p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-gray-50 rounded-lg">
                 <AlertTriangle className="w-5 h-5 text-gray-800" />
@@ -184,10 +184,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-gray-100 text-gray-900 rounded text-xs">70-84</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.partialMatch}</div>
-            <div className="tf-card-desc">Partial Match</div>
+            <div className="tf-body-secondary">Partial Match</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="tf-card-soft p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-success-subtle rounded-lg">
                 <CheckCircle2 className="w-5 h-5 text-success" />
@@ -195,10 +195,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">Active</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.shortlisted}</div>
-            <div className="tf-card-desc">Shortlisted</div>
+            <div className="tf-body-secondary">Shortlisted</div>
           </div>
 
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+          <div className="tf-card-soft p-4 sm:p-6">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2.5 bg-warning-subtle rounded-lg">
                 <MessageSquare className="w-5 h-5 text-warning" />
@@ -206,15 +206,15 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="px-2 py-0.5 bg-warning-subtle text-warning rounded text-xs">Pending</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.interview}</div>
-            <div className="tf-card-desc">Interviews</div>
+            <div className="tf-body-secondary">Interviews</div>
           </div>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="p-5">
-          <div className="flex gap-3">
+      <div className="tf-card-soft mb-6">
+        <div className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             {/* Search */}
             <div className="flex-1 relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -223,7 +223,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                 placeholder="Search by name or email..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent text-sm"
+                className="tf-input h-auto pl-12 pr-4 py-3"
               />
             </div>
 
@@ -291,7 +291,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             <div
               key={applicant.id}
               onClick={() => setSelectedApplicant(applicant)}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all overflow-hidden cursor-pointer group"
+              className="tf-card-soft hover:shadow-lg hover:border-gray-300 transition-all overflow-hidden cursor-pointer group"
             >
               <div className="flex">
                 {/* Left Color Bar */}
@@ -321,7 +321,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-6 tf-card-desc">
+                      <div className="flex items-center gap-6 tf-body-secondary">
                         <div className="flex items-center gap-2">
                           <Mail className="w-4 h-4 text-gray-400" />
                           <span>{applicant.email}</span>
@@ -406,7 +406,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       </div>
 
       {filteredApplicants.length === 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-16 text-center">
+        <div className="tf-card-soft p-16 text-center">
           <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
           <h3 className="text-gray-900 mb-2">No applicants found</h3>
           <p className="tf-body-muted">

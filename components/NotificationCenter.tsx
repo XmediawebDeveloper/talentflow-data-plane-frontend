@@ -150,7 +150,7 @@ export default function NotificationCenter({
                               <p className={`text-sm ${!notification.read ? 'text-gray-900' : 'text-gray-700'}`}>
                                 {notification.title}
                               </p>
-                              <p className="tf-meta-strong mt-0.5 line-clamp-2">
+                              <p className="tf-meta mt-0.5 line-clamp-2">
                                 {notification.message}
                               </p>
                               <div className="flex items-center gap-2 mt-2">

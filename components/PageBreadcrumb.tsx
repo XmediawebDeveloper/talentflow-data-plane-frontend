@@ -27,6 +27,9 @@ export interface BreadcrumbCrumb {
 
 /**
  * Route breadcrumb shown at the top of a page, e.g. Dashboard › Current Plan › Usage & Quotas.
+ * Phones (globals.css, `.tf-jdv-crumb`): the trail stays on one line (under 400px a 3+ crumb
+ * trail drops "Dashboard"; earlier crumbs shorten with "…" before the current page does),
+ * and `actions` such as a record pager sit on a slim line of their own beneath it.
  * The last item is always rendered as the current page (non-clickable), even if a href is given.
  */
 export default function PageBreadcrumb({
@@ -119,14 +122,14 @@ export default function PageBreadcrumb({
   );
 
   return (
-    <Breadcrumb ref={barRef} className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
+    <Breadcrumb ref={barRef} className={`${sticky ? 'sticky top-0 z-30 ' : ''}tf-jdv-crumb bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
       {actions ? (
         // flex-wrap + ml-auto rather than justify-between: on a narrow screen
         // the actions drop to their own line and stay right-aligned there,
         // which justify-between would not do for a lone wrapped item.
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="min-w-0">{list}</div>
-          <div className="flex items-center gap-2 shrink-0 ml-auto">{actions}</div>
+        <div className="tf-crumb-row flex flex-wrap items-center gap-2">
+          <div className="tf-crumb-list min-w-0">{list}</div>
+          <div className="tf-crumb-actions flex items-center gap-2 shrink-0 ml-auto">{actions}</div>
         </div>
       ) : (
         list

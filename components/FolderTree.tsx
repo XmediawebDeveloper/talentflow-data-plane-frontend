@@ -782,7 +782,7 @@ export default function FolderTree({
               <Plus className={`w-4 h-4 ${canCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
               {!canCreateSubfolder && (
-                <span className="text-xs text-gray-400 dark:text-slate-600 ml-auto">
+                <span className="tf-hint ml-auto">
                   {!canCreateFolder ? '(no permission)' : '(max depth)'}
                 </span>
               )}

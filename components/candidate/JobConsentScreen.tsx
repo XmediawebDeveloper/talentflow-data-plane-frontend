@@ -216,7 +216,7 @@ function TermsDialog({
               <AlertCircle className="w-4 h-4 text-warning" />
               <h3 id="instructions-heading" className={T_SECTION}>Key rules</h3>
             </div>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <ul className="tf-grid-2">
               {KEY_RULES.map((rule, index) => (
                 <li
                   key={rule.title}
@@ -229,7 +229,7 @@ function TermsDialog({
                     <rule.icon className={`w-3.5 h-3.5 shrink-0 ${rule.critical ? 'text-destructive' : 'text-warning'}`} />
                     {rule.title}
                   </p>
-                  <p className="mt-1 tf-meta-strong leading-relaxed">{rule.text}</p>
+                  <p className="mt-1 tf-meta leading-relaxed">{rule.text}</p>
                 </li>
               ))}
             </ul>
@@ -244,7 +244,7 @@ function TermsDialog({
               </h3>
               <span className="tf-meta">— this assessment is monitored to keep it fair</span>
             </div>
-            <ul className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <ul className="tf-grid-2">
               {PROCTORING.map((feature, index) => (
                 <li
                   key={feature.label}
@@ -252,11 +252,11 @@ function TermsDialog({
                     PROCTORING.length % 2 === 1 && index === PROCTORING.length - 1 ? 'sm:col-span-2' : ''
                   }`}
                 >
-                  <p className="flex items-center gap-1.5 tf-cell-name">
+                  <p className="flex items-center gap-1.5 tf-row-title">
                     <feature.icon className="w-3.5 h-3.5 shrink-0 text-brand-cyan" />
                     {feature.label}
                   </p>
-                  <p className="mt-1 tf-meta-strong leading-relaxed">{feature.description}</p>
+                  <p className="mt-1 tf-meta leading-relaxed">{feature.description}</p>
                 </li>
               ))}
             </ul>
@@ -271,8 +271,8 @@ function TermsDialog({
             <div className="rounded-xl bg-slate-50 ring-1 ring-gray-200 p-4 space-y-3">
               {TERMS.map((term) => (
                 <div key={term.title}>
-                  <p className="tf-cell-name">{term.title}</p>
-                  <p className="tf-meta-strong leading-relaxed mt-0.5">{term.content}</p>
+                  <p className="tf-row-title">{term.title}</p>
+                  <p className="tf-meta leading-relaxed mt-0.5">{term.content}</p>
                 </div>
               ))}
             </div>
@@ -407,7 +407,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                     as the page heading, its department / experience / location
                     on one line, then the rest of the role and the assessment's
                     own facts as pills. */}
-                <section className="rounded-2xl border border-gray-200 bg-white shadow-sm p-5 min-w-0">
+                <section className="tf-card-soft p-5 min-w-0">
                   {/* Title row: the role and its tagline on the left, the
                       candidate (name and email) in its top-right corner — under
                       them on a phone. */}
@@ -441,7 +441,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         {candidateInitials}
                       </span>
                       <div className="min-w-0">
-                        <p className="tf-cell-name truncate" title={assessmentInfo.candidate_name}>
+                        <p className="tf-row-title truncate" title={assessmentInfo.candidate_name}>
                           {assessmentInfo.candidate_name}
                         </p>
                         <p className="tf-meta break-all" title={assessmentInfo.candidate_email}>
@@ -459,7 +459,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         {group.map(({ label, Icon, iconClass }) => (
                           <span
                             key={label}
-                            className="inline-flex items-center gap-1.5 rounded-full border border-brand-blue/20 bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue"
+                            className="tf-badge gap-1.5 border border-brand-blue/20 bg-brand-blue/10 text-brand-blue"
                           >
                             <Icon className={`w-3.5 h-3.5 shrink-0 ${iconClass ?? ''}`} aria-hidden="true" />
                             {label}
@@ -477,7 +477,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                       <span className="flex h-6 w-6 items-center justify-center rounded-md bg-white border border-brand-blue/20 text-brand-blue shrink-0">
                         <FileText className="w-3.5 h-3.5" />
                       </span>
-                      <h2 id="jd-heading" className="text-sm font-semibold uppercase tracking-wide text-gray-700">About the role</h2>
+                      <h2 id="jd-heading" className="tf-row-title uppercase tracking-wide">About the role</h2>
                     </div>
 
                     <div className="p-5 space-y-4 min-w-0">
@@ -526,7 +526,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                   so Continue stays on screen on a 768px-tall laptop. */}
               <aside
                 aria-labelledby="before-you-begin-heading"
-                className="min-w-0 rounded-2xl border border-gray-200 bg-white shadow-sm lg:sticky lg:top-52 xl:top-40 lg:max-h-[calc(100dvh-14rem)] xl:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto"
+                className="tf-card-soft min-w-0 lg:sticky lg:top-52 xl:top-40 lg:max-h-[calc(100dvh-14rem)] xl:max-h-[calc(100dvh-11rem)] lg:overflow-y-auto"
               >
                 {/* Before You Begin — the AI interview's list. */}
                 <div className="p-5 pb-4">
@@ -534,7 +534,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                     <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10 text-brand-orange shrink-0">
                       <AlertTriangle className="w-4 h-4" />
                     </span>
-                    <h2 id="before-you-begin-heading" className="text-sm font-semibold text-gray-900">Before You Begin</h2>
+                    <h2 id="before-you-begin-heading" className="tf-row-title">Before You Begin</h2>
                   </div>
                   <ul className="space-y-2.5">
                     {BEFORE_YOU_BEGIN.map(({ icon: Icon, text }) => (
@@ -542,7 +542,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
                         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue shrink-0">
                           <Icon className="w-4 h-4" />
                         </span>
-                        <span className="tf-card-desc leading-snug pt-1.5">{text}</span>
+                        <span className="tf-body-secondary leading-snug pt-1.5">{text}</span>
                       </li>
                     ))}
                   </ul>
@@ -647,7 +647,7 @@ export function JobConsentScreen({ assessmentInfo, consentAccepted, onContinue, 
 
       {/* As the AI interview's footer: "Need help?" muted, the contact line darker. */}
       <footer className="w-full py-5 text-center bg-white border-t border-gray-200">
-        <p className="text-sm text-gray-400">
+        <p className="tf-body-muted">
           Need help?{' '}
           <a href="mailto:support@talentflow.com" className="font-medium text-gray-700 hover:text-brand-blue hover:underline break-all">
             Contact support@talentflow.com

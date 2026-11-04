@@ -70,15 +70,15 @@ const codingLanguages: string[] = assessment.coding_languages || [];
 const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
 
 return (
-  <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+  <div className="tf-card-soft">
     <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
       <div className="flex items-center gap-2 mb-1">
         <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
           <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
         </div>
-        <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
+        <h3 className="tf-row-name sm:text-base tracking-tight">Assessment Info</h3>
       </div>
-      <p className="tf-card-desc">Metadata extracted from the job description used to generate this assessment</p>
+      <p className="tf-body-secondary">Metadata extracted from the job description used to generate this assessment</p>
     </div>
 
     {!hasData ? (
@@ -90,63 +90,63 @@ return (
     ) : (
       <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
         {/* Key Metadata Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 sm:gap-3 lg:gap-4">
+        <div className="tf-grid-3">
           {/* Job Complexity Level */}
-          <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+          <div className="tf-card-soft p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Layers className="w-4 h-4 text-brand-blue" />
               </div>
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
+              <span className="tf-eyebrow tracking-wide">Job Complexity</span>
             </div>
             {assessment.jd_complexity ? (
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${complexityColor(assessment.jd_complexity)}`}>
                 {complexityLabel(assessment.jd_complexity)}
               </span>
             ) : (
-              <span className="text-sm text-gray-400">Not available</span>
+              <span className="tf-body-muted">Not available</span>
             )}
           </div>
 
           {/* Experience Level */}
-          <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+          <div className="tf-card-soft p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-brand-cyan" />
               </div>
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+              <span className="tf-eyebrow tracking-wide">Experience Level</span>
             </div>
             {assessment.jd_experience_level ? (
               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(assessment.jd_experience_level)}`}>
                 {expLabel(assessment.jd_experience_level)}
               </span>
             ) : (
-              <span className="text-sm text-gray-400">Not available</span>
+              <span className="tf-body-muted">Not available</span>
             )}
           </div>
 
           {/* Primary Domain */}
-          <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+          <div className="tf-card-soft p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                 <Globe className="w-4 h-4 text-brand-blue" />
               </div>
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
+              <span className="tf-eyebrow tracking-wide">Primary Domain</span>
             </div>
             {assessment.jd_primary_domain ? (
-              <span className="text-sm font-medium text-gray-900">{assessment.jd_primary_domain}</span>
+              <span className="tf-row-name">{assessment.jd_primary_domain}</span>
             ) : (
-              <span className="text-sm text-gray-400">Not available</span>
+              <span className="tf-body-muted">Not available</span>
             )}
           </div>
 
           {/* Coding Requirement */}
-          <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
+          <div className="tf-card-soft p-4">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                 <Code className="w-4 h-4 text-brand-cyan" />
               </div>
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
+              <span className="tf-eyebrow tracking-wide">Coding Requirement</span>
             </div>
             <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
               {assessment.coding_enabled ? 'Required' : 'Not Required'}
@@ -154,12 +154,12 @@ return (
           </div>
 
           {/* Eligible Programming Languages */}
-          <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
+          <div className="tf-card-soft p-4 sm:col-span-2">
             <div className="flex items-center gap-2 mb-2">
               <div className="w-9 h-9 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                 <Zap className="w-4 h-4 text-brand-orange-deep" />
               </div>
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
+              <span className="tf-eyebrow tracking-wide">Eligible Programming Languages</span>
             </div>
             {codingLanguages.length > 0 ? (
               <div className="flex flex-wrap gap-2">
@@ -174,7 +174,7 @@ return (
                 ))}
               </div>
             ) : (
-              <span className="text-sm text-gray-400">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
+              <span className="tf-body-muted">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
             )}
           </div>
         </div>
@@ -186,7 +186,7 @@ return (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <Star className="w-4 h-4 text-brand-blue" />
-              <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
+              <h4 className="tf-row-name tracking-tight">Must-Have Skills</h4>
               <span className="tf-meta">(Required skills extracted from JD)</span>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -217,7 +217,7 @@ return (
         <div>
           <div className="flex items-center gap-2 mb-3">
             <Star className="w-4 h-4 text-brand-cyan" />
-            <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
+            <h4 className="tf-row-name tracking-tight">Nice-to-Have Skills</h4>
             <span className="tf-meta">(Preferred skills extracted from JD)</span>
           </div>
           {niceToHaveSkills.length > 0 ? (
@@ -239,7 +239,7 @@ return (
               })}
             </div>
           ) : (
-            <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm text-gray-400 bg-gray-50 border border-gray-200">
+            <span className="inline-flex items-center px-3 py-1.5 rounded-lg tf-body-muted bg-gray-50 border border-gray-200">
               None configured for this JD
             </span>
           )}

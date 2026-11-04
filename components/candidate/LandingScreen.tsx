@@ -195,7 +195,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
             {hasJd && (
               <div className="mb-5">
                 <h2 className={`${T_EYEBROW} mb-3`}>Job Description</h2>
-                <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white overflow-hidden">
+                <div className="tf-panel overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setJdOpen((open) => !open)}
@@ -222,7 +222,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                       {/* Key facts, each with its own label, so "Hybrid" or
                           "3–5 yrs" never has to be guessed at. */}
                       {jdDetails.length > 0 && (
-                        <dl className="grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+                        <dl className="tf-grid-4">
                           {jdDetails.map(({ label, Icon, value }) => (
                             <div key={label} className={`${CARD_MUTED} flex items-start gap-2.5 min-w-0`}>
                               <Icon className="w-4 h-4 shrink-0 text-brand-blue mt-0.5" aria-hidden="true" />
@@ -267,7 +267,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                       )}
 
                       {(mustHaveSkills.length > 0 || niceToHaveSkills.length > 0) && (
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="tf-grid-2">
                           {([
                             { label: 'Required Skills', skills: mustHaveSkills, chip: 'bg-brand-blue/5 text-brand-blue ring-brand-blue/20' },
                             { label: 'Nice to Have', skills: niceToHaveSkills, chip: 'bg-slate-100 text-gray-700 ring-gray-200' },
@@ -303,7 +303,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
             {/* Assessment Rounds */}
             <div className="mb-5">
               <h2 className={`${T_EYEBROW} mb-3`}>Assessment Rounds</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="tf-grid-3">
                 {rounds.map((round) => (
                   <div key={round.type} className={`${CARD_MUTED} flex items-center gap-3`}>
                     <div className={`${ICON_TILE} ${round.tone}`}>
@@ -318,7 +318,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
             {/* System Requirements */}
             <div className="mb-5">
               <h2 className={`${T_EYEBROW} mb-3`}>System Requirements</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="tf-grid-3">
                 {([
                   { label: 'Stable Internet', help: 'Reliable connection required', Icon: Monitor, tone: TILE_BRAND },
                   { label: 'Camera Access', help: 'Required for proctoring', Icon: Camera, tone: TILE_SUCCESS },
