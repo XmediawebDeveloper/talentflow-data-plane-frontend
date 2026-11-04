@@ -3514,7 +3514,14 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .dark .tf-jd-card-actions > div > div > button { background-color: var(--color-slate-800) !important; color: var(--color-slate-300) !important; }
   /* Navigation tiles (icon + name + subtitle): wider than stat tiles so the full name fits — 1 / 2 / 3 / 4 / 5.
      Tablets keep 2: at 3 per row (768px) "Job Descriptions" broke mid-word. Every tile in a row is the same height. */
-  .tf-grid-tiles { @apply grid grid-cols-1 xs:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4; }
+  .tf-grid-tiles {
+    @apply grid grid-cols-1
+      min-[640px]:grid-cols-2
+      min-[1024px]:grid-cols-3
+      min-[1280px]:grid-cols-4
+      min-[1440px]:grid-cols-5
+      gap-3 sm:gap-4;
+  }
   .tf-grid-tiles > li > * { @apply h-full; }
   /* Text that must show in full: wraps onto the next line instead of "…" (size unchanged). */
   .tf-wrap { @apply whitespace-normal break-words; }
