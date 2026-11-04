@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
 
 /**
  * Candidates assessed / interviewed per JD id, for the "N assessed" and
@@ -26,17 +27,12 @@ export type JobCandidateCounts = Record<string, { assessed: number; interviewed:
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 
-async function paginate<T>(
+/** Page 1, then the rest a few at a time — same items, same order, same
+ *  stop rule (short page, total reached, MAX_PAGES) as a one-by-one loop. */
+function paginate<T>(
   fetchPage: (page: number) => Promise<{ items?: T[]; total?: number }>,
 ): Promise<T[]> {
-  const all: T[] = [];
-  for (let page = 1; page <= MAX_PAGES; page += 1) {
-    const res = await fetchPage(page);
-    const items = res.items ?? [];
-    all.push(...items);
-    if (items.length < PAGE_SIZE || all.length >= (res.total ?? all.length)) break;
-  }
-  return all;
+  return fetchAllPages(fetchPage, { pageSize: PAGE_SIZE, maxPages: MAX_PAGES });
 }
 
 /** `null` when the source failed — see `tally`. */

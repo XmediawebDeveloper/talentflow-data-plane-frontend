@@ -3,8 +3,6 @@ import { Job } from '@/lib/types/types';
 import { jdService } from '@/lib/services/jdService';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 
-const JD_BATCH_SIZE = 100;
-
 /**
  * Every JD record (all versions) keyed by id, read the way the Job
  * Descriptions page and JobOpeningPickerList read it — `source: 'my-jds'`,
@@ -21,13 +19,9 @@ export function useJobRecords(enabled = true): Map<string, Job> {
     let cancelled = false;
     (async () => {
       try {
-        const first = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-        const items = [...first.items];
-        const totalPages = Math.max(first.total_pages || Math.ceil(first.total / JD_BATCH_SIZE), 1);
-        for (let page = 2; page <= totalPages; page += 1) {
-          const next = await jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-          items.push(...next.items);
-        }
+        // Shared, short-lived cache (see jdService.listAllMine): a display-only
+        // read, so a recent one (under 30 s, cleared by any write) is reused.
+        const items = await jdService.listAllMine({ reuseRecent: true });
         if (cancelled) return;
         setRecords(new Map(items.map(mapJDToJob).map(job => [job.id, job])));
       } catch (error) {

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { listAssessmentsBatched } from '@/lib/utils/jobAssessmentHierarchy';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
@@ -56,14 +57,13 @@ import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAss
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 
-/* Same batch size and same reason as the Assessments dashboard's own list: the
+/* The whole set is read (pages of 100, `listAssessmentsBatched`), the same
+   batch size and the same reason as the Assessments dashboard's own list: the
    /assessments endpoint takes only jd_id, status, search and paging, so every
    filter this screen offers (job, job version, assessment version, created-on
    range) and every sort has to run over the WHOLE result set. Filtering one
    server page would silently scope "Job Version = V3" to whatever happened to
    be on screen, and sorting it would order 20 rows out of 156. */
-const FULL_SET_BATCH_SIZE = 100;
-
 
 /* ── Row model ─────────────────────────────────────────────────────────────
    One flat row per assessment, derived once from the API shape so the table,
@@ -376,21 +376,15 @@ const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
  * level so the page can warm a tab (`prefetchAssessmentRows`) before it is
  * opened, through the same code the table itself uses.
  */
-async function fetchAssessmentRows(fixedStatus?: FixedAssessmentStatus): Promise<AssessmentRow[]> {
-  const collected: AssessmentResponse[] = [];
-  let apiPage = 1;
-  for (;;) {
-    const batch = await assessmentService.list({
-      ...(fixedStatus ? { status: fixedStatus } : {}),
-      page: apiPage,
-      page_size: FULL_SET_BATCH_SIZE,
-    });
-    const items = batch.items || [];
-    collected.push(...items);
-    const total = batch.total ?? collected.length;
-    if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
-    apiPage += 1;
-  }
+async function fetchAssessmentRows(fixedStatus?: FixedAssessmentStatus, opts?: { fresh?: boolean }): Promise<AssessmentRow[]> {
+  /* Pages of 100 one after another to the end (listAssessmentsBatched) — through
+     the shared list cache, so the Assessments page reading the same set at the
+     same time pays for it once. `fresh` (any reload after the first) always
+     asks the server. */
+  const collected = await listAssessmentsBatched(
+    fixedStatus ? { status: fixedStatus } : {},
+    opts?.fresh ? { fresh: true } : { reuseRecent: true },
+  );
   /* Offset paging over a list that can change between batches (a row
      created or archived mid-walk) can hand the same assessment back on two
      pages — one row per id. */
@@ -529,7 +523,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      the mount effect below therefore contains no synchronous setState at all.
      `isLoading` starts true, so a mount needs no "start loading" write either
      — only Retry does, and that is an event handler. */
-  const fetchAll = useCallback(() => fetchAssessmentRows(fixedStatus), [fixedStatus]);
+  const fetchAll = useCallback((fresh: boolean) => fetchAssessmentRows(fixedStatus, { fresh }), [fixedStatus]);
 
   /* Every state write lands in a promise callback rather than in the effect
      body — the shape React actually wants for "subscribe to an external system
@@ -547,7 +541,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
        they are dropped rather than shown stale. */
     const isRefresh = hasLoadedOnce.current;
     hasLoadedOnce.current = true;
-    fetchAll()
+    // A refresh always asks the server; the first load may share a recent read.
+    fetchAll(isRefresh)
       .then((next) => {
         if (!alive) return;
         if (isRefresh) clearListSnapshots();

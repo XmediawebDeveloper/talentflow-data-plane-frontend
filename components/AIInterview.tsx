@@ -4,9 +4,6 @@ import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, F
 import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
-import { startWarmUp } from '@/lib/utils/warmUp';
-import { prefetchInterviewRows } from '@/components/ai-interview/AllInterviewsTable';
-import { prefetchAIResultRows } from '@/components/ai-interview/AIInterviewCandidateResults';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -92,6 +89,7 @@ import AllInterviewsTable, { VersionPill, AIInterviewJobStatusBadge, type BulkAc
 import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { cachedList, listCacheKey } from '@/lib/utils/listCache';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
@@ -630,35 +628,44 @@ export default function AIInterview() {
   };
 
   // Load configs and stats
-  const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
-    const firstPage = await aiInterviewService.listConfigs({
-      page: 1,
-      page_size: CONFIG_FETCH_PAGE_SIZE,
-      compact: true,
-    });
-    if (firstPage.total <= firstPage.items.length) {
-      return firstPage.items;
-    }
-
-    const totalPages = Math.max(
-      1,
-      firstPage.total_pages || Math.ceil(firstPage.total / CONFIG_FETCH_PAGE_SIZE),
-    );
-
-    const remainingPages = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, index) =>
-        aiInterviewService.listConfigs({
-          page: index + 2,
+  /* Every live config, pages of CONFIG_FETCH_PAGE_SIZE. Through the shared
+     list cache (lib/utils/listCache), so a visit soon after another one shares
+     its read; `fresh` (every load after the first) always asks the server. */
+  const loadAllConfigs = useCallback(async (fresh: boolean): Promise<AIInterviewResponse[]> => {
+    return cachedList(
+      listCacheKey('ai-configs|page-loop', { page_size: CONFIG_FETCH_PAGE_SIZE, compact: true }),
+      async () => {
+        const firstPage = await aiInterviewService.listConfigs({
+          page: 1,
           page_size: CONFIG_FETCH_PAGE_SIZE,
           compact: true,
-        })
-      )
-    );
+        });
+        if (firstPage.total <= firstPage.items.length) {
+          return firstPage.items;
+        }
 
-    return [
-      ...firstPage.items,
-      ...remainingPages.flatMap((page) => page.items),
-    ];
+        const totalPages = Math.max(
+          1,
+          firstPage.total_pages || Math.ceil(firstPage.total / CONFIG_FETCH_PAGE_SIZE),
+        );
+
+        const remainingPages = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            aiInterviewService.listConfigs({
+              page: index + 2,
+              page_size: CONFIG_FETCH_PAGE_SIZE,
+              compact: true,
+            })
+          )
+        );
+
+        return [
+          ...firstPage.items,
+          ...remainingPages.flatMap((page) => page.items),
+        ];
+      },
+      { fresh },
+    );
   }, []);
 
   /* Bumped by every loadArchivedConfigs run — tab switches, Refresh and the
@@ -668,12 +675,14 @@ export default function AIInterview() {
   /* When the archived list was last loaded, so a tab click does not download it
      all again (and re-render everything built on it) when it is seconds old. */
   const archivedLoadedAtRef = useRef(0);
-  const loadArchivedConfigs = useCallback(async () => {
+  /* `fresh: false` only from the first loadData — it may share a recent read
+     (lib/utils/listCache); tab clicks, Refresh and row actions ask the server. */
+  const loadArchivedConfigs = useCallback(async ({ fresh = true }: { fresh?: boolean } = {}) => {
     const seq = ++archivedSeqRef.current;
     try {
-      const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true }));
+      const items = await aiInterviewService.listAllConfigRows({ status: 'archived' }, fresh ? { fresh } : { reuseRecent: true });
       if (seq !== archivedSeqRef.current) return;
-      setArchivedConfigs(result.items);
+      setArchivedConfigs(items);
       archivedLoadedAtRef.current = Date.now();
     } catch (error) {
       console.error('Failed to load archived configs:', error);
@@ -703,7 +712,7 @@ export default function AIInterview() {
     /* The first load brings the archived configs in the same pass, so Total
        Jobs / Total Interviews appear once with archived included instead of
        showing the live-only figure and then jumping when they land. */
-    const archivedLoad = firstLoad ? loadArchivedConfigs() : null;
+    const archivedLoad = firstLoad ? loadArchivedConfigs({ fresh: false }) : null;
     try {
       // Remembered data already on screen: refresh quietly, no skeleton.
       if (firstLoad && remembered === null) setLoading(true);
@@ -722,12 +731,14 @@ export default function AIInterview() {
 
       let configItems: AIInterviewResponse[] = [];
       try {
-        configItems = await loadAllConfigs();
+        // Only the first load may share a recent read; every later run is a
+        // refresh (after a change, Refresh, a job status change) and asks the server.
+        configItems = await loadAllConfigs(!firstLoad);
       } catch (firstError) {
         // Retry once: this avoids a rare auth-refresh race where one concurrent
         // request refreshes the token and the sibling request needs one more hit.
         await new Promise((resolve) => window.setTimeout(resolve, 300));
-        configItems = await loadAllConfigs();
+        configItems = await loadAllConfigs(true);
       }
       if (isStale()) return;
       setConfigs(configItems);
@@ -769,14 +780,14 @@ export default function AIInterview() {
 
   /* The job badge reads each config's `jd_status`, which only arrives with the
      config list — so a job disabled / archived / re-enabled anywhere (this
-     tab, another tab, focus back on the window, or every 30s for another
-     user's change) quietly re-reads the list. The All Interviews table owns
-     its rows and keeps them live itself. */
+     tab or another tab: at once; tab visible again or another user's change:
+     throttled, see useJobStatusRefresh) quietly re-reads the list. The All
+     Interviews table owns its rows and keeps them live itself. */
   useJobStatusRefresh(() => {
     if (!hasLoadedRef.current) return;
     loadData();
     loadArchivedConfigs();
-  }, { pollMs: 30_000 });
+  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -1144,23 +1155,10 @@ export default function AIInterview() {
     loadAllInviteStatusesRef.current = loadAllInviteStatuses;
   }, [loadAllInviteStatuses]);
 
-  /* Warm-up: once the page's own load is done, load the other tabs' data in the
-     background, lightest first, so a click on any tab finds it ready instead of
-     starting from a skeleton. Each step is skipped quietly if it fails (the tab
-     then loads normally when opened). Runs once per visit. */
-  const warmedRef = useRef(false);
-  const cancelWarmUpRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (loading || warmedRef.current || configs.length === 0) return;
-    warmedRef.current = true;
-    cancelWarmUpRef.current = startWarmUp([
-      () => prefetchInterviewRows(),
-      () => prefetchAIResultRows(),
-      () => loadAllInviteStatusesRef.current(true),
-    ]);
-  }, [loading, configs.length]);
-  // Only leaving the page stops the warm-up (a re-render must not).
-  useEffect(() => () => cancelWarmUpRef.current?.(), []);
+  /* No background warm-up of the other tabs: it downloaded every interview
+     result (~21 MB), every invitation (~3.5 MB) and every config (~3.4 MB) on
+     each visit, whether or not those tabs were opened. Each tab loads its own
+     data when opened (and shows its remembered snapshot meanwhile). */
 
   useEffect(() => {
     if (activeTab === 'invitation-status') loadAllInviteStatusesRef.current();

@@ -638,6 +638,31 @@ const mockUsers: ApiUser[] = [
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
+/* POST /users/sync (seat-count reconcile with the Admin API) used to run on
+   every mount of this page. It now runs at most once per USER_SYNC_INTERVAL_MS
+   per tab — but any user-list reload after mount (create / edit / activate /
+   deactivate / delete / manual refresh all call loadUsers) clears the stamp,
+   so the next visit after a change always syncs, as before. */
+const USER_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const USER_SYNC_STAMP_KEY = 'tf:usersSync:lastRun';
+
+function userSyncDue(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem(USER_SYNC_STAMP_KEY));
+    return !last || Date.now() - last > USER_SYNC_INTERVAL_MS;
+  } catch {
+    return true;
+  }
+}
+
+function markUserSyncRan(): void {
+  try { sessionStorage.setItem(USER_SYNC_STAMP_KEY, String(Date.now())); } catch { /* storage unavailable: sync runs every mount */ }
+}
+
+function resetUserSyncThrottle(): void {
+  try { sessionStorage.removeItem(USER_SYNC_STAMP_KEY); } catch { /* ignore */ }
+}
+
 export default function UserManagement() {
   const router = useRouter();
   const { user: currentUser, refreshUser } = useAuth();
@@ -813,7 +838,7 @@ export default function UserManagement() {
   useEffect(() => {
     if (availableRoles.length === 0) return;
     let cancelled = false;
-    fetchRoleShownCounts(availableRoles.map((r) => r.id)).then((counts) => {
+    fetchRoleShownCounts(availableRoles).then((counts) => {
       if (!cancelled) setRoleDefaultCounts(counts);
     });
     return () => {
@@ -990,7 +1015,7 @@ export default function UserManagement() {
     // fetches straight from this tenant's own DB — so they fire immediately
     // instead of waiting on it. They're what the Users/Active/Inactive count
     // cards actually read; the sync result itself is never rendered anywhere.
-    loadUsers(); // also refreshes userCounts (see loadUsers)
+    loadUsers({ fromMount: true }); // also refreshes userCounts (see loadUsers)
     loadRoles();
     loadAllPermissions();
 
@@ -1003,6 +1028,8 @@ export default function UserManagement() {
     const syncWithAdminApi = async () => {
       try {
         const syncResult = await userService.syncUsers();
+        // A failed or unconfirmed sync doesn't count: retry on the next visit.
+        if (!syncResult.success) resetUserSyncThrottle();
         if (syncResult.synced) {
           console.log(`[USER-SYNC] Tenant ${syncResult.tenant_id}: Local=${syncResult.local_count}, Admin=${syncResult.admin_count}, Synced=${syncResult.synced_users || 0} users`);
         } else if (syncResult.error === 'USER_LIMIT_EXCEEDED' && syncResult.upgrade_required) {
@@ -1014,10 +1041,14 @@ export default function UserManagement() {
         }
       } catch (error) {
         console.warn('Failed to sync users with Admin API:', error);
+        resetUserSyncThrottle();
       }
     };
 
-    syncWithAdminApi();
+    if (userSyncDue()) {
+      markUserSyncRan();
+      syncWithAdminApi();
+    }
   }, []);
 
   // Component lifecycle tracking
@@ -1041,7 +1072,7 @@ export default function UserManagement() {
   const loadAllPermissions = async (): Promise<Permission[]> => {
     console.log('[LOAD PERMISSIONS] Starting to load permissions...');
     try {
-      const data = await rbacService.getPermissions();
+      const data = await rbacService.getPermissionsCached();
       console.log('[LOAD PERMISSIONS] Received data:', data);
       console.log('[LOAD PERMISSIONS] Permissions count:', data.permissions?.length || 0);
       if (data.permissions && data.permissions.length > 0) {
@@ -1569,8 +1600,11 @@ export default function UserManagement() {
 
   // `silent`: refetch in the background without swapping the table for the
   // skeleton — for quick in-place edits like the Active toggle.
-  const loadUsers = async ({ silent = false }: { silent?: boolean } = {}) => {
+  const loadUsers = async ({ silent = false, fromMount = false }: { silent?: boolean; fromMount?: boolean } = {}) => {
     if (!silent) setIsLoading(true);
+    // Any reload after mount follows a change or a manual refresh: let the next
+    // visit run the Admin API user sync again (see USER_SYNC_INTERVAL_MS).
+    if (!fromMount) resetUserSyncThrottle();
     // Keep the Active / Inactive / Total count cards in sync on every reload —
     // mount, manual refresh, and after mutations (activate/deactivate/delete/
     // create) that call loadUsers(). Previously userCounts loaded only once on

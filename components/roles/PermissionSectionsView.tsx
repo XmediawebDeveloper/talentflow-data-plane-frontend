@@ -2,6 +2,7 @@
 
 import React from 'react';
 import rbacService from '@/lib/services/rbacService';
+import { readRbacCache, writeRbacCache } from '@/lib/utils/rbacSessionCache';
 import {
   ALWAYS_ON_PERMISSION_CODES,
   getPermissionDisplaySections,
@@ -66,12 +67,36 @@ export const countGrantedPermissions = (codes: Iterable<string>): number =>
  * raw DB total, so each role's codes are fetched (a handful of roles). Roles
  * whose fetch fails are simply absent from the map — callers fall back.
  */
-export async function fetchRoleShownCounts(roleIds: number[]): Promise<Record<number, number>> {
-  const details = await Promise.allSettled(roleIds.map((id) => rbacService.getRoleById(id)));
+/** Max age of a session-cached role count (see fetchRoleShownCounts). */
+const ROLE_COUNT_MAX_AGE_MS = 2 * 60 * 1000;
+
+/**
+ * Counts are session-cached per role (lib/utils/rbacSessionCache) so moving
+ * between the Users and Roles pages doesn't refetch every role. Pass the role
+ * list items (not bare ids) so each entry is versioned by the list's fresh
+ * `permission_count`: a role whose raw total changed is refetched. The cache
+ * is also cleared on every role write and permissions update, and entries
+ * expire after ROLE_COUNT_MAX_AGE_MS.
+ */
+export async function fetchRoleShownCounts(
+  roles: Array<number | { id: number; permission_count?: number }>,
+): Promise<Record<number, number>> {
   const counts: Record<number, number> = {};
+  const toFetch: Array<{ id: number; version: string }> = [];
+  roles.forEach((r) => {
+    const id = typeof r === 'number' ? r : r.id;
+    const version = typeof r === 'number' ? '' : String(r.permission_count ?? '');
+    const hit = readRbacCache<number>(`roleShownCount:${id}`, ROLE_COUNT_MAX_AGE_MS, version);
+    if (hit !== undefined) counts[id] = hit;
+    else toFetch.push({ id, version });
+  });
+  const details = await Promise.allSettled(toFetch.map(({ id }) => rbacService.getRoleById(id)));
   details.forEach((d, i) => {
     if (d.status === 'fulfilled') {
-      counts[roleIds[i]] = countGrantedPermissions(withAlwaysOnPermissions((d.value.permissions || []).map((p) => p.code)));
+      const { id, version } = toFetch[i];
+      const count = countGrantedPermissions(withAlwaysOnPermissions((d.value.permissions || []).map((p) => p.code)));
+      counts[id] = count;
+      writeRbacCache(`roleShownCount:${id}`, count, version);
     }
   });
   return counts;

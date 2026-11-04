@@ -2,7 +2,55 @@
  * Resume Service
  */
 
-import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import api, { handleApiError, dispatchUnitsConsumed, getTokens } from './api';
+
+/* Throttle for POST /resumes/usage/reconcile. Three places ask for it (the
+   dashboard layout once per load, My Resumes and Resume Database on mount),
+   and each tab switch re-ran it. It now runs at most once per 15 minutes per
+   browser tab session, per signed-in account. Concurrent callers share the
+   in-flight request, so a caller that awaits it (the layout, which refetches
+   the quota widget afterwards) still waits for the real reconcile to finish.
+   If sessionStorage is unavailable the call simply runs, as before. Pass
+   `{ force: true }` to skip the throttle (e.g. right after a write). */
+const RECONCILE_THROTTLE_MS = 15 * 60 * 1000;
+const RECONCILE_STORAGE_PREFIX = 'tf-usage-reconcile-at:';
+let reconcileInFlight: Promise<void> | null = null;
+
+function reconcileStorageKey(): string {
+  // Key by account so a different login in the same tab is not throttled by
+  // the previous account's run.
+  let id = 'anon';
+  try {
+    const token = getTokens().accessToken;
+    const part = token?.split('.')[1];
+    if (part) {
+      const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+      id = [json.sub, json.tenant_id ?? json.tenant].filter(Boolean).join(':') || 'anon';
+    }
+  } catch {
+    // fall back to 'anon'
+  }
+  return RECONCILE_STORAGE_PREFIX + id;
+}
+
+function readReconcileStamp(key: string): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeReconcileStamp(key: string, value: number | null) {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, String(value));
+  } catch {
+    // storage unavailable: no throttle, same as before
+  }
+}
 
 /* Fired after any write that changes how many resumes a folder or pool holds
    — archive, unarchive, move, delete. Count badges live in several places
@@ -387,13 +435,30 @@ export const resumeService = {
    * Fire-and-forget: ask the backend to reconcile the admin API's RU usage
    * with our actual active resume count. Safe to call on every page mount —
    * the endpoint is idempotent and returns delta=0 when already in sync.
+   * Throttled to once per 15 minutes per tab session (see
+   * RECONCILE_THROTTLE_MS above); `force` bypasses the throttle.
    */
-  async reconcileUsage(): Promise<void> {
-    try {
-      await api.post('/resumes/usage/reconcile');
-    } catch {
-      // Reconciliation is best-effort; never block the page on it.
+  async reconcileUsage(options?: { force?: boolean }): Promise<void> {
+    if (reconcileInFlight) return reconcileInFlight;
+    const key = typeof window !== 'undefined' ? reconcileStorageKey() : null;
+    if (key && !options?.force) {
+      const last = readReconcileStamp(key);
+      const now = Date.now();
+      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return;
     }
+    if (key) writeReconcileStamp(key, Date.now());
+    reconcileInFlight = (async () => {
+      try {
+        await api.post('/resumes/usage/reconcile');
+      } catch {
+        // Reconciliation is best-effort; never block the page on it. Drop the
+        // stamp so the next mount retries, as it did before the throttle.
+        if (key) writeReconcileStamp(key, null);
+      } finally {
+        reconcileInFlight = null;
+      }
+    })();
+    return reconcileInFlight;
   },
 
   /**
