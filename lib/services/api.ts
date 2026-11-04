@@ -42,6 +42,14 @@ declare module 'axios' {
      * away the shared GETs in flight. Never set it on a request that writes.
      */
     invalidatesCache?: boolean;
+    /**
+     * Non-GET only, narrower than `invalidatesCache`: `false` keeps the list
+     * caches (listCache, and the paged lists that re-read when it clears) but
+     * still clears the 1 s shared GETs. For writes that touch no listed data —
+     * e.g. the header's notification bookkeeping POSTs on every hard load,
+     * which otherwise made every paged list fetch its page a second time.
+     */
+    invalidatesLists?: boolean;
   }
 }
 const GET_REUSE_MS = 1000;
