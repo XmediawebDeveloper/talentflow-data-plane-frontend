@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, Copy, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import ListPagination from '@/components/ListPagination';
 import {
   bulkInviteService,
   isBulkInviteActive,
@@ -14,9 +15,8 @@ import {
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 
 const POLL_MS = 2000;
-const PAGE_SIZE = 50;
-/* The results endpoint's page cap; past it, Load more stops growing the list. */
-const MAX_LIVE_ROWS = 1000;
+/* Rows per page, from the standard pager's ladder. */
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 type Tab = 'all' | 'sent' | 'skipped' | 'failed' | 'remaining';
 
@@ -77,6 +77,8 @@ export default function BulkInviteProgressPanel({
   const [rows, setRows] = useState<BulkInviteResultRow[]>([]);
   const [rowsTotal, setRowsTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [loadingRows, setLoadingRows] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -141,14 +143,13 @@ export default function BulkInviteProgressPanel({
     const timer = setTimeout(async () => {
       setLoadingRows(true);
       try {
-        /* Everything loaded so far, in one read, so a poll tick (processed
-           changed) refreshes pages 1..N in place instead of appending
-           page N again. */
+        /* One page from the server; a poll tick (processed changed)
+           re-reads the page on screen in place. */
         const res = await bulkInviteService.results(jobId, {
           status: tab === 'all' ? undefined : tab,
           search: search.trim() || undefined,
-          page: 1,
-          page_size: Math.min(page * PAGE_SIZE, MAX_LIVE_ROWS),
+          page,
+          page_size: pageSize,
         }, controller.signal);
         if (cancelled) return;
         setRows(res.items);
@@ -160,7 +161,7 @@ export default function BulkInviteProgressPanel({
       }
     }, search ? 300 : 0);
     return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
-  }, [jobId, tab, search, page, processed, status]);
+  }, [jobId, tab, search, page, pageSize, processed, status]);
 
   const switchTab = (next: Tab) => { setTab(next); setPage(1); };
   const onSearch = (v: string) => { setSearch(v); setPage(1); };
@@ -287,7 +288,7 @@ export default function BulkInviteProgressPanel({
         )}
         {active && (
           <p className="mt-2 tf-meta">
-            You can close this popup — the send carries on in the background and the progress card in the corner follows it.
+            You can minimize or close this popup — the send carries on in the background; the icon in the bottom-right corner follows it.
           </p>
         )}
       </div>
@@ -369,7 +370,10 @@ export default function BulkInviteProgressPanel({
       </div>
 
       {/* Table */}
-      <ul className={`rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 overflow-y-auto ${compact ? 'max-h-72' : 'max-h-[50vh]'}`}>
+      {/* A whole page shows at once (no scroll box of its own); the popup
+          around it scrolls, and a page change brings the table's top back. */}
+      <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden scroll-mt-4">
+      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
             <span>#</span>
@@ -397,7 +401,7 @@ export default function BulkInviteProgressPanel({
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>
-              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{i + 1}</span>
+              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center text-xs font-bold ${avatar}`} aria-hidden="true">{initials(r)}</span>
                 <span className="min-w-0">
@@ -435,20 +439,20 @@ export default function BulkInviteProgressPanel({
             </li>
           );
         })}
-        {rows.length < rowsTotal && rows.length < MAX_LIVE_ROWS && (
-          <li className="px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={loadingRows}
-              className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:opacity-50"
-            >
-              {loadingRows ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Load more ({rowsTotal - rows.length} more)
-            </button>
-          </li>
-        )}
       </ul>
+        <ListPagination
+          attached
+          compact
+          minimalOnMobile
+          currentPage={page}
+          itemsPerPage={pageSize}
+          totalItems={rowsTotal}
+          onPageChange={(p) => { setPage(p); listRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }}
+          onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+          itemLabel="candidates"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+        />
+      </div>
 
     </div>
   );

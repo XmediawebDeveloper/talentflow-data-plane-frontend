@@ -293,15 +293,18 @@ export default function VersionInviteDialog({
     return () => setBulkInPopup(bulkJobId, false);
   }, [bulkJobId, setBulkInPopup]);
   const bulkReported = useRef(false);
-  /* A send still going: Minimize closes the popup and the floating card
-     follows it (closing hands a running send over; see setInPopup). */
-  const sendRunning = !!bulkJob && isBulkInviteActive(bulkJob);
+  /* After Send, the popup hands the send to the floating widget: Minimize
+     (top right, before the send starts, while it runs and after it ends)
+     to its round icon; Done to its mini popup, where the send stays listed
+     until the recruiter clears it. Neither ever cancels the send. */
+  const afterSend = !!bulkJob;
   /* Minimize shrinks the popup into the bottom-right corner, where the
-     floating progress card then slides in, instead of the popup just
-     vanishing — closing on the spot read as a glitch, not a hand-over. */
+     widget's icon is, instead of the popup just vanishing — closing on the
+     spot read as a glitch, not a hand-over. */
   const [minimizing, setMinimizing] = useState(false);
   const minimize = () => {
     if (minimizing) return;
+    bulkTracker?.setWidget('icon');
     if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       onClose();
       return;
@@ -1067,7 +1070,9 @@ export default function VersionInviteDialog({
       // The list's pick named, once there is one: Continue is the next move.
       ? ((kind === 'assessment' ? asPick : aiPick) ? `${label.singular} picked — press Continue` : `Select ${article} to continue`)
       : bulkJob
-        ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
+        ? (isBulkInviteActive(bulkJob)
+          ? 'Sending in the background — minimize or close, it carries on'
+          : 'Done keeps the result in the corner until you clear it')
         : !loaded
           ? ''
           : jobLock
@@ -1169,15 +1174,15 @@ export default function VersionInviteDialog({
               footer's Cancel closes (the popup standard). While a send runs,
               Minimize in the top-right corner — the Resume Scoring progress
               popup's — hands it to the floating card, bottom right. */}
-          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${sendRunning ? 'pr-14 sm:pr-16' : ''}`}>
-            {sendRunning && (
+          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${afterSend ? 'pr-14 sm:pr-16' : ''}`}>
+            {afterSend && (
               <Button
                 variant="secondary"
                 size="sm"
                 onClick={minimize}
                 className="w-8 !px-0 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
-                aria-label="Minimize to background"
-                title="Run in background"
+                aria-label="Minimize"
+                title="Minimize — sending carries on; follow it from the icon bottom right"
               >
                 <Minus className="w-4 h-4" />
               </Button>
@@ -1193,7 +1198,8 @@ export default function VersionInviteDialog({
                 <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
-            {!off && (
+            {/* Units belong to choosing and sending; once sent, they are gone from here. */}
+            {!off && !afterSend && (
               <InviteQuotaBar
                 kind={kind}
                 refreshKey={quotaKey}
@@ -1511,7 +1517,7 @@ export default function VersionInviteDialog({
             <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
               {bulkJob ? (
                 <button
-                  onClick={onClose}
+                  onClick={() => { bulkTracker?.setWidget('mini'); onClose(); }}
                   className="tf-btn tf-btn-primary w-full sm:w-auto flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                 >
                   Done

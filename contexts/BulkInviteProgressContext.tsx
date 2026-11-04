@@ -31,6 +31,9 @@ export interface TrackedBulkInvite extends BulkInviteJob {
 /** What the starting popup knows about the send that the job record does not. */
 type TrackMeta = Pick<TrackedBulkInvite, 'jdTitle' | 'jdCode' | 'jobVersion' | 'versionNumber'>;
 
+/** The floating widget: hidden, the round icon, or the mini popup open. */
+export type BulkInviteWidgetView = 'hidden' | 'icon' | 'mini';
+
 interface BulkInviteProgressContextType {
   jobs: TrackedBulkInvite[];
   activeJobs: TrackedBulkInvite[];
@@ -38,14 +41,19 @@ interface BulkInviteProgressContextType {
   track: (job: BulkInviteJob, meta?: TrackMeta) => void;
   /** Apply a fresher snapshot (a panel that polls on its own hands them in). */
   sync: (job: BulkInviteJob) => void;
-  dismiss: (jobId: string) => void;
-  /** Runs whose own invite popup is open right now. The floating card leaves
-   *  these out: it is only for sends that carry on in the background. */
+  /** Drops runs from the widget's list. Never cancels a send. */
+  dismiss: (jobId: string | string[]) => void;
+  /** Runs whose own invite popup is open right now. The widget leaves these
+   *  out (that popup shows them) and does not poll them (its panel does). */
   inPopupIds: ReadonlySet<string>;
   /** The invite popup showing this run opened (true) or closed (false). On
-   *  close, a run that already finished in front of the recruiter is dismissed
-   *  - nothing left to follow - while one still sending moves to the card. */
+   *  close the run moves to the widget — finished or not, so its outcome can
+   *  still be read there until the recruiter clears it. */
   setInPopup: (jobId: string, open: boolean) => void;
+  /** Which form the widget is in. Minimize → 'icon'; a popup's Close /
+   *  Done → 'mini'; the mini popup's ✕ → 'icon'. */
+  widget: BulkInviteWidgetView;
+  setWidget: (view: BulkInviteWidgetView) => void;
   /** The job id a results view should open, if any, and who sets it. */
   openResultsFor: string | null;
   setOpenResultsFor: (jobId: string | null) => void;
@@ -87,12 +95,16 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   const [jobs, setJobs] = useState<TrackedBulkInvite[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [openResultsFor, setOpenResultsFor] = useState<string | null>(null);
+  const [widget, setWidget] = useState<BulkInviteWidgetView>('hidden');
 
   useEffect(() => {
     // Read after mount on purpose: localStorage is client-only, and reading
     // it in the initialiser would hydrate a widget the server never rendered.
+    const stored = readStored();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setJobs(readStored());
+    setJobs(stored);
+    // Runs carried over from before a reload come back as the round icon.
+    if (stored.some((j) => !j.dismissed)) setWidget('icon');
     setLoaded(true);
   }, []);
 
@@ -128,8 +140,9 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
 
   const track = useCallback((job: BulkInviteJob, meta?: TrackMeta) => upsert(job, meta), [upsert]);
   const sync = useCallback((job: BulkInviteJob) => upsert(job), [upsert]);
-  const dismiss = useCallback((jobId: string) => {
-    setJobs((prev) => prev.map((j) => (j.job_id === jobId ? { ...j, dismissed: true } : j)));
+  const dismiss = useCallback((jobId: string | string[]) => {
+    const ids = new Set(Array.isArray(jobId) ? jobId : [jobId]);
+    setJobs((prev) => prev.map((j) => (ids.has(j.job_id) ? { ...j, dismissed: true } : j)));
   }, []);
 
   const [inPopupIds, setInPopupIds] = useState<ReadonlySet<string>>(() => new Set());
@@ -140,24 +153,23 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
       if (open) next.add(jobId); else next.delete(jobId);
       return next;
     });
-    if (!open) {
-      setJobs((prev) => prev.map((j) => (
-        j.job_id === jobId && !isBulkInviteActive(j) ? { ...j, dismissed: true } : j
-      )));
-    }
+    // Handed to the widget: at least the icon, unless a popup asked for more.
+    if (!open) setWidget((w) => (w === 'hidden' ? 'icon' : w));
   }, []);
 
   const activeJobs = useMemo(() => jobs.filter(isBulkInviteActive), [jobs]);
 
-  /* One poll loop for every active run, whichever page is open. A page's own
-     panel may poll the same job faster; both write through `upsert`, so the
-     newest snapshot wins either way. */
+  /* One poll loop for every active run, whichever page is open — except a
+     run whose progress panel is on screen (its invite popup, or the results
+     popup opened from the widget): that panel polls it and hands each
+     snapshot in through `sync`, so the run is never asked for twice. */
   const activeIds = activeJobs.map((j) => j.job_id).join(',');
   const polling = useRef(false);
   const lastPolled = useRef<Record<string, number>>({});
   /* Read through an effect event: the latest jobs, without restarting the
      poll loop on every snapshot. */
   const shouldPoll = useEffectEvent((id: string) => {
+    if (inPopupIds.has(id) || openResultsFor === id) return false;
     const known = jobs.find((j) => j.job_id === id);
     const now = Date.now();
     if (known && isStale(known) && now - (lastPolled.current[id] ?? 0) < STALE_POLL_MS) return false;
@@ -194,8 +206,8 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
   }, [activeIds, upsert]);
 
   const value = useMemo<BulkInviteProgressContextType>(() => ({
-    jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor, setOpenResultsFor,
-  }), [jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor]);
+    jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor, setOpenResultsFor, widget, setWidget,
+  }), [jobs, activeJobs, track, sync, dismiss, inPopupIds, setInPopup, openResultsFor, widget]);
 
   return <BulkInviteProgressContext.Provider value={value}>{children}</BulkInviteProgressContext.Provider>;
 }

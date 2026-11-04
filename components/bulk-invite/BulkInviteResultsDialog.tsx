@@ -1,6 +1,7 @@
 'use client';
 
-import { Send } from 'lucide-react';
+import { Minus, Send } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
@@ -18,9 +19,13 @@ import type { TrackedBulkInvite } from '@/contexts/BulkInviteProgressContext';
 export default function BulkInviteResultsDialog({
   job,
   onClose,
+  onMinimize,
 }: {
   job: TrackedBulkInvite;
+  /** Close (and Esc): back to the widget's mini popup. */
   onClose: () => void;
+  /** Minimize, top right: down to the widget's round icon. */
+  onMinimize?: () => void;
 }) {
   const kindLabel = job.kind === 'assessment' ? 'Assessment' : 'AI Interview';
   /* Runs tracked before the versions were recorded: read the version from the
@@ -46,6 +51,11 @@ export default function BulkInviteResultsDialog({
       title={`${kindLabel} invitations`}
       subtitle={subtitle}
       zIndexClass="z-[70]"
+      headerExtra={onMinimize ? (
+        <Button variant="secondary" size="sm" onClick={onMinimize} className="w-8 !px-0" aria-label="Minimize" title="Minimize — sending carries on; the icon stays bottom right">
+          <Minus className="w-4 h-4" />
+        </Button>
+      ) : undefined}
       /* Same 16px above the "Invitation process completed" box as the panel
          leaves below it (its space-y-4), not the body's default 24px. */
       bodyClassName="pt-4 sm:pt-4"

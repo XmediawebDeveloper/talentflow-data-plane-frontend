@@ -60,6 +60,8 @@ export default function InviteQuotaBar({ kind, onStats, refreshKey = 0, action }
   }
 
   const { total_quota, consumed, pending, available } = stats;
+  /* A reply without the figures: show no bar rather than crash the popup. */
+  if ([total_quota, consumed, pending, available].some((n) => typeof n !== 'number')) return null;
   const out = available <= 0;
   const low = !out && available <= 3;
   const pct = (n: number) => (total_quota > 0 ? Math.min(100, (n / total_quota) * 100) : 0);
