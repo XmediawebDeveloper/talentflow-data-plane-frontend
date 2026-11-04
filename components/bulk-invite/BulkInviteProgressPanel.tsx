@@ -293,7 +293,7 @@ export default function BulkInviteProgressPanel({
         )}
         {active && (
           <p className="mt-2 tf-meta">
-            You can close this popup — the send carries on in the background and the progress card bottom-left follows it.
+            You can close this popup — the send carries on in the background and the progress card in the corner follows it.
           </p>
         )}
       </div>

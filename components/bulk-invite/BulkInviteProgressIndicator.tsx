@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { CheckCircle2, Loader2, Minimize2, Send, X, XCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { isBulkInviteActive } from '@/lib/services/bulkInviteService';
 import BulkInviteResultsDialog from './BulkInviteResultsDialog';
 import { bulkInviteStatusLine } from './BulkInviteProgressPanel';
@@ -15,13 +16,18 @@ import { bulkInviteStatusLine } from './BulkInviteProgressPanel';
  * Minimize and Close behave as the bulk scoring widget's do: Minimize drops
  * to a round progress button that restores on click; Close forgets the runs
  * shown here (they carry on in the background, and each popup's own panel
- * still follows its run). Bottom-LEFT so it never sits on the scoring widget,
- * which owns the bottom-right corner. Mounted once in the dashboard layout;
+ * still follows its run). Bottom-RIGHT, where the invite popup's Minimize
+ * sends it — bottom-left instead while the scoring widget is in that corner,
+ * so the two never sit on each other. Mounted once in the dashboard layout;
  * renders nothing when there is nothing to follow.
  */
 export default function BulkInviteProgressIndicator() {
   const { jobs, dismiss, inPopupIds, openResultsFor, setOpenResultsFor } = useBulkInviteProgress();
   const [minimized, setMinimized] = useState(false);
+  /* The scoring widget shows whenever a run is tracked and its own panel is
+     not open (GlobalScoringProgressIndicator's rule). */
+  const { activeScoringJobs, isMainPanelOpen } = useScoringProgress();
+  const onLeft = activeScoringJobs.length > 0 && !isMainPanelOpen;
   // Only background sends: a run whose invite popup is still open is shown
   // there, so the card stays out of the way until that popup is closed.
   const shown = jobs.filter((j) => !j.dismissed && !inPopupIds.has(j.job_id));
@@ -50,7 +56,7 @@ export default function BulkInviteProgressIndicator() {
           onClick={() => setMinimized(false)}
           aria-label={running > 0 ? `Sending invitations, ${overallPct}% done. Open progress.` : `Invitations sent, ${sent} sent. Open progress.`}
           title={running > 0 ? `Sending invitations · ${overallPct}%` : `Invitations sent · ${sent} sent`}
-          className="fixed bottom-6 left-6 z-40 h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105"
+          className={`fixed bottom-6 ${onLeft ? 'left-6' : 'right-6'} z-40 h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105`}
           style={{
             background: `conic-gradient(${allDone ? 'var(--raw-22c55e)' : 'var(--raw-ffffff)'} ${overallPct * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
           }}
@@ -61,7 +67,7 @@ export default function BulkInviteProgressIndicator() {
           </span>
         </button>
       ) : (
-        <div className="fixed bottom-4 left-3 sm:bottom-6 sm:left-6 z-40 w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden" role="status" aria-live="polite">
+        <div className={`fixed bottom-4 sm:bottom-6 ${onLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6'} z-40 w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-2xl overflow-hidden`} role="status" aria-live="polite">
           {/* Header — the scoring widget's: dark while running, green when done. */}
           <div className={`flex items-center justify-between px-4 py-3 text-white ${
             running > 0 ? 'bg-gray-800' : anyFailed ? 'bg-warning' : 'bg-success'
