@@ -1523,7 +1523,7 @@ Best regards`);
 
                     {/* Phones: one white panel, a row per detail, thin dividers. */}
                     {(facts.length > 0 || contacts.length > 0) && (
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3 max-sm:col-span-2 max-sm:mt-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-0 max-sm:rounded-xl max-sm:bg-white/80 max-sm:ring-1 max-sm:ring-brand-blue/10 max-sm:divide-y max-sm:divide-brand-blue/10 max-sm:overflow-hidden">
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5 mt-3 max-sm:col-span-2 max-sm:mt-4 max-sm:flex-col max-sm:items-stretch max-sm:gap-0 max-sm:rounded-xl max-sm:bg-white/80 max-sm:ring-1 max-sm:ring-brand-blue/10 max-sm:divide-y max-sm:divide-brand-blue/10 max-sm:overflow-hidden dark:max-sm:bg-slate-900/70 dark:max-sm:ring-slate-700 dark:max-sm:divide-slate-700">
                         {facts.map(({ icon: Icon, text }, index) => (
                           <span
                             key={index}
@@ -1555,9 +1555,11 @@ Best regards`);
                     on narrow screens. Same buttons, handlers and conditions
                     the action bar above the card had. */}
                 {/* Phones: every action is one full-width, equal-height, centred
-                    button, stacked — the primary last — instead of mixed widths. */}
-                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11">
-                  <div className="flex flex-wrap items-center gap-2 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
+                    button, stacked — the primary last — instead of mixed widths.
+                    From sm: the primary keeps its place at the right end of the row;
+                    the secondary buttons wrap among themselves first. */}
+                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 sm:[&>button]:shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 sm:flex-1 sm:min-w-0 sm:max-lg:[&>button]:!px-3 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
                     {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
                         onClick={() => { if (!canShareResume) return; handleShare(); }}

@@ -1,5 +1,6 @@
 'use client'
 
+import { phoneCentredLeft } from '@/lib/hooks/useCenteredMenuOnPhone';
 import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
@@ -2152,7 +2153,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       const left = versionMenuRef.current.getBoundingClientRect().left;
       if (window.innerWidth < 640) {
         // Phones: centred on the screen, like every other menu in this module.
-        setVersionMenuShift(Math.round((document.documentElement.clientWidth - menuWidth) / 2 - left));
+        setVersionMenuShift(Math.round(phoneCentredLeft(versionMenuRef.current, menuWidth) - left));
       } else {
         // 20px: clear of the job card's edge, which clips (it sits ~16px in).
         setVersionMenuShift(Math.min(0, window.innerWidth - 20 - (left + menuWidth)));

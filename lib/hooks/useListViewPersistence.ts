@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 
 /**
  * Find the element that actually scrolls this page's content.
@@ -125,9 +125,13 @@ export function useListStatePersistence<T extends Record<string, unknown>>(
   key: string,
   snapshot: T,
   restore: (saved: Partial<T>) => void,
-): void {
+): boolean {
   const storageKey = `listState:${key}`;
   const skipRef = useRef(true);
+  /* True from the render that carries the restored state. A server-paged list
+     passes it as usePagedList's `enabled`, so it fetches once with the restored
+     filters instead of once with the defaults and again after restore. */
+  const [restored, setRestored] = useState(false);
   const restoreRef = useRef(restore);
   restoreRef.current = restore;
 
@@ -138,6 +142,9 @@ export function useListStatePersistence<T extends Record<string, unknown>>(
       const raw = sessionStorage.getItem(storageKey);
       if (raw) restoreRef.current(JSON.parse(raw));
     } catch { /* ignore malformed / unavailable storage */ }
+    // Same commit as restore's setters, so the next render has both.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRestored(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -150,6 +157,8 @@ export function useListStatePersistence<T extends Record<string, unknown>>(
     if (serialized == null) return;
     try { sessionStorage.setItem(storageKey, serialized); } catch { /* ignore */ }
   }, [serialized, storageKey]);
+
+  return restored;
 }
 
 function safeStringify(value: unknown): string | null {

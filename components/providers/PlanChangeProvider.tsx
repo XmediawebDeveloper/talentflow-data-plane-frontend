@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { planChangeService } from '@/lib/services/planChangeService';
 import { PLAN_CHANGE_PENDING_EVENT } from '@/lib/services/api';
 import { isOnline, isTransientNetworkError, withNetworkRetry } from '@/lib/utils/networkRetry';
+import { takeBootstrapPart } from '@/lib/services/shellBootstrap';
 import { toast } from 'sonner';
 import type {
   PlanChangeNotification,
@@ -82,7 +83,11 @@ export function PlanChangeProvider({ children }: { children: React.ReactNode }) 
     }
 
     try {
-      const changes = await withNetworkRetry(() => planChangeService.getPendingChanges());
+      // First load: the app-shell /bootstrap response, if it carried this part.
+      const boot = await takeBootstrapPart<{ data?: unknown } | unknown[]>('pending_plan_changes');
+      const changes = boot.hit
+        ? ((boot.data as { data?: unknown })?.data ?? boot.data) as Awaited<ReturnType<typeof planChangeService.getPendingChanges>>
+        : await withNetworkRetry(() => planChangeService.getPendingChanges());
       const pending = Array.isArray(changes)
         ? changes.filter((c) => c.status?.toLowerCase() === 'pending')
         : [];

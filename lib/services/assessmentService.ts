@@ -186,6 +186,43 @@ export interface InvitationResponse {
   created_at: string;
 }
 
+/** GET /assessments/results-page (Results tab) filters — ONE builder on the
+ *  server reads them for the page, /stats and /ids. */
+export interface AssessmentResultsPageFilters {
+  search?: string;
+  /** The JD title the row shows. */
+  job?: string;
+  outcome?: 'all' | 'pass' | 'fail';
+  completed_from?: string;
+  completed_to?: string;
+}
+
+export interface AssessmentResultsPageQuery extends AssessmentResultsPageFilters {
+  page: number;
+  page_size: number;
+  sort_by?: 'newest' | 'oldest';
+  /** Invitation ids (comma list) — rows by id for select-all / export. */
+  ids?: string;
+}
+
+export interface AssessmentResultsPageStats {
+  total: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+}
+
+/** Drop empty values (and outcome 'all') so the request carries only set filters. */
+function cleanResultsPageParams<T extends object>(params: T): Partial<T> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '' || v === false) continue;
+    if (k === 'outcome' && v === 'all') continue;
+    out[k] = v;
+  }
+  return out as Partial<T>;
+}
+
 export interface AssessmentAttemptResponse {
   id?: string;  // Optional for pending candidates (no attempt yet)
   invitation_id: string;
@@ -400,6 +437,59 @@ export interface DetailedResultResponse {
 
 // ==================== NEW API INTERFACES ====================
 
+/** The list's server-side filters — the SAME set GET /assessments,
+ *  /assessments/stats and /assessments/ids read (one backend filter builder),
+ *  so a card's count equals the list's total for the same query. */
+export interface AssessmentListFilterParams {
+  jd_id?: string;
+  /** One status or a comma list ("published,draft"). */
+  status?: string;
+  search?: string;
+  /** 'job' = Job ID / Job Name only (the list's search box). */
+  search_scope?: 'job';
+  /** Job short id (JD-014) — every version of that job. */
+  job?: string;
+  jd_version?: number;
+  version?: number;
+  created_by?: string;
+  /** yyyy-mm-dd, inclusive. */
+  created_from?: string;
+  created_to?: string;
+  invited_only?: boolean;
+  /** The Total Jobs Type filter: 'Technical' | 'Behavioral' | 'Aptitude'. */
+  type?: string;
+}
+
+export type AssessmentListSortKey =
+  | 'published' | 'updated' | 'jobId' | 'jobName' | 'jobVersion' | 'assessmentVersion'
+  | 'status' | 'invitations' | 'completed' | 'createdAt' | 'createdBy';
+
+export interface AssessmentPageParams extends AssessmentListFilterParams {
+  [k: string]: unknown;
+  page: number;
+  page_size: number;
+  sort_by?: AssessmentListSortKey;
+  sort_dir?: 'asc' | 'desc';
+  /** Float this status to the top ('published' = Active first). */
+  status_first?: string;
+  ids?: string;
+  /** 'lineage' = one row per job, in the Total Jobs order. */
+  collapse?: 'lineage';
+}
+
+export interface AssessmentFilterOptions {
+  jobs: { value: string; label: string; count: number }[];
+  job_versions: number[];
+  versions: number[];
+  creators: string[];
+}
+
+/** Drop empty values so the cache key and the query string stay minimal. */
+const compactParams = <T extends object>(params: T): Partial<T> =>
+  Object.fromEntries(
+    Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''),
+  ) as Partial<T>;
+
 // 1. Stats Summary
 export interface AssessmentStatsResponse {
   total_assessments: number;
@@ -425,6 +515,8 @@ export interface AssessmentStatsResponse {
   total_ever_created?: number;
   total_deleted?: number;
   total_candidates_completed?: number;
+  /** Assessments with at least one invitation (same filters). */
+  invited_assessments?: number;
 }
 
 // 2. Clone Assessment
@@ -624,6 +716,55 @@ export const assessmentService = {
   }): Promise<AssessmentListResponse> {
     try {
       const response = await api.get<AssessmentListResponse>('/assessments', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * ONE page of the list, filtered / searched / sorted on the server.
+   */
+  async listPage(params: AssessmentPageParams): Promise<AssessmentListResponse> {
+    try {
+      const response = await api.get<AssessmentListResponse>('/assessments', { params: compactParams(params) });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Card counts for the list's filters (same WHERE as `listPage`). */
+  async getFilteredStats(filters: AssessmentListFilterParams, options?: { timeout?: number }): Promise<AssessmentStatsResponse> {
+    try {
+      const response = await api.get<AssessmentStatsResponse>('/assessments/stats', {
+        params: compactParams(filters),
+        timeout: options?.timeout,
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every id matching the list's filters — "select all" across pages. */
+  async listIds(
+    filters: AssessmentListFilterParams & Pick<AssessmentPageParams, 'sort_by' | 'sort_dir' | 'status_first'>,
+  ): Promise<string[]> {
+    try {
+      const response = await api.get<{ ids: string[] }>('/assessments/ids', { params: compactParams(filters) });
+      return response.data.ids || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** The filter panel's option lists — read when the panel opens. */
+  async getFilterOptions(status?: string): Promise<AssessmentFilterOptions> {
+    try {
+      const response = await api.get<AssessmentFilterOptions>('/assessments/filter-options', {
+        params: compactParams({ status }),
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -844,6 +985,69 @@ export const assessmentService = {
     try {
       const response = await api.get<{ items: any[]; total: number }>('/assessments/all-results');
       return response.data?.items ?? [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Results tab: ONE page of completed results across every assessment,
+   * filtered / sorted on the server (GET /assessments/results-page). Each row
+   * is a listResults() row plus `_assessment_*` / `_jd_*` labels.
+   */
+  async listResultsPage(query: AssessmentResultsPageQuery): Promise<{ items: any[]; total: number }> {
+    try {
+      const response = await api.get<{ items: any[]; total: number }>('/assessments/results-page', {
+        params: cleanResultsPageParams(query),
+      });
+      return { items: response.data?.items || [], total: response.data?.total ?? 0 };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab counts for the same filters the page takes. */
+  async getResultsPageStats(filters: AssessmentResultsPageFilters = {}): Promise<AssessmentResultsPageStats> {
+    try {
+      const response = await api.get<AssessmentResultsPageStats>('/assessments/results-page/stats', {
+        params: cleanResultsPageParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every result row matching the filters (ids only), in list order. */
+  async getResultsPageIds(
+    filters: AssessmentResultsPageFilters & { sort_by?: 'newest' | 'oldest' } = {},
+  ): Promise<{ id: string; invitation_id: string; assessment_id: string; candidate_display_id?: string | null }[]> {
+    try {
+      const response = await api.get<{ items: any[] }>('/assessments/results-page/ids', {
+        params: cleanResultsPageParams(filters),
+      });
+      return response.data?.items || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Result rows by invitation id, 200 per request (select-all / export). */
+  async getResultsPageByInvitationIds(invitationIds: string[]): Promise<any[]> {
+    const out: any[] = [];
+    for (let i = 0; i < invitationIds.length; i += 200) {
+      const chunk = invitationIds.slice(i, i + 200);
+      const res = await assessmentService.listResultsPage({ page: 1, page_size: chunk.length, ids: chunk.join(',') });
+      out.push(...res.items);
+    }
+    return out;
+  },
+
+  /** Results tab Job filter options — fetched when the panel opens. */
+  async getResultsPageFilterOptions(): Promise<{ jobs: string[] }> {
+    try {
+      const response = await api.get<{ jobs: string[] }>('/assessments/results-page/filter-options');
+      return response.data || { jobs: [] };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

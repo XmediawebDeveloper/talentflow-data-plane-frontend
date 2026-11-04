@@ -1649,34 +1649,36 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      request gets the exact number without disturbing the current view — used
      after uploads, which is when the badge would otherwise lag or flicker
      between the folder total and the global one. */
+  /* One GET /resumes/stats for My Resumes: the All Resumes total (active only)
+     and every folder's listing total (archived rows included, as a folder
+     listing includes them). Unfiltered — the badges describe the library. */
+  const fetchMyResumeStats = () =>
+    resumeService.stats({ source: 'my-resumes', include_archived: false });
+
   const refreshAllResumesTotal = async () => {
     try {
       // Same rule as the All Resumes listing: active resumes only, so the badge
       // and the table can never disagree about archived ones.
-      const res = await resumeService.list({
-        source: 'my-resumes',
-        page: 1,
-        page_size: 1,
-        include_archived: false,
-      });
-      allResumesTotalRef.current = res.total;
-      setAllResumesTotal(res.total);
-      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: res.total } : f)));
+      // GET /resumes/stats — same params as the folder reconcile below, so the
+      // api client's GET sharing serves both from one request.
+      const stats = await fetchMyResumeStats();
+      const total = stats.all_total;
+      if (typeof total !== 'number') return;
+      allResumesTotalRef.current = total;
+      setAllResumesTotal(total);
+      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: total } : f)));
     } catch {
       // Keep the last known figure rather than flashing a wrong one.
     }
   };
 
-  /* Bring every folder badge in line with what opening that folder lists, by
-     asking the same endpoint the table uses for each folder's total. The
-     folders API counts stored rows — versions included — so its numbers can
-     read higher than the list ever shows.
+  /* Bring every folder badge in line with what opening that folder lists,
+     from GET /resumes/stats (built from the same filter as the table's
+     list). The folders API counts stored rows — versions included — so its
+     numbers can read higher than the list ever shows.
 
-     Bounded on purpose: one small request per folder, only from the plain
-     unfiltered view (page load and post-upload refreshes), and skipped
-     entirely for large trees where the fan-out would cost more than the
-     inconsistency. Those keep the server's own count. */
-  const MAX_FOLDERS_TO_RECONCILE = 30;
+     One request for the whole tree, only from the plain unfiltered view
+     (page load and post-upload refreshes). */
   const reconcilingFoldersRef = useRef(false);
   const lastReconciledRef = useRef('');
   /* The newest folder snapshot a fetch put on screen: its signature (ids +
@@ -1723,7 +1725,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const reconcileFolderCounts = async (folderList: FolderType[]) => {
     if (reconcilingFoldersRef.current) return;
     const flat = flattenAllFolders(folderList).filter(f => f.id !== 'all');
-    if (flat.length === 0 || flat.length > MAX_FOLDERS_TO_RECONCILE) return;
+    // One stats call covers any number of folders, so no size cap any more.
+    if (flat.length === 0) return;
 
     // The server's numbers are the input to this correction, so re-running it
     // on an identical snapshot can only produce the same answer. Without this,
@@ -1735,23 +1738,19 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     reconcilingFoldersRef.current = true;
     let superseded = false;
     try {
-      const totals = await Promise.all(
-        flat.map(async (folder) => {
-          try {
-            const res = await resumeService.list({
-              source: 'my-resumes',
-              folder_id: folder.id,
-              page: 1,
-              page_size: 1,
-              // Folder badges count what the folder lists — and Archived
-              // Resumes lists archived rows, so this mirrors the table's rule.
-              include_archived: true,
-            });
-            return [folder.id, res.total] as const;
-          } catch {
-            return [folder.id, null] as const;
-          }
-        }),
+      /* ONE GET /resumes/stats call for every folder (was one page_size=1
+         list per folder). Its per-folder numbers are exactly what
+         GET /resumes?source=my-resumes&folder_id=<id> returns as `total` —
+         archived rows included, as Archived Resumes lists them. A folder the
+         server has no rows for is 0. On failure nothing is corrected. */
+      let folderTotals: Record<string, number> | null = null;
+      try {
+        folderTotals = (await fetchMyResumeStats()).folders ?? {};
+      } catch {
+        folderTotals = null;
+      }
+      const totals = flat.map(
+        (folder) => [folder.id, folderTotals ? (folderTotals[folder.id] ?? 0) : null] as const,
       );
 
       // A newer fetch replaced the folder snapshot while these were in

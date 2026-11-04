@@ -1,10 +1,10 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info, ArrowUp, ArrowDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
 import { centerMenuOnPhoneRef } from '@/lib/hooks/useCenteredMenuOnPhone';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -20,12 +20,14 @@ import {
   formatEmploymentType,
   formatIndustryType,
   matchesStatusFilter,
-  collapseToLatestVersions,
-  groupByLineage,
   lineageKey,
-  sortJobs,
+  mapJDToJob,
+  mapJDStatus,
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
+import { jdService, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
 import JobOpeningSummary, { JobOpeningPrimaryItems, JobOpeningDatesGrid } from '@/components/jobs/JobOpeningSummary';
@@ -33,7 +35,7 @@ import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { getCreationMethodConfig, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { useJobCandidateCountsFor } from '@/lib/hooks/useJobCandidateCounts';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -56,8 +58,32 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/** The fields the job list sorts by — one list for the Sort control and the phone Sort menu. */
+const JOB_SORT_OPTIONS: { value: JobSortBy; label: string }[] = [
+  { value: 'date', label: 'Date Posted' },
+  { value: 'applicants', label: 'Scored' },
+  { value: 'assessed', label: 'Assessed' },
+  { value: 'interviewed', label: 'Interviewed' },
+  { value: 'title', label: 'Job Title' },
+  { value: 'status', label: 'Status' },
+  { value: 'industry', label: 'Industry Type' },
+];
+
+/** The two sort orders, worded for the field: dates newest / oldest, counts highest / lowest,
+ *  text A → Z / Z → A. */
+const sortOrderLabels = (field: JobSortBy): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'applicants' || field === 'assessed' || field === 'interviewed'
+      ? { desc: 'Highest first', asc: 'Lowest first' }
+      : { desc: 'Z → A', asc: 'A → Z' };
 
 const viewVersionsMenuItemClass = 'group text-gray-700 dark:text-slate-200';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 dark:text-orange-300 [&_svg]:!text-current';
@@ -84,14 +110,11 @@ const JOBS_EXPORT_HEADERS = [
   'Scored'
 ];
 
+/* The list loads itself, one page at a time (GET /jd?view=jobs) with the stat
+   cards beside it (GET /jd/stats) — both built server-side from one filter, so
+   a card always equals the total its tab lists. The host no longer passes
+   `jobs`: it used to download every JD version to compute all of this here. */
 interface JobsListingProps {
-  jobs: Job[];
-  /** Whether `jobs` holds every page yet. Until it does, the stat cards show a
-   *  placeholder rather than the partial tally of the pages loaded so far; once
-   *  it does, they count `jobs` live (so a publish/archive/delete action updates
-   *  them instantly). Defaults to true, so a host that loads `jobs` in one go
-   *  doesn't need to pass it. */
-  jobsFullyLoaded?: boolean;
   onCreateNew: () => void;
   /** Permission gate for onCreateNew — action/icon must stay visible and only
    *  become non-clickable (with a toast on click) when this is true, never
@@ -110,7 +133,7 @@ interface JobsListingProps {
   onScoreResumes?: (job: Job) => void;
   onScoreResumesDisabled?: boolean;
   onScoreResumesDisabledReason?: string;
-  onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
+  onUpdateJobStatus?: (jobId: string, status: Job['status'], job?: Job) => void;
   onEditJob?: (job: Job) => void;
   /**
    * Statuses the host has successfully written since the version lineage was
@@ -198,16 +221,37 @@ const StatVersionsPlaceholder = () => (
   <span aria-hidden className="mt-1.5 block h-5 w-20 rounded-full bg-gray-100 dark:bg-slate-800 animate-pulse" />
 );
 
+/** A list row plus the server's per-row version counts (GET /jd?view=jobs). */
+type JobRow = Job & { versionCount?: number; tabVersionCount?: number };
+
+/* The rows' placeholder while the first page loads — card-shaped pulses, so
+   the cards above (which have their own placeholders) and the list arrive
+   without a layout jump. */
+const JobsListLoading = () => (
+  <div className="space-y-3" role="status" aria-label="Loading job openings">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 dark:bg-slate-900 dark:border-slate-700">
+        <div className="h-4 w-40 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+        <div className="mt-3 h-3 w-3/4 rounded bg-gray-100 dark:bg-slate-800 animate-pulse" />
+        <div className="mt-2 h-3 w-1/2 rounded bg-gray-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    ))}
+  </div>
+);
+
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false, onRefresh }: JobsListingProps) {
+export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false, onRefresh }: JobsListingProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Assigned once the paged list exists (below); Refresh re-reads it bypassing the cache.
+  const refreshListRef = useRef<() => void>(() => {});
   const handleRefresh = async () => {
-    if (isRefreshing || !onRefresh) return;
+    if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      await onRefresh();
+      refreshListRef.current();
+      await onRefresh?.();
     } finally {
       setIsRefreshing(false);
     }
@@ -289,9 +333,6 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
   const versionLineage = useJobVersionLineage();
-  // "N assessed" / "N interviewed" on each card — tallied client-side, since
-  // the JD list endpoint carries neither count.
-  const candidateCounts = useJobCandidateCounts();
   /* No lineage is fetched to answer a status pill any more. The pill reads the
      job's representative row, which the list already has, so selecting one
      costs zero requests — where it used to fire one per job on the page. The
@@ -339,15 +380,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [listScrollRequest, setListScrollRequest] = useState(0);
 
-  // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows the
-  // toolbar + filters + jobs list. Initial render is 'cards' unless the URL
-  // already carried a specific status (deep-link from a notification, etc.).
-  // We deliberately ignore the default 'all' so a fresh visit lands on cards.
-  // `forceListView` also opens on the list: it means "show me every job", which the
-  // tiles can't do — and it survives the 'all' exclusion above, unlike a status filter.
-  const [pageView, setPageView] = useState<'cards' | 'list'>(
-    forceListView || (initialStatusFilter && initialStatusFilter !== 'all') ? 'list' : 'cards',
-  );
+  // Every module lands on its Total card with the list already open (same as
+  // Resume Scoring / AI Talent Match): the tiles stay on top, the list renders
+  // under them without a click. 'cards' is kept in the type only so an old
+  // persisted snapshot still parses.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   // When URL changes to include a specific status filter, jump to list view.
   useEffect(() => {
     if (initialStatusFilter && initialStatusFilter !== 'all') setPageView('list');
@@ -392,7 +429,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   // Persist this list's view state (filters / search / sort / pagination / view
   // toggles) so returning from a job-details page restores it. Declared after the
   // useState + URL-sync effects above so restore wins over the mount-time resets.
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'job-openings-list',
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
@@ -410,7 +447,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
       // were restored but the whole list stayed hidden behind the stat tiles,
       // which read as "the table vanished". A deep link carrying an explicit
       // status still wins: it means "show me that list".
-      if ((s.pageView === 'cards' || s.pageView === 'list')
+      if (s.pageView === 'list'
         && !forceListView
         && !(initialStatusFilter && initialStatusFilter !== 'all')) {
         setPageView(s.pageView);
@@ -445,179 +482,117 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     },
   );
 
-  const matchesCriteria = (job: Job) => {
-    // Enhanced search - search across multiple fields
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = searchQuery === '' || (
-      job.title.toLowerCase().includes(searchLower) ||
-      job.job_id?.toLowerCase().includes(searchLower) ||
-      job.location?.toLowerCase().includes(searchLower) ||
-      job.industry_type?.toLowerCase().includes(searchLower) ||
-      formatIndustryType(job.industry_type).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Information Technology")
-      job.department?.toLowerCase().includes(searchLower) ||
-      job.employmentType?.toLowerCase().includes(searchLower) ||
-      formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
-      job.experience?.toLowerCase().includes(searchLower) ||
-      job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
-      (job as any).workMode?.toLowerCase().includes(searchLower) ||  // Work mode (onsite, hybrid, remote)
-      formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
-    );
+  /* ── The list: one page from the server ─────────────────────────────────
+     GET /jd?view=jobs returns exactly the rows this page used to compute from
+     every JD version: on "All Jobs" each job's latest version, on a status tab
+     each job's latest version WITH that status; search / More Filters /
+     creation method then test that chosen row (they never pick it). Sort and
+     paging run server-side too. GET /jd/stats answers the cards, tab badges,
+     creation-method badges and the filter dropdown options for the same
+     filters, from the same server-side filter, so a card equals its tab. */
+  const statusTab = (statusFilter || 'all').toLowerCase();
+  const serverFilters = useMemo<JobOpeningsFilters>(() => ({
+    search: searchQuery.trim() || undefined,
+    creation_method: creationMethodFilter ?? undefined,
+    location: locationFilter,
+    department: departmentFilter,
+    industry: industryFilter,
+    employment_type: employmentTypeFilter,
+    work_mode: workModeFilter,
+    created_by_name: createdByFilter,
+    experience: experienceFilter,
+    applicants: applicantsFilter,
+    date_from: datePostedFromFilter || undefined,
+    date_to: datePostedToFilter || undefined,
+  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter]);
+  const hasCriteria = Object.values(serverFilters).some((v) => v !== undefined && v !== null && v !== '' && v !== 'all');
+  const listQuery = useMemo(() => ({
+    ...serverFilters,
+    status_tab: statusTab,
+    sort_by: sortBy,
+    sort_order: sortOrder,
+    page: currentPage,
+    page_size: itemsPerPage,
+  }), [serverFilters, statusTab, sortBy, sortOrder, currentPage, itemsPerPage]);
 
-    const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
-    const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
-    const matchesIndustry = industryFilter === 'all' || job.industry_type === industryFilter;
-    const matchesEmploymentType = employmentTypeFilter === 'all' || job.employmentType === employmentTypeFilter;
-    const matchesCreatedBy = createdByFilter === 'all' || job.postedBy?.trim() === createdByFilter;
-    const matchesWorkMode = workModeFilter === 'all' || job.workMode?.trim().toLowerCase() === workModeFilter;
-
-    // Creation method filter (Manual vs AI) - null means show all
-    const matchesCreationMethod = creationMethodFilter === null ||
-      (creationMethodFilter === 'ai' && (job as any).creation_method === 'ai_generated') ||
-      (creationMethodFilter === 'manual' && (job as any).creation_method === 'manual');
-
-    // Experience filter — compare actual year ranges, not digit substrings.
-    // Each bucket is a [min, max] year span; a job matches if its own
-    // [min, max] span overlaps the bucket's span.
-    let matchesExperience = true;
-    if (experienceFilter !== 'all') {
-      const buckets: Record<string, [number, number]> = {
-        entry: [0, 2],
-        junior: [2, 4],
-        mid: [5, 7],
-        senior: [8, 10],
-        architect: [10, Infinity],
-        management: [10, Infinity],
+  const paged = usePagedList<JobRow, JobOpeningsStats, typeof listQuery>({
+    name: 'job-openings',
+    query: listQuery,
+    // Wait for the saved filters/page, or landing fetches twice.
+    enabled: listStateRestored,
+    fetchPage: async (q) => {
+      const res = await jdService.listJobs(q);
+      const meta = res.versions_meta ?? {};
+      return {
+        items: (res.items ?? []).map((jd) => ({
+          ...mapJDToJob(jd),
+          versionCount: meta[jd.id]?.version_count,
+          tabVersionCount: meta[jd.id]?.tab_version_count,
+        })),
+        total: res.total ?? 0,
       };
-      const bucket = buckets[experienceFilter];
-      if (bucket) {
-        // Derive the job's year span from numeric fields, falling back to
-        // parsing the experience string (e.g. "5-10", "10+", "3").
-        let jobMin = job.experience_min;
-        let jobMax = job.experience_max;
-        if (jobMin == null && jobMax == null) {
-          const exp = job.experience?.toLowerCase() || '';
-          const nums = exp.match(/\d+/g)?.map(Number) ?? [];
-          if (nums.length > 0) {
-            jobMin = nums[0];
-            jobMax = exp.includes('+') ? Infinity : (nums[1] ?? nums[0]);
-          }
-        }
-        if (jobMin == null && jobMax == null) {
-          // No experience data on the job — exclude when a specific level is selected.
-          matchesExperience = false;
-        } else {
-          const lo = jobMin ?? jobMax ?? 0;
-          const hi = jobMax ?? jobMin ?? Infinity;
-          // Ranges overlap when each starts at/before the other ends.
-          matchesExperience = lo <= bucket[1] && hi >= bucket[0];
-        }
-      }
-    }
+    },
+    // Each card is a tab, so the tab is not a stats filter.
+    fetchStats: (f) => {
+      const { status_tab: _tab, ...filters } = f as typeof f & { status_tab?: string };
+      void _tab;
+      return jdService.getJobStats(filters as JobOpeningsFilters);
+    },
+  });
+  refreshListRef.current = paged.refresh;
+  const serverStats = paged.stats;
 
-    // Date posted filter
-    let matchesDatePosted = true;
-    if (datePostedFromFilter || datePostedToFilter) {
-      const jobDate = job.created_at ? new Date(job.created_at) : (job.postedDate ? new Date(job.postedDate) : null);
-      if (jobDate) {
-        if (datePostedFromFilter) {
-          const fromDate = new Date(datePostedFromFilter);
-          matchesDatePosted = matchesDatePosted && jobDate >= fromDate;
-        }
-        if (datePostedToFilter) {
-          const toDate = new Date(datePostedToFilter);
-          toDate.setHours(23, 59, 59, 999); // End of day
-          matchesDatePosted = matchesDatePosted && jobDate <= toDate;
-        }
-      } else {
-        matchesDatePosted = false;
-      }
-    }
+  useEffect(() => {
+    if (paged.error) toast.error('Failed to load job openings');
+  }, [paged.error]);
 
-    // Applicants filter
-    let matchesApplicants = true;
-    if (applicantsFilter !== 'all') {
-      const count = job.applicants || 0;
-      if (applicantsFilter === 'low') matchesApplicants = count < 10;
-      else if (applicantsFilter === 'medium') matchesApplicants = count >= 10 && count < 50;
-      else if (applicantsFilter === 'high') matchesApplicants = count >= 50;
-    }
-
-    /* Status is deliberately NOT here — see the lineage-aware selection below.
-       It cannot be decided one row at a time, because the version that carries
-       the status the pill asks for may not be among these rows at all. */
-    return matchesSearch && matchesLocation && matchesDepartment &&
-           matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
-           matchesApplicants && matchesCreationMethod && matchesCreatedBy && matchesWorkMode;
+  /* Statuses / deletes the host has just written show at once; the refetch
+     the write triggers (any write clears the list cache) then confirms them. */
+  const withOverride = <J extends Job>(job: J): J => {
+    const override = versionStatusOverrides?.[job.id];
+    return override ? { ...job, status: mapJDStatus(override) } : job;
   };
+  const pageRows: JobRow[] = paged.items
+    .filter((row) => !deletedVersionIds?.has(row.id))
+    .map(withOverride);
+  const totalMatching = paged.total;
+  const currentJobs = pageRows;
 
-  /* ── One row per job on "All Jobs" — one row per MATCHING version on a status tab ──
-     Every version of a JD is its own row in the API response (its own id,
-     sharing the lineage's human-readable `job_id`).
+  // Assessed / interviewed for the rows on screen only (GET /jd/candidate-counts).
+  const candidateCounts = useJobCandidateCountsFor(pageRows.map((row) => row.id));
 
-     "All Jobs" collapses to one row per job_id (the latest version), so a job
-     republished twice doesn't read as duplicates there.
-
-     ── A status tab shows whichever version actually had that status ──
-     Filter FIRST, then collapse WITHIN the matches — so a JD with v1 Published
-     and v2 Disabled shows its v1 row under the Published tab AND its v2 row
-     under the Disabled tab, each the version that was really in that state.
-     (Deliberate: a job can therefore appear under more than one tab at once,
-     and the stat tiles above — which still count distinct jobs by their LATEST
-     version only — can disagree with a tab's row count. That's intentional
-     here, not the bug this comment used to warn about.) */
-  /* Version FIRST, criteria SECOND. Each job is represented by its latest
-     version (All Jobs) or its latest version with the tab's status, and only
-     THAT version is then tested against search and More Filters. Filtering
-     every version before collapsing let a filter drop the newest version and
-     promote an older one in its place — v4 listed under Published while v5
-     was the job's latest published version, because v5 alone missed a filter.
-     Now a job whose chosen version misses a filter is simply not listed. */
-  const statusSelectedJobs = (statusFilter === 'all'
-    ? collapseToLatestVersions(jobs)
-    : collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, statusFilter)))
-  ).filter(matchesCriteria);
-
-  const dedupedJobs = statusSelectedJobs;
-
-  /* Grouped over the WHOLE list, not the filtered one, so the counts below
-     describe the library rather than the current filter. The expanded history
-     itself does not come from here — it is fetched per job from the lineage
-     endpoint, which is authoritative about what versions exist. */
-  const allVersionGroups = groupByLineage(jobs);
-
-  /* Distinct jobs, ignoring filters — what the stat cards and the "of N jobs"
-     badge count, so those numbers describe the same thing the list shows. */
-  const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
-
-  // Apply sorting to filtered jobs
-  // Assessed/interviewed counts come from the candidate-counts hook, not the
-  // JD payload, so attach them before sorting on either.
-  const sortedJobs = sortJobs(
-    (sortBy === 'assessed' || sortBy === 'interviewed') && candidateCounts
-      ? dedupedJobs.map(job => ({
-          ...job,
-          assessed: candidateCounts[job.id]?.assessed ?? 0,
-          interviewed: candidateCounts[job.id]?.interviewed ?? 0,
-        }))
-      : dedupedJobs,
-    sortBy,
-    sortOrder,
-  );
+  /* Every JD row this page has seen (page rows, "select all" fetches, ticked
+     versions), so a selection that spans pages can still name its jobs for
+     the bulk actions and the export. */
+  const knownJobsRef = useRef(new Map<string, Job>());
+  pageRows.forEach((row) => knownJobsRef.current.set(row.id, row));
+  const rememberJobs = (list: Job[]) => list.forEach((job) => knownJobsRef.current.set(job.id, job));
+  const knownJob = (id: string): Job | undefined => {
+    const job = knownJobsRef.current.get(id);
+    return job ? withOverride(job) : undefined;
+  };
 
   // Bulk action handlers
   /* The single Select All control offers these scopes through its dropdown:
      - current page: add the jobs visible on the active page (count tracks the
        Show: N per-page value);
-     - all pages: select the whole filtered list across every page;
-     - all versions: every version of every listed job, not just the row's own;
+     - all pages: every job matching the filters, across every page (fetched
+       from the server with the same filters);
+     - all versions: every version of every matching job, not just the row's own;
      - clear: empty the selection.
      A job row's checkbox selects that row's own version only; other versions
      are ticked in View Versions or through "Select all versions". */
-  const rowVersionsOf = (row: Job) =>
-    (allVersionGroups.get(lineageKey(row)) ?? [row]).filter(version =>
-      !deletedVersionIds?.has(version.id) &&
-      (statusFilter === 'all' || matchesStatusFilter(version, statusFilter))
-    );
+  const rowVersionsOf = (row: Job): Job[] => {
+    const key = lineageKey(row);
+    const versions = Array.from(knownJobsRef.current.keys())
+      .map(knownJob)
+      .filter((version): version is Job =>
+        !!version &&
+        lineageKey(version) === key &&
+        !deletedVersionIds?.has(version.id) &&
+        (statusFilter === 'all' || matchesStatusFilter(version, statusFilter)));
+    return versions.length ? versions : [row];
+  };
   /* Drop per-version ticks: the rows' own versions only, or every version of
      those jobs. */
   const resetVersionPicks = (rows: Job[], wholeJob = false) => {
@@ -644,21 +619,67 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
       return next;
     });
   };
-  const selectAllPages = () => {
-    setVersionPicks(new Map());
-    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+
+  /* Ids of every matching job / every version of them, once "Select all
+     jobs" / "Select all versions" has fetched them for the current filters. */
+  const [allMatchingIds, setAllMatchingIds] = useState<string[] | null>(null);
+  const [allVersionIds, setAllVersionIds] = useState<string[] | null>(null);
+  const [selectingAll, setSelectingAll] = useState(false);
+  /** Every job the list matches, all pages, in list order (pages of 100). */
+  const fetchAllMatching = async (): Promise<Job[]> => {
+    const PAGE = 100;
+    const base = { ...serverFilters, status_tab: statusTab, sort_by: sortBy, sort_order: sortOrder };
+    const first = await jdService.listJobs({ ...base, page: 1, page_size: PAGE });
+    const pages = Math.max(1, Math.ceil((first.total ?? 0) / PAGE));
+    const rest = await fetchRemainingPages(pages, (page) => jdService.listJobs({ ...base, page, page_size: PAGE }));
+    return [first, ...rest].flatMap((res) => (res.items ?? []).map(mapJDToJob));
+  };
+  const selectAllPages = async () => {
+    if (selectingAll) return;
+    setSelectingAll(true);
+    try {
+      const rows = await fetchAllMatching();
+      rememberJobs(rows);
+      const ids = rows.map((row) => row.id).filter((id) => !deletedVersionIds?.has(id));
+      setAllMatchingIds(ids);
+      setVersionPicks(new Map());
+      setSelectedJobs(new Set(ids));
+    } catch {
+      toast.error('Could not select all jobs. Please try again.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
   const clearSelection = () => {
     setVersionPicks(new Map());
     setSelectedJobs(new Set());
   };
-  const selectAllVersions = () => {
-    setVersionPicks(new Map(sortedJobs.flatMap(rowVersionsOf).map(version => [version.id, true])));
-    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+  const selectAllVersions = async () => {
+    if (selectingAll) return;
+    setSelectingAll(true);
+    try {
+      const [rows, versions] = await Promise.all([
+        fetchAllMatching(),
+        jdService.listJobVersions({ ...serverFilters, status_tab: statusTab }),
+      ]);
+      const versionJobs = versions.map(mapJDToJob);
+      rememberJobs(rows);
+      rememberJobs(versionJobs);
+      const rowIds = rows.map((row) => row.id).filter((id) => !deletedVersionIds?.has(id));
+      const versionIds = versionJobs.map((version) => version.id).filter((id) => !deletedVersionIds?.has(id));
+      setAllMatchingIds(rowIds);
+      setAllVersionIds(versionIds);
+      setVersionPicks(new Map(versionIds.map((id) => [id, true])));
+      setSelectedJobs(new Set(rowIds));
+    } catch {
+      toast.error('Could not select all versions. Please try again.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const handleSelectJob = (jobId: string) => {
-    const row = sortedJobs.find(job => job.id === jobId);
+    const row = pageRows.find(job => job.id === jobId);
     if (row) resetVersionPicks([row]);
     const newSelected = new Set(selectedJobs);
     if (newSelected.has(jobId)) {
@@ -669,32 +690,47 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     setSelectedJobs(newSelected);
   };
 
-  /* A selection belongs to the tab it was made on. Switching tabs clears it,
-     so the "N Selected" count, the confirm popups and the action itself all
-     describe the same jobs — rather than counting rows from another tab that
-     the action would then silently skip. */
-  const [selectionTab, setSelectionTab] = useState(statusFilter);
-  if (selectionTab !== statusFilter) {
-    setSelectionTab(statusFilter);
+  /* A selection belongs to the tab — and the filters — it was made on.
+     Changing either clears it, so the "N Selected" count, the confirm popups
+     and the action itself all describe the same jobs, rather than counting
+     rows the list no longer shows that the action would then act on. */
+  const selectionScope = `${statusFilter}|${JSON.stringify(serverFilters)}`;
+  const [selectionTab, setSelectionTab] = useState(selectionScope);
+  if (selectionTab !== selectionScope) {
+    setSelectionTab(selectionScope);
     setSelectedJobs(new Set());
     setVersionPicks(new Map());
+    setAllMatchingIds(null);
+    setAllVersionIds(null);
     setShowBulkActions(false);
   }
 
-  /* The selected jobs on screen, and the ones each bulk action applies to —
-     the same eligibility rules as each job's three-dot menu. */
-  /* A version is selected when ticked in View Versions (or by "Select all
-     versions"); with no tick of its own, the row's own version follows the
-     row checkbox. On a status tab only the versions with that tab's status. */
-  const allRowVersions = sortedJobs.flatMap(rowVersionsOf);
-  const selectedVisibleJobs = allRowVersions.filter(version =>
-    versionPicks.get(version.id) ?? selectedJobs.has(version.id)
-  );
-  const allVersionsSelected = allRowVersions.length > 0 && selectedVisibleJobs.length === allRowVersions.length;
+  /* The selected jobs, and the ones each bulk action applies to — the same
+     eligibility rules as each job's three-dot menu. A version is selected when
+     ticked in View Versions (or by "Select all versions"); with no tick of its
+     own, a row follows its checkbox. */
+  const selectedVisibleJobs: Job[] = Array.from(new Set([...selectedJobs, ...versionPicks.keys()]))
+    .filter(id => (versionPicks.get(id) ?? selectedJobs.has(id)) && !deletedVersionIds?.has(id))
+    .map(knownJob)
+    .filter((job): job is Job => !!job);
+  const isPicked = (id: string) => versionPicks.get(id) ?? selectedJobs.has(id);
+  const allVersionsSelected = !!allVersionIds && allVersionIds.length > 0 && allVersionIds.every(isPicked);
+  /* "Select all versions (N)": exact once fetched; before that, with no
+     search/filter the stats already know it (versions with the tab's status). */
+  const allVersionsCount: number | null = allVersionIds
+    ? allVersionIds.length
+    : !hasCriteria && serverStats
+      ? serverStats.versions?.[statusTab as JobOpeningsTab] ?? null
+      : null;
   const checkedVersionIds = new Set(selectedVisibleJobs.map(job => job.id));
   const hasSelection = selectedJobs.size > 0 || selectedVisibleJobs.length > 0;
-  const toggleVersionChecked = (versionJob: Job) =>
+  const toggleVersionChecked = (versionJob: Job) => {
+    if (!knownJobsRef.current.has(versionJob.id)) {
+      const detail = versionLineage.versionDetails[versionJob.id];
+      rememberJobs([detail?.id ? { ...mapJDToJob(detail), status: versionJob.status } : versionJob]);
+    }
     setVersionPicks(prev => new Map(prev).set(versionJob.id, !checkedVersionIds.has(versionJob.id)));
+  };
   const bulkDisableJobs = selectedVisibleJobs.filter(job => job.status === 'Published');
   const bulkReenableJobs = selectedVisibleJobs.filter(job => job.status === 'Disabled');
   const bulkArchiveJobs = selectedVisibleJobs.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
@@ -885,74 +921,49 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   // Get unique values for filters — drop empty/blank values (so the dropdowns
   // don't show a blank option) and sort alphabetically so the lists are ordered
   // rather than appearing in random job-fetch order.
-  const byName = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
-  const uniqueLocations = Array.from(new Set(jobs.map(job => job.location).filter(Boolean))).sort(byName);
-  const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean))).sort(byName);
-  const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
-  const uniqueCreators = Array.from(new Set(jobs.map(job => job.postedBy?.trim()).filter(Boolean))).sort(byName);
-  const uniqueWorkModes = Array.from(new Set(jobs.map(job => job.workMode?.trim().toLowerCase()).filter(Boolean))).sort(byName);
+  // Filter dropdown options — every value in the tenant's JDs (all versions),
+  // from GET /jd/stats, already de-blanked and sorted.
+  const uniqueLocations = serverStats?.facets?.locations ?? [];
+  const uniqueEmploymentTypes = serverStats?.facets?.employment_types ?? [];
+  const uniqueIndustries = serverStats?.facets?.industries ?? [];
+  const uniqueCreators = serverStats?.facets?.creators ?? [];
+  const uniqueWorkModes = serverStats?.facets?.work_modes ?? [];
 
-  // Calculate stats
-  /* Each status card IS its tab's filter — clicking it opens that tab — so its
-     number must be exactly the row count that tab shows (filters aside).
-     They used to disagree: the cards counted a job only when its LATEST
-     version had the status, while the tab lists a job when ANY version has it
-     (filter versions first, then one row per job — see statusSelectedJobs).
-     A job with v1 Published under a newer Draft/Disabled/Archived version
-     was a Published row but not a Published count: "129" on the card,
-     "135 of 216" after clicking it. Both now come from the same call.
-
-     The versions pill counts the versions that HAVE the card's status —
-     not every version of those jobs. A job holds at most one draft (always
-     its latest version), so Drafts reads N jobs / N versions; Published
-     counts each published version once, however many a job has. Counting
-     all of a job's versions put a draft job's earlier published versions
-     under "Drafts" (79 jobs, "82 versions"). */
-  const jobsInStatusTab = (pill: string) =>
-    collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, pill)));
-  const versionsWithStatus = (pill: string) =>
-    jobs.filter(job => matchesStatusFilter(job, pill)).length;
-  /* Count badges for the toolbar pills. Same rule as the cards above: each
-     status badge is the row count its tab shows, filters aside. The creation
-     method badges count the jobs in the CURRENT status tab, so All = AI +
-     Manual reads straight off the list. */
-  const statusPillCount = (pill: string) =>
-    pill === 'all' ? distinctJobs.length : jobsInStatusTab(pill.toLowerCase()).length;
-  const methodTabJobs = statusFilter === 'all'
-    ? collapseToLatestVersions(jobs)
-    : jobsInStatusTab(statusFilter.toLowerCase());
-  const methodPillCount = (method: 'ai' | 'manual' | null) =>
-    method === null
-      ? methodTabJobs.length
-      : methodTabJobs.filter((j) => (j as any).creation_method === (method === 'ai' ? 'ai_generated' : 'manual')).length;
-  const pillCountBadge = (active: boolean, n: number) => (
+  /* Each status card IS its tab — clicking it opens that tab — so its number
+     is exactly the row count that tab lists for the current search/filters
+     (GET /jd/stats builds it from the same server-side filter as the list).
+     The versions pill counts the versions that HAVE the card's status.
+     With no search/filter these are the same numbers the page showed when it
+     computed them from every JD version in the browser. */
+  const statusPillCount = (pill: string): number | null =>
+    serverStats ? serverStats.jobs?.[pill.toLowerCase() as JobOpeningsTab] ?? 0 : null;
+  const methodPillCount = (method: 'ai' | 'manual' | null): number | null => {
+    if (!serverStats) return null;
+    const row = serverStats.by_method?.[statusTab as JobOpeningsTab];
+    return row ? row[method ?? 'all'] ?? 0 : 0;
+  };
+  const pillCountBadge = (active: boolean, n: number | null) => (
     <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
       active ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
     }`}>
-      {n.toLocaleString()}
+      {n == null ? '–' : n.toLocaleString()}
     </span>
   );
-  const publishedTabJobs = jobsInStatusTab('published');
-  const draftTabJobs = jobsInStatusTab('draft');
-  const archivedTabJobs = jobsInStatusTab('archived');
   const stats = {
-    total: distinctJobs.length,
-    published: publishedTabJobs.length,
-    draft: draftTabJobs.length,
-    closed: distinctJobs.filter(j => j.status === 'Closed').length,
-    archived: archivedTabJobs.length,
-    totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0),
-    totalVersions: jobs.length,
-    publishedVersions: versionsWithStatus('published'),
-    draftVersions: versionsWithStatus('draft'),
-    archivedVersions: versionsWithStatus('archived'),
+    total: serverStats?.total ?? 0,
+    published: serverStats?.published ?? 0,
+    draft: serverStats?.draft ?? 0,
+    archived: serverStats?.archived ?? 0,
+    totalVersions: serverStats?.versions?.all ?? 0,
+    publishedVersions: serverStats?.versions?.published ?? 0,
+    draftVersions: serverStats?.versions?.draft ?? 0,
+    archivedVersions: serverStats?.versions?.archived ?? 0,
   };
 
-  /* The stat cards (number and versions pill) only ever show a count of the
-   * complete list — while later pages are still loading they show a
-   * placeholder, never a partial tally that would then jump. */
-  const statValue = (count: number) => (jobsFullyLoaded ? count : <StatValuePlaceholder />);
-  const statVersions = (count: number) => (jobsFullyLoaded ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
+  /* The stat cards show a placeholder until the counts land — never a
+   * partial tally that would then jump. */
+  const statValue = (count: number) => (serverStats ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (serverStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -984,12 +995,16 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   };
 
   // NEW: Pagination logic
-  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
-  const currentJobs = sortedJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(totalMatching / itemsPerPage);
 
   /* Whether every matching job (across all pages) is selected — drives the
-     Select All button's "fully checked" icon. */
-  const allPagesSelected = sortedJobs.length > 0 && sortedJobs.every(job => selectedJobs.has(job.id));
+     Select All button's "fully checked" icon. Known for certain once "Select
+     all jobs" has fetched them, or when every match is on this page. */
+  const allPagesSelected = totalMatching > 0 && (
+    allMatchingIds && allMatchingIds.length >= totalMatching
+      ? allMatchingIds.every(id => selectedJobs.has(id))
+      : totalMatching <= pageRows.length && pageRows.every(job => selectedJobs.has(job.id))
+  );
   /* Same for the active page — drives the "this page" menu checkbox. */
   const currentPageSelected = currentJobs.length > 0 && currentJobs.every(job => selectedJobs.has(job.id));
 
@@ -1211,8 +1226,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         <>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
-        <div className="tf-card p-3 sm:p-4 mb-4">
+        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort.
+            Phones (globals.css, `.tf-jobs-toolbar`): search · filter icon, the
+            Location / Industry / Creator pills (scrolling), the status tabs
+            (underlined, scrolling), All / AI / Manual, then Select all · Sort ·
+            Refresh. From sm the layout below is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
           {/* Row 1: Search + More Filters — the canonical toolbar, now shared
               via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
@@ -1229,7 +1248,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             // all come from the shared SearchableSelect chrome, so they match the
             // Search input and the date fields. They stack full-width on mobile.
             leadingActions={
-              <>
+              <div className="tf-jobs-filter-pills contents">
                 {uniqueLocations.length > 1 && (
                   <SearchableSelect
                     className="w-full sm:w-48"
@@ -1266,7 +1285,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     ariaLabel="Filter by created by"
                   />
                 )}
-              </>
+              </div>
             }
             // Search flexes to fill the row; `controlsFollowSearch` gives the
             // search→control gap the same 8px as control→control, so Search,
@@ -1281,8 +1300,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             onClearFilters={clearAllFilters}
             // Sort by sits right after More Filters, in the search row.
             afterFiltersActions={
-            sortedJobs.length > 0 ? (
-              <div className="flex items-center gap-2">
+            totalMatching > 0 ? (
+              <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. One size at
@@ -1296,15 +1315,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     }}
                     ariaLabel="Sort jobs by"
                     className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
-                    options={[
-                      { value: 'date', label: 'Date Posted' },
-                      { value: 'applicants', label: 'Scored' },
-                      { value: 'assessed', label: 'Assessed' },
-                      { value: 'interviewed', label: 'Interviewed' },
-                      { value: 'title', label: 'Job Title' },
-                      { value: 'status', label: 'Status' },
-                      { value: 'industry', label: 'Industry Type' },
-                    ]}
+                    options={JOB_SORT_OPTIONS}
                   />
                   <button
                     type="button"
@@ -1410,11 +1421,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               The row itself always renders (so the status tabs stay reachable even
               when a filter yields no rows); Select all and Sort render only when
               there are jobs to act on. */}
-          <div className="flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
+          <div className="tf-jobs-row2 flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
             {/* Select all + Bulk Actions — sits at the head of the row, where the
                 "Show:" label used to be. */}
-            {sortedJobs.length > 0 && (
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {totalMatching > 0 && (
+              <div className="tf-jobs-select flex items-center gap-2 sm:gap-3 flex-wrap">
                 {/* One Select All button. Its dropdown carries BOTH scopes:
                     "this page (N)" — tracks the Show: N per-page value — and
                     "all jobs (N)" — the total across every page. */}
@@ -1423,7 +1434,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={`${tabPill(hasSelection)} h-9`}
+                    className={`tf-jobs-selectall ${tabPill(hasSelection)} h-9`}
+                    data-active={hasSelection || undefined}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1468,7 +1480,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           aria-checked={allPagesSelected}
                           onClick={() => {
                             if (allPagesSelected) clearSelection();
-                            else selectAllPages();
+                            else void selectAllPages();
                             setShowSelectMenu(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
@@ -1478,7 +1490,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           ) : (
                             <Square className="w-4 h-4 text-gray-500" />
                           )}
-                          Select all jobs ({sortedJobs.length})
+                          {selectingAll ? 'Selecting…' : `Select all jobs (${totalMatching})`}
                         </button>
                         <button
                           type="button"
@@ -1486,7 +1498,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           aria-checked={allVersionsSelected}
                           onClick={() => {
                             if (allVersionsSelected) clearSelection();
-                            else selectAllVersions();
+                            else void selectAllVersions();
                             setShowSelectMenu(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
@@ -1496,7 +1508,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           ) : (
                             <Square className="w-4 h-4 text-gray-500" />
                           )}
-                          Select all versions ({allRowVersions.length})
+                          {selectingAll ? 'Selecting…' : allVersionsCount != null ? `Select all versions (${allVersionsCount})` : 'Select all versions'}
                         </button>
                         <div className="border-t border-gray-200 my-1" />
                         <button
@@ -1518,7 +1530,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 button (not inline beside it), matching the Resume Scoring toolbar.
                 `basis-full order-last` drops this group onto its own line at the
                 bottom of the wrap-row. */}
-            {sortedJobs.length > 0 && hasSelection && (
+            {totalMatching > 0 && hasSelection && (
               <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
@@ -1645,9 +1657,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             )}
 
             {/* Status tabs */}
+            <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Job status">
             {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
               <button
                 key={status}
+                role="tab"
+                aria-selected={statusFilter.toLowerCase() === status.toLowerCase()}
                 onClick={() => search.setFilter('status', status.toLowerCase())}
                 className={`${tabPill(statusFilter.toLowerCase() === status.toLowerCase())} h-9`}
               >
@@ -1655,6 +1670,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 {pillCountBadge(statusFilter.toLowerCase() === status.toLowerCase(), statusPillCount(status))}
               </button>
             ))}
+            </div>
 
             {/* Creation method: [ All | AI Generated | Manual ] — a single
                 connected segmented toggle (shared tinted track; the active
@@ -1662,7 +1678,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 Phones: the toggle takes the full row, each option sized to its
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
-            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
+            <div className="tf-jobs-method flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
               <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
@@ -1691,8 +1707,46 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               </div>
             </div>
 
+            {/* Phones: one "Sort" button that opens a menu — the fields, then the order
+                (worded for the field). From sm the inline Sort control above is used. */}
+            {pageRows.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tf-jobs-sortmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue data-[state=open]:border-brand-blue/40 data-[state=open]:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    aria-label={`Sort: ${JOB_SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? ''}, ${sortOrderLabels(sortBy)[sortOrder]}`}
+                  >
+                    <ArrowUpDown className="w-4 h-4 text-brand-blue" />
+                    Sort
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
+                  <DropdownMenuLabel className="text-xs text-gray-500">Sort by</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as JobSortBy)}>
+                    {JOB_SORT_OPTIONS.map((o) => (
+                      <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Order</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+                    <DropdownMenuRadioItem value="desc">
+                      <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).desc}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="asc">
+                      <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).asc}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {/* Refresh — right corner of the pill row, as on AI Interviews. */}
-            {onRefresh && (
+            {(
               <Button
                 variant="secondary"
                 size="sm"
@@ -1701,7 +1755,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 title="Refresh"
                 aria-label="Refresh"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
-                className="flex-shrink-0 !h-9 sm:ml-auto"
+                className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
               >
                 <span className="hidden 2xl:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
@@ -1711,7 +1765,9 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
         {/* Jobs Grid/List — `jobsListRef` is the phone scroll target. */}
         <div ref={jobsListRef} aria-hidden="true" />
-        {currentJobs.length > 0 ? (
+        {paged.loading && currentJobs.length === 0 ? (
+          <JobsListLoading />
+        ) : currentJobs.length > 0 ? (
             // List View
             <div className="space-y-3">
               {currentJobs.map(job => {
@@ -1741,17 +1797,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                    overall but only ONE of them matching the active tab (e.g.
                    v1 Published / v2 Draft, viewed on the Published tab) — the
                    card already shows that one version in full, so expanding it
-                   would just repeat the same row. Counted from siblings that
-                   match the tab's status, not the whole lineage. */
-                const lineageSiblings = allVersionGroups.get(versionKey) ?? [job];
+                   would just repeat the same row. Counted server-side (GET /jd?view=jobs → versions_meta):
+                   distinct versions in the lineage, or with the tab's status. */
                 const hasVersionHistory = statusFilter === 'all'
-                  ? (job.versionNumber ?? 1) > 1 ||
-                    new Set(lineageSiblings.map((sibling) => sibling.versionNumber ?? 1)).size > 1
-                  : new Set(
-                      lineageSiblings
-                        .filter((sibling) => matchesStatusFilter(sibling, statusFilter))
-                        .map((sibling) => sibling.versionNumber ?? 1),
-                    ).size > 1;
+                  ? (job.versionNumber ?? 1) > 1 || (job.versionCount ?? 1) > 1
+                  : (job.tabVersionCount ?? 1) > 1;
 
                 /* Counts for the colored badge stack beside the row actions.
                    assessed/interviewed come from the candidate-counts hook (null
@@ -2486,7 +2536,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         )}
 
         {/* Pagination Controls */}
-        {sortedJobs.length > 5 && (
+        {totalMatching > 5 && (
           <div className="tf-card p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
@@ -2506,7 +2556,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
                 <span className="tf-body-secondary">
-                  Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
+                  Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, totalMatching)}</span> of <span className="font-medium text-gray-900">{totalMatching}</span> jobs
                 </span>
               </div>
 

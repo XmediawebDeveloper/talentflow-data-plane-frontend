@@ -508,7 +508,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {/* Modal Header */}
         {/* Header — the AI Interview tracker's: solid icon tile, title, then
             JD ID · job name · job version. */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+        <div className="tf-tracker-header px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
@@ -539,7 +539,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             over the loaded list, and getEffectiveStatus returns exactly these
             keys, so a card and its rows always agree. */}
         <InviteStatCards
-          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+          gridClassName="tf-tracker-stats"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -754,7 +754,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
                       {timelineEvents(invitation).length > 0 && (
-                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
                           {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
                             <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                               <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
@@ -988,8 +988,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {/* Modal Footer */}
         {/* Footer — stacks on phones; First/Last drop out below sm, matching the
             Assessments and AI Interviews trackers. */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
+        <div className="tf-tracker-footer px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+          {/* Phones show this count above the cards already, so it isn't repeated here. */}
+          <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1 max-sm:hidden">
             {/* The filtered count, not the raw total — the number has to agree
                 with the rows actually on screen. */}
             {resultsLabel}

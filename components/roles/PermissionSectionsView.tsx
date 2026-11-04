@@ -90,6 +90,22 @@ export async function fetchRoleShownCounts(
     if (hit !== undefined) counts[id] = hit;
     else toFetch.push({ id, version });
   });
+  if (toFetch.length === 0) return counts;
+  // One batch request for every uncached role; per-role GETs only as the
+  // fallback for an older backend without /rbac/roles/permission-codes.
+  try {
+    const batch = await rbacService.getRolesPermissionCodes(toFetch.map(({ id }) => id));
+    toFetch.forEach(({ id, version }) => {
+      const codes = batch[id];
+      if (!codes) return; // not visible / gone: absent, callers fall back
+      const count = countGrantedPermissions(withAlwaysOnPermissions(codes));
+      counts[id] = count;
+      writeRbacCache(`roleShownCount:${id}`, count, version);
+    });
+    return counts;
+  } catch {
+    /* fall through to per-role fetches */
+  }
   const details = await Promise.allSettled(toFetch.map(({ id }) => rbacService.getRoleById(id)));
   details.forEach((d, i) => {
     if (d.status === 'fulfilled') {

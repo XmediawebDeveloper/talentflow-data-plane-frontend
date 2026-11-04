@@ -29,6 +29,8 @@ export type EnvVerificationRecordLike = {
   status: string;
   analysis_status: string | null;
   triggered_at: string | null;
+  /** When the phone first opened the QR link (null = never scanned). Optional — older backends omit it. */
+  opened_at?: string | null;
   submitted_at: string | null;
   video_uploaded: boolean;
   video_url: string | null;
@@ -59,6 +61,14 @@ type Props = {
   formatTs: (ts?: string) => string;
   /** Which interview this verification belongs to (shown in the footer). */
   interviewRef?: { candidate: string; role: string; sessionId: string };
+  /** Interview still live — a pending/opened QR is "waiting", not "not completed". */
+  isInProgress?: boolean;
+  /** e.g. "Attempt 2" when the interview has more than one attempt. */
+  attemptLabel?: string;
+  /** Re-run the AI analysis after it failed. */
+  onRetryAnalysis?: () => void;
+  reanalyzing?: boolean;
+  reanalyzeError?: string;
 };
 
 const FRAME_STEP = 0.5;       // stored frames are 2fps → index × 0.5s
@@ -117,6 +127,7 @@ function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na'; titl
 
 export default function EnvVerificationStudio({
   v, videoSrc, videoStillLoading, frames, framesLoading, framesError, openViewer, registerVideo, formatTs, interviewRef,
+  isInProgress = false, attemptLabel, onRetryAnalysis, reanalyzing = false, reanalyzeError,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -243,12 +254,37 @@ export default function EnvVerificationStudio({
   const flagged = analysed && v.result_severity === 'flagged';
   const liveCheck = v.color_match ?? rgbPass;
 
-  const statusLabel = analysing ? 'In progress'
+  // What happened on the phone when no video arrived. pending/opened rows only
+  // count as "waiting" while the interview is still live; after it ends they're final.
+  const waitingOnPhone = !v.video_uploaded && isInProgress && (v.status === 'pending' || v.status === 'opened');
+  const notCompleted = !v.video_uploaded && !waitingOnPhone && (v.status === 'expired' || v.status === 'pending' || v.status === 'opened');
+  const uploadFailed = !v.video_uploaded && !waitingOnPhone && !notCompleted;
+  const notUploadedMessage = waitingOnPhone
+    ? (v.status === 'opened'
+        ? 'QR scanned — waiting for the candidate to finish recording…'
+        : 'Waiting for the candidate to scan the QR code…')
+    : notCompleted
+    ? (v.opened_at
+        ? 'The candidate opened the link on their phone but did not submit a recording before time ran out.'
+        : 'The candidate did not scan the QR code before it expired.')
+    : 'The candidate submitted, but the video upload failed.';
+  const secondsBetween = (a?: string | null, b?: string | null) => {
+    if (!a || !b) return null;
+    const d = (new Date(b).getTime() - new Date(a).getTime()) / 1000;
+    return Number.isFinite(d) && d >= 0 ? Math.round(d) : null;
+  };
+  const timeToScan = secondsBetween(v.triggered_at, v.opened_at);
+
+  const statusLabel = waitingOnPhone ? 'In progress'
+    : notCompleted ? 'Not completed'
+    : uploadFailed ? 'Upload failed'
+    : analysing ? 'In progress'
     : v.analysis_status === 'error' ? 'Not checked'
     : flagged ? 'Needs review'
     : analysed ? 'Clear'
     : 'Pending';
-  const title = analysing ? 'Checking the video…'
+  const title = !v.video_uploaded ? notUploadedMessage
+    : analysing ? 'Checking the video…'
     : v.analysis_status === 'error' ? 'We could not check this video — please watch it yourself'
     : flagged ? (rows.length > 0 ? `${rows.length} ${rows.length === 1 ? 'thing needs' : 'things need'} your review` : 'Something needs your review')
     : analysed ? 'No problems found'
@@ -274,10 +310,13 @@ export default function EnvVerificationStudio({
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Proxy integrity verification</span>
+              {attemptLabel && <span className="text-2xs font-semibold text-gray-500">· {attemptLabel}</span>}
               <span className={`inline-flex items-center gap-1 text-2xs font-bold px-2 py-0.5 rounded-full ${
-                flagged ? 'bg-destructive-subtle text-destructive' : analysed ? 'bg-success-subtle text-success' : 'bg-gray-100 text-gray-600'
+                flagged || uploadFailed ? 'bg-destructive-subtle text-destructive'
+                  : notCompleted ? 'bg-brand-orange/10 text-brand-orange-deep'
+                  : analysed ? 'bg-success-subtle text-success' : 'bg-gray-100 text-gray-600'
               }`}>
-                {analysing && <Loader2 className="w-3 h-3 animate-spin" />}
+                {(analysing || waitingOnPhone) && <Loader2 className="w-3 h-3 animate-spin" />}
                 {statusLabel}
               </span>
               <span
@@ -289,6 +328,38 @@ export default function EnvVerificationStudio({
             </div>
             <h3 className="mt-1.5 text-lg font-bold text-gray-900 leading-snug">{title}</h3>
             {v.ai_summary && <p className="mt-1 text-sm text-gray-600 leading-relaxed">{v.ai_summary}</p>}
+            <div className="mt-2 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+              <span>Shown <span className="font-mono">{v.triggered_at ? formatTs(v.triggered_at) : '—'}</span></span>
+              <span className="inline-flex items-center gap-1">
+                <Smartphone className="w-3.5 h-3.5 text-gray-400" />
+                Scanned{' '}
+                {v.opened_at ? (
+                  <>
+                    <span className="font-mono">{formatTs(v.opened_at)}</span>
+                    {timeToScan != null && <span className="text-gray-400">({timeToScan}s later)</span>}
+                  </>
+                ) : <span className="text-gray-400">—</span>}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <Check className="w-3.5 h-3.5 text-gray-400" />
+                Submitted{' '}
+                {v.submitted_at ? <span className="font-mono">{formatTs(v.submitted_at)}</span> : <span className="text-gray-400">—</span>}
+              </span>
+            </div>
+            {v.analysis_status === 'error' && v.video_uploaded && onRetryAnalysis && (
+              <div className="mt-2 flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={onRetryAnalysis}
+                  disabled={reanalyzing}
+                  className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/30 hover:bg-brand-blue/5 disabled:opacity-50"
+                >
+                  {reanalyzing && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Retry analysis
+                </button>
+                {reanalyzeError && <span className="text-xs text-destructive">{reanalyzeError}</span>}
+              </div>
+            )}
             <p className="mt-2 text-xs text-gray-500">For your review only — this does not change the candidate&apos;s result.</p>
           </div>
           {v.download_url && (
@@ -310,7 +381,7 @@ export default function EnvVerificationStudio({
         <section className="rounded-xl border border-gray-200 overflow-hidden min-w-0 lg:col-start-1 lg:row-start-1">
           <div className="bg-gray-900">
             {!v.video_uploaded ? (
-              <div className="aspect-video grid place-items-center text-sm text-gray-300">The video did not upload.</div>
+              <div className="aspect-video grid place-items-center text-sm text-gray-300 px-6 text-center">{notUploadedMessage}</div>
             ) : videoStillLoading ? (
               <div className="aspect-video grid place-items-center text-sm text-gray-300">
                 <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading video…</span>

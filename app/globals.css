@@ -3299,17 +3299,38 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) :is(button, a) { width: auto !important; }
     /* Select all: plain checkbox + label / "N selected" in brand blue; no pill, no chevron
        (tapping still opens its menu). */
-    .tf-jdv-toolbar .tf-tb-selectall { background: transparent !important; border-color: transparent !important; box-shadow: none !important; padding-left: 0 !important; font-size: var(--text-sm) !important; color: var(--color-gray-700) !important; }
-    .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] { color: var(--color-brand-blue) !important; font-weight: 600; }
-    .tf-jdv-toolbar .tf-tb-selectall > svg:first-child { width: 1.125rem; height: 1.125rem; }
-    .tf-jdv-toolbar .tf-tb-selectall-chevron { display: none !important; }
+    /* Select all: a boxed dropdown button with its ▾ — the same look as on Job Openings —
+       so it reads as a menu (this page / all / clear). Ticked rows: inside the tinted
+       selection bar it reads "N Selected ▾" in blue, without the box. */
+    .tf-jdv-toolbar .tf-tb-selectall {
+      height: 2.25rem !important; padding: 0 0.75rem !important; gap: 0.375rem !important; border-radius: 0.5rem !important;
+      background: white !important; border: 1px solid var(--color-gray-200) !important; box-shadow: none !important;
+      font-size: var(--text-sm) !important; font-weight: 500; color: var(--color-gray-700) !important;
+    }
+    .tf-jdv-toolbar .tf-tb-selectall:hover,
+    .tf-jdv-toolbar .tf-tb-selectall[aria-expanded="true"] { border-color: color-mix(in srgb, var(--color-brand-blue) 40%, white) !important; color: var(--color-brand-blue) !important; }
+    .tf-jdv-toolbar .tf-tb-selectall > svg:first-child { width: 1rem; height: 1rem; color: var(--color-gray-400); }
+    .tf-jdv-toolbar .tf-tb-selectall-chevron { display: block !important; width: 0.875rem !important; height: 0.875rem !important; color: var(--color-gray-400); }
+    /* Ticked rows: "● N Selected ▾" as one small outlined pill inside the tinted bar, so
+       the ▾ clearly belongs to it (it opens the same menu). */
+    .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] {
+      height: 2rem !important; padding: 0 0.5rem !important; gap: 0.25rem !important; border-radius: 9999px !important;
+      background: white !important; border-color: color-mix(in srgb, var(--color-brand-blue) 35%, white) !important;
+      color: var(--color-brand-blue) !important; font-weight: 600;
+    }
+    .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] > svg { color: var(--color-brand-blue); }
+    /* Dark: keep the Select all / "N selected" label and the bar's Clear readable. */
+    .dark .tf-jdv-toolbar .tf-tb-selectall { color: var(--color-slate-200) !important; background: var(--color-slate-900) !important; border-color: var(--color-slate-700) !important; }
+    .dark .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] { background: var(--color-slate-900) !important; border-color: color-mix(in srgb, var(--color-brand-blue) 55%, var(--color-slate-900)) !important; }
+    .dark .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] { color: var(--color-blue-300) !important; }
+    .dark .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > button:last-child { color: var(--color-slate-300) !important; }
 
     /* Rows ticked: line 3 becomes a tinted, bordered bar, and the tab's Actions / Clear row
        (.tf-tb-bulk, drawn right after the toolbar) moves up into its right side as
        "Clear  [Actions ▾]". The tab's own action button steps aside meanwhile. */
     .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar { margin-bottom: 0.75rem !important; }
     .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar > .tf-tb-lead {
-      flex: 1 1 100% !important; min-height: 3rem; padding: 0 0.75rem; border-radius: 0.75rem;
+      flex: 1 1 100% !important; min-height: 3rem; padding: 0 0.5rem; border-radius: 0.75rem;
       background: color-mix(in srgb, var(--color-brand-blue) 7%, white);
       border: 1px solid color-mix(in srgb, var(--color-brand-blue) 25%, white);
     }
@@ -3317,9 +3338,13 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
       background: color-mix(in srgb, var(--color-brand-blue) 20%, var(--color-slate-900)); border-color: color-mix(in srgb, var(--color-brand-blue) 45%, var(--color-slate-900));
     }
     .tf-tab-toolbar:has(.tf-tb-bulk) .tf-jdv-toolbar > .tf-tb-controls > :not([data-tb-filters]):not([data-toolbar-filter]):not([data-toolbar-sort]) { display: none !important; }
-    .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk {
-      position: relative; z-index: 1; width: max-content; margin: -3.375rem 0.4375rem 0.75rem auto;
-      flex-direction: row-reverse; gap: 0.25rem;
+    /* From 360px the bulk row rides on the bar's right side. Narrower, there isn't room
+       for "N Selected ▾", Clear and Actions on one line, so it stays on its own line below. */
+    @media (width >= theme(--breakpoint-2xs)) {
+      .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk {
+        position: relative; z-index: 1; width: max-content; margin: -3.375rem 0.4375rem 0.75rem auto;
+        flex-direction: row-reverse; gap: 0.25rem;
+      }
     }
     .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > * { flex: none !important; }
     .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk button { width: auto !important; }
@@ -3328,6 +3353,13 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
       color: var(--color-gray-700) !important; padding-inline: 0.625rem !important;
     }
     .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > button:last-child > svg { display: none; }
+    /* 360–399px: slightly tighter Clear / Actions so "N Selected ▾ · Clear · Actions" fit. */
+    @media (width < theme(--breakpoint-xs)) {
+      .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk { margin-right: 0.25rem; gap: 0.125rem; }
+      .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > button:last-child { padding-inline: 0.375rem !important; }
+      .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child:is(button),
+      .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child > button { padding-inline: 0.625rem !important; }
+    }
     .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child:is(button),
     .tf-tab-toolbar:has(.tf-jdv-toolbar) .tf-tb-bulk > :first-child > button {
       background: var(--color-brand-blue) !important; border-color: var(--color-brand-blue) !important; color: white !important; font-weight: 600;
@@ -3360,6 +3392,114 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .dark .tf-jdv-crumb .tf-pager > button { background: color-mix(in srgb, var(--color-brand-blue) 25%, var(--color-slate-900)) !important; color: var(--color-slate-100) !important; }
     .tf-jdv-crumb .tf-pager > button:not(:disabled):hover { background: var(--color-brand-blue) !important; color: white !important; }
   }
+  /* Job Openings list toolbar on phones (JobsListing adds .tf-jobs-toolbar):
+       [ search ....................... ] [⚙]
+       [ All Locations ▾ ][ All Industries ▾ ]
+       [ All Creators ▾                      ]       ← wrap and share the width (their
+                                                       menus would be clipped in a scroller)
+       All Jobs 291  Published 279  Draft 13  Disab…  ← underlined tabs, scroll sideways
+       [ All 291 |  AI 229  | Manual 62 ]
+       ☐ Select all            Sort: Date posted ⇅  [↻]
+     The toolbar's nested rows become `display: contents` so every piece is ordered
+     directly in the card. From sm the toolbar is unchanged. */
+  @media (width < theme(--breakpoint-sm)) {
+    .tf-jobs-toolbar { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.5rem; row-gap: 0.625rem; }
+    .tf-jobs-toolbar > .tf-tb-row,
+    .tf-jobs-toolbar > div:has(> .tf-tb-row),
+    .tf-jobs-toolbar .tf-tb-controls,
+    .tf-jobs-toolbar > .tf-jobs-row2 { display: contents !important; }
+    /* Line 1: search · filter icon. */
+    .tf-jobs-toolbar .tf-tb-search { order: 1; flex: 1 1 0% !important; min-width: 0; }
+    .tf-jobs-toolbar .tf-tb-search input { border-radius: 9999px !important; }
+    .tf-jobs-toolbar [data-tb-filters] { order: 2; flex: none !important; width: 2.25rem !important; padding: 0 !important; position: relative; }
+    .tf-jobs-toolbar [data-tb-filters] > span:not(:last-child),
+    .tf-jobs-toolbar [data-tb-filters] > span.sm\:hidden { display: none !important; }
+    .tf-jobs-toolbar [data-tb-filters] > span:last-child:not(.sm\:hidden):not(.hidden) {
+      position: absolute; top: -0.375rem; right: -0.375rem; padding: 0 0.3rem; line-height: 1rem;
+    }
+    .tf-jobs-toolbar .tf-tb-controls > button:not([data-tb-filters]) { order: 2; flex: none; }   /* Reset */
+    /* Line 2: Location / Industry / Creator as rounded pills sharing the width. */
+    .tf-jobs-toolbar .tf-jobs-filter-pills { order: 3; display: flex !important; flex-wrap: wrap; gap: 0.5rem; flex: 1 1 100%; }
+    .tf-jobs-toolbar .tf-jobs-filter-pills > * { flex: 1 1 40%; min-width: 0; width: auto !important; }
+    .tf-jobs-toolbar .tf-jobs-filter-pills button[aria-haspopup="listbox"] { border-radius: 9999px !important; }
+    /* More Filters panel, when open. */
+    .tf-jobs-toolbar > div.mb-3.pt-3 { order: 4; flex: 1 1 100%; margin: 0 !important; }
+    /* Line 3: status tabs — underlined, scrolling sideways, the card's divider under them. */
+    .tf-jobs-toolbar .tf-jobs-status-tabs {
+      order: 5; display: flex !important; flex: 1 1 100%; gap: 1rem; overflow-x: auto; scrollbar-width: none;
+      border-bottom: 1px solid var(--color-gray-200); margin-top: 0.125rem;
+    }
+    .tf-jobs-toolbar .tf-jobs-status-tabs::-webkit-scrollbar { display: none; }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button {
+      flex: none; height: 2.25rem !important; padding: 0 0.125rem !important; border-radius: 0 !important;
+      background: transparent !important; box-shadow: none !important; color: var(--color-gray-600) !important;
+      border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
+    }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button[aria-selected="true"] { color: var(--color-brand-blue) !important; font-weight: 600; border-bottom-color: var(--color-brand-blue); }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button > span { background: var(--color-gray-100) !important; color: var(--color-gray-600) !important; box-shadow: none !important; }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button[aria-selected="true"] > span { background: color-mix(in srgb, var(--color-brand-blue) 10%, white) !important; color: var(--color-brand-blue) !important; }
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs { border-color: var(--color-slate-700); }
+    /* Line 4: All / AI / Manual. */
+    .tf-jobs-toolbar .tf-jobs-method { order: 6; flex: 1 1 100%; }
+    /* Line 5: Select all on the left; the Sort menu button and Refresh on the right.
+         ☐ Select All                  [⇅ Sort ▾] [↻]
+       Phones sort from that menu (JobsListing, .tf-jobs-sortmenu), so the inline Sort
+       control steps aside. */
+    .tf-jobs-toolbar .tf-jobs-sort { display: none !important; }
+    .tf-jobs-toolbar .tf-jobs-select { order: 7; min-width: 0; }
+    .tf-jobs-toolbar .tf-jobs-sortmenu { order: 8; flex: none; }
+    .tf-jobs-toolbar .tf-jobs-refresh { order: 9; flex: none; width: 2.25rem; padding: 0 !important; justify-content: center; }
+    /* Select all: the same boxed button as Sort beside it — white, light border, 36px, with
+       its checkbox, label and ▾ (it opens a menu). Ticked rows: a light-blue box,
+       "● N Selected ▾" in blue. */
+    .tf-jobs-toolbar .tf-jobs-select { flex: 0 1 auto; margin-right: auto; }
+    .tf-jobs-toolbar .tf-jobs-selectall {
+      height: 2.25rem !important; padding: 0 0.75rem !important; gap: 0.375rem !important; border-radius: 0.5rem !important;
+      background: white !important; border: 1px solid var(--color-gray-200) !important; box-shadow: none !important;
+      color: var(--color-gray-700) !important; font-weight: 500;
+    }
+    .tf-jobs-toolbar .tf-jobs-selectall:hover,
+    .tf-jobs-toolbar .tf-jobs-selectall[aria-expanded="true"] { border-color: color-mix(in srgb, var(--color-brand-blue) 40%, white) !important; color: var(--color-brand-blue) !important; }
+    .tf-jobs-toolbar .tf-jobs-selectall > svg:first-child { width: 1rem; height: 1rem; color: var(--color-gray-400); }
+    .tf-jobs-toolbar .tf-jobs-selectall > svg:last-child { width: 0.875rem; height: 0.875rem; color: var(--color-gray-400); }
+    .tf-jobs-toolbar .tf-jobs-selectall[data-active] {
+      background: color-mix(in srgb, var(--color-brand-blue) 8%, white) !important;
+      border-color: color-mix(in srgb, var(--color-brand-blue) 35%, white) !important;
+      color: var(--color-brand-blue) !important; font-weight: 600;
+    }
+    .tf-jobs-toolbar .tf-jobs-selectall[data-active] > svg { color: var(--color-brand-blue); }
+    /* Under 360px: less inner padding and no ▾ so Select all · Sort · Refresh stay on one line. */
+    @media (width < theme(--breakpoint-2xs)) {
+      .tf-jobs-toolbar .tf-jobs-selectall { padding: 0 0.5rem !important; gap: 0.25rem !important; }
+      .tf-jobs-toolbar .tf-jobs-sortmenu { padding: 0 0.5rem !important; gap: 0.25rem !important; }
+      .tf-jobs-toolbar .tf-jobs-selectall > svg:last-child, .tf-jobs-toolbar .tf-jobs-sortmenu > svg:last-child { display: none; }
+    }
+    .dark .tf-jobs-toolbar .tf-jobs-selectall:not([data-active]) { background: var(--color-slate-900) !important; border-color: var(--color-slate-700) !important; color: var(--color-slate-200) !important; }
+  }
+  /* Job Openings toolbar on tablets / small laptops (640–1279px): three w-48 filters,
+     More Filters and Sort squeezed the search box down to an icon on the same line.
+     Here the search takes its own full line and the controls wrap on the line below. */
+  @media (width >= theme(--breakpoint-sm)) and (width < theme(--breakpoint-xl)) {
+    .tf-jobs-toolbar > .tf-tb-row { flex-wrap: wrap; }
+    .tf-jobs-toolbar > .tf-tb-row > .tf-tb-search { flex: 1 1 100%; }
+    .tf-jobs-toolbar > .tf-tb-row > .tf-tb-controls { flex: 1 1 100%; margin-left: 0 !important; }
+  }
+  /* Track Invites popups on phones (TRACKER_DIALOG_PANEL_CLASS adds .tf-tracker-panel):
+     the stat chips (three rows) and filters fill the height, and the card list — the one
+     part allowed to shrink — got 0px with nothing to scroll to. Here the whole panel
+     scrolls instead, every section at its natural height, so the cards always show. */
+  @media (width < theme(--breakpoint-sm)) {
+    .tf-tracker-panel { overflow-y: auto !important; }
+    .tf-tracker-panel > * { flex-shrink: 0 !important; }
+    .tf-tracker-panel > .flex-1 { flex: 0 0 auto !important; min-height: auto !important; overflow: visible !important; }
+    .tf-tracker-panel .tf-record-list { flex: none !important; min-height: auto !important; overflow: visible !important; }
+    /* Header and footer (Cancel / Invite More) stay pinned while the panel scrolls. */
+    .tf-tracker-panel > .tf-tracker-header { position: sticky; top: 0; z-index: 2; }
+    .tf-tracker-panel > .tf-tracker-footer { position: sticky; bottom: 0; z-index: 2; }
+  }
+  /* Track popups' stat chips (Total / Invited / In Progress …): 2 per row below 400px — three
+     left "In Progress", "Completed" and "Terminated" cut to "…" — then 3 / 4 / 7 as before. */
+  .tf-tracker-stats { @apply grid grid-cols-2 xs:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3; }
   /* Text buttons (icon + label, tagged data-jdv-text by the card): one line, natural width, never
      squeezed into an icon square or into the ⋮ beside them. */
   .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"])[data-jdv-text] {
@@ -3372,8 +3512,17 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   }
   .dark .tf-jd-card-actions > div > button,
   .dark .tf-jd-card-actions > div > div > button { background-color: var(--color-slate-800) !important; color: var(--color-slate-300) !important; }
-  /* Navigation tiles (icon + name + subtitle): wider than stat tiles so the full name fits — 1 / 2 / 3 / 4 / 5. */
-  .tf-grid-tiles { @apply grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 sm:gap-4; }
+  /* Navigation tiles (icon + name + subtitle): wider than stat tiles so the full name fits — 1 / 2 / 3 / 4 / 5.
+     Tablets keep 2: at 3 per row (768px) "Job Descriptions" broke mid-word. Every tile in a row is the same height. */
+  .tf-grid-tiles {
+    @apply grid grid-cols-1
+      min-[640px]:grid-cols-2
+      min-[1024px]:grid-cols-3
+      min-[1280px]:grid-cols-4
+      min-[1440px]:grid-cols-5
+      gap-3 sm:gap-4;
+  }
+  .tf-grid-tiles > li > * { @apply h-full; }
   /* Text that must show in full: wraps onto the next line instead of "…" (size unchanged). */
   .tf-wrap { @apply whitespace-normal break-words; }
 
