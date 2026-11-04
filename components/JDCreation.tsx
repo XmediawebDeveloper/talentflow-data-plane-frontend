@@ -3088,6 +3088,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Use loaded JD data or prop data
   const effectiveEditingJD = loadedJDData || editingJD;
+  // Names the JD in this flow's toasts: "JD-076 — Java Developer (Version 2)".
+  // Job code / version come from the saved row (this visit's checkpoint, else
+  // the JD being edited); a new JD not saved yet is named by its title only.
+  // Null when there is nothing to name yet (no title, no saved row).
+  const jdToastSubject = (): string | null => {
+    const jobCode = leaveCheckpointMeta?.jobCode ?? effectiveEditingJD?.job_id ?? null;
+    const title = jobTitle.trim() || effectiveEditingJD?.title || '';
+    if (!jobCode && !title) return null;
+    return formatJobSubject({
+      job_id: jobCode ?? undefined,
+      title: title || 'Untitled',
+      versionNumber: jobCode ? (leaveCheckpointMeta?.versionNumber ?? effectiveEditingJD?.version_number ?? undefined) : undefined,
+    });
+  };
 
   // FIX-003: Computed values for editing state
   const isEditingDraft = effectiveEditingJD?.status === 'draft';
@@ -5531,7 +5545,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
           toast.success({
             title: 'JD Generated Successfully',
-            description: 'AI has created a comprehensive job description.'
+            description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}AI has created a comprehensive job description.`
           });
         } else {
           throw new Error('No description in response');
@@ -5629,12 +5643,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               toast.success({
                 title: 'JD Generated Successfully',
-                description: 'Job details have been auto-filled. Click "Next" to review.',
+                description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}job details have been auto-filled. Click "Next" to review.`,
               });
             } else {
               toast.success({
                 title: 'JD Generated Successfully',
-                description: 'Click "Next" to add job details.',
+                description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}click "Next" to add job details.`,
               });
             }
           }
@@ -6544,7 +6558,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       toast.success({
         title: 'Data Extracted',
-        description: 'AI has analyzed your JD and extracted key requirements.'
+        description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}AI has analyzed your JD and extracted key requirements.`
       });
     } catch (error) {
       console.error('[TalentFlow] Extraction failed:', error);
@@ -7743,12 +7757,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           if (mergedCount > 0) {
             toast.success({
               title: 'Duplicates combined',
-              description: `${mergedCount} duplicate ${mergedCount === 1 ? 'entry was' : 'entries were'} merged. Job description has been regenerated.`,
+              description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}${mergedCount} duplicate ${mergedCount === 1 ? 'entry was' : 'entries were'} merged. Job description has been regenerated.`,
             });
           } else {
             toast.success({
               title: 'JD Reformatted',
-              description: 'Job description has been regenerated with your changes.',
+              description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}job description has been regenerated with your changes.`,
             });
           }
         } else if (mode === 'manual') {
@@ -7756,7 +7770,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           setManualJD(finalDescription);
           toast.success({
             title: 'JD Formatted',
-            description: 'Preview updated with structured markdown formatting.',
+            description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}preview updated with structured markdown formatting.`,
           });
         } else {
           console.error('[DEBUG] Cannot reformat - editingId is null.');
@@ -8123,7 +8137,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     try {
       if (format === 'txt') {
         saveBlob(new Blob([fullContent], { type: 'text/plain' }), `${baseName}.txt`);
-        toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+        toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a text file.` });
         return;
       }
 
@@ -8133,7 +8147,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         const children = fullContent.split('\n').map(line => new Paragraph({ children: [new TextRun({ text: line })] }));
         const blob = await Packer.toBlob(new Document({ sections: [{ properties: {}, children }] }));
         saveBlob(blob, `${baseName}.docx`);
-        toast.success({ title: 'Downloaded!', description: 'Job description saved as DOCX file' });
+        toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a DOCX file.` });
         return;
       }
 
@@ -8158,7 +8172,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         }
       }
       doc.save(`${baseName}.pdf`);
-      toast.success({ title: 'Downloaded!', description: 'Job description saved as PDF file' });
+      toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a PDF file.` });
     } catch (error) {
       console.error('[TalentFlow] JD download failed:', error);
       toast.error({ title: 'Download failed', description: 'Could not create the file. Please try again.' });
@@ -8220,7 +8234,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
         toast.success({
           title: 'JD Regenerated',
-          description: 'Job description has been updated based on your changes.'
+          description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}job description has been updated based on your changes.`
         });
       }
     } catch (error) {
@@ -9681,7 +9695,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         onClick={() => {
                           const text = mode === 'ai' ? generatedJD : manualJD;
                           navigator.clipboard.writeText(text);
-                          toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                          toast.success({ title: 'Copied!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}copied to the clipboard.` });
                         }}
                         className=""
                         title="Copy to clipboard"
@@ -9701,7 +9715,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           a.download = `${jobTitle.replace(/[^a-z0-9]/gi, '_')}_JD.txt`;
                           a.click();
                           URL.revokeObjectURL(url);
-                          toast.success({ title: 'Downloaded!', description: 'Job description saved as text file' });
+                          toast.success({ title: 'Downloaded!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}saved as a text file.` });
                         }}
                         className=""
                         title="Download as text file"
@@ -11632,7 +11646,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       onClick={() => {
                         const text = mode === 'ai' ? generatedJD : manualJD;
                         navigator.clipboard.writeText(text);
-                        toast.success({ title: 'Copied!', description: 'Job description copied to clipboard' });
+                        toast.success({ title: 'Copied!', description: `${jdToastSubject() ? `${jdToastSubject()}: ` : ''}copied to the clipboard.` });
                       }}
                       className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-md hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-sm text-black"
                       title="Copy to clipboard"

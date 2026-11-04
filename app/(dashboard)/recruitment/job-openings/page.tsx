@@ -250,7 +250,10 @@ export default function JobOpeningsPage() {
     try {
       await jdService.updateStatus(jobId, status);
       markVersionStatus(jobId, status.toLowerCase());
-      toast.success('Job status updated');
+      const updated = jobs.find(job => job.id === jobId);
+      toast.success(updated
+        ? `${formatJobSubject({ ...updated, versionNumber: updated.versionNumber ?? 1 })} status updated to ${mapStatus(status)}.`
+        : 'Job status updated');
     } catch (error) {
       toast.error('Failed to update job status');
     }
@@ -314,11 +317,11 @@ export default function JobOpeningsPage() {
       // The job already had an open draft version: that one is reopened, not a new copy.
       if (newJd.reused_existing_draft) {
         toast.success('Opened the existing draft version', {
-          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} is already in draft. Continue editing it.`,
         });
       } else {
         toast.success('New version created', {
-          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} was created as a new draft. Edit and publish it independently.`,
         });
       }
       // Start on Step 1 with ALL the source JD's data pre-filled (title, JD

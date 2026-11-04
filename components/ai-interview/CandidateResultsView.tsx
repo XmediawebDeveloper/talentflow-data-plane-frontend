@@ -1424,7 +1424,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     status: string;
     analysis_status: string | null;
     triggered_at: string | null;
+    // When the phone first opened the QR link (null = never scanned) and
+    // when the QR window closed/closes. Optional — older backends omit them.
+    opened_at?: string | null;
+    expires_at?: string | null;
     submitted_at: string | null;
+    video_duration_seconds?: number | null;
     video_uploaded: boolean;
     video_url: string | null;
     download_url: string | null;
@@ -1459,8 +1464,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const envVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
+  // Per-verification "Retry analysis" in-flight flag + last error message.
+  const [envReanalyzing, setEnvReanalyzing] = useState<Record<string, boolean>>({});
+  const [envReanalyzeError, setEnvReanalyzeError] = useState<Record<string, string>>({});
+
+  // Initial load — runs once per interview on mount (not only when the tab
+  // is opened) so the tab badge can show the count and turn red for a
+  // flagged result before the recruiter even clicks into the tab.
   useEffect(() => {
-    if (activeTab !== 'verification' || envVerifications !== null) return;
+    if (envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1478,7 +1490,69 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       })
       .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
     return () => { cancelled = true; };
-  }, [activeTab, liveSession.id, envVerifications]);
+  }, [liveSession.id, envVerifications]);
+
+  // Auto-refresh while anything is still in flight — analysis queued/running,
+  // or the QR still waiting on the phone (pending/opened). Silent re-fetch
+  // (no skeleton) every 5s; stops by itself once every attempt is final.
+  // Frames for an attempt whose analysis_status changed are dropped so the
+  // frames effect below re-fetches them (they only exist once analysis ends).
+  const envHasInFlight = useMemo(
+    () => (envVerifications ?? []).some(v =>
+      v.analysis_status === 'pending' || v.analysis_status === 'running'
+      // pending/opened only count while the interview is live — after it
+      // ends, a row stuck there is final (candidate never finished), and
+      // polling it would never stop.
+      || (isInProgress && (v.status === 'pending' || v.status === 'opened'))
+    ),
+    [envVerifications, isInProgress],
+  );
+  useEffect(() => {
+    if (!envHasInFlight) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api.get(`/ai-interview/${liveSession.id}/environment-verifications`)
+        .then(res => {
+          if (cancelled) return;
+          const list: EnvVerificationRecord[] = Array.isArray(res?.data?.verifications) ? res.data.verifications : [];
+          setEnvVerifications(prev => {
+            const prevById = new Map((prev ?? []).map(p => [p.verification_id, p]));
+            const changed = list
+              .filter(n => prevById.get(n.verification_id)?.analysis_status !== n.analysis_status)
+              .map(n => n.verification_id);
+            if (changed.length > 0) {
+              const drop = <T,>(rec: Record<string, T>) => {
+                const next = { ...rec };
+                changed.forEach(id => { delete next[id]; });
+                return next;
+              };
+              setEnvFrames(drop);
+              setEnvFramesError(drop);
+              setEnvFramesLoading(drop);
+            }
+            return list;
+          });
+        })
+        .catch(() => { /* keep showing last good data; next tick retries */ });
+    }, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [envHasInFlight, envVerifications, liveSession.id]);
+
+  const retryEnvAnalysis = (verificationId: string) => {
+    setEnvReanalyzing(prev => ({ ...prev, [verificationId]: true }));
+    setEnvReanalyzeError(prev => { const n = { ...prev }; delete n[verificationId]; return n; });
+    api.post(`/ai-interview/environment-verification/${verificationId}/reanalyze`)
+      .then(() => {
+        setEnvVerifications(prev => (prev ?? []).map(v =>
+          v.verification_id === verificationId ? { ...v, analysis_status: 'pending' } : v
+        ));
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.detail;
+        setEnvReanalyzeError(prev => ({ ...prev, [verificationId]: typeof msg === 'string' ? msg : 'Could not restart analysis. Please try again.' }));
+      })
+      .finally(() => setEnvReanalyzing(prev => ({ ...prev, [verificationId]: false })));
+  };
 
   // Verification Frames tab — the ~20 individual frames the vision LLM
   // actually analyzed, one fetch per verification record (frames are
@@ -1768,7 +1842,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
-    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: (envVerifications ?? []).some(v => v.result_severity === 'flagged' || v.color_match === false || v.id_match === false) ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -3649,11 +3723,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     ? 'Could not load QR verification data — please refresh and try again.'
                     : liveSession.environment_verification_enabled
                     ? 'No QR verification was triggered during this interview.'
-                    : 'Mobile Environment Verification was not enabled for this interview.'
+                    : 'QR Verification was not enabled for this interview.'
                 )
               ) : (
                 <div className="space-y-4">
-                  {envVerifications.map((v) => {
+                  {envVerifications.map((v, attemptIdx) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
                     return (
@@ -3668,6 +3742,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         openViewer={(urls, index) => setEnvFrameViewer({ urls, index })}
                         registerVideo={(el) => { envVideoRefs.current[v.verification_id] = el; }}
                         formatTs={formatTs}
+                        isInProgress={isInProgress}
+                        attemptLabel={envVerifications.length > 1 ? `Attempt ${attemptIdx + 1}` : undefined}
+                        onRetryAnalysis={() => retryEnvAnalysis(v.verification_id)}
+                        reanalyzing={!!envReanalyzing[v.verification_id]}
+                        reanalyzeError={envReanalyzeError[v.verification_id]}
                         interviewRef={{
                           candidate: interview.candidate_name || liveSession.candidate_name || 'Candidate',
                           role: (interview as any).job_title || (interview as any).role || interview.position || '',
