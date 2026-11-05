@@ -97,6 +97,10 @@ export interface JDCreate {
   /** Create the editor's WORKING COPY of a new JD: hidden from every list, and no
    *  JD ID until Save as Draft / Publish commits it (commitWorkingCopy). */
   as_working_copy?: boolean;
+  /** Row id to create the JD under. Set when LLM calls (AI generation, Step 1
+   *  extraction) ran before the first save, so their usage records - which carry
+   *  this id as resource_id - belong to the JD they produced. */
+  pre_generated_id?: string;
   locations?: JDLocation[];
   // Mandatory-flag mirror of `JDExtractedParams`; persisted on the JD record so
   // scoring/AI-match enforce the recruiter-chosen strictness.
