@@ -3,15 +3,15 @@
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import {
-  ArrowLeft, CreditCard, Package, RefreshCw, Download, Loader2, CheckCircle, Clock, AlertCircle, Circle, Copy, Hash, CalendarDays,
+  ArrowLeft, Download, Loader2, CheckCircle, Clock, AlertCircle, Circle, Copy, Package, RefreshCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
-import { useAuth } from '@/components/providers/AuthProvider';
 import {
-  BILLING_HISTORY_URL, formatInvoiceAmount, getInvoicePaymentLabel, getInvoiceStatusVariant, type BillingInvoice,
+  BILLING_HISTORY_URL, formatInvoiceAmount, getInvoiceStatusVariant, type BillingInvoice,
 } from '@/lib/utils/billingInvoices';
+import { SELLER, amountInWords, type InvoiceParty } from '@/lib/utils/pdfInvoice';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,6 +21,10 @@ const PAYMENT_STATE_CLASS: Record<'paid' | 'overdue' | 'unpaid' | 'other', strin
   unpaid: 'bg-warning-subtle text-warning-strong',
   other: 'bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300',
 };
+
+const LABEL = 'text-2xs font-bold uppercase tracking-[0.08em] text-brand-blue';
+
+const capitalize = (s?: string | null) => (s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '');
 
 /** Copy-to-clipboard for ids. */
 function CopyButton({ value, label }: { value: string; label: string }) {
@@ -44,33 +48,37 @@ function CopyButton({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** One label / value row in the side panel. */
-function InfoRow({ icon: Icon, label, children }: { icon: React.ComponentType<{ className?: string }>; label: string; children: ReactNode }) {
+/** Label / value rows inside a party or payment card; empty values are left out. */
+function KeyValues({ rows }: { rows: [string, ReactNode, boolean?][] }) {
+  const kept = rows.filter(([, v]) => v !== null && v !== undefined && v !== '');
+  if (!kept.length) return null;
   return (
-    <div className="flex items-start gap-3 py-2.5">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
-      <div className="min-w-0 flex-1">
-        <dt className="text-xs text-gray-500 dark:text-slate-400">{label}</dt>
-        <dd className="mt-0.5 break-words text-sm text-gray-900 dark:text-slate-50">{children}</dd>
-      </div>
-    </div>
+    <dl className="mt-2 grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-xs">
+      {kept.map(([k, v, mono]) => (
+        <div key={k} className="contents">
+          <dt className="text-gray-500 dark:text-slate-400">{k}</dt>
+          <dd className={`text-gray-900 [overflow-wrap:anywhere] dark:text-slate-100 ${mono ? 'font-mono text-[11px]' : ''}`}>{v}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
 
 /**
- * One invoice as a page — the admin console's invoice view: a header with the
- * number, status and actions; the invoice document itself (masthead, billed to,
- * items, totals, terms); and a side panel with the payment state, details and
- * timeline.
+ * One invoice as a page, laid out like the downloadable tax invoice (the same
+ * design as the PDF): title + status, key dates, From / Bill to with both
+ * companies' addresses, line items, amount in words, payment details and
+ * totals. The side panel keeps the payment state, plan and timeline.
  */
 export default function InvoiceDetailView({
-  invoice, downloading, onDownload,
+  invoice, billTo, downloading, onDownload,
 }: {
   invoice: BillingInvoice;
+  /** The tenant as printed in "Bill to" (company profile + signed-in user). */
+  billTo: InvoiceParty;
   downloading: boolean;
   onDownload: (inv: BillingInvoice) => void;
 }) {
-  const { tenant, user } = useAuth();
   // "Due in N days" is measured from when the page opened.
   const [openedAt] = useState(() => Date.now());
   const formatAmount = formatInvoiceAmount;
@@ -79,9 +87,12 @@ export default function InvoiceDetailView({
   const tax = invoice.tax_amount_inr || 0;
   const discount = invoice.discount_amount_inr || 0;
   const total = invoice.total_amount_inr || 0;
-  const taxPct = subtotal > 0 && tax > 0 ? Math.round((tax / subtotal) * 100) : null;
+  const taxable = subtotal - discount;
+  const taxPct = taxable > 0 && tax > 0 ? Math.round((tax / taxable) * 1000) / 10 : null;
   const reason = invoice.reason || invoice.metadata?.reason;
-  const method = invoice.payment_method || invoice.metadata?.payment_method ? getInvoicePaymentLabel(invoice) : '';
+  const paymentMethod = invoice.payment_method || invoice.metadata?.payment_method || '';
+  const paymentRef = invoice.razorpay_payment_id || invoice.metadata?.razorpay_payment_id || invoice.metadata?.payment_reference || '';
+  const orderId = invoice.razorpay_order_id || invoice.metadata?.razorpay_order_id || '';
   const lineItems = invoice.line_items ?? [];
 
   const statusKey = String(invoice.status ?? '').toUpperCase();
@@ -90,13 +101,26 @@ export default function InvoiceDetailView({
   const dueTime = invoice.due_date ? Date.parse(invoice.due_date) : NaN;
   const daysToDue = Number.isNaN(dueTime) ? null : Math.ceil((dueTime - openedAt) / DAY_MS);
   const overdue = statusKey === 'OVERDUE' || (unpaid && daysToDue !== null && daysToDue < 0);
-  const statusLabel = overdue ? 'Overdue' : statusKey.charAt(0) + statusKey.slice(1).toLowerCase();
+  const statusLabel = overdue ? 'Overdue' : capitalize(statusKey);
   const dueNote = !unpaid || daysToDue === null
     ? null
     : daysToDue < 0 ? `overdue by ${-daysToDue} day${daysToDue === -1 ? '' : 's'}`
       : daysToDue === 0 ? 'due today'
         : `due in ${daysToDue} day${daysToDue === 1 ? '' : 's'}`;
   const paymentState: keyof typeof PAYMENT_STATE_CLASS = paid ? 'paid' : overdue ? 'overdue' : unpaid ? 'unpaid' : 'other';
+
+  const period = invoice.subscription_start_date || invoice.subscription_end_date
+    ? `${invoice.subscription_start_date ? formatISTDate(invoice.subscription_start_date) : '—'} – ${invoice.subscription_end_date ? formatISTDate(invoice.subscription_end_date) : '—'}`
+    : '';
+
+  // Same key dates as the PDF; empty ones drop out.
+  const meta = ([
+    ['Invoice date', formatISTDate(invoice.issue_date)],
+    ['Due date', paid ? '' : formatISTDate(invoice.due_date)],
+    ['Service period', period],
+    ['Place of supply', SELLER.placeOfSupply],
+    ['Paid on', paid && invoice.paid_at ? formatISTDate(invoice.paid_at) : ''],
+  ] as [string, string][]).filter(([, v]) => v);
 
   // Issued → paid (or still waiting).
   const timeline: { label: string; date?: string | null; state: 'done' | 'current' | 'late' }[] = [
@@ -108,8 +132,20 @@ export default function InvoiceDetailView({
         : { label: statusLabel, date: null, state: 'done' },
   ];
 
-  const billedToName = tenant?.name || 'Your organization';
-  const billedToEmail = tenant?.email || user?.email;
+  const billedToName = billTo.company || billTo.name || 'Your organization';
+  const billAddress = (billTo.address || []).filter(Boolean) as string[];
+  const items = lineItems.length > 0
+    ? lineItems.map((item) => {
+        const amount = Math.abs(item.amount ?? item.total ?? (item.quantity || 0) * (item.unit_price || 0));
+        return {
+          description: item.description || '—',
+          sub: item.unit && item.quantity ? `${item.quantity.toLocaleString('en-IN')} ${item.unit}` : period ? `Service period ${period}` : '',
+          qty: item.unit ? 1 : item.quantity ?? 1,
+          rate: item.unit ? amount : Math.abs(item.unit_price ?? amount),
+          amount,
+        };
+      })
+    : [{ description: invoice.plan_name?.trim() || 'Subscription', sub: period ? `Service period ${period}` : '', qty: 1, rate: subtotal, amount: subtotal }];
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -147,228 +183,250 @@ export default function InvoiceDetailView({
       </div>
 
       <div className="grid grid-cols-1 items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-            {/* ── The invoice document ── */}
-            <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
-              {/* Masthead */}
-              <div className="flex flex-col gap-4 border-b border-gray-100 px-4 pb-5 pt-5 dark:border-slate-700/60 sm:flex-row sm:items-start sm:justify-between sm:px-8 sm:pt-8">
-                <div className="min-w-0">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logos/talent_flow_logo.png" alt="BION TalentFlow" className="h-8 w-auto object-contain" />
-                </div>
-                <div className="sm:text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-500 dark:text-slate-400">Invoice</p>
-                  <p className="mt-1 break-all text-base font-semibold text-gray-900 dark:text-slate-50 sm:text-lg">{invoice.invoice_number}</p>
-                  <dl className="mt-3 grid grid-cols-[auto_auto] justify-start gap-x-4 gap-y-1 text-sm sm:justify-end">
-                    <dt className="text-gray-500 dark:text-slate-400">Issue date</dt>
-                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatISTDate(invoice.issue_date)}</dd>
-                    <dt className="text-gray-500 dark:text-slate-400">Due date</dt>
-                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatISTDate(invoice.due_date)}</dd>
-                    {invoice.paid_at && (
-                      <>
-                        <dt className="text-gray-500 dark:text-slate-400">Paid on</dt>
-                        <dd className="font-medium tabular-nums text-success-strong">{formatISTDate(invoice.paid_at)}</dd>
-                      </>
-                    )}
-                  </dl>
-                </div>
-              </div>
+        {/* ── The invoice document (same layout as the PDF) ── */}
+        <article className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-slate-700/60 dark:bg-slate-900">
+          <div aria-hidden className="h-1.5 bg-gradient-to-r from-brand-blue via-brand-blue to-[#079CC4]" />
 
-              {/* Billed to + service period */}
-              <div className="grid grid-cols-1 gap-4 border-b border-gray-100 px-4 py-5 dark:border-slate-700/60 sm:grid-cols-2 sm:gap-6 sm:px-8 sm:py-6">
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Billed to</p>
-                  <p className="mt-2 text-sm font-semibold text-gray-900 [overflow-wrap:anywhere] dark:text-slate-50">{billedToName}</p>
-                  {billedToEmail && <p className="break-all text-sm text-gray-500 dark:text-slate-400">{billedToEmail}</p>}
-                </div>
-                {(invoice.subscription_start_date || invoice.subscription_end_date) && (
-                  <div className="min-w-0 sm:text-right">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">Service period</p>
-                    <p className="mt-2 text-sm tabular-nums text-gray-900 dark:text-slate-50">
-                      {invoice.subscription_start_date ? formatISTDate(invoice.subscription_start_date) : '—'} – {invoice.subscription_end_date ? formatISTDate(invoice.subscription_end_date) : '—'}
+          <div className="space-y-5 px-4 py-5 sm:px-8 sm:py-7">
+            {/* Logo | title, number, status */}
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logos/talent_flow_logo.png" alt="BION TalentFlow" className="h-8 w-auto self-start object-contain" />
+              <div className="sm:text-right">
+                <p className="text-xl font-extrabold uppercase tracking-[0.02em] text-brand-blue">Tax Invoice</p>
+                <p className="mt-0.5 break-all text-sm font-semibold text-gray-900 dark:text-slate-50"># {invoice.invoice_number}</p>
+              </div>
+            </div>
+
+            {/* Key dates */}
+            {meta.length > 0 && (
+              <dl className="grid grid-cols-2 overflow-hidden rounded-xl border border-gray-200 bg-slate-50 dark:border-slate-700/60 dark:bg-slate-800/40 sm:grid-flow-col sm:auto-cols-fr sm:grid-cols-none">
+                {meta.map(([k, v]) => (
+                  <div key={k} className="border-b border-r border-gray-200 px-4 py-2.5 last:border-r-0 dark:border-slate-700/60 sm:border-b-0 [&:last-child:nth-child(odd)]:col-span-2 sm:[&:last-child:nth-child(odd)]:col-span-1">
+                    <dt className="text-2xs font-semibold uppercase tracking-[0.06em] text-gray-500 dark:text-slate-400">{k}</dt>
+                    <dd className="mt-0.5 text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{v}</dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+
+            {/* From | Bill to — both companies with their addresses */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 px-4 py-3.5 text-sm text-gray-500 dark:border-slate-700/60 dark:text-slate-400">
+                <p className={`${LABEL} mb-1.5`}>From</p>
+                <p className="font-bold text-gray-900 dark:text-slate-50">{SELLER.name}</p>
+                {SELLER.address.map((line) => <p key={line}>{line}</p>)}
+                <KeyValues rows={[['Email', SELLER.email], ['Phone', SELLER.phone], ['GSTIN', SELLER.gstin, true], ['PAN', SELLER.pan, true]]} />
+              </div>
+              <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/[0.05] px-4 py-3.5 text-sm text-gray-500 dark:border-brand-blue/30 dark:bg-brand-blue/10 dark:text-slate-400">
+                <p className={`${LABEL} mb-1.5`}>Bill to</p>
+                <p className="font-bold text-gray-900 [overflow-wrap:anywhere] dark:text-slate-50">{billedToName}</p>
+                {billTo.name && billTo.name !== billedToName && (
+                  <p className="font-medium text-gray-900 dark:text-slate-100">{billTo.name}</p>
+                )}
+                {billAddress.length > 0
+                  ? billAddress.map((line) => <p key={line} className="[overflow-wrap:anywhere]">{line}</p>)
+                  : (
+                    <p className="text-xs italic text-gray-400 dark:text-slate-500">
+                      No address yet — add it in{' '}
+                      <Link href="/organization/company-profile" className="not-italic text-brand-blue hover:underline">Company Profile</Link>.
                     </p>
-                    {invoice.next_billing_date && (
-                      <p className="text-xs text-gray-500 dark:text-slate-400">Next billing {formatISTDate(invoice.next_billing_date)}</p>
-                    )}
+                  )}
+                <KeyValues rows={[['Email', billTo.email], ['Phone', billTo.phone], ['GSTIN', billTo.gstin, true]]} />
+              </div>
+            </div>
+
+            {/* Line items */}
+            <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-slate-700/60">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-brand-blue text-left text-2xs font-bold uppercase tracking-[0.06em] text-white">
+                    <th className="hidden w-10 px-3 py-2.5 text-center sm:table-cell">#</th>
+                    <th className="px-3 py-2.5">Description</th>
+                    <th className="hidden px-3 py-2.5 text-right sm:table-cell">Qty</th>
+                    <th className="hidden px-3 py-2.5 text-right sm:table-cell">Rate</th>
+                    <th className="px-3 py-2.5 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="border-t border-gray-200 even:bg-slate-50 dark:border-slate-700/60 dark:even:bg-slate-800/40">
+                      <td className="hidden px-3 py-3 text-center align-top text-gray-500 dark:text-slate-400 sm:table-cell">{idx + 1}</td>
+                      <td className="px-3 py-3 align-top [overflow-wrap:anywhere]">
+                        <p className="font-semibold text-gray-900 dark:text-slate-50">{item.description}</p>
+                        {item.sub && <p className="text-xs text-gray-500 dark:text-slate-400">{item.sub}</p>}
+                        {/* Qty × rate under the description on phones, where those columns hide. */}
+                        <p className="text-xs text-gray-500 dark:text-slate-400 sm:hidden">{item.qty} × {formatAmount(item.rate)}</p>
+                      </td>
+                      <td className="hidden px-3 py-3 text-right align-top tabular-nums text-gray-700 dark:text-slate-300 sm:table-cell">{item.qty}</td>
+                      <td className="hidden whitespace-nowrap px-3 py-3 text-right align-top tabular-nums text-gray-700 dark:text-slate-300 sm:table-cell">{formatAmount(item.rate)}</td>
+                      <td className="whitespace-nowrap px-3 py-3 text-right align-top font-semibold tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(item.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Amount in words + payment | totals */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] sm:gap-6">
+              <div className="space-y-3">
+                <div className="rounded-xl border border-gray-200 px-4 py-3 dark:border-slate-700/60">
+                  <p className={`${LABEL} mb-1`}>Amount in words</p>
+                  <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{amountInWords(total)}</p>
+                </div>
+                <div className="rounded-xl border border-gray-200 px-4 py-3 dark:border-slate-700/60">
+                  <p className={LABEL}>Payment details</p>
+                  <KeyValues
+                    rows={[
+                      ['Method', capitalize(paymentMethod) || (paid ? '—' : 'Awaiting payment')],
+                      ['Reference', paymentRef && (
+                        <span className="inline-flex items-center gap-1"><span className="break-all">{paymentRef}</span><CopyButton value={paymentRef} label="payment ID" /></span>
+                      ), true],
+                      ['Order ID', orderId && (
+                        <span className="inline-flex items-center gap-1"><span className="break-all">{orderId}</span><CopyButton value={orderId} label="order ID" /></span>
+                      ), true],
+                    ]}
+                  />
+                </div>
+                {reason && (
+                  <div className="rounded-xl bg-brand-blue/[0.06] px-4 py-3 dark:bg-brand-blue/10">
+                    <p className={`${LABEL} mb-1`}>Note</p>
+                    <p className="text-sm text-gray-900 dark:text-slate-100">{capitalize(String(reason).replace(/_/g, ' '))}</p>
                   </div>
                 )}
               </div>
 
-              {/* Reason (e.g. add-on purchase, plan change) */}
-              {reason && (
-                <div className="mx-4 mt-5 rounded-lg border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-3 sm:mx-8 sm:mt-6">
-                  <p className="text-sm font-medium text-brand-blue">{reason}</p>
+              <dl className="space-y-2 text-sm">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-gray-500 dark:text-slate-400">Subtotal</dt>
+                  <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(subtotal)}</dd>
+                </div>
+                {discount > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 dark:text-slate-400">Discount</dt>
+                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">−{formatAmount(discount)}</dd>
+                  </div>
+                )}
+                {tax > 0 && (
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-gray-500 dark:text-slate-400">GST{taxPct !== null ? ` (${taxPct}%)` : ''}</dt>
+                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(tax)}</dd>
+                  </div>
+                )}
+                <div className="!mt-3 flex justify-between gap-4 rounded-lg bg-brand-blue px-3 py-2.5 text-white">
+                  <dt className="font-bold">Total (INR)</dt>
+                  <dd className="text-base font-extrabold tabular-nums">{formatAmount(total)}</dd>
+                </div>
+                {paid ? (
+                  <div className="flex justify-between gap-4 pt-1">
+                    <dt className="text-gray-500 dark:text-slate-400">Amount paid</dt>
+                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(total)}</dd>
+                  </div>
+                ) : unpaid && (
+                  <div className="flex justify-between gap-4 pt-1 font-bold">
+                    <dt className="text-gray-900 dark:text-slate-50">Balance due</dt>
+                    <dd className={`tabular-nums ${overdue ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{formatAmount(total)}</dd>
+                  </div>
+                )}
+              </dl>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex flex-col gap-3 border-t border-gray-200 px-4 py-4 text-xs text-gray-500 dark:border-slate-700/60 dark:text-slate-400 sm:flex-row sm:items-end sm:justify-between sm:px-8">
+            <div className="space-y-1">
+              {(paid || unpaid) && (
+                <p>
+                  <span className="font-semibold text-gray-900 dark:text-slate-100">Terms:</span>{' '}
+                  {paid ? 'Thank you for your payment.' : 'Payment is due by the due date shown above.'}
+                </p>
+              )}
+              <p>This is a computer-generated tax invoice and does not require a signature.</p>
+              {(SELLER.email || SELLER.phone) && (
+                <p>
+                  Questions? {[SELLER.email && `Write to ${SELLER.email}`, SELLER.phone && `call ${SELLER.phone}`].filter(Boolean).join(' or ')}.
+                </p>
+              )}
+            </div>
+            <p className="shrink-0 sm:text-right">
+              <span className="block font-semibold text-gray-900 dark:text-slate-100">For {SELLER.name}</span>
+              Authorised signatory
+            </p>
+          </div>
+          <div aria-hidden className="h-1 bg-gradient-to-r from-[#079CC4] to-brand-blue" />
+        </article>
+
+        {/* ── Side panel: amount, payment state, plan, timeline ── */}
+        <aside className="space-y-4">
+          <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
+              {paid ? 'Amount paid' : unpaid ? 'Amount due' : 'Total'}
+            </p>
+            <p className={`mt-1 text-2xl font-semibold tabular-nums ${overdue ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{formatAmount(total)}</p>
+            <div className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ${PAYMENT_STATE_CLASS[paymentState]}`}>
+              {paid ? <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" /> : unpaid ? <Clock className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
+              <span>
+                {paid
+                  ? <>Paid{invoice.paid_at && <> on {formatISTDate(invoice.paid_at)}</>}{paymentMethod && <> via {capitalize(paymentMethod)}</>}</>
+                  : unpaid
+                    ? <>Waiting for payment{dueNote && <> · {dueNote}</>}</>
+                    : <>This invoice is {statusLabel.toLowerCase()}.</>}
+              </span>
+            </div>
+          </div>
+
+          {(invoice.plan_name || invoice.billing_interval) && (
+            <div className="space-y-3 rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
+              {invoice.plan_name && (
+                <div className="flex items-start gap-3">
+                  <Package className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Plan</p>
+                    <p className="flex flex-wrap items-center gap-1.5 text-sm text-gray-900 dark:text-slate-50">
+                      {invoice.plan_name.trim()}
+                      {invoice.plan_type && (
+                        <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-brand-blue">{invoice.plan_type}</span>
+                      )}
+                    </p>
+                  </div>
                 </div>
               )}
-
-              {/* Line items */}
-              <div className="overflow-x-auto px-4 pt-5 sm:px-8 sm:pt-6">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 dark:border-slate-700">
-                      <th className="pb-2 text-left text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Description</th>
-                      <th className="hidden px-3 pb-2 text-center text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400 sm:table-cell">Qty</th>
-                      <th className="hidden whitespace-nowrap px-3 pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400 sm:table-cell">Unit price</th>
-                      <th className="pb-2 text-right text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {lineItems.length > 0 ? (
-                      lineItems.map((item, idx) => (
-                        <tr key={idx} className="border-b border-gray-100 last:border-0 dark:border-slate-700/60">
-                          <td className="py-3 pr-3 text-gray-900 [overflow-wrap:anywhere] dark:text-slate-50">
-                            {item.description || '—'}
-                            {/* Qty × price under the description on phones, where those columns hide. */}
-                            <span className="block text-xs text-gray-500 dark:text-slate-400 sm:hidden">
-                              {item.quantity} × {formatAmount(item.unit_price)}
-                            </span>
-                          </td>
-                          <td className="hidden px-3 py-3 text-center tabular-nums text-gray-700 dark:text-slate-300 sm:table-cell">{item.quantity}</td>
-                          <td className="hidden whitespace-nowrap px-3 py-3 text-right tabular-nums text-gray-700 dark:text-slate-300 sm:table-cell">{formatAmount(item.unit_price)}</td>
-                          <td className="whitespace-nowrap py-3 text-right font-medium tabular-nums text-gray-900 dark:text-slate-50">
-                            {formatAmount(Math.abs(item.amount ?? item.total ?? 0))}
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="py-3 pr-3 text-gray-900 dark:text-slate-50">{invoice.plan_name?.trim() || 'Subscription'}</td>
-                        <td className="hidden px-3 py-3 text-center sm:table-cell">1</td>
-                        <td className="hidden whitespace-nowrap px-3 py-3 text-right tabular-nums sm:table-cell">{formatAmount(subtotal)}</td>
-                        <td className="whitespace-nowrap py-3 text-right font-medium tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(subtotal)}</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals */}
-              <div className="flex justify-end px-4 py-5 sm:px-8 sm:py-6">
-                <dl className="w-full space-y-2 text-sm sm:w-80">
-                  <div className="flex justify-between gap-4">
-                    <dt className="text-gray-500 dark:text-slate-400">Subtotal</dt>
-                    <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(subtotal)}</dd>
+              {invoice.billing_interval && (
+                <div className="flex items-start gap-3">
+                  <RefreshCw className="mt-0.5 h-4 w-4 shrink-0 text-gray-400 dark:text-slate-500" />
+                  <div>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">Billing interval</p>
+                    <p className="text-sm text-gray-900 dark:text-slate-50">{capitalize(invoice.billing_interval)}</p>
                   </div>
-                  {discount > 0 && (
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-gray-500 dark:text-slate-400">Discount</dt>
-                      <dd className="tabular-nums text-brand-teal">−{formatAmount(discount)}</dd>
-                    </div>
-                  )}
-                  {tax > 0 && (
-                    <div className="flex justify-between gap-4">
-                      <dt className="text-gray-500 dark:text-slate-400">GST{taxPct !== null ? ` (${taxPct}%)` : ''}</dt>
-                      <dd className="tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(tax)}</dd>
-                    </div>
-                  )}
-                  <div className="mt-1 flex justify-between gap-4 border-t border-gray-200 pt-3 dark:border-slate-700">
-                    <dt className="font-semibold text-gray-900 dark:text-slate-50">Total (INR)</dt>
-                    <dd className="text-lg font-semibold tabular-nums text-gray-900 dark:text-slate-50">{formatAmount(total)}</dd>
-                  </div>
-                  {unpaid && (
-                    <div className="flex justify-between gap-4 rounded-md bg-gray-100 px-3 py-2 dark:bg-slate-800">
-                      <dt className="font-medium text-gray-900 dark:text-slate-50">Amount due</dt>
-                      <dd className={`font-semibold tabular-nums ${overdue ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{formatAmount(total)}</dd>
-                    </div>
-                  )}
-                </dl>
-              </div>
-
-              {/* Terms */}
-              <div className="border-t border-gray-100 bg-gray-50/70 px-4 py-4 dark:border-slate-700/60 dark:bg-slate-800/40 sm:px-8">
-                <p className="text-xs leading-relaxed text-gray-500 dark:text-slate-400">
-                  <span className="font-medium text-gray-700 dark:text-slate-300">Terms &amp; Conditions:</span> Payment is due within 30 days.
-                  Late payments may be subject to a service fee. For questions about this invoice, please contact billing@talentflow.com.
-                </p>
-              </div>
-            </article>
-
-            {/* ── Side panel: amount, payment state, details, timeline ── */}
-            <aside className="space-y-4">
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">
-                  {paid ? 'Amount paid' : unpaid ? 'Amount due' : 'Total'}
-                </p>
-                <p className={`mt-1 text-2xl font-semibold tabular-nums ${overdue ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>{formatAmount(total)}</p>
-                <div className={`mt-3 flex items-start gap-2 rounded-lg px-3 py-2.5 text-sm ${PAYMENT_STATE_CLASS[paymentState]}`}>
-                  {paid ? <CheckCircle className="mt-0.5 h-4 w-4 shrink-0" /> : unpaid ? <Clock className="mt-0.5 h-4 w-4 shrink-0" /> : <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />}
-                  <span>
-                    {paid
-                      ? <>Paid{invoice.paid_at && <> on {formatISTDate(invoice.paid_at)}</>}{method && <> via {method}</>}</>
-                      : unpaid
-                        ? <>Waiting for payment{dueNote && <> · {dueNote}</>}</>
-                        : <>This invoice is {statusLabel.toLowerCase()}.</>}
-                  </span>
                 </div>
-              </div>
+              )}
+            </div>
+          )}
 
-              <div className="rounded-xl border border-gray-200 bg-white px-4 py-1.5 dark:border-slate-700/60 dark:bg-slate-900 sm:px-5">
-                <dl className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                  {(invoice.plan_name || invoice.plan_type) && (
-                    <InfoRow icon={Package} label="Plan">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        {invoice.plan_name?.trim()}
-                        {invoice.plan_type && (
-                          <span className="rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-semibold uppercase tracking-wide text-brand-blue">{invoice.plan_type}</span>
-                        )}
-                      </span>
-                    </InfoRow>
-                  )}
-                  {invoice.billing_interval && (
-                    <InfoRow icon={RefreshCw} label="Billing interval">
-                      <span className="capitalize">{invoice.billing_interval.toLowerCase()}</span>
-                    </InfoRow>
-                  )}
-                  <InfoRow icon={CreditCard} label="Payment method">
-                    {method || <span className="text-gray-400 dark:text-slate-500">{paid ? 'Not recorded' : '—'}</span>}
-                  </InfoRow>
-                  {invoice.razorpay_payment_id && (
-                    <InfoRow icon={Hash} label="Payment ID">
-                      <span className="flex items-center gap-1">
-                        <span className="min-w-0 break-all font-mono text-xs">{invoice.razorpay_payment_id}</span>
-                        <CopyButton value={invoice.razorpay_payment_id} label="payment ID" />
-                      </span>
-                    </InfoRow>
-                  )}
-                  {invoice.razorpay_order_id && (
-                    <InfoRow icon={Hash} label="Order ID">
-                      <span className="flex items-center gap-1">
-                        <span className="min-w-0 break-all font-mono text-xs">{invoice.razorpay_order_id}</span>
-                        <CopyButton value={invoice.razorpay_order_id} label="order ID" />
-                      </span>
-                    </InfoRow>
-                  )}
-                  {invoice.subscription_start_date && (
-                    <InfoRow icon={CalendarDays} label="Service period">
-                      {formatISTDate(invoice.subscription_start_date)} – {invoice.subscription_end_date ? formatISTDate(invoice.subscription_end_date) : '—'}
-                    </InfoRow>
-                  )}
-                </dl>
-              </div>
-
-              <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
-                <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Timeline</p>
-                <ol className="space-y-3">
-                  {timeline.map((step, i) => (
-                    <li key={i} className="relative flex gap-3">
-                      {i < timeline.length - 1 && <span aria-hidden className="absolute bottom-[-12px] left-[7px] top-5 w-px bg-gray-200 dark:bg-slate-700" />}
-                      <span className="mt-0.5 shrink-0">
-                        {step.state === 'done' ? (
-                          <CheckCircle className="h-4 w-4 text-success" />
-                        ) : step.state === 'late' ? (
-                          <AlertCircle className="h-4 w-4 text-destructive" />
-                        ) : (
-                          <Circle className="h-4 w-4 text-warning" />
-                        )}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{step.label}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">{step.date ? formatISTDate(step.date) : '—'}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            </aside>
+          <div className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700/60 dark:bg-slate-900 sm:p-5">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-slate-400">Timeline</p>
+            <ol className="space-y-3">
+              {timeline.map((step, i) => (
+                <li key={i} className="relative flex gap-3">
+                  {i < timeline.length - 1 && <span aria-hidden className="absolute bottom-[-12px] left-[7px] top-5 w-px bg-gray-200 dark:bg-slate-700" />}
+                  <span className="mt-0.5 shrink-0">
+                    {step.state === 'done' ? (
+                      <CheckCircle className="h-4 w-4 text-success" />
+                    ) : step.state === 'late' ? (
+                      <AlertCircle className="h-4 w-4 text-destructive" />
+                    ) : (
+                      <Circle className="h-4 w-4 text-warning" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{step.label}</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-400">{step.date ? formatISTDate(step.date) : '—'}</p>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </aside>
       </div>
     </div>
   );
