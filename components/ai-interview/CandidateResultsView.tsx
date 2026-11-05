@@ -3747,6 +3747,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         onRetryAnalysis={() => retryEnvAnalysis(v.verification_id)}
                         reanalyzing={!!envReanalyzing[v.verification_id]}
                         reanalyzeError={envReanalyzeError[v.verification_id]}
+                        watchInRecording={renderWatchInRecording(v.triggered_at)}
                         interviewRef={{
                           candidate: interview.candidate_name || liveSession.candidate_name || 'Candidate',
                           role: (interview as any).job_title || (interview as any).role || interview.position || '',
