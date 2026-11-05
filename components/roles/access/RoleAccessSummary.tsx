@@ -41,10 +41,10 @@ function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule
     .map((c) => module.entries.find((e) => e.code === c))
     .filter((e): e is NonNullable<typeof e> => !!e && isHostOn(codes, e.host))
     .map((e) => moduleName(e.host));
-  if (offScreens.length) notes.push({ text: `Not on the ${listText(offScreens)} screen${offScreens.length > 1 ? 's' : ''}`, warn: true });
+  if (offScreens.length) notes.push({ text: `Hidden on the ${listText(offScreens)} page${offScreens.length > 1 ? 's' : ''}`, warn: true });
   const own = d.missing.filter((c) => !getMainPermission(c));
-  if (own.length) notes.push({ text: `Except ${listText(own.map(shortLabel))}`, warn: true });
-  if (d.extra.length) notes.push({ text: `Also: ${listText(d.extra.map(getPermissionLabel))}` });
+  if (own.length) notes.push({ text: `Turned off: ${listText(own.map(shortLabel))}`, warn: true });
+  if (d.extra.length) notes.push({ text: `Extra access: ${listText(d.extra.map(getPermissionLabel))}` });
 
   return (
     <div className="grid grid-cols-[34px_1fr_auto] items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 dark:border-slate-800">
@@ -53,7 +53,7 @@ function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule
       </span>
       <div className="min-w-0">
         <div className={`text-sm font-semibold ${d.base === 'none' ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{module.name}</div>
-        <div className="text-[13px] text-gray-500 dark:text-slate-400">{d.base === 'none' ? 'Hidden for this role' : module.can[d.base]}</div>
+        <div className="text-[13px] text-gray-500 dark:text-slate-400">{d.base === 'none' ? 'Not available for this role' : module.can[d.base]}</div>
         {notes.length > 0 && (
           <div className="mt-1 flex flex-col gap-0.5">
             {notes.map((n) => (

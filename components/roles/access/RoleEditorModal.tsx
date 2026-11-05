@@ -177,10 +177,10 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
 
   const title = { new: 'Create Role', edit: 'Edit Role', dup: 'Duplicate Role', view: '' }[mode];
   const subtitle = mode === 'edit'
-    ? (holders ? `Saving changes access straight away for all ${holders} ${holders === 1 ? 'person' : 'people'} with this role.` : 'Nobody has this role yet.')
+    ? (holders ? `When you save, this changes access right away for the ${holders} ${holders === 1 ? 'person' : 'people'} with this role.` : 'Nobody has this role yet.')
     : mode === 'dup' && role
-      ? `Starts as a copy of ${role.name}. Change what the new role needs, then assign it.`
-      : 'Pick a level for each module. Use Advanced only for fine detail.';
+      ? `A copy of ${role.name}. Change what's different, then give it to people.`
+      : 'Choose what people with this role can see and do.';
   const people = role?.holders ?? [];
   const named = people.slice(0, 4).map((p) => p.name);
   if (holders > named.length) named.push(`${holders - named.length} more`);
@@ -214,7 +214,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
           </div>
           {mode === 'new' ? (
             <div className="mb-4">
-              <label className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">Start from</label>
+              <label className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">Copy permissions from</label>
               <FilterSelect
                 value={startFrom}
                 onChange={(v: string) => {
@@ -222,7 +222,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                   const src = roles.find((r) => String(r.id) === v);
                   setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
                 }}
-                options={[{ value: '', label: 'Blank: no access' }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
+                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
               />
             </div>
           ) : (

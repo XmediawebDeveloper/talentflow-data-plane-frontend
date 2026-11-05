@@ -52,7 +52,7 @@ export const AccessLegend = ({ className = '' }: { className?: string }) => (
   <div className={`flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-slate-400 ${className}`}>
     <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />Full</span>
     <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />View</span>
-    <span className="inline-flex items-center gap-1.5"><AccessDot tone="exc" />Has exceptions</span>
+    <span className="inline-flex items-center gap-1.5"><AccessDot tone="exc" />Some turned off</span>
   </div>
 );
 

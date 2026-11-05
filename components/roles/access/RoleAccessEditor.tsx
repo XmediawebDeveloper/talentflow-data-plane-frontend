@@ -4,7 +4,6 @@ import React, { useState } from 'react';
 import { Check, Info, Lock, Search, SlidersHorizontal, ToggleRight, Undo2 } from 'lucide-react';
 import PermissionTilesEditor from '@/components/roles/PermissionTilesEditor';
 import { getMainPermission, getPermissionLabel, getPermissionParts } from '@/lib/constants/permissionCategories';
-import { getAllCatalogCodes } from '@/lib/permissions/permissionRules';
 import {
   ACCESS_MODULES,
   ALWAYS_ON,
@@ -28,7 +27,6 @@ import { useAdvancedToggles } from './useAdvancedToggles';
 type Mode = 'quick' | 'advanced';
 interface Notice { kind: 'up' | 'down' | 'neutral'; text: React.ReactNode; snapshot?: Set<string> }
 
-const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const listText = (items: React.ReactNode[]) =>
   items.flatMap((item, i) => (i === 0 ? [item] : [i === items.length - 1 ? ' and ' : ', ', item]));
 const LEVEL_LABEL: Record<AccessLevel, string> = { none: 'No access', view: 'View', full: 'Full' };
@@ -82,9 +80,6 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
   const [filter, setFilter] = useState('');
   const advanced = useAdvancedToggles(codes, (next) => { setNotice(null); onChange(next); });
 
-  const catalogue = getAllCatalogCodes();
-  const onCount = catalogue.filter((c) => codes.has(c) || ALWAYS_ON.has(c)).length;
-
   const change = (next: Set<string>, n: Notice | null) => { onChange(next); setNotice(n); };
 
   const setLevel = (m: AccessModule, level: AccessLevel) => {
@@ -94,8 +89,8 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const down = changed.filter((c) => !isUpgrade(c));
     const fmt = (arr: typeof changed) => listText(arr.map((c) => <b key={c.module.id}>{c.module.name} ({LEVEL_LABEL[c.to]})</b>));
     const parts: React.ReactNode[] = [];
-    if (up.length) parts.push(<span key="up">Also turned on {fmt(up)}, which {m.name} needs. </span>);
-    if (down.length) parts.push(<span key="down">Also changed {fmt(down)}, because they need {m.name}.</span>);
+    if (up.length) parts.push(<span key="up">We also turned on {fmt(up)}, because {m.name} needs {up.length === 1 ? 'it' : 'them'}. </span>);
+    if (down.length) parts.push(<span key="down">We also changed {fmt(down)}, because {down.length === 1 ? 'it needs' : 'they need'} {m.name}.</span>);
     change(next, parts.length ? { kind: down.length ? 'down' : 'up', text: parts, snapshot: codes } : null);
   };
 
@@ -106,7 +101,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const { label, section } = getPermissionParts(code);
     change(next, {
       kind: was ? 'down' : 'up',
-      text: <span>{label}{main ? <> on the <b>{section}</b> screen</> : null} turned {was ? 'off' : 'back on'}.</span>,
+      text: <span>{label}{main ? <> on the <b>{section}</b> page</> : null} turned {was ? 'off' : 'back on'}.</span>,
       snapshot: codes,
     });
   };
@@ -115,7 +110,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const hostLabel = moduleName(host);
     const label = shortLabel(code);
     if (!isHostOn(codes, host)) {
-      return <Chip key={code} state="na" label={hostLabel} note="screen off" title={`${hostLabel} is off for this role. Turn it on and ${label} appears there.`} />;
+      return <Chip key={code} state="na" label={hostLabel} note="(not available)" title={`This role can't open ${hostLabel}. Give it access to ${hostLabel} and ${label} shows there too.`} />;
     }
     const on = codes.has(code);
     return (
@@ -124,7 +119,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         state={on ? 'on' : 'off'}
         label={hostLabel}
         note={on ? undefined : 'off'}
-        title={on ? `Untick to hide ${label} on the ${hostLabel} screen` : `${label} is off on the ${hostLabel} screen. Tick to turn it back on.`}
+        title={on ? `Untick to hide ${label} on the ${hostLabel} page` : `${label} is hidden on the ${hostLabel} page. Tick to show it again.`}
         onClick={onClick}
       />
     );
@@ -138,12 +133,12 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const hosts = Array.from(new Set(m.entries.map((e) => e.host)));
     const needs = level === 'none' ? moduleNeeds(m) : [];
     let can: React.ReactNode;
-    if (level === 'none') can = 'Hidden for people with this role';
+    if (level === 'none') can = 'Not available for this role';
     else if (!adjusted) can = m.can[level];
     else if (level === 'full') {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">Full access with {plural(d.missing.length + d.extra.length, 'exception')}</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">Full access, {d.missing.length + d.extra.length} turned off</span>
           {' · '}
           <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Restore full access</button>
         </>
@@ -151,7 +146,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     } else {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">View, plus {plural(d.extra.length, 'extra permission')}</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">View, plus {d.extra.length} more</span>
           {' · '}
           <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'view')}>Back to view only</button>
         </>
@@ -167,7 +162,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
           role="radio"
           aria-checked={on}
           aria-disabled={disabled || undefined}
-          title={disabled ? 'Always on for every account' : on && adjusted ? 'Click to clear the exceptions' : undefined}
+          title={disabled ? 'Everyone always has this' : on && adjusted ? 'Click to go back to the standard level' : undefined}
           onClick={disabled ? undefined : () => setLevel(m, v)}
           className={`relative whitespace-nowrap rounded-[7px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors max-[720px]:flex-1 ${
             on ? `bg-white shadow-sm dark:bg-slate-900 ${v === 'full' ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-100'}` : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
@@ -188,7 +183,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
               {m.name}
               {adjusted && (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                  {level === 'full' ? plural(d.missing.length + d.extra.length, 'exception') : `+${d.extra.length} extra`}
+                  {level === 'full' ? `${d.missing.length + d.extra.length} turned off` : `+${d.extra.length} more`}
                 </span>
               )}
               {m.always && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">Always on</span>}
@@ -201,9 +196,9 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         </div>
         {level === 'full' && hosts.length > 0 && (
           <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Available on</span>
+            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Also works on</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              <Chip state="home" label={m.name} title="The module's own page" />
+              <Chip state="home" label={m.name} title="Its own page" />
               {hosts.map((h) => {
                 const entry = m.entries.find((e) => e.host === h)!;
                 return screenChip(entry.code, h, () => toggleOne(entry.code));
@@ -213,23 +208,23 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         )}
         {ownMissing.length > 0 && (
           <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Except</span>
+            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Turned off</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {ownMissing.map((c) => <Chip key={c} state="off" label={shortLabel(c)} title="Turned off. Tick to turn it back on." onClick={() => toggleOne(c)} />)}
+              {ownMissing.map((c) => <Chip key={c} state="off" label={shortLabel(c)} title="Tick to turn it back on" onClick={() => toggleOne(c)} />)}
             </div>
           </div>
         )}
         {d.extra.length > 0 && (
           <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Also allowed</span>
+            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Extra access</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {d.extra.map((c) => <Chip key={c} state="on" label={getPermissionLabel(c)} title="Untick to remove" onClick={() => toggleOne(c)} />)}
+              {d.extra.map((c) => <Chip key={c} state="on" label={getPermissionLabel(c)} title="Untick to take it away" onClick={() => toggleOne(c)} />)}
             </div>
           </div>
         )}
         {needs.length > 0 && (
           <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            Needs {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. They are turned on for you.
+            Works only with {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. We turn {needs.length === 1 ? 'it' : 'them'} on for you when you choose View or Full.
           </div>
         )}
       </div>
@@ -243,7 +238,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const on = m.entries.filter((e) => codes.has(e.code)).length;
     return (
       <div className="mx-4 mb-4 flex flex-wrap items-center gap-2.5 rounded-xl bg-gray-50 px-3 py-2.5 text-[12.5px] dark:bg-slate-800/50">
-        <span className="font-semibold text-gray-900 dark:text-slate-100">{shortLabel(m.entries[0].code)} on other screens · {on} of {m.entries.length}</span>
+        <span className="font-semibold text-gray-900 dark:text-slate-100">{shortLabel(m.entries[0].code)} on other pages · {on} of {m.entries.length}</span>
         <div className="flex flex-wrap gap-x-4 gap-y-1.5">
           {m.entries.map((e) => screenChip(e.code, e.host, () => advanced.onToggleCode(e.code)))}
         </div>
@@ -259,10 +254,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     <div>
       {advanced.dialog}
       <div className="mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 dark:border-slate-800">
-        <div>
-          <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">What this role can do</div>
-          <div className="text-[12.5px] text-gray-500 dark:text-slate-400">{onCount} of {catalogue.length} permissions on</div>
-        </div>
+        <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">What this role can do</div>
         <div role="tablist" aria-label="Editor view" className="inline-flex gap-0.5 rounded-[10px] bg-gray-100 p-[3px] dark:bg-slate-800 max-[560px]:w-full">
           {([['quick', 'Quick Setup', ToggleRight], ['advanced', 'Advanced', SlidersHorizontal]] as const).map(([v, label, Icon]) => (
             <button
@@ -282,8 +274,8 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
       </div>
       <p className="mb-3.5 mt-2 text-[13px] text-gray-500 dark:text-slate-400">
         {mode === 'quick'
-          ? <>Pick a level for each module. <b>Full</b> works everywhere the module appears, including its buttons on other screens. Untick a screen under <b>Available on</b> to leave it out. Anything a module needs is turned on for you.</>
-          : 'Every individual permission, section by section. Anything you switch off here shows as a named exception in Quick Setup.'}
+          ? <>For each area, choose <b>No access</b>, <b>View</b> or <b>Full</b>. Full gives every action in that area, on every page where it shows up. If an area needs another area to work, we turn that on for you.</>
+          : 'Turn single permissions on or off. Anything you turn off also shows in Quick Setup.'}
       </p>
       {notice && (
         <div className={`mb-3.5 flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-gray-900 dark:text-slate-100 ${noticeTone}`}>
@@ -321,7 +313,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
                 className="min-w-0 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none dark:text-slate-100"
               />
             </label>
-            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400"><Lock className="h-3 w-3" /> needs its main permission first</span>
+            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400"><Lock className="h-3 w-3" /> needs another permission turned on first</span>
           </div>
           <PermissionTilesEditor
             selected={codes}

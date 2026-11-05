@@ -190,9 +190,8 @@ export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => des
 export type LevelTone = 'full' | 'view' | 'exc' | 'none';
 
 export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string } => {
-  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
-  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `Full access · ${plural(d.distance, 'exception')}` } : { tone: 'full', text: 'Full access' };
-  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `View · ${d.extra.length} extra` } : { tone: 'view', text: 'View only' };
+  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `Full access · ${d.distance} turned off` } : { tone: 'full', text: 'Full access' };
+  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `View · ${d.extra.length} more` } : { tone: 'view', text: 'View only' };
   return { tone: 'none', text: 'No access' };
 };
 
