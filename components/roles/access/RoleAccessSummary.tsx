@@ -82,22 +82,12 @@ export default function RoleAccessSummary({ codes, roleName, description, eyebro
   const counts = accessCounts(codes);
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{eyebrow}</div>
-          <div className="mt-0.5 text-lg font-semibold text-gray-900 dark:text-slate-100">{roleName}</div>
-          {description && <div className="max-w-md text-[13px] text-gray-500 dark:text-slate-400">{description}</div>}
-        </div>
-        <div className="flex">
-          {(['full', 'view', 'none'] as const).map((k, i) => (
-            <div key={k} className={`px-4 text-right ${i ? 'border-l border-gray-200 dark:border-slate-700' : ''}`}>
-              <b className="block text-xl font-bold leading-tight text-gray-900 dark:text-slate-100">{counts[k]}</b>
-              <span className="whitespace-nowrap text-xs text-gray-500 dark:text-slate-400">{LEVEL_NAMES[k]}</span>
-            </div>
-          ))}
-        </div>
+      <div className="mb-4 min-w-0">
+        <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{eyebrow}</div>
+        <div className="mt-0.5 text-lg font-semibold text-gray-900 dark:text-slate-100">{roleName}</div>
+        {description && <div className="max-w-md text-[13px] text-gray-500 dark:text-slate-400">{description}</div>}
       </div>
-      <AccessLevelKey />
+      <AccessLevelKey counts={counts} />
       {MODULE_GROUPS.map((group) => (
         <div key={group} className="mt-3.5">
           <div className="mb-0.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>

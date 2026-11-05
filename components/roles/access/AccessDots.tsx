@@ -92,17 +92,27 @@ export function AccessInline({ codes, max = 3 }: { codes: Set<string>; max?: num
   );
 }
 
-/** Short key for the three levels, shown under "What this role can do" in the
- *  role editor and above the read-only access list. */
-export const AccessLevelKey = ({ className = '' }: { className?: string }) => (
+/** Key for the three levels: how many areas are at each level (when `counts`
+ *  is given) and what the level means. Same box in the role editor (live
+ *  counts while editing) and the read-only access panel. */
+export const AccessLevelKey = ({
+  counts,
+  className = '',
+}: {
+  counts?: { full: number; view: number; none: number };
+  className?: string;
+}) => (
   <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 sm:grid-cols-3 sm:gap-4 ${className}`}>
     {([
-      [LEVEL_NAMES.full, 'Can see it and do everything in it'],
-      [LEVEL_NAMES.view, 'Can see it, but not change anything'],
-      [LEVEL_NAMES.none, "Can't see this area"],
-    ] as const).map(([term, text]) => (
-      <div key={term}>
-        <dt className="font-semibold text-gray-900 dark:text-slate-100">{term}</dt>
+      ['full', 'Can see it and do everything in it'],
+      ['view', 'Can see it, but not change anything'],
+      ['none', "Can't see this area"],
+    ] as const).map(([level, text]) => (
+      <div key={level}>
+        <dt className="flex items-baseline gap-1.5 font-semibold text-gray-900 dark:text-slate-100">
+          {counts && <span className="text-lg font-bold leading-none">{counts[level]}</span>}
+          {LEVEL_NAMES[level]}
+        </dt>
         <dd className="text-gray-500 dark:text-slate-400">{text}</dd>
       </div>
     ))}

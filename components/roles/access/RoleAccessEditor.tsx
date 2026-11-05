@@ -9,6 +9,7 @@ import {
   ALWAYS_ON,
   MODULE_BY_ID,
   MODULE_GROUPS,
+  accessCounts,
   applyQuickSetup,
   describeModule,
   isHostOn,
@@ -269,7 +270,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         </div>
       </div>
       {mode === 'quick' ? (
-        <AccessLevelKey className="mb-3.5 mt-2" />
+        <AccessLevelKey counts={accessCounts(codes)} className="mb-3.5 mt-2" />
       ) : (
         <p className="mb-3.5 mt-2 text-[13px] text-gray-500 dark:text-slate-400">
           Turn single permissions on or off. Anything you turn off also shows in Quick Setup.
