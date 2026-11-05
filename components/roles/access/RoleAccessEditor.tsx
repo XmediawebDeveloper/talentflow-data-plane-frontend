@@ -16,7 +16,9 @@ import {
   isUpgrade,
   LEVEL_NAMES,
   moduleName,
+  missingFullNeeds,
   moduleNeeds,
+  NEEDS_FULL,
   shortLabel,
   turnOff,
   turnOn,
@@ -217,6 +219,23 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {d.extra.map((c) => <Chip key={c} state="on" label={getPermissionLabel(c)} title="Untick to take it away" onClick={() => toggleOne(c)} />)}
             </div>
+          </div>
+        )}
+        {missingFullNeeds(codes, m).length > 0 && (
+          <div className="ml-[46px] mt-2 text-[12.5px] font-medium text-amber-700 dark:text-amber-400">
+            {missingFullNeeds(codes, m).map((o) => o.name).join(' and ')} isn't {LEVEL_NAMES.full}, so there may be no resumes to work with.{' '}
+            <button
+              type="button"
+              className="font-semibold text-brand-blue hover:underline"
+              onClick={() => missingFullNeeds(codes, m).forEach((o) => setLevel(o, 'full'))}
+            >
+              Give {missingFullNeeds(codes, m).map((o) => o.name).join(' and ')} {LEVEL_NAMES.full}
+            </button>
+          </div>
+        )}
+        {level !== 'full' && (NEEDS_FULL[m.id] ?? []).length > 0 && (
+          <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
+            {LEVEL_NAMES.full} here also gives {(NEEDS_FULL[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).join(' and ')} {LEVEL_NAMES.full}, so they can upload resumes to work with.
           </div>
         )}
         {needs.length > 0 && (

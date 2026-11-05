@@ -63,8 +63,8 @@ const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: b
   ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and export results' } },
   assessments: { name: 'Assessments', group: 'Hiring', about: 'Create assessments and invite candidates to take them', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
   ai_interviews: { name: 'AI Interviews', group: 'Hiring', about: 'Set up AI interviews and invite candidates', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
-  my_resumes: { name: 'My Resumes', group: 'Candidates', about: 'Upload and manage your own resumes', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete resumes' } },
-  internal_database: { name: 'Shared Database', group: 'Candidates', about: 'Browse resumes shared across the company', can: { view: 'Browse the company-wide resume database', full: 'Share, archive and delete resumes in the shared database' } },
+  my_resumes: { name: 'My Resumes', group: 'Candidates', about: 'Upload resumes and manage your own', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete their own resumes' } },
+  internal_database: { name: 'Shared Database', group: 'Candidates', about: "Everyone's uploaded resumes in one place (nobody uploads here directly)", can: { view: 'Browse and use resumes uploaded by anyone in the company', full: "Also share, archive and delete anyone's resumes" } },
   hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', about: 'Keep a set of reusable HR questions', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
   user_management: { name: 'User Management', group: 'Administration', about: 'Add people and give them a role', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
   teams: { name: 'Teams', group: 'Administration', about: 'Group people into teams', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
@@ -232,6 +232,28 @@ export const isUpgrade = (c: LevelChange) => RANK[c.to] > RANK[c.from];
  *   - a module that was exactly View and now has extras drops back to clean.
  * Returns the new codes and every OTHER module whose level changed.
  */
+/**
+ * Areas that need ANOTHER area at Full access to be useful (user decision
+ * 2026-11-05): scoring, assessments and AI interviews work on the person's own
+ * resumes, and a new user's My Resumes is empty unless they can upload. So
+ * setting one of these to Full also sets My Resumes to Full. View only needs
+ * nothing extra (looking at results needs no resumes). This is a Quick Setup
+ * rule between areas; the permission-level rules stay in permissionRules.ts.
+ */
+export const NEEDS_FULL: Record<string, string[]> = {
+  resume_scoring: ['my_resumes'],
+  assessments: ['my_resumes'],
+  ai_interviews: ['my_resumes'],
+};
+
+/** Areas `m` needs at Full access that are not Full in `codes` (for a warning). */
+export const missingFullNeeds = (codes: Set<string>, m: AccessModule): AccessModule[] =>
+  levelOf(codes, m) !== 'full'
+    ? []
+    : (NEEDS_FULL[m.id] ?? [])
+        .map((id) => MODULE_BY_ID[id])
+        .filter((o): o is AccessModule => !!o && !(levelOf(codes, o) === 'full' && describeModule(codes, o).distance === 0));
+
 export const applyQuickSetup = (
   codes: Set<string>,
   m: AccessModule,
@@ -239,6 +261,14 @@ export const applyQuickSetup = (
 ): { codes: Set<string>; changed: LevelChange[] } => {
   const before = Object.fromEntries(ACCESS_MODULES.map((o) => [o.id, describeModule(codes, o)]));
   let next = setModuleLevel(codes, m, level);
+  if (level === 'full') {
+    for (const id of NEEDS_FULL[m.id] ?? []) {
+      const needed = MODULE_BY_ID[id];
+      if (needed) next = setModuleLevel(next, needed, 'full');
+    }
+    // Areas just turned Full may host this area's buttons: add them too.
+    next = setModuleLevel(next, m, 'full');
+  }
   for (let pass = 0; pass < 3; pass++) {
     for (const o of ACCESS_MODULES) {
       if (o.id === m.id) continue;

@@ -119,7 +119,11 @@ export default function RoleManagement() {
     const checkPermission = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
-        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
+        // Same rule as lib/navigation/routeAccess.ts: Permissions & Roles View or
+        // Manage, or User Management (it assigns roles). Editing needs Manage.
+        const p = currentUser.permissions as Record<string, boolean | undefined> | undefined;
+        const hasPermission = currentUser.role === 'tenant_admin'
+          || !!(p?.can_view_roles || p?.can_manage_permissions_roles || p?.can_manage_users);
 
         if (!hasPermission) {
           toast.error('You do not have permission to access Role Management');

@@ -447,6 +447,12 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
         ],
       },
     ],
+    // Managing roles includes giving them to people ("Give this role to"), so
+    // it needs to see the people list: User Management View (2026-11-05).
+    // Mirrors app/services/permission_dependencies.py.
+    dependencies: {
+      'settings:permissions_roles': ['users:read'],
+    },
   },
   {
     id: 'support',
