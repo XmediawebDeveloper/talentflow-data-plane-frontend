@@ -355,6 +355,14 @@ export default function AIInterview() {
   const [trackerBulkResendOpen, setTrackerBulkResendOpen] = useState(false);
   const [isTrackerBulkResending, setIsTrackerBulkResending] = useState(false);
   const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+  // One-click "Revoke pending invites" from the version row's 3-dot menu —
+  // distinct from the Track popup's checkbox-driven bulk revoke above: this
+  // one needs no manual selection, it revokes every INVITED/CONSENT_PENDING
+  // candidate on the config at once, mirroring the Assessment module's
+  // kebab-menu "Revoke pending invites" action.
+  const [revokePendingTarget, setRevokePendingTarget] = useState<AIInterviewResponse | null>(null);
+  const [revokePendingCount, setRevokePendingCount] = useState<number | null>(null);
+  const [isRevokingPending, setIsRevokingPending] = useState(false);
   // Edit invitation modal target — only ever set for a REVOKED invitation
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [editInviteForm, setEditInviteForm] = useState({ candidate_name: '', candidate_email: '' });
@@ -1782,6 +1790,43 @@ export default function AIInterview() {
     }
   };
 
+  /* One-click "Revoke pending invites" — opens the confirm modal and fetches
+     the eligible count up front, same two-step flow as Assessments'
+     handleOpenRevokeModal. */
+  const handleOpenRevokePendingModal = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
+    setOpenMenuId(null);
+    setRevokePendingTarget(config);
+    setRevokePendingCount(null);
+    try {
+      const count = await aiInterviewService.getRevokableInvitationsCount(config.id);
+      setRevokePendingCount(count);
+    } catch (err) {
+      console.error('Failed to fetch revokable invitations count:', err);
+      setRevokePendingCount(null);
+    }
+  };
+
+  const confirmRevokePendingInvites = async () => {
+    if (!revokePendingTarget || isRevokingPending) return;
+    setIsRevokingPending(true);
+    try {
+      const result = await aiInterviewService.revokePendingInvitations(revokePendingTarget.id);
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
+      toast.success(
+        result.revoked_count > 0
+          ? `Revoked ${result.revoked_count} pending invite link(s).`
+          : 'No pending invites to revoke.'
+      );
+      setRevokePendingTarget(null);
+    } catch (error: any) {
+      toast.error(friendlyErrorMessage(error, "Couldn't revoke pending invites. Please try again."));
+    } finally {
+      setIsRevokingPending(false);
+    }
+  };
+
   const handleCopyLink = async (config: AIInterviewResponse) => {
     if (blockIfJdDisabled(config)) return;
     if (config.interview_link) {
@@ -2756,6 +2801,40 @@ export default function AIInterview() {
                   >
                     <Copy className={`w-4 h-4 flex-shrink-0 ${dupBlocked ? '' : 'text-menu-icon-download'}`} />
                     <span className={MENU_ITEM_SCALE_CLASS}>Duplicate</span>
+                  </button>
+                );
+              })()}
+              {/* Revoke pending invites — one click, no manual selection,
+                  unlike the Track popup's checkbox-driven bulk revoke.
+                  Mirrors the Assessments kebab-menu action: only meaningful
+                  once at least one invite exists, and repeatable (unlike
+                  Assessment's one-shot invite batch, an AI Interview config
+                  can be shared with new candidates at any time, so there is
+                  no "already revoked" permanent seal here — the confirm
+                  modal's live count simply reads 0 once nothing is pending). */}
+              {isPublished && hasBeenShared && (() => {
+                const revokeBlocked = jdLocked
+                  ? jdLockReason
+                  : !canInviteAIInterviews
+                    ? 'You do not have permission to invite candidates'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (revokeBlocked) return;
+                      void handleOpenRevokePendingModal(config);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!revokeBlocked}
+                    title={revokeBlocked || 'Revoke every invite not yet opened by its candidate'}
+                    className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                      revokeBlocked
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-destructive'
+                    }`}
+                  >
+                    <Ban className={`w-4 h-4 flex-shrink-0 ${revokeBlocked ? 'text-gray-300' : ''}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Revoke pending invites</span>
                   </button>
                 );
               })()}
@@ -5545,6 +5624,37 @@ export default function AIInterview() {
         onConfirm={confirmDeleteConfig}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* One-click "Revoke pending invites" from the version row's menu —
+          invalidates only INVITED / CONSENT_PENDING links. Candidates who
+          have reached system check or further are deliberately not touched. */}
+      <ConfirmationDialog
+        isOpen={!!revokePendingTarget}
+        onClose={() => { if (!isRevokingPending) setRevokePendingTarget(null); }}
+        onConfirm={confirmRevokePendingInvites}
+        title="Revoke pending invite links?"
+        description={
+          revokePendingTarget
+            ? `Pending invite links for "${revokePendingTarget.jd_title || revokePendingTarget.position || 'this interview'}" will stop working immediately.`
+            : ''
+        }
+        confirmText={isRevokingPending ? 'Revoking…' : 'Revoke links'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {revokePendingTarget && (
+          <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
+            <p className="text-warning-strong font-medium mb-1">
+              {revokePendingCount === null
+                ? 'Counting eligible invitations…'
+                : `${revokePendingCount} link${revokePendingCount === 1 ? '' : 's'} will be revoked.`}
+            </p>
+            <p className="text-warning-strong text-xs mt-1">
+              Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
+            </p>
+          </div>
+        )}
+      </ConfirmationDialog>
 
       {/* Version History's eye icon — read-only Review & Publish peek. */}
       <AIInterviewReviewPreviewModal

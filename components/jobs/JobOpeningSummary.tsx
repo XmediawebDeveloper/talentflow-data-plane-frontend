@@ -252,6 +252,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
         <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
+          <DollarSign className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
