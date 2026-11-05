@@ -5007,7 +5007,7 @@ export default function ResumeScoringPage({
         ) : scoredHistory.length === 0 ? (
           <div className="tf-card">
             <EmptyState
-              icon={History}
+              icon={ClipboardList}
               title="No Scoring History Yet"
               description="Start scoring resumes against job descriptions to see your results here."
               action={{
