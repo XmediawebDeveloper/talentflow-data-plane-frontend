@@ -901,9 +901,14 @@ export default function AuditTrailPage() {
 
   // Get impact text (unit consumption impact)
   const getImpactText = (log: AuditLog): { text: string; negative: boolean; positive?: boolean } => {
-    const units = log.details?.units_consumed_actual ?? log.units_consumed;
-    // Addon/seat purchases add credits — show as positive (green)
-    const isPurchase = ['addon_purchase', 'seats_purchase'].includes(log.action);
+    // Units added by a Super Admin keep units_consumed = 0 (they are not usage);
+    // the amount added is in details.units_added.
+    const isAdminGrant = log.action === 'units_added_by_admin';
+    const units = isAdminGrant
+      ? Number(log.details?.units_added) || 0
+      : log.details?.units_consumed_actual ?? log.units_consumed;
+    // Addon/seat purchases and admin grants add credits — show as positive (green)
+    const isPurchase = isAdminGrant || ['addon_purchase', 'seats_purchase'].includes(log.action);
     if (units && units > 0 && log.unit_type) {
       if (isPurchase) {
         return { text: `+${units} ${log.unit_type}`, negative: false, positive: true };
