@@ -52,6 +52,9 @@ export interface AIMatchResultItem {
   resume_version?: number | null;
   version_count?: number | null;
   is_archived?: boolean;
+  /** True when the candidate's email matches an existing team member's login —
+   *  same "existing team member" lockout Resume Database enforces. */
+  is_tenant_user_email?: boolean;
 }
 
 /** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
@@ -293,6 +296,10 @@ export interface MatchedCandidate {
   /** True once the underlying resume has been archived from Resume Database —
    *  same flag ScoredResumesTable reads to show its "Resume Archived" badge. */
   isArchived?: boolean;
+  /** True when this candidate's email matches an existing team member's login —
+   *  same lockout Resume Database shows via its "Existing Team Member" badge.
+   *  Every action except View Scorecard must be disabled for this candidate. */
+  isTenantUserEmail?: boolean;
 }
 
 // Vector-based matching interfaces for client-side similarity computation
@@ -349,6 +356,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     attachmentCount: 1,
     rank: result.rank,  // Rating (1-10 scale) from backend
     isArchived: !!result.is_archived,
+    isTenantUserEmail: !!result.is_tenant_user_email,
   };
 }
 
@@ -408,6 +416,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             attachmentCount: resume.version_count || 1,
             resumeVersion: resume.version || 1,
             isArchived: !!resume.is_archived,
+            isTenantUserEmail: !!resume.is_tenant_user_email,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);

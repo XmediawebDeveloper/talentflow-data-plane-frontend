@@ -726,6 +726,7 @@ export default function AIInterviewTrackInvitesModal({
             try {
               await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
               toast.success(`New invitation link sent to ${inv.candidate_email}`);
+              setSelectedIds(new Set());
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {
@@ -768,6 +769,7 @@ export default function AIInterviewTrackInvitesModal({
             try {
               await aiInterviewService.revokeInvitation(inv.id);
               toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+              setSelectedIds(new Set());
               await loadInvitations(true);
               await onChanged?.();
             } catch (err: any) {

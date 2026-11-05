@@ -490,6 +490,58 @@ export interface AIConfigFilterOptions {
   creators: string[];
 }
 
+/**
+ * GET /ai-interview/candidate-results (Results tab) filters — ONE builder on
+ * the server reads them for the page, /stats and /ids, so a count equals the
+ * list's total. Every field optional.
+ */
+export interface AICandidateResultsFilters {
+  search?: string;
+  /** JD short id (JD-014). */
+  job?: string;
+  jd_version?: number;
+  interview_version?: number;
+  invite_source?: string;
+  /** completed | terminated (comma list); default both. */
+  status?: string;
+  result?: 'pass' | 'fail' | 'unscored';
+  risk?: 'High' | 'Medium' | 'Low' | 'None';
+  completed_from?: string;
+  completed_to?: string;
+}
+
+export interface AICandidateResultsQuery extends AICandidateResultsFilters {
+  page: number;
+  page_size: number;
+  sort_by?: 'newest' | 'oldest';
+  /** Session ids (comma list) — rows by id for select-all / export. */
+  ids?: string;
+}
+
+/** A light result row: the session plus the labels the tab joins on. */
+export type AICandidateResultRow = AIInterviewResponse & {
+  _config_id: string;
+  _config_title: string;
+  _job_id: string;
+  _job_version: number;
+  _interview_version: number;
+};
+
+export interface AICandidateResultsStats {
+  total: number;
+  completed: number;
+  terminated: number;
+  passed: number;
+  failed: number;
+  unscored: number;
+}
+
+export interface AICandidateResultsFilterOptions {
+  jobs: { value: string; title: string }[];
+  job_versions: number[];
+  interview_versions: number[];
+}
+
 export interface AIInvitationOverview {
   total: number;
   invited: number;
@@ -624,6 +676,8 @@ export const aiInterviewService = {
     search?: string;
     page?: number;
     page_size?: number;
+    /** Rows without transcript / timer / coverage payloads (lists only). */
+    compact?: boolean;
   }): Promise<AIInterviewListResponse> {
     try {
       // Trailing slash on purpose: the list route is registered at "/", so the
@@ -1035,6 +1089,67 @@ export const aiInterviewService = {
       const response = await api.get<AIConfigFilterOptions>('/ai-interview/configs/filter-options', {
         params: status ? { status } : {},
       });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab: one page of finished candidate sessions across every interview. */
+  async listCandidateResults(query: AICandidateResultsQuery): Promise<{ items: AICandidateResultRow[]; total: number }> {
+    try {
+      const response = await api.get<{ items: AICandidateResultRow[]; total: number }>(
+        '/ai-interview/candidate-results',
+        { params: cleanAIConfigParams(query) },
+      );
+      return { items: response.data?.items || [], total: response.data?.total ?? 0 };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Results tab counts for the same filters the page takes. */
+  async getCandidateResultsStats(filters: AICandidateResultsFilters = {}): Promise<AICandidateResultsStats> {
+    try {
+      const response = await api.get<AICandidateResultsStats>('/ai-interview/candidate-results/stats', {
+        params: cleanAIConfigParams(filters),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Every result row matching the filters, as {id, config_id}, in list order. */
+  async getCandidateResultIds(
+    filters: AICandidateResultsFilters & { sort_by?: 'newest' | 'oldest' } = {},
+  ): Promise<{ id: string; config_id: string }[]> {
+    try {
+      const response = await api.get<{ items: { id: string; config_id: string }[] }>(
+        '/ai-interview/candidate-results/ids',
+        { params: cleanAIConfigParams(filters) },
+      );
+      return response.data?.items || [];
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /** Result rows by session id, 200 per request (select-all / export). */
+  async getCandidateResultsByIds(ids: string[]): Promise<AICandidateResultRow[]> {
+    const out: AICandidateResultRow[] = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      const chunk = ids.slice(i, i + 200);
+      const res = await aiInterviewService.listCandidateResults({ page: 1, page_size: chunk.length, ids: chunk.join(',') });
+      out.push(...res.items);
+    }
+    return out;
+  },
+
+  /** Results tab filter panel options — fetched when the panel opens. */
+  async getCandidateResultsFilterOptions(): Promise<AICandidateResultsFilterOptions> {
+    try {
+      const response = await api.get<AICandidateResultsFilterOptions>('/ai-interview/candidate-results/filter-options');
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

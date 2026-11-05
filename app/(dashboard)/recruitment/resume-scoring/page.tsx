@@ -83,6 +83,9 @@ export default function ResumeScoringRoute() {
     people?: { all: number; exact: number; partial: number; none: number };
   } | null>(null);
   const [loading, setLoading] = useState(true);
+  // `jobs` has its final value (see fetchData) — lets the JD-first flow tell
+  // "not loaded yet" from "that JD is not a published one".
+  const [jobsLoaded, setJobsLoaded] = useState(false);
   // Set once the mount effect has read the URL params into state, so the page
   // never mounts with them still unset.
   const [paramsReady, setParamsReady] = useState(false);
@@ -680,9 +683,24 @@ export default function ResumeScoringRoute() {
       // (filteredResumes / handleSelectAll), which nothing renders — the
       // Select Resumes popup (SelectSourceModal) loads its own resumes. The
       // `refreshResumes` callback below still loads them on demand.
-      const jdParams = { status: 'published' as const, source: 'my-jds' as const };
+      //
+      // Nor is every published JD any more (that walk was the slowest call on
+      // the landing — every JD with every field — and the overview never reads
+      // it). The "Score Resumes" job picker (JobOpeningPickerList) loads its
+      // own list when that view opens, and a pick it makes that this list
+      // lacks is mapped from the picked record itself (handleJobPicked). The
+      // one consumer left is the JD-first flow (?mode=new&jd_id=…), which
+      // needs only THAT JD — fetched by id, with the same published / my-jds
+      // filters the full list applied, so a JD it would not have found is
+      // still not found.
+      const jdFirstId = searchParams.get('mode') === 'new' ? searchParams.get('jd_id') : null;
       const [jdResponse, folderResponse] = await Promise.all([
-        fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
+        jdFirstId
+          ? jdService.list({ ids: [jdFirstId], status: 'published', source: 'my-jds', page: 1, page_size: 1 })
+              // A malformed id is a 422 here (the old full list just missed it):
+              // treat it as "not a published JD", like before.
+              .catch(() => ({ items: [] as JDResponse[] }))
+          : Promise.resolve({ items: [] as JDResponse[] }),
         folderService.list().catch(() => []),
       ]);
 
@@ -743,6 +761,7 @@ export default function ResumeScoringRoute() {
       toast.error('Failed to load data from database');
     } finally {
       setLoading(false);
+      setJobsLoaded(true);
     }
   };
 
@@ -779,16 +798,19 @@ export default function ResumeScoringRoute() {
     }
   };
 
-  // Only a ?jd_id landing waits for the JD list before mounting: the JD-first
-  // flow (mode=new&jd_id) looks the JD up in `jobs` and would otherwise show
-  // the overview first, and the scored-list landing keeps its previous timing.
+  // Only the JD-first landing (?mode=new&jd_id) waits for `jobs` (now just
+  // that one JD, fetched by id) before mounting: it looks the JD up in `jobs`
+  // and would otherwise show the overview first. A plain ?jd_id landing (the
+  // scored-list view) reads only the scored index, so it no longer waits on
+  // any JD fetch.
   // Every other landing mounts right away — <ResumeScoringPage> holds its own
   // overview skeleton until its history, global list and quota are in, and
   // the JD list keeps loading in the background for the Score Resumes flow.
   // Also held until plan availability is known, so FeatureGate's spinner never
   // flashes between this skeleton and the page's own. Once mounted it stays
   // mounted (as before: `loading` only ever flipped once).
-  const readyToMount = paramsReady && !planFeatureLoading && !(loading && searchParams.get('jd_id'));
+  const readyToMount = paramsReady && !planFeatureLoading
+    && !(loading && searchParams.get('jd_id') && searchParams.get('mode') === 'new');
   if (readyToMount && !pageMounted) setPageMounted(true);
   if (!pageMounted && !readyToMount) {
     // A ?jd_id in the URL means we're landing on the scored-resumes LIST view,
@@ -803,6 +825,7 @@ export default function ResumeScoringRoute() {
       <div className="tf-page relative flex flex-col">
         <ResumeScoringPage
         jobs={jobs}
+        jobsLoaded={jobsLoaded}
         resumes={resumes}
         folders={folders}
         scoredHistory={scoredHistory}

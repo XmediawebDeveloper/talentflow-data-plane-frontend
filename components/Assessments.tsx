@@ -2,7 +2,7 @@
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
@@ -130,7 +130,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import Dropdown from '@/components/ui/filter-select';
 import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
-import type { AssessmentResponse, AssessmentPageParams } from '@/lib/services/assessmentService';
+import type { AssessmentResponse, AssessmentPageParams, AssessmentResultsPageFilters, AssessmentResultsPageQuery, AssessmentResultsPageStats } from '@/lib/services/assessmentService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip, jobVersionDisplayStatus, assessmentStatusLabel } from '@/components/assessments/AssessmentVersionHistoryPanel';
@@ -1524,11 +1524,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   /* Candidates assessed, one per email, counted from the completed results
      when the stats endpoint does not send `total_unique_candidates`. */
   const [uniqueEmailsAssessed, setUniqueEmailsAssessed] = useState<number | undefined>(undefined);
-  const [completedCandidates, setCompletedCandidates] = useState<CandidateResultRow[]>(() => readListSnapshot<CandidateResultRow[]>('assessments-results:rows') ?? []);
-  const completedCandidatesRef = useRef(completedCandidates);
-  completedCandidatesRef.current = completedCandidates;
-  const [isLoadingCompletedCandidates, setIsLoadingCompletedCandidates] = useState(false);
-  const [completedCandidatesError, setCompletedCandidatesError] = useState<string | null>(null);
+  /* Candidate Results rows seen so far, by row key — the tab pages on the
+     server, so ticked rows (and Select all) are kept here for Export /
+     Download PDF Reports. */
+  const [knownResultRows, setKnownResultRows] = useState<Record<string, CandidateResultRow>>({});
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
   /* Candidate Results' own search and filters, in the shared hook every other
      tab on this page already uses. The tab had neither: it listed every
@@ -1747,7 +1746,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const pageResetKey = `${activeTab}|${preSelectedJdId ?? ''}|${assessmentItemsPerPage}`;
   const heldPageResetKeyRef = useRef<string | null>(null);
   const pageResetMountedRef = useRef(false);
-  useListStatePersistence(
+  /* True from the render carrying the restored state — the server-paged lists
+     wait for it so landing fetches once, with the restored tab / filters. */
+  const listStateRestored = useListStatePersistence(
     'assessments',
     {
       activeTab,
@@ -2639,7 +2640,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       else next.add(key);
       return next;
     });
-  const selectedResultRows = completedCandidates.filter((row) => selectedResultKeys.has(resultRowKey(row)));
+  const selectedResultRows = [...selectedResultKeys]
+    .map((key) => knownResultRows[key])
+    .filter((row): row is CandidateResultRow => !!row);
 
   /* Export columns, in the table's order. Timeline splits into its three parts
      so each lands in its own spreadsheet column. */
@@ -3007,8 +3010,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     name: 'assessments:total-jobs',
     query: totalJobsQuery,
     fetchPage: (q) => assessmentService.listPage(q),
-    enabled: serverTotalJobs,
+    /* After the restore, and once a restored search has settled: one page
+       request on landing, for the state actually on screen. */
+    enabled: serverTotalJobs && listStateRestored && assessmentSearch === assessmentSearchQuery,
   });
+  /* Still waiting for the first page (or held for the restore / search to
+     settle): the skeleton, not a one-render "no jobs" flash. */
+  const totalJobsWaiting = totalJobsPaged.loading
+    || (totalJobsPaged.items.length === 0 && (!listStateRestored || assessmentSearch !== assessmentSearchQuery));
   const totalJobsRows = totalJobsPaged.items.map((a, index) => mapAssessmentFromApi(a, index));
   useEffect(() => {
     if (!serverTotalJobs || totalJobsPaged.items.length === 0) return;
@@ -3250,21 +3259,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // its "X / N" counts Candidate Results records. Each entry carries its own
   // assessment (`aid`): this tab spans assessments, and the details route is
   // keyed on the result's assessment, so the neighbour may live under another.
-  const openCandidateResult = (result: CandidateResultRow, rows: CandidateResultRow[]) => {
+  // The list is paged on the server, so its order comes from one light ids
+  // call (GET /assessments/results-page/ids); the page on screen if that fails.
+  const openCandidateResult = async (result: CandidateResultRow, pageRows: CandidateResultRow[]) => {
     const attemptId = result.id;
     if (!attemptId) {
       toast.error('No result record for this candidate yet');
       return;
     }
+    let navList = pageRows
+      .filter(row => row.id && row._assessment_id)
+      .map(row => ({ id: row.id, cid: row.candidate_display_id || '', aid: row._assessment_id }));
     try {
-      sessionStorage.setItem(
-        'assessmentResultNavList',
-        JSON.stringify(
-          rows
-            .filter(row => row.id && row._assessment_id)
-            .map(row => ({ id: row.id, cid: row.candidate_display_id || '', aid: row._assessment_id }))
-        )
-      );
+      const refs = await assessmentService.getResultsPageIds({ ...completedResultsFilters, sort_by: completedResultsSort });
+      if (refs.length) navList = refs.map(r => ({ id: r.id, cid: r.candidate_display_id || '', aid: r.assessment_id }));
+    } catch { /* keep the page's rows */ }
+    try {
+      sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
     } catch { /* ignore quota errors */ }
 
     const cid = result.candidate_display_id ? `&cid=${encodeURIComponent(result.candidate_display_id)}` : '';
@@ -3273,207 +3284,130 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     router.push(`/recruitment/assessments/${result._assessment_id}/results/details?candidate_id=${attemptId}${cid}&from=candidate-results`);
   };
 
-  /* `fromCache`: only the tab-open effect passes true — it may reuse a recent
-     assessment list (lib/utils/listCache). Refresh, polls and reloads after a
-     change always read it fresh. */
-  const loadAllCompletedCandidates = async (fromCache = false) => {
-    const startedAt = performance.now();
-    // Rows already on screen: refresh behind them rather than back to a skeleton.
-    if (completedCandidatesRef.current.length === 0) setIsLoadingCompletedCandidates(true);
-    setCompletedCandidatesError(null);
-    try {
-      /* Every assessment of every job version, paged to the end rather than
-         asked for one fixed page — a tenant past that page size lost whole
-         assessments off the reply, and with them their candidates. */
-      const items = await listAllAssessments({}, fromCache ? { reuseRecent: true } : { fresh: true });
-      if (items.length === 0) {
-        setCompletedCandidates([]);
-        return;
-      }
-      /* Which job version each assessment belongs to, resolved from the JD ROW
-         it points at. One lineage lookup per job answers for all of its
-         versions, so this costs a request per job rather than per assessment. */
-      const jobVersionByJdId = rememberJobVersions(
-        await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
-      );
-      /* Skip assessments with no completed candidates: one batched
-         `/assessments/completed-counts` request (200 ids max) tells us which,
-         instead of paging every assessment's results only to get an empty
-         list. An id missing from the answer, or a failed batch, is fetched
-         as before, so nothing is dropped on a count error. */
-      /* Fast path: every completed result in ONE request (backend
-         /assessments/all-results), instead of the counts + per-assessment
-         fan-out below. Any failure leaves `fastAttempts` null and the original
-         path runs unchanged. */
-      let fastAttempts: any[] | null = null;
-      try {
-        fastAttempts = await assessmentService.getAllResults();
-      } catch {
-        fastAttempts = null;
-      }
-      const knownEmpty = new Set<string>();
-      const COUNT_BATCH = 200;
-      for (let start = 0; !fastAttempts && start < items.length; start += COUNT_BATCH) {
-        const batch = items.slice(start, start + COUNT_BATCH).map((a: any) => a.id);
-        try {
-          const counts = await assessmentService.getCompletedCounts(batch);
-          for (const id of batch) {
-            if (counts[id] === 0) knownEmpty.add(id);
-          }
-        } catch {
-          /* fall back to fetching this batch */
-        }
-      }
-      // Results rather than invitations: the attempt carries the scores and the
-      // pass/fail verdict this tab is about.
-      const assessmentById = new Map<string, any>(items.map((a: any) => [a.id, a]));
-      const stampAttempt = (a: any, attempt: any): CandidateResultRow => ({
-              ...attempt,
-              _assessment_id: a.id,
-              _assessment_short_id: a.short_id,
-              _assessment_title: a.title,
-              /* Job Version of the assessment this attempt belongs to, resolved
-                 from that assessment's JD ROW — `a.jd_version` is a
-                 creation-time snapshot that reads 1 for assessments authored
-                 against later versions, so it is the fallback only. */
-              _jd_id: a.jd_id,
-              /* Job ID, from the same record and for the same reason as the
-                 version below: already in hand, so the column costs no
-                 request and cannot disagree with the assessment it came
-                 from. */
-              _jd_short_id: a.jd_short_id,
-              _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
-              /* The assessment's OWN version, straight off the record this
-                 fan-out already holds — no extra request, and it cannot
-                 disagree with the assessment it came from. Same field, same
-                 name, as the Invitation Status rows use. */
-              _assessment_version: a.version,
-      });
-      const results = fastAttempts
-        // A row whose assessment is not in `items` has nothing to stamp it with.
-        ? [fastAttempts.flatMap((attempt: any) => {
-            const a = assessmentById.get(attempt.assessment_id);
-            return a ? [stampAttempt(a, attempt)] : [];
-          })]
-        : await Promise.all(
-            items.map(async (a: any) => {
-              if (knownEmpty.has(a.id)) return [];
-              try {
-                const attempts = await collectAllPages((page, page_size) =>
-                  assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
-                );
-                return attempts.map((attempt) => stampAttempt(a, attempt));
-              } catch {
-                return [];
-              }
-            })
-          );
-      const merged = results.flat();
+  /* ── Candidate Results: ONE page from the server, plus the counts ──────
+     GET /assessments/results-page (+ /stats) with the tab's search, filters
+     and sort, in parallel; the server builds both from one filter function and
+     each row with the same code as GET /{assessment_id}/results. The tab used
+     to walk every assessment, resolve every job's versions and download every
+     completed result (/all-results) before drawing, all in series.
 
-      /* ── Resume Version ────────────────────────────────────────────────
-         Joined from the scoring records, which are where this app already
-         keeps "which version of the resume was used" (`resume_version` on
-         ScoringResponse - the same field the Scored Resumes table's own
-         Resume Version column reads).
-
-         Scoped to the JDs that actually have completed attempts, not to every
-         scored resume in the tenant: `/scoring/all` would be a far larger
-         response, most of it for jobs with no candidate results at all. One
-         request per distinct JD, in parallel, alongside the per-assessment
-         fan-out already running.
-
-         Keyed on jd_id + lowercased email. jd_id rather than the job's
-         lineage id because every republish mints a new JD row: two versions of
-         one job can each have scored the same candidate at different resume
-         versions, and the row must report the one scored against ITS version.
-         Email because that is the only candidate identity both an attempt and
-         a scoring record carry.
-
-         A failed lookup leaves the field undefined, which the column renders
-         as a dash - a candidate invited by hand was never scored, and
-         defaulting that to v1 would state something untrue. */
-      const jdIds = [...new Set(merged.map((row) => row._jd_id).filter(Boolean))] as string[];
-      const resumeVersionByKey = new Map<string, number>();
-      if (jdIds.length > 0) {
-        const scoreKey = (jdId: string, email?: string) => `${jdId}|${(email || '').trim().toLowerCase()}`;
-        /* Fast path: one request per 200 jobs (backend /scoring/resume-versions)
-           instead of a page of full scoring records per job. Same value, same
-           (job, email) key. On any failure the per-job reads below run as before. */
-        let resumeVersionsBatched = false;
-        try {
-          const batched = await scoringService.getResumeVersions(jdIds);
-          for (const [jdId, byEmail] of Object.entries(batched)) {
-            for (const [email, version] of Object.entries(byEmail)) {
-              resumeVersionByKey.set(scoreKey(jdId, email), version);
-            }
-          }
-          resumeVersionsBatched = true;
-        } catch {
-          resumeVersionsBatched = false;
-        }
-        if (!resumeVersionsBatched) await Promise.all(
-          jdIds.map(async (jdId) => {
-            try {
-              const scored = await scoringService.getJDScoredResumes(jdId, { page_size: 1000 });
-              for (const score of scored.items || []) {
-                const email = score.candidate_email || score.email;
-                if (!email || score.resume_version == null) continue;
-                const key = scoreKey(jdId, email);
-                /* Several scorings of one candidate against one job version is
-                   possible (a resume re-uploaded and re-scored). The HIGHEST
-                   resume version wins, which is the latest resume the pairing
-                   knows about. */
-                const prev = resumeVersionByKey.get(key);
-                if (prev == null || score.resume_version > prev) {
-                  resumeVersionByKey.set(key, score.resume_version);
-                }
-              }
-            } catch {
-              /* One job's scoring being unavailable must not empty the tab -
-                 those rows simply show a dash in this one column. */
-            }
-          })
-        );
-        for (const row of merged) {
-          if (!row._jd_id) continue;
-          row._resume_version = resumeVersionByKey.get(scoreKey(row._jd_id, row.candidate_email));
-        }
-      }
-      /* Most recently COMPLETED first, then earlier completions in order —
-         the completion time from the API (`completed_at`), parsed the way the
-         Active tab's table parses its timestamps (`parseIST`: a stamp with no
-         zone is IST, not the browser's local time). An unparseable stamp
-         counts as 0 instead of NaN, which made the comparator inconsistent
-         and the whole order arbitrary. A row with no completion time (not
-         expected here — every row is a completed result) sorts after the
-         completed ones; ties fall back to `created_at`, newest first. */
-      const stampTime = (value?: string) => {
-        const time = value ? parseIST(value).getTime() : NaN;
-        return Number.isFinite(time) ? time : 0;
+     The page's own extras, for its rows only and in parallel: the Job Version
+     resolved from each row's JD (`/jd/version-map`) — `_jd_version` from the
+     server is the assessment's creation-time snapshot, kept as the fallback —
+     and the Resume Version (`/scoring/resume-versions`, keyed jd + email). */
+  const {
+    job: completedFilterJob,
+    outcome: completedFilterOutcome,
+    completedFrom: completedFilterFrom,
+    completedTo: completedFilterTo,
+  } = completedCandidatesSearch.filters;
+  const completedResultsFilters: AssessmentResultsPageFilters = {
+    search: completedCandidatesSearch.appliedQuery.trim() || undefined,
+    job: completedFilterJob || undefined,
+    outcome: completedFilterOutcome !== 'all' ? completedFilterOutcome : undefined,
+    completed_from: completedFilterFrom || undefined,
+    completed_to: completedFilterTo || undefined,
+  };
+  const completedResultsSort: 'newest' | 'oldest' = listSortBy === 'oldest' ? 'oldest' : 'newest';
+  const completedResultsQuery: AssessmentResultsPageQuery = {
+    ...completedResultsFilters,
+    sort_by: completedResultsSort,
+    page: completedCandidatesPage,
+    page_size: completedCandidatesPageSize,
+  };
+  const withResultVersions = async (rows: CandidateResultRow[]): Promise<CandidateResultRow[]> => {
+    const jdIds = [...new Set(rows.map((row) => row._jd_id).filter(Boolean))] as string[];
+    if (jdIds.length === 0) return rows;
+    const [versionsRes, resumeRes] = await Promise.allSettled([
+      resolveJobVersionsByJdId(jdIds),
+      scoringService.getResumeVersions(jdIds),
+    ]);
+    const jobVersionByJdId = versionsRes.status === 'fulfilled' ? rememberJobVersions(versionsRes.value) : new Map<string, number>();
+    const resumeByJd = resumeRes.status === 'fulfilled' ? resumeRes.value : {};
+    return rows.map((row) => {
+      const byEmail = row._jd_id ? resumeByJd[row._jd_id] : undefined;
+      const email = (row.candidate_email || '').trim().toLowerCase();
+      return {
+        ...row,
+        _jd_version: jobVersionOfAssessment({ jd_id: row._jd_id, jd_version: row._jd_version }, jobVersionByJdId),
+        /* A failed lookup, or a candidate never scored against this job,
+           leaves it undefined — the column draws a dash, not a made-up v1. */
+        _resume_version: byEmail ? byEmail[email] : undefined,
       };
-      merged.sort((x: any, y: any) =>
-        (stampTime(y.completed_at) - stampTime(x.completed_at))
-        || (stampTime(y.created_at) - stampTime(x.created_at)));
-      setCompletedCandidates(merged);
-      writeListSnapshot('assessments-results:rows', merged);
-      perfNote('Assessments / Results — loaded', startedAt);
-      setCompletedCandidatesPage(1);
-    } catch (err: any) {
-      console.error('Failed to load completed candidates:', err);
-      setCompletedCandidatesError(err?.message || 'Failed to load completed candidates');
-      setCompletedCandidates([]);
+    });
+  };
+  const completedResultsPaged = usePagedList<CandidateResultRow, AssessmentResultsPageStats, AssessmentResultsPageQuery>({
+    name: 'assessment-candidate-results',
+    query: completedResultsQuery,
+    fetchPage: async (q) => {
+      const res = await assessmentService.listResultsPage(q);
+      return { items: await withResultVersions(res.items as CandidateResultRow[]), total: res.total };
+    },
+    fetchStats: (filters) => assessmentService.getResultsPageStats(filters),
+    enabled: activeTab === 'completed-candidates'
+      && listStateRestored
+      && completedCandidatesSearch.query === completedCandidatesSearch.appliedQuery,
+  });
+  /* Every row seen is remembered, so ticks survive paging and Export /
+     Download act on the rows themselves. */
+  useEffect(() => {
+    const rows = completedResultsPaged.items;
+    if (rows.length === 0) return;
+    setKnownResultRows((prev) => {
+      const next = { ...prev };
+      for (const row of rows) next[resultRowKey(row)] = row;
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completedResultsPaged.items]);
+  /* "Select all N": every row matching the search / filters, across pages —
+     their keys from /results-page/ids, the rows not seen yet by id. */
+  const [selectingAllResults, setSelectingAllResults] = useState(false);
+  const selectAllMatchingResults = async () => {
+    setSelectingAllResults(true);
+    try {
+      const refs = await assessmentService.getResultsPageIds({ ...completedResultsFilters, sort_by: completedResultsSort });
+      const keyOf = (r: { assessment_id: string; invitation_id: string }) => `${r.assessment_id}-${r.invitation_id}`;
+      const missing = refs.filter((r) => !knownResultRows[keyOf(r)]).map((r) => r.invitation_id);
+      const fetched = missing.length
+        ? await withResultVersions(await assessmentService.getResultsPageByInvitationIds(missing) as CandidateResultRow[])
+        : [];
+      setKnownResultRows((prev) => {
+        const next = { ...prev };
+        for (const row of fetched) next[resultRowKey(row)] = row;
+        return next;
+      });
+      setSelectedResultKeys(new Set(refs.map(keyOf)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not select every result');
     } finally {
-      setIsLoadingCompletedCandidates(false);
+      setSelectingAllResults(false);
     }
   };
-
-  // Trigger the aggregated load whenever the user switches into this tab.
+  /* Refresh / Retry: re-read the page and counts from the server. */
+  const loadAllCompletedCandidates = async () => {
+    completedResultsPaged.refresh();
+  };
+  /* The Job filter's options — the JD titles that occur in the result rows,
+     from the server when the panel first opens (not on landing), so the
+     control never offers a value that selects nothing. */
+  const [resultJobTitles, setResultJobTitles] = useState<string[] | null>(null);
   useEffect(() => {
-    if (activeTab === 'completed-candidates') {
-      loadAllCompletedCandidates(true);
+    if (!showCompletedCandidateFilters || resultJobTitles) return;
+    let alive = true;
+    assessmentService.getResultsPageFilterOptions()
+      .then((opts) => { if (alive) setResultJobTitles(opts.jobs || []); })
+      .catch(() => { /* the control keeps its "All jobs" choice */ });
+    return () => { alive = false; };
+  }, [showCompletedCandidateFilters, resultJobTitles]);
+  /* A page past the end (rows gone, or a stale page) steps back once the
+     total is known. */
+  useEffect(() => {
+    const lastPage = Math.max(1, Math.ceil(completedResultsPaged.total / completedCandidatesPageSize));
+    if (!completedResultsPaged.refreshing && completedResultsPaged.total > 0 && completedCandidatesPage > lastPage) {
+      setCompletedCandidatesPage(lastPage);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [completedResultsPaged.refreshing, completedResultsPaged.total, completedCandidatesPage, completedCandidatesPageSize]);
 
   /* Every invitation of every assessment, for the Invitation Status tab. Same
      fan-out as the results aggregation above — list the assessments, then one
@@ -3759,7 +3693,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
        one page per request); what their row menus need is read for the jobs on
        screen (`loadAssessmentsForVisibleJobs`), not by downloading every
        assessment on landing. */
-    if (isFlatAssessmentTab(activeTab) || activeTab === 'jobs') {
+    /* Results pages its own rows on the server (GET /assessments/results-page)
+       with every label it shows — it needs no assessment list either. */
+    if (isFlatAssessmentTab(activeTab) || activeTab === 'jobs' || activeTab === 'completed-candidates') {
       setIsLoading(false);
       return;
     }
@@ -4589,6 +4525,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `/assessments/${assessmentId}/invitations/${invitation.id}/resend`
       );
       toast.success('New invitation link generated and emailed!');
+      setTrackingSelectedIds(new Set());
       await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
@@ -6020,7 +5957,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      the unique figure, and the pill is then hidden. */
   const uniqueCandidatesAssessed =
     stats.total_unique_candidates
-    ?? (completedCandidates.length > 0 ? countCandidateEmails(completedCandidates) : uniqueEmailsAssessed);
+    ?? uniqueEmailsAssessed;
 
   const visibleAssessments = serverTotalJobs ? (totalJobsRows as typeof collapsedAssessments) : collapsedAssessments.slice(
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
@@ -6937,7 +6874,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               disabled={asUnitsExhausted}
               aria-disabled={!canCreateAssessment}
               title={!canCreateAssessment ? 'You do not have permission to create assessments' : (asUnitsExhausted ? 'No assessment units available' : '')}
-              icon={<Sparkles className="w-4 h-4" />}
+              icon={<Plus className="w-4 h-4" />}
               className={`${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Create AI Assessment</span>
@@ -7562,87 +7499,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {
-              /* Candidate Results tab - every completed attempt across all assessments */
-              const resultsTotal = completedCandidates.length;
-
-              /* Search + filters, applied here rather than in the request: the
-                 rows are a client-side merge of one listResults() call per
-                 assessment (see `loadAllCompletedCandidates`), so there is no
-                 single endpoint to hand a query to.
-
-                 The haystack is every identifier the row actually shows, plus
-                 the assessment title — the table has no column for it, but it
-                 is still how a recruiter names what someone sat. Same rule the
-                 Invitation Status search below already follows. */
-              const resultQuery = completedCandidatesSearch.appliedQuery.trim().toLowerCase();
+              /* Candidate Results tab - every completed attempt across all
+                 assessments, ONE page at a time from the server
+                 (`completedResultsPaged`): search, filters and sort run in
+                 the request (GET /assessments/results-page), with the same
+                 semantics this tab used to apply here — the haystack is every
+                 identifier the row shows plus the assessment title / AS-N; Job
+                 is the JD title the row shows; Outcome passes when every round
+                 score present is at RESULT_PASS_MARK; the completed range is
+                 inclusive of the whole `to` day. */
               const {
                 job: filterResultJob,
                 outcome: filterResultOutcome,
                 completedFrom: filterResultFrom,
                 completedTo: filterResultTo,
               } = completedCandidatesSearch.filters;
-              /* Inclusive of the whole `to` day — a recruiter picking today
-                 expects today's results, not those finished at exactly 00:00.
-                 The same pair of lines the Invitation Status tab uses. */
-              const resultFromTime = filterResultFrom ? new Date(`${filterResultFrom}T00:00:00`).getTime() : null;
-              const resultToTime = filterResultTo ? new Date(`${filterResultTo}T23:59:59.999`).getTime() : null;
+              /* No results anywhere (not narrowed by this tab's own search or
+                 filters) — the tab empty state rather than "no matches". */
+              const noResultsAnywhere = completedResultsPaged.total === 0 && !completedCandidatesSearch.isNarrowed;
+              const resultJobOptions: SearchableSelectOption[] = [
+                ...new Set([...(resultJobTitles || []), ...(filterResultJob ? [filterResultJob] : [])]),
+              ].sort((a, b) => a.localeCompare(b)).map((title) => ({ value: title, label: title }));
 
-              /* Pass/Fail for the whole attempt, read the same way the two
-                 score cells below read it: a round counts as passed at
-                 RESULT_PASS_MARK, and an attempt passes when every round it
-                 has a score for did. An attempt with no score at all is
-                 neither, so it falls out of both filters rather than being
-                 quietly counted as a fail. */
-              const resultOutcomeOf = (row: CandidateResultRow): 'pass' | 'fail' | null => {
-                const scores = [row.technical_score, row.coding_score]
-                  .filter((value): value is number => typeof value === 'number');
-                if (scores.length === 0) return null;
-                return scores.every((value) => value >= RESULT_PASS_MARK) ? 'pass' : 'fail';
-              };
-
-              const filteredResults = (listSortBy === 'oldest' ? [...completedCandidates].reverse() : completedCandidates).filter((row) => {
-                if (resultQuery) {
-                  const haystack = [
-                    row.candidate_name,
-                    row.candidate_email,
-                    row.candidate_display_id,
-                    row.candidate_phone,
-                    /* The Job ID joins the haystack with its column: every
-                       other identifier this table SHOWS is searchable, and a
-                       JD-014 on screen that the search box cannot find reads
-                       as broken. It is also what the Invitation Status search
-                       beside it already matches on. */
-                    row._jd_short_id,
-                    row.jd_title,
-                    row._assessment_title,
-                    row._assessment_short_id,
-                  ].filter(Boolean).join(' ').toLowerCase();
-                  if (!haystack.includes(resultQuery)) return false;
-                }
-                if (filterResultJob && (row.jd_title || row._assessment_title || '') !== filterResultJob) return false;
-                if (filterResultOutcome !== 'all' && resultOutcomeOf(row) !== filterResultOutcome) return false;
-                if (resultFromTime !== null || resultToTime !== null) {
-                  const completedAt = new Date(row.completed_at || 0).getTime();
-                  if (!completedAt) return false;
-                  if (resultFromTime !== null && completedAt < resultFromTime) return false;
-                  if (resultToTime !== null && completedAt > resultToTime) return false;
-                }
-                return true;
-              });
-
-              /* The Job filter's options — the jobs actually present in the
-                 loaded rows, so the control can never offer a value that
-                 selects nothing. */
-              const resultJobOptions: SearchableSelectOption[] = [...new Set(
-                completedCandidates
-                  .map((row) => row.jd_title || row._assessment_title || '')
-                  .filter(Boolean),
-              )].sort((a, b) => a.localeCompare(b)).map((title) => ({ value: title, label: title }));
-
-              const total = filteredResults.length;
+              const total = completedResultsPaged.total;
               const totalPages = Math.max(1, Math.ceil(total / completedCandidatesPageSize));
               const safePage = Math.min(Math.max(1, completedCandidatesPage), totalPages);
-              const pageItems = filteredResults.slice((safePage - 1) * completedCandidatesPageSize, safePage * completedCandidatesPageSize);
+              const pageItems = completedResultsPaged.items;
+              /* The details page's Prev / Next fallback list (see openCandidateResult). */
+              const filteredResults = pageItems;
+              /* Nothing on screen yet — also while held for the restore or a
+                 typed search to settle, so that wait draws the skeleton. */
+              const isLoadingCompletedCandidates = completedResultsPaged.loading
+                || (pageItems.length === 0 && completedCandidatesSearch.query !== completedCandidatesSearch.appliedQuery);
+              const completedCandidatesError = completedResultsPaged.error
+                ? ((completedResultsPaged.error as Error)?.message || 'Failed to load completed candidates')
+                : null;
               return (
                 <div>
                   {/* This tab's row in the page's one toolbar position — the
@@ -7691,8 +7582,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                                  {selectedResultRows.length.toLocaleString()} selected
+                                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500 flex items-center justify-between gap-2">
+                                  <span>{selectedResultRows.length.toLocaleString()} selected</span>
+                                  {/* Select every row matching the search / filters, across pages. */}
+                                  {selectedResultKeys.size < total && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.preventDefault(); void selectAllMatchingResults(); }}
+                                      disabled={selectingAllResults}
+                                      className="normal-case font-medium text-brand-blue hover:underline disabled:opacity-50"
+                                    >
+                                      {selectingAllResults ? 'Selecting…' : `Select all ${total.toLocaleString()}`}
+                                    </button>
+                                  )}
                                 </div>
                                 <DropdownMenuItem
                                   className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExportAssessments ? 'cursor-pointer' : 'cursor-not-allowed opacity-60 text-gray-400'}`}
@@ -7875,7 +7777,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         Retry
                       </Button>
                     </div>
-                  ) : resultsTotal === 0 ? (
+                  ) : noResultsAnywhere ? (
                     /* No results anywhere: the shared tab empty state, and with
                        it none of the tab's own chrome — the toolbar above is
                        gated on the same count, because there is nothing to
@@ -10134,10 +10036,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                 )}
               </div>
-            ) : (isLoading || (serverTotalJobs && totalJobsPaged.loading)) && listDisplayMode === 'grid' ? (
+            ) : (isLoading || (serverTotalJobs && totalJobsWaiting)) && listDisplayMode === 'grid' ? (
               /* Card view loads as card skeletons. */
               <CardGridSkeleton count={6} />
-            ) : isLoading || (serverTotalJobs && totalJobsPaged.loading) ? (
+            ) : isLoading || (serverTotalJobs && totalJobsWaiting) ? (
               /* Loading State — mirrors the job-list rows (renderJobListRow) */
               <div className="space-y-3">
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -10212,7 +10114,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       aria-disabled={!canCreateAssessment}
                       className={`${(!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
-                      icon={<Sparkles className="w-4 h-4" />}
+                      icon={<Plus className="w-4 h-4" />}
                     >
                       Create AI Assessment
                     </Button>
@@ -11107,7 +11009,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         target={revokeInviteTarget}
         onClose={() => setRevokeInviteTarget(null)}
         getAssessmentId={getInviteAssessmentId}
-        onRevoked={refreshInviteSurfaces}
+        onRevoked={() => { setTrackingSelectedIds(new Set()); refreshInviteSurfaces(); }}
       />
       {archiveConfirmModal}
       {deleteConfirmModal}

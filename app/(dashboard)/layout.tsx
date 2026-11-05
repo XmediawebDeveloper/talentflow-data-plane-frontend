@@ -92,8 +92,10 @@ function ResumeUsageReconciler() {
     if (ranRef.current) return;
     ranRef.current = true;
     (async () => {
-      await resumeService.reconcileUsage();
-      await refetch();
+      // Only when a reconcile ran: a throttled no-op changed nothing, and the
+      // quota /bootstrap just delivered is current — refetching it on every
+      // hard load was a duplicate /usage/quota-status per page.
+      if (await resumeService.reconcileUsage()) await refetch();
     })();
   }, [refetch]);
 

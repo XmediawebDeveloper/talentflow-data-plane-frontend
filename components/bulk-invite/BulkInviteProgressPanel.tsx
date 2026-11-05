@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useEffectEvent, useState } from 'react';
+import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AlertCircle, Check, CheckCircle2, Copy, ListChecks, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import ListPagination from '@/components/ListPagination';
 import {
   bulkInviteService,
   isBulkInviteActive,
@@ -13,6 +14,7 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { usePermissions } from '@/lib/hooks/usePermissions';
 import dynamic from 'next/dynamic';
 
 /* On demand: this panel is mounted from the dashboard layout, and both track
@@ -21,9 +23,8 @@ const TrackInvitesModal = dynamic(() => import('@/components/TrackInvitesModal')
 const AIInterviewTrackInvitesModal = dynamic(() => import('@/components/AIInterviewTrackInvitesModal'), { ssr: false, loading: () => null });
 
 const POLL_MS = 2000;
-const PAGE_SIZE = 50;
-/* The results endpoint's page cap; past it, Load more stops growing the list. */
-const MAX_LIVE_ROWS = 1000;
+/* Rows per page, from the standard pager's ladder. */
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 type Tab = 'all' | 'sent' | 'skipped' | 'failed' | 'remaining';
 
@@ -84,12 +85,20 @@ export default function BulkInviteProgressPanel({
   const [rows, setRows] = useState<BulkInviteResultRow[]>([]);
   const [rowsTotal, setRowsTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [loadingRows, setLoadingRows] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   /* "Track status" on a sent row: the tracker for this send's interview /
      assessment, opened over this popup, filtered to that candidate. */
   const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
+  /* Revoke / Edit on the "Track status" popup's own tracker — same gate the
+     Assessments page's Track Invites popup trusts implicitly (reaching that
+     page already requires this permission). This widget can surface anywhere,
+     so it checks explicitly rather than assuming the host page already did. */
+  const { hasPermission, isTenantAdmin } = usePermissions();
+  const canModifyAssessmentInvites = isTenantAdmin || hasPermission('canUpdateAssessments') || hasPermission('canCreateAssessments');
   const active = !!job && isBulkInviteActive(job);
 
   /* A run that no worker has picked up for two minutes: say so, rather
@@ -151,14 +160,13 @@ export default function BulkInviteProgressPanel({
     const timer = setTimeout(async () => {
       setLoadingRows(true);
       try {
-        /* Everything loaded so far, in one read, so a poll tick (processed
-           changed) refreshes pages 1..N in place instead of appending
-           page N again. */
+        /* One page from the server; a poll tick (processed changed)
+           re-reads the page on screen in place. */
         const res = await bulkInviteService.results(jobId, {
           status: tab === 'all' ? undefined : tab,
           search: search.trim() || undefined,
-          page: 1,
-          page_size: Math.min(page * PAGE_SIZE, MAX_LIVE_ROWS),
+          page,
+          page_size: pageSize,
         }, controller.signal);
         if (cancelled) return;
         setRows(res.items);
@@ -170,7 +178,7 @@ export default function BulkInviteProgressPanel({
       }
     }, search ? 300 : 0);
     return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
-  }, [jobId, tab, search, page, processed, status]);
+  }, [jobId, tab, search, page, pageSize, processed, status]);
 
   const switchTab = (next: Tab) => { setTab(next); setPage(1); };
   const onSearch = (v: string) => { setSearch(v); setPage(1); };
@@ -263,17 +271,17 @@ export default function BulkInviteProgressPanel({
   return (
     <div className={compact ? 'space-y-3' : 'space-y-4'}>
       {/* Banner */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gradient-to-r from-brand-blue/5 to-transparent px-4 py-3">
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-gradient-to-r from-brand-blue/5 to-transparent px-4 py-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className={`h-10 w-10 shrink-0 rounded-full inline-flex items-center justify-center ${
+            <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center ${
               active ? 'bg-brand-blue/10 text-brand-blue'
                 : finished ? 'bg-success text-white'
                 : 'bg-warning-subtle text-warning-strong'}`}>
-              {active ? <Loader2 className="w-5 h-5 animate-spin" /> : finished ? <Check className="w-5 h-5" /> : <XCircle className="w-5 h-5" />}
+              {active ? <Loader2 className="w-4 h-4 animate-spin" /> : finished ? <Check className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             </span>
             <div className="min-w-0" aria-live="polite">
-              <p className="text-base font-semibold text-gray-900 dark:text-slate-50">{heading}</p>
+              <p className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-50">{heading}</p>
               <p className="tf-meta">{subline}</p>
             </div>
           </div>
@@ -297,7 +305,7 @@ export default function BulkInviteProgressPanel({
         )}
         {active && (
           <p className="mt-2 tf-meta">
-            You can close this popup — the send carries on in the background and the progress card bottom-left follows it.
+            You can minimize or close this popup — the send carries on in the background; the icon in the bottom-right corner follows it.
           </p>
         )}
       </div>
@@ -324,16 +332,16 @@ export default function BulkInviteProgressPanel({
       </div>
 
       {/* Segmented progress */}
-      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-2.5 flex flex-col lg:flex-row lg:items-center gap-2 lg:gap-4">
+      <div className="rounded-xl border border-gray-200 dark:border-slate-700 px-3 py-1.5 flex flex-col lg:flex-row lg:items-center gap-1.5 lg:gap-4">
         <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 shrink-0">Invitation progress</span>
         <div
-          className="flex h-5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
+          className="flex h-3.5 flex-1 overflow-hidden rounded-full bg-gray-200 dark:bg-slate-700"
           role="progressbar" aria-valuemin={0} aria-valuemax={100}
           aria-valuenow={Math.round(share(job.processed))}
           aria-label={`${job.processed} of ${job.total} processed`}
         >
           {segments.map((seg) => (
-            <div key={seg.key} className={`${seg.bar} h-full flex items-center justify-center text-2xs font-semibold ${seg.key === 'remaining' ? 'text-gray-700 dark:text-slate-200' : 'text-white'} transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }}>
+            <div key={seg.key} className={`${seg.bar} h-full flex items-center justify-center text-[9px] leading-none font-semibold ${seg.key === 'remaining' ? 'text-gray-700 dark:text-slate-200' : 'text-white'} transition-[width] duration-500`} style={{ width: `${share(seg.n)}%` }}>
               {share(seg.n) >= 12 ? pctLabel(seg.n) : ''}
             </div>
           ))}
@@ -379,7 +387,10 @@ export default function BulkInviteProgressPanel({
       </div>
 
       {/* Table */}
-      <ul className={`rounded-xl border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-700/60 overflow-y-auto ${compact ? 'max-h-72' : 'max-h-[50vh]'}`}>
+      {/* A whole page shows at once (no scroll box of its own); the popup
+          around it scrolls, and a page change brings the table's top back. */}
+      <div ref={listRef} className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden scroll-mt-4">
+      <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
             <span>#</span>
@@ -407,7 +418,7 @@ export default function BulkInviteProgressPanel({
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>
-              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{i + 1}</span>
+              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center text-xs font-bold ${avatar}`} aria-hidden="true">{initials(r)}</span>
                 <span className="min-w-0">
@@ -457,20 +468,20 @@ export default function BulkInviteProgressPanel({
             </li>
           );
         })}
-        {rows.length < rowsTotal && rows.length < MAX_LIVE_ROWS && (
-          <li className="px-3 py-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => p + 1)}
-              disabled={loadingRows}
-              className="w-full inline-flex items-center justify-center gap-1.5 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:opacity-50"
-            >
-              {loadingRows ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-              Load more ({rowsTotal - rows.length} more)
-            </button>
-          </li>
-        )}
       </ul>
+        <ListPagination
+          attached
+          compact
+          minimalOnMobile
+          currentPage={page}
+          itemsPerPage={pageSize}
+          totalItems={rowsTotal}
+          onPageChange={(p) => { setPage(p); listRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }}
+          onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+          itemLabel="candidates"
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+        />
+      </div>
 
       {trackRow && typeof document !== 'undefined' && createPortal(
         /* Portaled above the invite popup (its open animation's transform
@@ -492,11 +503,13 @@ export default function BulkInviteProgressPanel({
               jdId={job.jd_id}
               jdTitle={job.version_label || 'Assessment'}
               initialSearch={trackRow.email || trackRow.name || undefined}
+              canModifyInvites={canModifyAssessmentInvites}
             />
           )}
         </div>,
         document.body,
       )}
+
     </div>
   );
 }

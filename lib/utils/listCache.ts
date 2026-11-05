@@ -177,8 +177,9 @@ export function withListCacheInvalidation<S extends object>(service: S, methods:
 
 /* Safety net: any write through the shared API client — from any service or
    component — clears the cache when it starts and when it finishes. */
-const writes = (config?: { method?: string; invalidatesCache?: boolean }) =>
-  !!config && (config.method || 'get').toLowerCase() !== 'get' && config.invalidatesCache !== false;
+const writes = (config?: { method?: string; invalidatesCache?: boolean; invalidatesLists?: boolean }) =>
+  !!config && (config.method || 'get').toLowerCase() !== 'get'
+    && config.invalidatesCache !== false && config.invalidatesLists !== false;
 if (typeof window !== 'undefined') {
   api.interceptors.request.use((config) => {
     if (writes(config)) invalidateListCache();

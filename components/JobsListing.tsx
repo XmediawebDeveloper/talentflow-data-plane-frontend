@@ -51,6 +51,9 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
 import { Tooltip } from '@/components/ui/tooltip';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteKind } from '@/components/talent-match-invite/inviteVersions';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -133,7 +136,7 @@ interface JobsListingProps {
   onScoreResumes?: (job: Job) => void;
   onScoreResumesDisabled?: boolean;
   onScoreResumesDisabledReason?: string;
-  onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
+  onUpdateJobStatus?: (jobId: string, status: Job['status'], job?: Job) => void;
   onEditJob?: (job: Job) => void;
   /**
    * Statuses the host has successfully written since the version lineage was
@@ -257,7 +260,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     }
   };
   const router = useRouter();
-  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode, hasPermission, tenant } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
   // real, populated fields — AuthProvider never sets the deprecated lowercase
   // canUpdateJd/etc. aliases, so checking those left every non-admin's Edit/
@@ -267,6 +270,35 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJD ?? false);
   const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJD ?? false);
   const canExportJd = isTenantAdmin || hasPermissionCode('jd:export');
+  /* Create / Send Assessment | AI Interview on a Published (or Republished)
+     job's ⋮ menu — Job Details' Create / Send tiles: THE invite popup for
+     that job version, which creates, publishes and sends versions in place.
+     Same gates as the tiles: permission, tenant feature, plan. */
+  const { open: openInvite } = useInviteDialog();
+  const { hasPlanFeature } = usePlanFeatures();
+  const featureOn = (f: 'assessment' | 'ai_interview') =>
+    !tenant?.features || (tenant.features as Record<string, unknown>)[f] === true;
+  const createSendDenied = (kind: InviteKind): string | null => {
+    if (kind === 'assessment') {
+      if (!(isTenantAdmin || hasPermission('canCreateAssessments'))) return 'You do not have permission to create or send assessments';
+      if (!featureOn('assessment')) return 'Assessments not enabled';
+      return hasPlanFeature('assessment') ? null : PLAN_LOCKED_MESSAGE;
+    }
+    if (!(isTenantAdmin || hasPermission('canCreateAIInterviews') || hasPermission('canInviteAIInterviews'))) return 'You do not have permission to create or send AI interviews';
+    if (!featureOn('ai_interview')) return 'AI Interviews not enabled';
+    return hasPlanFeature('ai_interview') ? null : PLAN_LOCKED_MESSAGE;
+  };
+  const openCreateSend = (job: Job, kind: InviteKind) =>
+    openInvite({
+      kind,
+      job: { jdId: job.id, jdTitle: job.title, jdCode: job.job_id, versionNumber: job.versionNumber, status: job.status },
+      candidates: [],
+      preselect: false,
+    });
+  const CREATE_SEND_ITEMS: { kind: InviteKind; label: string; Icon: typeof Video; tone: string }[] = [
+    { kind: 'assessment', label: 'Invite Assessment', Icon: ClipboardList, tone: 'text-menu-icon-view' },
+    { kind: 'interview', label: 'Invite AI Interview', Icon: Video, tone: 'text-menu-icon-ai' },
+  ];
   // Search + all eleven filters, in the shared hook. The controls commit as they
   // change, so this uses `setFilter` and leaves the draft pair alone.
   const search = useListSearch({
@@ -318,6 +350,23 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     createdBy: createdByFilter,
     workMode: workModeFilter,
   } = search.filters;
+
+  // All / AI Generated / Manual: one white chip that slides to the active
+  // option (measured from the buttons) instead of jumping between them.
+  const [methodTrack, setMethodTrack] = useState<HTMLDivElement | null>(null);
+  const [methodChip, setMethodChip] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const track = methodTrack;
+    if (!track) return;
+    const measure = () => {
+      const active = track.querySelector<HTMLElement>('[data-active="true"]');
+      if (active) setMethodChip({ left: active.offsetLeft, width: active.offsetWidth });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [methodTrack, creationMethodFilter]);
 
   // Sync status filter with URL parameter changes
   useEffect(() => {
@@ -429,7 +478,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   // Persist this list's view state (filters / search / sort / pagination / view
   // toggles) so returning from a job-details page restores it. Declared after the
   // useState + URL-sync effects above so restore wins over the mount-time resets.
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'job-openings-list',
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
@@ -518,6 +567,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const paged = usePagedList<JobRow, JobOpeningsStats, typeof listQuery>({
     name: 'job-openings',
     query: listQuery,
+    // Wait for the saved filters/page, or landing fetches twice.
+    enabled: listStateRestored,
     fetchPage: async (q) => {
       const res = await jdService.listJobs(q);
       const meta = res.versions_meta ?? {};
@@ -1677,17 +1728,26 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
             <div className="tf-jobs-method flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
-              <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
+              <div ref={setMethodTrack} className={`${SEGMENT_TOGGLE} relative w-full sm:w-auto`}>
+                {methodChip && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1 bottom-1 rounded-md bg-white shadow-sm shadow-brand-blue/10 transition-[left,width] duration-300 ease-out"
+                    style={{ left: methodChip.left, width: methodChip.width }}
+                  />
+                )}
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
-                  className={`${segmentBtn(creationMethodFilter === null)} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === null}
+                  className={`${segmentBtn(creationMethodFilter === null)} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   All
                   {pillCountBadge(false, methodPillCount(null))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
-                  className={`${segmentBtn(creationMethodFilter === 'ai')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'ai'}
+                  className={`${segmentBtn(creationMethodFilter === 'ai')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Sparkles className="hidden sm:block w-3.5 h-3.5" />
                   <span className="hidden sm:inline">AI Generated</span>
@@ -1696,7 +1756,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
-                  className={`${segmentBtn(creationMethodFilter === 'manual')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'manual'}
+                  className={`${segmentBtn(creationMethodFilter === 'manual')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Edit className="hidden sm:block w-3.5 h-3.5" />
                   Manual
@@ -1707,7 +1768,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
             {/* Phones: one "Sort" button that opens a menu — the fields, then the order
                 (worded for the field). From sm the inline Sort control above is used. */}
-            {sortedJobs.length > 0 && (
+            {pageRows.length > 0 && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
@@ -1940,6 +2001,31 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                               <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                             </button>
                           )}
+                          {/* Create / Send — Published and Republished jobs. */}
+                          {job.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                            const denied = createSendDenied(kind);
+                            return (
+                              <button
+                                key={kind}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (denied) {
+                                    // Permission lock: tooltip only. Plan lock keeps its toast.
+                                    if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                    return;
+                                  }
+                                  setActiveDropdown(null);
+                                  openCreateSend(job, kind);
+                                }}
+                                aria-disabled={!!denied}
+                                title={denied ?? ''}
+                                className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${denied ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                              >
+                                <Icon className={`w-4 h-4 ${denied ? 'text-gray-400' : tone}`} />
+                                <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                              </button>
+                            );
+                          })}
                           {/* Disable Job for Published */}
                           {job.status === 'Published' && onDisableJob && (
                             <button
@@ -2394,6 +2480,30 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}
+                                {/* Create / Send — same gates as the latest-version menu */}
+                                {versionJob.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                                  const denied = createSendDenied(kind);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={kind}
+                                      onSelect={(e) => {
+                                        if (denied) {
+                                          e.preventDefault();
+                                          // Permission lock: tooltip only. Plan lock keeps its toast.
+                                          if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                          return;
+                                        }
+                                        openCreateSend(versionJob, kind);
+                                      }}
+                                      aria-disabled={!!denied}
+                                      title={denied ?? undefined}
+                                      className={denied ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
+                                    >
+                                      <Icon className={`w-4 h-4 ${tone}`} />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                                    </DropdownMenuItem>
+                                  );
+                                })}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
                                   <DropdownMenuItem
@@ -2526,7 +2636,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </Button>
               ) : (
                 <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
-                  Create Job
+                  Create New Job
                 </Button>
               )}
             </div>

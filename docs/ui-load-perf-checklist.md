@@ -7,8 +7,8 @@ Standard per module: `GET /<module>/stats?<filters>` + `GET /<module>?page=1&pag
 (`lib/hooks/usePagedList.ts`). Both use ONE shared backend filter builder, so card count == list `total`. Card click = filter change.
 
 ## Phase 0 — deploy (ops)
-- [ ] Deploy backend + frontend to staging. Backend restart applies the new MIGRATION_INDEXES per tenant.
-- [ ] Re-measure the 8 tools with the same browser harness
+- [x] Deploy backend + frontend to staging (3 deploys on 2026-11-04)
+- [x] Re-measured the 8 tools on staging: 0 failed calls; calls 19/24/26/19/21/45/21/15 → 9/10/16/13/9/10/13/10
 
 ## Phase 1 — default landing + bugs
 - [x] Job Descriptions, AI Assessments, AI Interviews land on Total card + list (pageView 'list'; a stale 'cards' snapshot is ignored)
@@ -52,10 +52,31 @@ Standard per module: `GET /<module>/stats?<filters>` + `GET /<module>?page=1&pag
 - [x] Frontend tsc: clean for all changed files (2 pre-existing `<style jsx>` errors in untouched proctoring files)
 - [x] Backend suite: 5637 passed, 38 failed — all 38 also fail on clean HEAD (confirmed in a HEAD worktree); 0 new failures
 - [x] New backend tests: resume stats, scoring stats/jds, JD listing, AI match listing, assessment/AI-interview list query, invitation-overview expired, shell slice
-- [ ] Not run against a real Postgres — new SQL is parse-checked only. First real run is staging.
+- [x] New SQL verified on staging Postgres: every new endpoint returns 200 (0 failed calls across 8 tools + Results)
 
 ## Must not regress — check on staging
 - [ ] Card count == list total for every filter (all modules)
 - [ ] Export / "select all" cover every matching row, not just the visible page
 - [ ] RBAC: a restricted role sees the same rows in stats and list
 - [ ] Known behaviour changes listed in the hand-off summary
+
+## Round 2 (after first staging deploy, 2026-11-04)
+Staging check of round 1: all 8 tools 0 failed API calls; JD / Assessments / AI Interviews land on Total + list; card == list total verified for JD and Assessments.
+- [x] AI Interviews tab badges counted loaded rows (10/13/12) → now /configs/stats (verified on staging: 198/198, 269/269, 220/220, 47/47, 2/2)
+- [x] Merge 7b1b04bb re-added `jobs.find` in job-openings/page.tsx (tsc error) → job passed from caller
+- [x] JD / AI Interviews / Assessments landing fetched page 1 twice (default then restored state) → `useListStatePersistence` returns `restored`, lists wait for it
+- [x] Extra /usage/quota-status per hard load (ResumeUsageReconciler refetched even when reconcile was throttled) → refetch only when reconcile ran
+- [x] /users/:id every hard load for accounts with no display id → remembered per tab session
+- [x] Resume Scoring landing: no JD list download (was 1.9 s ps=10000 + 4× ps=100 walk)
+- [x] AI Interviews Results (6.9 s): /candidate-results (+stats/ids/filter-options) server-paged; GET /ai-interview/ heavy JSONB → `compact=true`
+- [x] Assessments Results (2.0 s serial chain): /assessments/results-page (+stats/ids/filter-options), visible-row lookups in parallel
+- [x] Re-measured: AI Results page 331 ms + stats 243 ms (was 6.9 s); Assessments Results 172 + 90 ms (was 2.0 s); Resume Scoring no JD list
+- [x] tsc exit 0; backend suite: same 38 pre-existing failures, 0 new
+
+## Round 3 (in progress, 2026-11-04)
+- [x] Merge 6e521f2f: `sortedJobs` (phone Sort menu) crashed Job Descriptions → `pageRows`; verified on staging
+- [x] Header notification POSTs no longer clear list caches (`invalidatesLists: false`) → no double page fetch; verified
+- [x] /auth/me returns tenant `user_display_id` → no /users/:id per page; verified
+- [x] `/jd/lineages` 980 ms: loaded full JD rows (description, embedding, skills JSONB) for 9 fields → selects 9 columns (identical output, real-DB test) — verify on staging
+- [x] AI Talent Match: `useAllJobInviteTargets` walk fed nothing visible → removed; reconcile POST `invalidatesLists: false` — verify on staging
+- [x] Teams usage 640 ms: `id::text = details->>…` defeated PK index (full scan per candidate unit row) → uuid-cast PK lookups — verify on staging

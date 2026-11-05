@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Trash2, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Minus, Plus, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePathname, useRouter } from 'next/navigation';
 import { saveInviteUnitsHandoff, USAGE_QUOTAS_FROM_INVITE_URL, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
@@ -17,7 +17,7 @@ import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteRevie
 import InviteMessageStep from './InviteMessageStep';
 import { DEFAULT_EXPIRY_DAYS, defaultInviteMessage } from './inviteDefaults';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
-import { bulkInviteService, SERVER_MATCH_LABEL, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection, type InviteCandidateSourceTab, type ServerInviteCandidate } from '@/lib/services/bulkInviteService';
+import { bulkInviteService, isBulkInviteActive, SERVER_MATCH_LABEL, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection, type InviteCandidateSourceTab, type ServerInviteCandidate } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -234,9 +234,9 @@ export default function VersionInviteDialog({
   /* The page's candidates with an email go straight into the send (no email,
      no invite — said once in Review). `preselect` false lists them left out.
      With `pickInto` they are the list's own picks instead (`pagePicks`) —
-     and so from AI Talent Match for one job: ticked in its AI Talent Match
-     tab (a pick with no resume id stays a page candidate). */
-  const listPicks: InviteCandidateSourceTab | undefined = pickInto ?? (openOn === 'talent-match' && jdId ? 'talent-match' : undefined);
+     and so from AI Talent Match / Score Resume for one job: ticked in that
+     page's own tab (a pick with no resume id stays a page candidate). */
+  const listPicks: InviteCandidateSourceTab | undefined = pickInto ?? (openOn && jdId ? openOn : undefined);
   const recipients = pickInto ? []
     : listPicks ? candidates.filter((c) => c.email && !c.resumeId)
     : candidates.filter((c) => c.email);
@@ -293,6 +293,25 @@ export default function VersionInviteDialog({
     return () => setBulkInPopup(bulkJobId, false);
   }, [bulkJobId, setBulkInPopup]);
   const bulkReported = useRef(false);
+  /* After Send, the popup hands the send to the floating widget: Minimize
+     (top right, before the send starts, while it runs and after it ends)
+     to its round icon; Done to its mini popup, where the send stays listed
+     until the recruiter clears it. Neither ever cancels the send. */
+  const afterSend = !!bulkJob;
+  /* Minimize shrinks the popup into the bottom-right corner, where the
+     widget's icon is, instead of the popup just vanishing — closing on the
+     spot read as a glitch, not a hand-over. */
+  const [minimizing, setMinimizing] = useState(false);
+  const minimize = () => {
+    if (minimizing) return;
+    bulkTracker?.setWidget('icon');
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onClose();
+      return;
+    }
+    setMinimizing(true);
+    window.setTimeout(onClose, 260);
+  };
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -337,14 +356,15 @@ export default function VersionInviteDialog({
       // version → Candidates; else the Version step. Picked from the list
       // (Resume Database and the other job-less buttons): step 1, Add
       // candidates — the page's candidates are already in, so it skipped
-      // straight to Review. From AI Talent Match the page's picks open on
-      // Candidates instead (step 2): seen with the rest of the list first.
+      // straight to Review. From AI Talent Match / Score Resume the page's
+      // picks open on Candidates instead (step 2): seen ticked in that page's
+      // tab with the rest of the list first.
       // Back from Add units: the step it was on, while its version still sends.
       const restored = restore?.versionId ? pool.find((v) => v.id === restore.versionId && v.sendable) : undefined;
       setStep(restore ? (restored ? restore.step : 'version')
         : !chosen ? 'version'
         : fromListPick.current ? (fixed ? 'candidates' : 'version')
-        : openOn === 'talent-match' && (recipients.length > 0 || selectionCount(pagePicks) > 0) ? 'candidates'
+        : openOn && (recipients.length > 0 || selectionCount(pagePicks) > 0) ? 'candidates'
         : recipients.length > 0 ? 'review'
         : fixed ? 'candidates' : 'version');
       fromListPick.current = false;
@@ -965,7 +985,12 @@ export default function VersionInviteDialog({
       // Mark it as on screen first, so the floating card never flashes up
       // while this popup is showing the run.
       bulkTracker?.setInPopup(started.job_id, true);
-      bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
+      bulkTracker?.track(started, {
+        jdTitle: job.jdTitle,
+        jdCode: job.jdCode,
+        jobVersion: selected.jobVersion ?? job.jobVersionNumber,
+        versionNumber: selected.version,
+      });
       bodyRef.current?.scrollTo({ top: 0 });
       const queued = started.queued ?? 0;
       if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
@@ -1045,7 +1070,9 @@ export default function VersionInviteDialog({
       // The list's pick named, once there is one: Continue is the next move.
       ? ((kind === 'assessment' ? asPick : aiPick) ? `${label.singular} picked — press Continue` : `Select ${article} to continue`)
       : bulkJob
-        ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
+        ? (isBulkInviteActive(bulkJob)
+          ? 'Sending in the background — minimize or close, it carries on'
+          : 'Done keeps the result in the corner until you clear it')
         : !loaded
           ? ''
           : jobLock
@@ -1132,20 +1159,34 @@ export default function VersionInviteDialog({
   return (
     <>
       <div
-        className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-        onClick={requestClose}
+        className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 ${minimizing ? 'opacity-0 transition-opacity duration-200' : 'animate-in fade-in duration-200'}`}
+        onClick={minimizing ? undefined : requestClose}
       />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 ${minimizing ? 'pointer-events-none' : ''}`}>
         <div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="version-invite-title"
-          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}
+          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col ${minimizing ? 'origin-bottom-right translate-x-[30vw] translate-y-[35vh] scale-[0.12] opacity-0 transition-[translate,scale,opacity] duration-[260ms] ease-in' : 'animate-in zoom-in-95 duration-200'}`}
         >
           {/* Header: what this is, and the units it spends. No X — the
-              footer's Cancel closes (the popup standard). */}
-          <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60">
+              footer's Cancel closes (the popup standard). While a send runs,
+              Minimize in the top-right corner — the Resume Scoring progress
+              popup's — hands it to the floating card, bottom right. */}
+          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${afterSend ? 'pr-14 sm:pr-16' : ''}`}>
+            {afterSend && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={minimize}
+                className="w-8 !px-0 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
+                aria-label="Minimize"
+                title="Minimize — sending carries on; follow it from the icon bottom right"
+              >
+                <Minus className="w-4 h-4" />
+              </Button>
+            )}
             <div className="flex items-center gap-3 min-w-0">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <Icon className="w-4 h-4 text-brand-blue" />
@@ -1157,10 +1198,17 @@ export default function VersionInviteDialog({
                 <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
-            {!off && (
+            {/* Units belong to choosing and sending; once sent, they are gone from here. */}
+            {!off && !afterSend && (
               <InviteQuotaBar
                 kind={kind}
                 refreshKey={quotaKey}
+                /* Add-ons (more units), always at hand — not only once they run out. */
+                action={canAddUnits ? (
+                  <Button variant="primary" size="sm" onClick={addUnits} icon={<Plus className="w-3 h-3" />} className="h-6 px-2 gap-1 text-2xs whitespace-nowrap">
+                    Add-ons
+                  </Button>
+                ) : undefined}
                 onStats={(s) => {
                   setQuotaUnlimited(isUnlimitedQuota(s));
                   setQuotaAvailable(s && !isUnlimitedQuota(s) ? s.available : null);
@@ -1478,7 +1526,7 @@ export default function VersionInviteDialog({
             <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto max-sm:flex-wrap">
               {bulkJob ? (
                 <button
-                  onClick={onClose}
+                  onClick={() => { bulkTracker?.setWidget('mini'); onClose(); }}
                   className="tf-btn tf-btn-primary w-full sm:w-auto flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                 >
                   Done

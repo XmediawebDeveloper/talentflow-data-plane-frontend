@@ -246,11 +246,13 @@ export default function JobOpeningsPage() {
     setScoreResumesJob(job);
   };
 
-  const handleUpdateJobStatus = async (jobId: string, status: string) => {
+  // The list is server-paged (no page-level `jobs` array any more), so the
+  // caller hands over the row it acted on for the toast's job name.
+  const handleUpdateJobStatus = async (jobId: string, status: string, job?: Job) => {
     try {
       await jdService.updateStatus(jobId, status);
       markVersionStatus(jobId, status.toLowerCase());
-      const updated = jobs.find(job => job.id === jobId);
+      const updated = job;
       toast.success(updated
         ? `${formatJobSubject({ ...updated, versionNumber: updated.versionNumber ?? 1 })} status updated to ${mapStatus(status)}.`
         : 'Job status updated');

@@ -326,9 +326,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const inviteTargets = useJobInviteTargets(jobId, {
     assessmentConfigured,
     aiInterviewConfigured,
-    // Never look up targets for a feature outside the plan.
-    assessmentEnabled: mayInviteAssessment && hasPlanFeature('assessment'),
-    aiInterviewEnabled: mayInviteAIInterview && hasPlanFeature('ai_interview'),
+    // Never look up targets for a feature outside the plan. Nor when the host
+    // opens its own Create / Send popup (`onOpenInviteDialog`): every gate
+    // below short-circuits on `viaInviteDialog`, so the answer would be unused
+    // (the popup offers Create and checks the job itself).
+    assessmentEnabled: !onOpenInviteDialog && mayInviteAssessment && hasPlanFeature('assessment'),
+    aiInterviewEnabled: !onOpenInviteDialog && mayInviteAIInterview && hasPlanFeature('ai_interview'),
   });
   // With no JD to check (the global scoring view's cross-job rows) there is
   // nothing to gate on, so the entries keep their permission-only behaviour and
