@@ -27,6 +27,10 @@ import {
 import { planTurnOff, withRequired } from '@/lib/permissions/permissionRules';
 
 export type AccessLevel = 'none' | 'view' | 'full';
+
+/** The ONE name of each level, used on every screen (buttons, key, labels,
+ *  totals, legend) so the wording never differs between places. */
+export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Full access', view: 'View only', none: 'No access' };
 export type ModuleGroup = 'Hiring' | 'Candidates' | 'Administration';
 
 export interface ModuleEntry {
@@ -192,9 +196,9 @@ export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => des
 export type LevelTone = 'full' | 'view' | 'exc' | 'none';
 
 export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string } => {
-  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `Full access · ${d.distance} turned off` } : { tone: 'full', text: 'Full access' };
-  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `View · ${d.extra.length} more` } : { tone: 'view', text: 'View only' };
-  return { tone: 'none', text: 'No access' };
+  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.full} · ${d.distance} turned off` } : { tone: 'full', text: LEVEL_NAMES.full };
+  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.view} · ${d.extra.length} more` } : { tone: 'view', text: LEVEL_NAMES.view };
+  return { tone: 'none', text: LEVEL_NAMES.none };
 };
 
 export const accessCounts = (codes: Set<string>) => {

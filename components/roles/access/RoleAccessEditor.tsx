@@ -13,6 +13,7 @@ import {
   describeModule,
   isHostOn,
   isUpgrade,
+  LEVEL_NAMES,
   moduleName,
   moduleNeeds,
   shortLabel,
@@ -21,7 +22,7 @@ import {
   type AccessLevel,
   type AccessModule,
 } from '@/lib/permissions/moduleLevels';
-import { ModuleIcon } from './AccessDots';
+import { AccessLevelKey, ModuleIcon } from './AccessDots';
 import { useAdvancedToggles } from './useAdvancedToggles';
 
 type Mode = 'quick' | 'advanced';
@@ -29,7 +30,7 @@ interface Notice { kind: 'up' | 'down' | 'neutral'; text: React.ReactNode; snaps
 
 const listText = (items: React.ReactNode[]) =>
   items.flatMap((item, i) => (i === 0 ? [item] : [i === items.length - 1 ? ' and ' : ', ', item]));
-const LEVEL_LABEL: Record<AccessLevel, string> = { none: 'No access', view: 'View', full: 'Full' };
+const LEVEL_LABEL = LEVEL_NAMES;
 
 /** Checkbox chip used by "Available on", "Except", "Also allowed" and the Advanced strip. */
 function Chip({ state, label, note, title, onClick }: {
@@ -145,17 +146,17 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     else if (level === 'full') {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">Full access, {d.missing.length + d.extra.length} turned off</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.full}, {d.missing.length + d.extra.length} turned off</span>
           {' · '}
-          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Restore full access</button>
+          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Back to {LEVEL_NAMES.full}</button>
         </>
       );
     } else {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">View, plus {d.extra.length} more</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.view}, plus {d.extra.length} more</span>
           {' · '}
-          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'view')}>Back to view only</button>
+          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'view')}>Back to {LEVEL_NAMES.view}</button>
         </>
       );
     }
@@ -219,7 +220,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         )}
         {needs.length > 0 && (
           <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            Works only with {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. We turn {needs.length === 1 ? 'it' : 'them'} on for you when you choose View or Full.
+            Works only with {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. We turn {needs.length === 1 ? 'it' : 'them'} on for you when you choose {LEVEL_NAMES.view} or {LEVEL_NAMES.full}.
           </div>
         )}
       </div>
@@ -267,11 +268,13 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
           ))}
         </div>
       </div>
-      <p className="mb-3.5 mt-2 text-[13px] text-gray-500 dark:text-slate-400">
-        {mode === 'quick'
-          ? <>For each area, choose <b>No access</b>, <b>View</b> or <b>Full</b>. Full gives every action in that area, on every page where it shows up. If an area needs another area to work, we turn that on for you.</>
-          : 'Turn single permissions on or off. Anything you turn off also shows in Quick Setup.'}
-      </p>
+      {mode === 'quick' ? (
+        <AccessLevelKey className="mb-3.5 mt-2" />
+      ) : (
+        <p className="mb-3.5 mt-2 text-[13px] text-gray-500 dark:text-slate-400">
+          Turn single permissions on or off. Anything you turn off also shows in Quick Setup.
+        </p>
+      )}
       {notice && (
         <div className={`mb-3.5 flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-gray-900 dark:text-slate-100 ${noticeTone}`}>
           {notice.kind === 'down' ? <Info className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}

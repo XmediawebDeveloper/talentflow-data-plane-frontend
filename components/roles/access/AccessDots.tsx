@@ -9,6 +9,7 @@ import {
   ACCESS_MODULES,
   describeModule,
   levelText,
+  LEVEL_NAMES,
   type AccessModule,
   type LevelTone,
 } from '@/lib/permissions/moduleLevels';
@@ -50,8 +51,8 @@ export const AccessDot = ({ tone, className = 'h-2 w-2' }: { tone: LevelTone; cl
 
 export const AccessLegend = ({ className = '' }: { className?: string }) => (
   <div className={`flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-slate-400 ${className}`}>
-    <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />Full</span>
-    <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />View</span>
+    <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{LEVEL_NAMES.full}</span>
+    <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />{LEVEL_NAMES.view}</span>
     <span className="inline-flex items-center gap-1.5"><AccessDot tone="exc" />Some turned off</span>
   </div>
 );
@@ -90,3 +91,20 @@ export function AccessInline({ codes, max = 3 }: { codes: Set<string>; max?: num
     </div>
   );
 }
+
+/** Short key for the three levels, shown under "What this role can do" in the
+ *  role editor and above the read-only access list. */
+export const AccessLevelKey = ({ className = '' }: { className?: string }) => (
+  <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 sm:grid-cols-3 sm:gap-4 ${className}`}>
+    {([
+      [LEVEL_NAMES.full, 'Can see it and do everything in it'],
+      [LEVEL_NAMES.view, 'Can see it, but not change anything'],
+      [LEVEL_NAMES.none, "Can't see this area"],
+    ] as const).map(([term, text]) => (
+      <div key={term}>
+        <dt className="font-semibold text-gray-900 dark:text-slate-100">{term}</dt>
+        <dd className="text-gray-500 dark:text-slate-400">{text}</dd>
+      </div>
+    ))}
+  </dl>
+);
