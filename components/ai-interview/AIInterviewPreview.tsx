@@ -858,7 +858,8 @@ export default function AIInterviewPreview() {
 
         {/* ── Interview Overview ── */}
         <SectionCard title="Interview Overview" icon={Brain}>
-          <div className="flex flex-col lg:flex-row gap-4 items-start">
+          {/* Phones / tablets: the fact tiles take the full width (items-stretch). */}
+          <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-start">
             {/* The three facts that decide what the candidate meets: how long and
                 under what pacing, what transcribes them, and which rounds run. */}
             <div className="flex flex-col gap-3 lg:w-72 lg:flex-shrink-0">

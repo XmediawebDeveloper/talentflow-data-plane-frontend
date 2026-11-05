@@ -2215,7 +2215,9 @@ export default function AssessmentDetailsView({
             right — the AI Interview / AI Assessment candidate result pages'
             layout. Tablet/mobile: the wrapping horizontal `tabPill` bar. */}
         <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
-          <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
+          {/* Phones / tablets (globals.css, `.tf-detail-nav`): the Job Details page's
+              underlined tab strip, scrolling sideways. From lg the vertical rail. */}
+          <nav className="tf-detail-nav p-2 sm:p-3" aria-label="Assessment details sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -2838,10 +2840,10 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              /* Phone: one swipeable row with full labels — the Assessments
-                 page's Invite Status popup treatment; three to a row cut every
-                 label short. */
-              gridClassName="flex gap-2 overflow-x-auto scrollbar-hide [&>*]:shrink-0 [&>*]:min-w-[6.75rem] sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:gap-3 sm:overflow-visible sm:[&>*]:min-w-0"
+              /* The Job Openings module's Track Invites stat grid (globals.css,
+                 `.tf-tracker-stats`): 2 per row on phones, so every label shows in
+                 full without a sideways-scrolling strip; 3 / 4 / 7 as it widens. */
+              gridClassName="tf-tracker-stats"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });

@@ -1755,7 +1755,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             wrapping onto a second row so every tab stays visible). Desktop
             (lg+): a sticky vertical rail on the left, content on the right. */}
         <div className="lg:sticky lg:top-20 lg:self-start tf-card-soft">
-          <nav className="p-2 sm:p-3" aria-label="Interview details sections">
+          {/* Phones / tablets (globals.css, `.tf-detail-nav`): the Job Details page's
+              underlined tab strip, scrolling sideways. From lg the vertical rail. */}
+          <nav className="tf-detail-nav p-2 sm:p-3" aria-label="Interview details sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },

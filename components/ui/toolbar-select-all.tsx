@@ -64,10 +64,13 @@ export default function ToolbarSelectAll({
         aria-haspopup="menu"
         aria-expanded={open}
         aria-pressed={selectedCount > 0}
+        /* tf-jobs-selectall + data-active: the Job Openings list's phone look inside a
+           `.tf-jobs-toolbar` (globals.css); elsewhere inert. */
+        data-active={selectedCount > 0 || undefined}
         /* sm:h-9 so this pill matches the 36px toolbar band (search, the filter
            pill, More Filters) from sm up. Phones keep tabPill's own 28px — the
            Job Openings toolbar's Select All, which the mobile rows follow. */
-        className={`tf-tb-selectall ${tabPill(selectedCount > 0)} sm:h-9`}
+        className={`tf-tb-selectall tf-jobs-selectall ${tabPill(selectedCount > 0)} sm:h-9`}
       >
         {allSelected && selectedCount > 0 ? (
           <CheckSquare className="w-3.5 h-3.5" />
