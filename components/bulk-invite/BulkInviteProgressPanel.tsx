@@ -14,7 +14,6 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
-import { usePermissions } from '@/lib/hooks/usePermissions';
 import dynamic from 'next/dynamic';
 
 /* On demand: this panel is mounted from the dashboard layout, and both track
@@ -93,12 +92,6 @@ export default function BulkInviteProgressPanel({
   /* "Track status" on a sent row: the tracker for this send's interview /
      assessment, opened over this popup, filtered to that candidate. */
   const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
-  /* Revoke / Edit on the "Track status" popup's own tracker — same gate the
-     Assessments page's Track Invites popup trusts implicitly (reaching that
-     page already requires this permission). This widget can surface anywhere,
-     so it checks explicitly rather than assuming the host page already did. */
-  const { hasPermission, isTenantAdmin } = usePermissions();
-  const canModifyAssessmentInvites = isTenantAdmin || hasPermission('canUpdateAssessments') || hasPermission('canCreateAssessments');
   const active = !!job && isBulkInviteActive(job);
 
   /* A run that no worker has picked up for two minutes: say so, rather
@@ -503,7 +496,6 @@ export default function BulkInviteProgressPanel({
               jdId={job.jd_id}
               jdTitle={job.version_label || 'Assessment'}
               initialSearch={trackRow.email || trackRow.name || undefined}
-              canModifyInvites={canModifyAssessmentInvites}
             />
           )}
         </div>,

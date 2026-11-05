@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, Loader2, Ban, Send, FileText, RefreshCw, Undo2 } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Ban, Send, FileText, Undo2 } from 'lucide-react';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -71,15 +71,9 @@ interface TrackInvitesModalProps {
   /** Shown (greyed, as the tooltip) when Invite More is not allowed — the
    *  button stays visible (RBAC grey-out rule). */
   inviteMoreDeniedReason?: string;
-  /** Revoke / Edit are offered only when true (permission + live JD). Resend
-   *  and Copy Link are unaffected. */
-  canModifyInvites?: boolean;
   /** This JD is disabled — Copy Link / Revoke on an Invited row, Edit on a
    *  Revoked row and Resend on an Expired row stay visible but disabled, the
-   *  same lock the Assessments page's own Track Invites popup applies.
-   *  Independent of `canModifyInvites`: Resend is offered regardless of that
-   *  flag, so without this a disabled JD's expired invite could still be
-   *  resent from here. */
+   *  same lock the Assessments page's own Track Invites popup applies. */
   jdDisabled?: boolean;
   /** Called after a revoke / edit changed invitations, once this popup's own
    *  rows are reloaded - so the host's counts refresh at once. */
@@ -152,7 +146,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -320,16 +314,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     await onChanged?.();
   };
 
+  // Edit / Revoke are wired unconditionally — same as the Assessments page's
+  // own Track Invites popup and the AI Interview tracker — so the menu only
+  // ever hides an action based on the invite's status (via
+  // buildInvitationRowActions), never on a separate permission check. A
+  // disabled JD still greys them out via `jdDisabled` below.
   const rowActionOptions = {
     onResend: handleResendInvitation,
     resendingId,
-    ...(canModifyInvites
-      ? {
-          onEdit: (inv: any) => setEditTarget(inv),
-          onRevoke: (inv: any) => setRevokeTarget(inv),
-          revokingId: revokeTarget?.id,
-        }
-      : {}),
+    onEdit: (inv: any) => setEditTarget(inv),
+    onRevoke: (inv: any) => setRevokeTarget(inv),
+    revokingId: revokeTarget?.id,
   };
 
   const filtersActive = hasActiveInviteFilters(filters) || !!(assessmentVersionFilter || sourceFilter || resultFilter);
@@ -489,8 +484,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     await handleInvitesChanged();
   };
 
-  // Bulk revoke — only offered when canModifyInvites, mirroring the per-row
-  // Revoke action's own gate.
+  // Bulk revoke — offered whenever the selection is revocable, mirroring the
+  // per-row Revoke action's own gate.
   const handleBulkRevoke = async () => {
     const targets = selectedRows.filter(isRevocableInvitation);
     if (targets.length === 0) {
@@ -732,7 +727,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
                 </Button>
               )}
-              {canModifyInvites && allRevocable && (
+              {allRevocable && (
                 <Button
                   variant="destructive"
                   size="sm"
@@ -751,11 +746,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {!isLoading && invitations.length > 0 && !(paginationBelowTable && selectableIds.length > 0) && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             <p className="tf-meta">{resultsLabel}</p>
-            {/* Completion rate — the AI tracker's badge, in place of the old card. */}
-            <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-              <TrendingUp className="w-3.5 h-3.5" />
-              {completionRate}% Completion
-            </span>
           </div>
         )}
 

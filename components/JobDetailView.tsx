@@ -5121,8 +5121,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdTitle={job.title}
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
-          // Revoke / Edit follow the same gate as Invite on this page.
-          canModifyInvites={permissions.canCreateAssessments && canInviteJdAssessment && !jobInactive}
           jdDisabled={job.status === 'Disabled'}
           /* Footer Invite More — the one Create / Send Assessment popup over
              this tracker. The tracker spans every assessment version of this
