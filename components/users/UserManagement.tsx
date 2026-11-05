@@ -1518,7 +1518,7 @@ export default function UserManagement() {
                 placeholder={rolesLoaded ? 'Choose a role' : 'Loading roles…'}
                 ariaLabel="Role"
                 disabled={!rolesLoaded || !!roleLockedReason}
-                className="w-full sm:w-full"
+                className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-1 sm:py-1 px-3 sm:px-3 rounded-md sm:rounded-md border-input"
               />
             </div>
             <p className="mt-1.5 text-xs leading-relaxed text-gray-500 dark:text-slate-400">

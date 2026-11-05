@@ -129,12 +129,19 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     const d = describeModule(codes, m);
     const level = d.base;
     const adjusted = d.distance > 0;
-    const ownMissing = d.missing.filter((c) => !getMainPermission(c));
-    const hosts = Array.from(new Set(m.entries.map((e) => e.host)));
+    // Everything turned off, including a button hidden on another page
+    // ("Score Resume on Job Descriptions"); ticking it turns it back on.
+    const ownMissing = d.missing.filter((c) => {
+      const entry = m.entries.find((e) => e.code === c);
+      return !entry || isHostOn(codes, entry.host);
+    });
+    const missingLabel = (c: string) => {
+      const entry = m.entries.find((e) => e.code === c);
+      return entry ? `${shortLabel(c)} on ${moduleName(entry.host)}` : shortLabel(c);
+    };
     const needs = level === 'none' ? moduleNeeds(m) : [];
     let can: React.ReactNode;
-    if (level === 'none') can = 'Not available for this role';
-    else if (!adjusted) can = m.can[level];
+    if (!adjusted) can = m.about;
     else if (level === 'full') {
       can = (
         <>
@@ -194,23 +201,11 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             {(['none', 'view', 'full'] as AccessLevel[]).map(levelButton)}
           </div>
         </div>
-        {level === 'full' && hosts.length > 0 && (
-          <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Also works on</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              <Chip state="home" label={m.name} title="Its own page" />
-              {hosts.map((h) => {
-                const entry = m.entries.find((e) => e.host === h)!;
-                return screenChip(entry.code, h, () => toggleOne(entry.code));
-              })}
-            </div>
-          </div>
-        )}
         {ownMissing.length > 0 && (
           <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
             <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Turned off</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {ownMissing.map((c) => <Chip key={c} state="off" label={shortLabel(c)} title="Tick to turn it back on" onClick={() => toggleOne(c)} />)}
+              {ownMissing.map((c) => <Chip key={c} state="off" label={missingLabel(c)} title="Tick to turn it back on" onClick={() => toggleOne(c)} />)}
             </div>
           </div>
         )}

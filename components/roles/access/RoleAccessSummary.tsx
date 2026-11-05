@@ -13,7 +13,7 @@ import {
   shortLabel,
   type AccessModule,
 } from '@/lib/permissions/moduleLevels';
-import { getMainPermission, getPermissionLabel } from '@/lib/constants/permissionCategories';
+import { getPermissionLabel } from '@/lib/constants/permissionCategories';
 import { AccessDot, ModuleIcon } from './AccessDots';
 
 const listText = (items: string[]) =>
@@ -30,42 +30,35 @@ const TONE_TILE = {
 function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule }) {
   const d = describeModule(codes, module);
   const lt = levelText(d);
+  // Name + level only. A short note appears only when the role differs from
+  // the plain level (something turned off, or something extra on top).
+  const offLabel = (c: string) => {
+    const entry = module.entries.find((e) => e.code === c);
+    return entry ? `${shortLabel(c)} on ${moduleName(entry.host)}` : shortLabel(c);
+  };
+  const off = d.missing.filter((c) => {
+    const entry = module.entries.find((e) => e.code === c);
+    return !entry || isHostOn(codes, entry.host);
+  });
   const notes: { text: string; warn?: boolean }[] = [];
-  if (d.base === 'full' && module.entries.length) {
-    const hosts = Array.from(new Set(module.entries.filter((e) => codes.has(e.code)).map((e) => moduleName(e.host))));
-    if (hosts.length) notes.push({ text: `Also works on ${listText(hosts)}` });
-  }
-  const offScreens = d.missing
-    .filter((c) => getMainPermission(c))
-    .map((c) => module.entries.find((e) => e.code === c))
-    .filter((e): e is NonNullable<typeof e> => !!e && isHostOn(codes, e.host))
-    .map((e) => moduleName(e.host));
-  if (offScreens.length) notes.push({ text: `Hidden on the ${listText(offScreens)} page${offScreens.length > 1 ? 's' : ''}`, warn: true });
-  const own = d.missing.filter((c) => !getMainPermission(c));
-  if (own.length) notes.push({ text: `Turned off: ${listText(own.map(shortLabel))}`, warn: true });
-  if (d.extra.length) notes.push({ text: `Extra access: ${listText(d.extra.map((c) => (moduleOfCode(c)?.id === module.id ? shortLabel(c) : getPermissionLabel(c))))}` });
+  if (off.length) notes.push({ text: `Turned off: ${listText(off.map(offLabel))}`, warn: true });
+  if (d.extra.length) notes.push({ text: `Also: ${listText(d.extra.map((c) => (moduleOfCode(c)?.id === module.id ? shortLabel(c) : getPermissionLabel(c))))}` });
 
   return (
-    <div className="grid grid-cols-[34px_1fr_auto] items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 dark:border-slate-800">
+    <div className="grid grid-cols-[34px_1fr_auto] items-center gap-3 border-b border-gray-100 py-2.5 last:border-b-0 dark:border-slate-800">
       <span className={`grid h-[34px] w-[34px] place-items-center rounded-lg ${TONE_TILE[lt.tone]}`}>
         <ModuleIcon module={module} className="h-[17px] w-[17px]" />
       </span>
       <div className="min-w-0">
         <div className={`text-sm font-semibold ${d.base === 'none' ? 'text-gray-500 dark:text-slate-400' : 'text-gray-900 dark:text-slate-100'}`}>{module.name}</div>
-        <div className="text-[13px] text-gray-500 dark:text-slate-400">{d.base === 'none' ? 'Not available for this role' : module.can[d.base]}</div>
-        {notes.length > 0 && (
-          <div className="mt-1 flex flex-col gap-0.5">
-            {notes.map((n) => (
-              <span key={n.text} className={`text-[12.5px] ${n.warn ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-slate-400'}`}>{n.text}</span>
-            ))}
-          </div>
-        )}
+        <div className="text-[13px] text-gray-500 dark:text-slate-400">{module.about}</div>
+        {notes.map((n) => (
+          <div key={n.text} className={`text-[12.5px] ${n.warn ? 'text-amber-700 dark:text-amber-400' : 'text-gray-500 dark:text-slate-400'}`}>{n.text}</div>
+        ))}
       </div>
-      <div className="text-right">
-        <div className={`inline-flex items-center gap-1.5 whitespace-nowrap pt-1.5 text-[13px] font-medium ${TONE_TEXT[lt.tone]}`}>
-          <AccessDot tone={lt.tone} />
-          {lt.text}
-        </div>
+      <div className={`inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium ${TONE_TEXT[lt.tone]}`}>
+        <AccessDot tone={lt.tone} />
+        {lt.text}
       </div>
     </div>
   );

@@ -223,6 +223,8 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                   setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
                 }}
                 options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
+                ariaLabel="Copy permissions from"
+                className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-1 sm:py-1 px-3 sm:px-3 rounded-md sm:rounded-md border-input"
               />
             </div>
           ) : (

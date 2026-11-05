@@ -49,23 +49,25 @@ export interface AccessModule {
   entries: ModuleEntry[];
   /** What each level lets people do (UI copy). */
   can: { view: string; full: string };
+  /** One plain line: what this area is for. */
+  about: string;
 }
 
-const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: boolean; can: { view: string; full: string } }> = {
-  job_description: { name: 'Job Descriptions', group: 'Hiring', can: { view: 'See job descriptions and their versions', full: 'Create, edit, archive, disable, delete and export job descriptions' } },
-  resume_scoring: { name: 'Resume Scoring', group: 'Hiring', can: { view: 'See scoring results and scorecards', full: 'Score resumes, export results and download scorecards' } },
-  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and export results' } },
-  assessments: { name: 'Assessments', group: 'Hiring', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
-  ai_interviews: { name: 'AI Interviews', group: 'Hiring', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
-  my_resumes: { name: 'My Resumes', group: 'Candidates', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete resumes' } },
-  internal_database: { name: 'Shared Database', group: 'Candidates', can: { view: 'Browse the company-wide resume database', full: 'Share, archive and delete resumes in the shared database' } },
-  hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
-  user_management: { name: 'User Management', group: 'Administration', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
-  teams: { name: 'Teams', group: 'Administration', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
-  subscription_billing: { name: 'Subscription & Billing', group: 'Administration', can: { view: 'See the plan, usage, payment methods and billing history', full: 'Upgrade the plan, manage payment methods and export usage' } },
-  settings: { name: 'Settings', group: 'Administration', can: { view: 'See general, roles, API and branding settings', full: 'Change general, roles, API and branding settings' } },
-  analytics: { name: 'Analytics', group: 'Administration', always: true, can: { view: 'See the dashboard (always on for everyone)', full: 'Export analytics and build custom reports' } },
-  support: { name: 'Support', group: 'Administration', always: true, can: { view: 'Raise support tickets (always on for everyone)', full: 'Also manage security settings' } },
+const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: boolean; about: string; can: { view: string; full: string } }> = {
+  job_description: { name: 'Job Descriptions', group: 'Hiring', about: 'Create and manage job descriptions', can: { view: 'See job descriptions and their versions', full: 'Create, edit, archive, disable, delete and export job descriptions' } },
+  resume_scoring: { name: 'Resume Scoring', group: 'Hiring', about: 'Score resumes against a job description', can: { view: 'See scoring results and scorecards', full: 'Score resumes, export results and download scorecards' } },
+  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and export results' } },
+  assessments: { name: 'Assessments', group: 'Hiring', about: 'Create assessments and invite candidates to take them', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
+  ai_interviews: { name: 'AI Interviews', group: 'Hiring', about: 'Set up AI interviews and invite candidates', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
+  my_resumes: { name: 'My Resumes', group: 'Candidates', about: 'Upload and manage your own resumes', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete resumes' } },
+  internal_database: { name: 'Shared Database', group: 'Candidates', about: 'Browse resumes shared across the company', can: { view: 'Browse the company-wide resume database', full: 'Share, archive and delete resumes in the shared database' } },
+  hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', about: 'Keep a set of reusable HR questions', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
+  user_management: { name: 'User Management', group: 'Administration', about: 'Add people and give them a role', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
+  teams: { name: 'Teams', group: 'Administration', about: 'Group people into teams', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
+  subscription_billing: { name: 'Subscription & Billing', group: 'Administration', about: 'Plan, usage, payments and invoices', can: { view: 'See the plan, usage, payment methods and billing history', full: 'Upgrade the plan, manage payment methods and export usage' } },
+  settings: { name: 'Settings', group: 'Administration', about: 'Company settings, roles, API keys and branding', can: { view: 'See general, roles, API and branding settings', full: 'Change general, roles, API and branding settings' } },
+  analytics: { name: 'Analytics', group: 'Administration', always: true, about: 'Dashboard and reports', can: { view: 'See the dashboard (always on for everyone)', full: 'Export analytics and build custom reports' } },
+  support: { name: 'Support', group: 'Administration', always: true, about: 'Get help and raise support tickets', can: { view: 'Raise support tickets (always on for everyone)', full: 'Also manage security settings' } },
 };
 
 const MODULE_ORDER = [
@@ -85,7 +87,7 @@ const sectionOfCode = (code: string): CustomPermissionCategory | undefined =>
 const buildModules = (): AccessModule[] => {
   const byId = new Map<string, AccessModule>();
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
-    const copy = MODULE_COPY[cat.id] ?? { name: cat.name, group: 'Administration' as ModuleGroup, can: { view: `See ${cat.name}`, full: `Manage ${cat.name}` } };
+    const copy = MODULE_COPY[cat.id] ?? { name: cat.name, group: 'Administration' as ModuleGroup, about: cat.name, can: { view: `See ${cat.name}`, full: `Manage ${cat.name}` } };
     const view: string[] = [];
     const full: string[] = [];
     if (cat.viewCode) view.push(cat.viewCode);
