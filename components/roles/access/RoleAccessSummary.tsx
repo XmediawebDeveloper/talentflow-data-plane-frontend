@@ -8,8 +8,8 @@ import {
   describeModule,
   isHostOn,
   levelText,
-  moduleCount,
   moduleName,
+  moduleOfCode,
   shortLabel,
   type AccessModule,
 } from '@/lib/permissions/moduleLevels';
@@ -30,7 +30,6 @@ const TONE_TILE = {
 function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule }) {
   const d = describeModule(codes, module);
   const lt = levelText(d);
-  const [on, total] = moduleCount(codes, module);
   const notes: { text: string; warn?: boolean }[] = [];
   if (d.base === 'full' && module.entries.length) {
     const hosts = Array.from(new Set(module.entries.filter((e) => codes.has(e.code)).map((e) => moduleName(e.host))));
@@ -44,7 +43,7 @@ function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule
   if (offScreens.length) notes.push({ text: `Hidden on the ${listText(offScreens)} page${offScreens.length > 1 ? 's' : ''}`, warn: true });
   const own = d.missing.filter((c) => !getMainPermission(c));
   if (own.length) notes.push({ text: `Turned off: ${listText(own.map(shortLabel))}`, warn: true });
-  if (d.extra.length) notes.push({ text: `Extra access: ${listText(d.extra.map(getPermissionLabel))}` });
+  if (d.extra.length) notes.push({ text: `Extra access: ${listText(d.extra.map((c) => (moduleOfCode(c)?.id === module.id ? shortLabel(c) : getPermissionLabel(c))))}` });
 
   return (
     <div className="grid grid-cols-[34px_1fr_auto] items-start gap-3 border-b border-gray-100 py-3 last:border-b-0 dark:border-slate-800">
@@ -67,7 +66,6 @@ function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule
           <AccessDot tone={lt.tone} />
           {lt.text}
         </div>
-        <div className="mt-0.5 text-xs text-gray-400 dark:text-slate-500">{on} of {total} permissions</div>
       </div>
     </div>
   );
