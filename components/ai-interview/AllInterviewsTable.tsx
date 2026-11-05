@@ -358,6 +358,7 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   const locked = !!jdActionLockReason(row.config.jd_status);
   if (kind === 'archive') {
     if (!cfg.canArchive) return 'no permission to archive';
+    if (row.rawStatus === 'draft') return 'draft has no archive state — delete instead';
     if (row.rawStatus === 'archived') return 'already archived';
     if (locked) return 'job is disabled or archived';
     return null;
@@ -615,16 +616,20 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
   /* ── Bulk actions on the ticked rows ── Actions (N) + Clear, the Candidate
      Results pattern. Items per tab: All → Export / Archive / Unarchive /
-     Delete; Active and Draft drop Unarchive; Archived drops Archive. */
+     Delete; Active drops Unarchive; Archived drops Archive; Draft drops both
+     Archive and Unarchive — a draft has nothing to archive (the row ⋮ menu's
+     rule, see renderInterviewVersionActions), only Edit/Delete apply. */
   const selectedRows = useMemo(
     () => [...selectedIds].map((id) => knownRows[id]).filter((row): row is InterviewRow => !!row),
     [selectedIds, knownRows],
   );
   const bulkKinds: BulkActionKind[] = fixedStatus === 'archived'
     ? ['unarchive', 'delete']
-    : fixedStatus
-      ? ['archive', 'delete']
-      : ['archive', 'unarchive', 'delete'];
+    : fixedStatus === 'draft'
+      ? ['delete']
+      : fixedStatus
+        ? ['archive', 'delete']
+        : ['archive', 'unarchive', 'delete'];
   const BULK_META: Record<BulkActionKind, { label: string; Icon: typeof Archive; className: string }> = {
     archive: { label: 'Archive', Icon: Archive, className: 'text-menu-icon-archive' },
     unarchive: { label: 'Unarchive', Icon: ArchiveRestore, className: 'text-menu-icon-archive' },
