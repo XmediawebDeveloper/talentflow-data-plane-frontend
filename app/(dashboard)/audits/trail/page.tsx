@@ -239,6 +239,24 @@ const isCandidateActor = (log: Pick<AuditLog, 'actor_role' | 'user_display_id' |
 
 const formatRole = (role: string | null) => (role ? role.replace(/_/g, ' ').toLowerCase() : '');
 
+// Readable names for unit codes (RU → Resume Upload, …).
+const UNIT_TYPE_LABELS: Record<string, string> = {
+  RU: 'Resume Upload',
+  RS: 'Resume Scoring',
+  AS: 'Assessment',
+  AIU: 'AI Interview',
+  max_seats: 'Team Seats',
+  max_jobs: 'Job Postings',
+};
+
+// Friendly text for a few raw Event Details values.
+const formatDetailValue = (key: string, value: unknown): string => {
+  const s = String(value);
+  if (key === 'unit_type') return UNIT_TYPE_LABELS[s] || s;
+  if (key === 'source' && (s === 'control_plane' || s === 'super_admin')) return 'Super Admin';
+  return s;
+};
+
 /** 'YYYY-MM-DD' (local day) → that day's first / last instant, as ISO strings. */
 const dayStartISO = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndISO = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
@@ -910,6 +928,10 @@ export default function AuditTrailPage() {
     // Addon/seat purchases and admin grants add credits — show as positive (green)
     const isPurchase = isAdminGrant || ['addon_purchase', 'seats_purchase'].includes(log.action);
     if (units && units > 0 && log.unit_type) {
+      if (isAdminGrant) {
+        // e.g. "+2 Resume Upload" instead of "+2 RU"
+        return { text: `+${units} ${UNIT_TYPE_LABELS[log.unit_type] || log.unit_type}`, negative: false, positive: true };
+      }
       if (isPurchase) {
         return { text: `+${units} ${log.unit_type}`, negative: false, positive: true };
       }
@@ -1874,7 +1896,7 @@ export default function AuditTrailPage() {
                                 .filter(([, v]) => v !== null && v !== undefined)
                                 .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}`)
                                 .join(' · ')
-                            : String(value)}
+                            : formatDetailValue(key, value)}
                         </span>
                       </div>
                     ))}
