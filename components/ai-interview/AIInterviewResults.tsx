@@ -9,7 +9,6 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
@@ -24,7 +23,8 @@ const RESULTS_FILTER_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-1.5 sm:py
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
-import NameAvatar from '@/components/ui/name-avatar';
+import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { DateField } from '@/components/ui/date-field';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -246,6 +246,19 @@ export function isAutoCompleted(session: any): boolean {
   return reason.startsWith('time_limit');
 }
 
+/** A session's status in the shared invite-status look (InviteStatusChip). */
+const SESSION_STATUS_KIND: Record<string, InviteStatusKind> = {
+  completed: 'completed', in_progress: 'in_progress', invited: 'invited', terminated: 'terminated',
+  cancelled: 'cancelled', expired: 'expired', revoked: 'revoked',
+};
+export function SessionStatusChip({ session }: { session: any }) {
+  const kind = SESSION_STATUS_KIND[session?.status];
+  const auto = isAutoCompleted(session);
+  return kind
+    ? <InviteStatusChip kind={kind} auto={auto} title={auto ? 'Auto-completed when the interview duration elapsed' : undefined} />
+    : <InviteStatusChip kind="other" label={getStatusLabel(session?.status)} />;
+}
+
 export function getStatusIcon(status: string) {
   switch (status) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-success" />;
@@ -310,7 +323,8 @@ const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value
 
 export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, emptyStateText, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   const scoped = !!jobScope && jobScope.length > 0;
-  const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
+  /* Every name in Capitalized Case (the invite trackers' rule), after the host's own formatter. */
+  const showName = (name?: string | null) => capitalizedCase(formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, also enforced by the audit
   // endpoint) — greyed with the reason when missing, never hidden.
@@ -1717,7 +1731,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {/* pl-6 keeps the corner select seal off the avatar — it shows on
                         touch, on hover, and on every card once anything is selected. */}
                     <div className="flex items-start gap-2.5 pl-6">
-                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
@@ -1749,11 +1762,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant={getStatusVariant(session.status)}>
-                          {getStatusIcon(session.status)}
-                          {getStatusLabel(session.status)}
-                          {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
-                        </Badge>
+                        <SessionStatusChip session={session} />
                         {session.status === 'in_progress' && (
                           <span className="tf-badge flex bg-destructive text-white text-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -1861,7 +1870,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   }
                   title={
                     <span className="flex min-w-0 items-center gap-2">
-                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                       <span className="min-w-0 [overflow-wrap:anywhere]">{showName(session.candidate_name) || 'Unknown'}</span>
                     </span>
                   }
@@ -1870,10 +1878,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       {col('interviewVersion') && rowInterviewVersion(session) != null && (
                         <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
                       )}
-                      <Badge variant={getStatusVariant(session.status)} className="shrink-0">
-                        {getStatusIcon(session.status)}
-                        {getStatusLabel(session.status)}
-                      </Badge>
+                      <SessionStatusChip session={session} />
                     </>
                   }
                   meta={[
@@ -1998,7 +2003,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         {col('candidate') && (
                           <td className="tf-td">
                             <div className="flex items-center gap-2">
-                              <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
@@ -2029,11 +2033,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         {col('status') && (
                           <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
-                              <Badge variant={getStatusVariant(session.status)}>
-                                {getStatusIcon(session.status)}
-                                {getStatusLabel(session.status)}
-                                {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
-                              </Badge>
+                              <SessionStatusChip session={session} />
                               {session.status === 'in_progress' && (
                                 <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
