@@ -146,14 +146,7 @@ export default function PermissionSectionsView({ codes, renderLockedSection, sho
             className="tf-card-soft overflow-hidden"
           >
             <div className="flex items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5">
-              <div>
-                <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
-                <p className="tf-meta">
-                  {showAll
-                    ? `${grantedCount} of ${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`
-                    : `${section.items.length} permission${section.items.length !== 1 ? 's' : ''}`}
-                </p>
-              </div>
+              <h3 className={`text-base max-sm:text-sm font-semibold ${noneGranted ? 'text-gray-400 dark:text-slate-500' : 'text-gray-900 dark:text-slate-50'}`}>{section.name}</h3>
             </div>
             <div className="tf-grid-3 p-4">
               {section.items.map((item) => {

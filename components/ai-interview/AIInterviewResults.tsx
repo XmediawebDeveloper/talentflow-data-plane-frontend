@@ -9,11 +9,10 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import FilterSelect from '@/components/ui/filter-select';
 
@@ -24,7 +23,8 @@ const RESULTS_FILTER_TRIGGER_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-1.5 sm:py
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import TimelineStamps from '@/components/ui/timeline-stamps';
-import NameAvatar from '@/components/ui/name-avatar';
+import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { DateField } from '@/components/ui/date-field';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -246,6 +246,19 @@ export function isAutoCompleted(session: any): boolean {
   return reason.startsWith('time_limit');
 }
 
+/** A session's status in the shared invite-status look (InviteStatusChip). */
+const SESSION_STATUS_KIND: Record<string, InviteStatusKind> = {
+  completed: 'completed', in_progress: 'in_progress', invited: 'invited', terminated: 'terminated',
+  cancelled: 'cancelled', expired: 'expired', revoked: 'revoked',
+};
+export function SessionStatusChip({ session }: { session: any }) {
+  const kind = SESSION_STATUS_KIND[session?.status];
+  const auto = isAutoCompleted(session);
+  return kind
+    ? <InviteStatusChip kind={kind} auto={auto} title={auto ? 'Auto-completed when the interview duration elapsed' : undefined} />
+    : <InviteStatusChip kind="other" label={getStatusLabel(session?.status)} />;
+}
+
 export function getStatusIcon(status: string) {
   switch (status) {
     case 'completed': return <CheckCircle className="w-4 h-4 text-success" />;
@@ -310,7 +323,8 @@ const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value
 
 export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, hideJobVersion = false, readOnly = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, emptyStateText, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp, jobScope, toolbarPortal, formatCandidateName, onOpenInviteDialog, onTotalItemsChange }: AIInterviewResultsProps) {
   const scoped = !!jobScope && jobScope.length > 0;
-  const showName = (name?: string | null) => (formatCandidateName && name ? formatCandidateName(name) : name);
+  /* Every name in Capitalized Case (the invite trackers' rule), after the host's own formatter. */
+  const showName = (name?: string | null) => capitalizedCase(formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, also enforced by the audit
   // endpoint) — greyed with the reason when missing, never hidden.
@@ -1088,7 +1102,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           />
         );
         const toolbarBlock = (
-        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-4'}>
+        /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
+           list's lines — search · filter icon, Result, Invite, Columns · Export,
+           the status tabs (underlined), then Select All · Sort · List / Grid —
+           as the AI Assessment results page. Embedded in Job Details: unchanged. */
+        <div className={toolbarPortal ? '' : 'tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4'}>
         <ListToolbar
           searchValue={search.query}
           onSearchChange={search.setQuery}
@@ -1149,7 +1167,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              status pills → Sort by → List / Grid. Embedded in Job Details:
              the AI Talent Match row as before. */
           /* Status is in More Filters when embedded, to make room here. */
-          afterFiltersActions={toolbarActions}
+          afterFiltersActions={toolbarActions && !portaled ? <div className="tf-jobs-invite contents">{toolbarActions}</div> : toolbarActions}
           leadingActions={
             <>
               {portaled ? (
@@ -1166,6 +1184,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               ) : (
                 /* Inline with Search, as Location / Industry are on the Job
                    Openings page. */
+                <div className="tf-jobs-filter-pills contents">
                 <SearchableSelect
                   className="w-full sm:w-44"
                   value={resultFilter}
@@ -1176,6 +1195,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   searchPlaceholder="Search result..."
                   ariaLabel="Filter by result"
                 />
+                </div>
               )}
               {portaled && sortControl}
             </>
@@ -1188,6 +1208,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           {/* Customize Columns / Export — standalone only as buttons;
               embedded in Job Details they are items in the Actions pill. */}
           {!portaled && (
+            <div className="tf-jobs-actions-line contents">
             <Button
               variant="secondary"
               size="sm"
@@ -1198,8 +1219,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               <span className="hidden md:inline">Customize Columns</span>
               <span className="md:hidden">Columns</span>
             </Button>
-          )}
-          {!portaled && (
             <Button
               variant="primary"
               size="sm"
@@ -1211,6 +1230,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             >
               Export{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
+            </div>
           )}
         </ListToolbar>
 
@@ -1438,7 +1458,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             between the two rows. Each field applies as it changes; the
             toolbar's Reset clears them all. */}
         {showFilters && !portaled && (
-          <div className="mt-3 pt-3 border-t border-brand-blue/10">
+          <div className="tf-jobs-filter-panel mt-3 pt-3 border-t border-brand-blue/10">
             <div className="tf-grid-4 [&>div]:min-w-0">
               <div>
                 <label className={filterLabelClass}>Score Range (%)</label>
@@ -1532,7 +1552,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             Actions once a row is ticked, the status pills, then Sort by and
             List / Grid at the row's end. */}
         {!portaled && (
-          <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+          <div className="tf-jobs-row2 flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <div className="tf-jobs-select">
             <ToolbarSelectAll
               selectedCount={selected.size}
               allSelected={allOnPageSelected}
@@ -1554,6 +1575,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               }
               onClear={() => setSelected(new Map())}
             />
+            </div>
             {selected.size > 0 && (
               <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
@@ -1627,18 +1649,36 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
+            <div className="tf-jobs-status-tabs contents">
             {RESULT_STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => search.setFilter('status', opt.value)}
+                aria-pressed={statusFilter === opt.value}
                 className={tabPill(statusFilter === opt.value)}
               >
                 {opt.label}
               </button>
             ))}
-            <div className="flex items-center gap-2 sm:ml-auto">
-              {sortControl}
+            </div>
+            <div className="tf-jobs-trail flex items-center gap-2 sm:ml-auto">
+              <div className="tf-jobs-sort contents">{sortControl}</div>
+              {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+              <PhoneSortMenu<typeof sortField>
+                value={sortField}
+                order={sortDirection}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'score', label: 'Score' },
+                  { value: 'date', label: 'Completed' },
+                ]}
+                orderLabels={(f) => (f === 'date'
+                  ? { desc: 'Newest first', asc: 'Oldest first' }
+                  : f === 'score' ? { desc: 'Highest first', asc: 'Lowest first' } : { desc: 'Z → A', asc: 'A → Z' })}
+                onChange={(v) => { setSortField(v); setCurrentPage(1); }}
+                onOrderChange={(o) => { setSortDirection(o); setCurrentPage(1); }}
+              />
               <ListViewToggle value={displayMode} onChange={setDisplayMode} />
             </div>
           </div>
@@ -1717,7 +1757,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {/* pl-6 keeps the corner select seal off the avatar — it shows on
                         touch, on hover, and on every card once anything is selected. */}
                     <div className="flex items-start gap-2.5 pl-6">
-                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}
@@ -1749,11 +1788,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <Badge variant={getStatusVariant(session.status)}>
-                          {getStatusIcon(session.status)}
-                          {getStatusLabel(session.status)}
-                          {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
-                        </Badge>
+                        <SessionStatusChip session={session} />
                         {session.status === 'in_progress' && (
                           <span className="tf-badge flex bg-destructive text-white text-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -1861,7 +1896,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   }
                   title={
                     <span className="flex min-w-0 items-center gap-2">
-                      <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                       <span className="min-w-0 [overflow-wrap:anywhere]">{showName(session.candidate_name) || 'Unknown'}</span>
                     </span>
                   }
@@ -1870,10 +1904,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       {col('interviewVersion') && rowInterviewVersion(session) != null && (
                         <VersionPill kind="interview" version={rowInterviewVersion(session)!} />
                       )}
-                      <Badge variant={getStatusVariant(session.status)} className="shrink-0">
-                        {getStatusIcon(session.status)}
-                        {getStatusLabel(session.status)}
-                      </Badge>
+                      <SessionStatusChip session={session} />
                     </>
                   }
                   meta={[
@@ -1998,7 +2029,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         {col('candidate') && (
                           <td className="tf-td">
                             <div className="flex items-center gap-2">
-                              <NameAvatar name={session.candidate_name} fallback={session.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
@@ -2029,11 +2059,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         {col('status') && (
                           <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
-                              <Badge variant={getStatusVariant(session.status)}>
-                                {getStatusIcon(session.status)}
-                                {getStatusLabel(session.status)}
-                                {isAutoCompleted(session) && <span className="opacity-80" title="Auto-completed when the interview duration elapsed">(Auto)</span>}
-                              </Badge>
+                              <SessionStatusChip session={session} />
                               {session.status === 'in_progress' && (
                                 <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

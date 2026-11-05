@@ -47,6 +47,9 @@ export interface ServerInviteCandidate {
    *  other sources never list an archived resume in the first place, so this
    *  stays undefined (falsy) there. */
   archived?: boolean;
+  /** This email belongs to an existing team member — never invitable, the
+   *  same lockout Resume Database / AI Talent Match show. */
+  is_tenant_user_email?: boolean;
   /** This resume's version and how many the candidate has, when the server sends them. */
   version?: number | null;
   version_count?: number | null;

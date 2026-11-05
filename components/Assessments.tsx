@@ -129,6 +129,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import QuotaBadge from '@/components/ui/quota-badge';
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import Dropdown from '@/components/ui/filter-select';
+import { PhoneSortMenu } from '@/components/ui/select-all-menu';
 import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse, AssessmentPageParams, AssessmentResultsPageFilters, AssessmentResultsPageQuery, AssessmentResultsPageStats } from '@/lib/services/assessmentService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
@@ -155,7 +156,8 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
+import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
 
@@ -2175,39 +2177,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      tab), with `resolveInviteFieldStatus` — the row's own fields — only as
      its fallback. */
   const renderInviteBadgeForStatus = (status: string, inv: { termination_code?: string | null }) => {
-    const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
     switch (status) {
       case 'expired':
-        return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
+        return <InviteStatusChip kind="expired" />;
       case 'completed': {
         const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
-        return (
-          <span
-            className={`${base} bg-status-completed/10 dark:bg-status-completed/15 text-status-completed ring-status-completed/20 dark:ring-status-completed/25`}
-            title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
-          >
-            <CheckCircle className="w-3 h-3" />
-            Completed
-            {autoCompleted && <span className="text-status-completed/80">(Auto)</span>}
-          </span>
-        );
+        return <InviteStatusChip kind="completed" auto={autoCompleted} title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined} />;
       }
       case 'failed':
-        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
+        return <InviteStatusChip kind="invite_failed" />;
       case 'bounced':
-        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+        return <InviteStatusChip kind="bounced" />;
       case 'revoked':
-        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><Ban className="w-3 h-3" /> Revoked</span>;
+        return <InviteStatusChip kind="revoked" />;
       case 'abandoned':
-        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+        return <InviteStatusChip kind="terminated" title="Ended before completion — the candidate left the assessment" />;
       case 'started':
-        return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
+        return <InviteStatusChip kind="in_progress" />;
       case 'opened':
-        return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
+        return <InviteStatusChip kind="system_check" title="Consent accepted — the candidate is on the system check step" />;
       case 'sent':
-        return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
+        return <InviteStatusChip kind="invited" />;
       default:
-        return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
+        return <InviteStatusChip kind="link_created" title="Link created — no email sent yet" />;
     }
   };
 
@@ -2652,6 +2644,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const RESULT_EXPORT_COLUMNS: { id: string; label: string; headers: string[]; cells: (row: CandidateResultRow) => string[] }[] = [
     { id: 'candidate', label: 'Candidate', headers: ['Candidate'], cells: (r) => [r.candidate_name || ''] },
     { id: 'email', label: 'Email', headers: ['Email'], cells: (r) => [r.candidate_email || ''] },
+    { id: 'resultStatus', label: 'Status', headers: ['Status'], cells: (r) => [resultStatusLabel(r)] },
+    { id: 'techScore', label: 'Tech Score', headers: ['Tech Score'], cells: (r) => [resultScoreText(r.technical_score)] },
+    { id: 'codingScore', label: 'Coding Score', headers: ['Coding Score'], cells: (r) => [resultScoreText(r.coding_score)] },
     {
       id: 'timeline', label: 'Timeline', headers: ['Started At', 'Completed At', 'Duration'],
       cells: (r) => [
@@ -2661,9 +2656,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ],
     },
     { id: 'completed', label: 'Completed', headers: ['Completed'], cells: (r) => [r.completed_at ? formatISTDate(r.completed_at) : ''] },
-    { id: 'resultStatus', label: 'Result Status', headers: ['Result Status'], cells: (r) => [resultStatusLabel(r)] },
-    { id: 'techScore', label: 'Tech Score', headers: ['Tech Score'], cells: (r) => [resultScoreText(r.technical_score)] },
-    { id: 'codingScore', label: 'Coding Score', headers: ['Coding Score'], cells: (r) => [resultScoreText(r.coding_score)] },
     { id: 'inviteSource', label: 'Invite Source', headers: ['Invite Source'], cells: (r) => [inviteSourceLabel(assessmentInviteSource(r)) || ''] },
     { id: 'phone', label: 'Phone', headers: ['Phone'], cells: (r) => [r.candidate_phone || ''] },
     { id: 'cid', label: 'CID', headers: ['CID'], cells: (r) => [r.candidate_display_id || ''] },
@@ -6796,7 +6788,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          {/* Phones: Questions / Invite share a row and Create takes its own full row —
+              the Job Openings header's full-width buttons. From sm unchanged. */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3 [&>*]:max-sm:w-full">
             {/* Assessment Quota Badge with color coding - use stats.units_consumed for consistency */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -6875,7 +6869,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               aria-disabled={!canCreateAssessment}
               title={!canCreateAssessment ? 'You do not have permission to create assessments' : (asUnitsExhausted ? 'No assessment units available' : '')}
               icon={<Plus className="w-4 h-4" />}
-              className={`${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`max-sm:col-span-2 ${!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Create AI Assessment</span>
                 <span className="sm:hidden">Create</span>
@@ -7091,7 +7085,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             `[&>*:last-child:not(:first-child)]:mb-3` spaces an open filter
             panel (or the match line) off that rule the way the toolbar row's
             own mb-3 already does when it is alone. */}
-        <div className="tf-card p-3 sm:p-4 mb-4">
+        {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's lines —
+              ( search ............ ) (⚙) [≡ ⊞]
+              Jobs 0  All 2  Active 1  Draft 1  Archi…   ← underlined tabs, scroll sideways
+                                         [⇅ Sort ▾] [↻]
+            From sm the card is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
 
         {/* THE search position for this page: one row, directly above the tab
             pills, for every tab.
@@ -7110,7 +7109,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             placeholder and its own filter fields — what is shared is the row,
             its position and its order: search, More Filters, Reset, count
             badge. */}
-        <ListToolbarSlot ref={toolbarSlot.ref} className="mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
+        <ListToolbarSlot ref={toolbarSlot.ref} className="tf-jobs-slot mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {/* Total Jobs and Archived — the two tabs the page lists itself. Same
             ListToolbar, same panel, same handlers as before; the only change is
@@ -7369,7 +7368,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           const visibleTabs = TABS.filter((tab) => !('adminOnly' in tab && tab.adminOnly) || isTenantAdmin);
 
           return (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap">
+              {/* `contents` from sm (the row as before); on phones one underlined strip. */}
+              <div className="tf-jobs-status-tabs contents">
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key) && !CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
               <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
                 {visibleTabs.filter((tab) => CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
@@ -7394,37 +7395,50 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </button>
                 )}
               </div>
+              </div>
               {/* Sort by + Refresh are ONE unit pinned to the row's right
                   edge. As separate flex-wrap siblings, any extra width in the
                   pills (a longer count, a new tab) pushed Refresh down onto a
                   line of its own. Together they wrap as a pair or not at all,
                   and the "Sort by" word drops out below 2xl so the pair stays
                   narrow enough to share the pills' line. */}
-              <div className="flex items-center gap-1.5 ml-auto flex-shrink-0">
+              <div className="tf-jobs-tools flex items-center gap-1.5 ml-auto flex-shrink-0">
               {showSortBy && (() => {
+                const sortOptions = [
+                  { value: 'newest', label: 'Newest' },
+                  { value: 'oldest', label: 'Oldest' },
+                  ...(dateOnlySort ? [] : [
+                    { value: 'active', label: 'Active first' },
+                    { value: 'draft', label: 'Draft first' },
+                  ]),
+                ];
+                const sortValue = dateOnlySort ? (listSortBy === 'oldest' ? 'oldest' : 'newest') : listSortBy;
                 const sortControl = (
-                <div className="flex items-center gap-2">
+                <div className="tf-jobs-sort flex items-center gap-2">
                   <label htmlFor="assessment-sort" className="tf-label whitespace-nowrap">Sort by</label>
                   <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                     <Dropdown
                       id="assessment-sort"
                       ariaLabel="Sort by"
-                      value={dateOnlySort ? (listSortBy === 'oldest' ? 'oldest' : 'newest') : listSortBy}
+                      value={sortValue}
                       onChange={(v) => setListSortBy(v as typeof listSortBy)}
                       className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
-                      options={[
-                        { value: 'newest', label: 'Newest' },
-                        { value: 'oldest', label: 'Oldest' },
-                        ...(dateOnlySort ? [] : [
-                          { value: 'active', label: 'Active first' },
-                          { value: 'draft', label: 'Draft first' },
-                        ]),
-                      ]}
+                      options={sortOptions}
                     />
                   </div>
                 </div>
                 );
-                return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+                return (
+                  <>
+                    {sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl}
+                    {/* Phones: the Job Openings list's Sort menu beside Refresh (the inline Sort by hides). */}
+                    <PhoneSortMenu
+                      value={sortValue}
+                      options={sortOptions}
+                      onChange={(v) => setListSortBy(v as typeof listSortBy)}
+                    />
+                  </>
+                );
               })()}
               {/* Refresh — right corner of the pill row, on every tab, as on
                   the AI Interviews page. */}
@@ -7436,7 +7450,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 title="Refresh"
                 aria-label="Refresh"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-                className="flex-shrink-0 !h-9"
+                className="tf-jobs-refresh flex-shrink-0 !h-9"
               >
                 <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
@@ -7445,7 +7459,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
-        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
+        <div data-list-bulk-slot className="empty:hidden mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2" />
         </div>
 
         {/* The list itself. Like the Job Descriptions page, the rows and
@@ -7728,7 +7742,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
-                                {['Select', 'Candidate', 'Email', 'Timeline', 'Completed', 'Result Status', 'Tech Score', 'Coding Score', 'Invite Source', 'Phone', 'CID', 'JD ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Actions'].map((c) => (
+                                {['Select', 'Candidate', 'Email', 'Status', 'Tech Score', 'Coding Score', 'Timeline', 'Completed', 'Invite Source', 'Phone', 'CID', 'JD ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Actions'].map((c) => (
                                   <th key={c} className="tf-th-cell tf-th"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -7894,11 +7908,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </th>
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Email</span></th>
-                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
-                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result Status</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
                               <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Tech Score</span></th>
                               <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Coding Score</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Completed</span></th>
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Phone</span></th>
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
@@ -7952,15 +7966,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                   <td className="tf-td">
                                     <div className="flex items-center gap-3">
-                                      <NameAvatar name={result.candidate_name} fallback={result.candidate_email} size="md" />
-                                      <p className="min-w-0 max-w-[240px] tf-row-name truncate" title={result.candidate_name || 'Unknown'}>
-                                        {result.candidate_name || 'Unknown'}
+                                      <p className="min-w-0 max-w-[240px] tf-row-name truncate" title={capitalizedCase(result.candidate_name) || 'Unknown'}>
+                                        {capitalizedCase(result.candidate_name) || 'Unknown'}
                                       </p>
                                     </div>
                                   </td>
                                   <td className="tf-td tf-body-secondary whitespace-nowrap">
                                     <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '-'}</span>
                                   </td>
+                                  <td className="tf-td">
+                                    {renderInviteBadgeForStatus(
+                                      result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
+                                      {},
+                                    )}
+                                  </td>
+                                  {/* Tech / Coding Score — the Invitation Status
+                                      tab's own cell (`renderInviteScoreCell`). */}
+                                  {renderInviteScoreCell(result, 'technical')}
+                                  {renderInviteScoreCell(result, 'coding')}
                                   <td className="tf-td tf-meta">
                                     <div className="space-y-1">
                                       {result.started_at && (
@@ -7991,16 +8014,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       {result.completed_at ? formatISTDate(result.completed_at) : '-'}
                                     </div>
                                   </td>
-                                  <td className="tf-td">
-                                    {renderInviteBadgeForStatus(
-                                      result.status === 'completed' ? 'completed' : result.status === 'in_progress' ? 'started' : 'pending',
-                                      {},
-                                    )}
-                                  </td>
-                                  {/* Tech / Coding Score — the Invitation Status
-                                      tab's own cell (`renderInviteScoreCell`). */}
-                                  {renderInviteScoreCell(result, 'technical')}
-                                  {renderInviteScoreCell(result, 'coding')}
                                   {/* Invite Source — how this candidate was
                                       actually invited, from the invitation's
                                       own resume_id. */}
@@ -8137,8 +8150,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               }
                               title={
                                 <span className="flex min-w-0 items-center gap-2">
-                                  <NameAvatar name={result.candidate_name} fallback={result.candidate_email} size="md" />
-                                  <span className="truncate" title={result.candidate_name || 'Unknown'}>{result.candidate_name || 'Unknown'}</span>
+                                  <span className="truncate" title={capitalizedCase(result.candidate_name) || 'Unknown'}>{capitalizedCase(result.candidate_name) || 'Unknown'}</span>
                                 </span>
                               }
                               actions={
@@ -8940,9 +8952,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   )}
                                   <div className="flex items-start justify-between gap-2">
                                     <div className="flex items-center gap-3 min-w-0">
-                                      <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                                       <div className="min-w-0">
-                                        <p className="tf-row-name truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
+                                        <p className="tf-row-name truncate" title={capitalizedCase(inv.candidate_name)}>{capitalizedCase(inv.candidate_name) || '-'}</p>
                                         <p className="tf-meta truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
                                       </div>
                                     </div>
@@ -9102,7 +9113,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     )}
                                     <td className="tf-td">
                                       <div className="flex items-center gap-3">
-                                        <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                                         {/* Invited / Expired name the email on the
                                             name's own line ("Name — email"), so it
                                             is not repeated on a second one; every
@@ -9112,14 +9122,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                             className="min-w-0 max-w-[360px] text-sm truncate"
                                             title={[inv.candidate_name, inv.candidate_email].filter(Boolean).join(' — ')}
                                           >
-                                            <span className="font-medium text-gray-900 dark:text-slate-50">{inv.candidate_name || '-'}</span>
+                                            <span className="font-medium text-gray-900 dark:text-slate-50">{capitalizedCase(inv.candidate_name) || '-'}</span>
                                             {inv.candidate_email && (
                                               <span className="tf-meta"> — {inv.candidate_email}</span>
                                             )}
                                           </p>
                                         ) : (
                                           <div className="min-w-0 max-w-[240px]">
-                                            <p className="tf-row-name truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
+                                            <p className="tf-row-name truncate" title={capitalizedCase(inv.candidate_name)}>{capitalizedCase(inv.candidate_name) || '-'}</p>
                                             <p className="tf-meta truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
                                           </div>
                                         )}
@@ -9267,8 +9277,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               badges={renderInviteBadgeForStatus(statusOf(inv), inv)}
                               title={
                                 <span className="flex min-w-0 items-center gap-2">
-                                  <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
-                                  <span className="truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</span>
+                                  <span className="truncate" title={capitalizedCase(inv.candidate_name)}>{capitalizedCase(inv.candidate_name) || '-'}</span>
                                 </span>
                               }
                               actions={renderInviteRowActions(inv)}
@@ -10009,7 +10018,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     {event.event_type.replace(/_/g, ' ')}
                                   </div>
                                   <div className="tf-meta truncate">
-                                    {event.candidate_name || 'Unknown'} • {event.assessment_title || 'Assessment'}
+                                    {capitalizedCase(event.candidate_name) || 'Unknown'} • {event.assessment_title || 'Assessment'}
                                   </div>
                                 </div>
                               </div>
@@ -10298,7 +10307,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <InviteStatCards
               /* Phone: one swipeable row — three to a row cut every label to
                  "Total Inv…" / "Complet…" and stacked three rows of tiles. */
-              gridClassName="flex gap-1.5 overflow-x-auto scrollbar-hide [&>*]:shrink-0 [&>*]:min-w-[6.75rem] sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:gap-2 lg:gap-3 sm:overflow-visible sm:[&>*]:min-w-0"
+              /* The Job Openings module's Track Invites stat grid (`.tf-tracker-stats`). */
+              gridClassName="tf-tracker-stats"
               activeStatus={trackingFilters.status}
               onSelect={(status) => {
                 setTrackingFilters({ ...trackingFilters, status });
@@ -10573,12 +10583,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </td>
                             <td className="tf-td align-top">
                               <div className="flex items-center gap-3">
-                                <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                                 {/* Capped rather than free: under auto layout a
                                     single long email would otherwise set the
                                     column width for the whole table. */}
                                 <div className="min-w-0 max-w-[240px]">
-                                  <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                  <p className="tf-row-name truncate" title={capitalizedCase(invitation.candidate_name)}>{capitalizedCase(invitation.candidate_name)}</p>
                                   <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
                               </div>
@@ -10780,8 +10789,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         onClick={rowOpensDetails ? () => openTrackedInviteResult(invitation) : undefined}
                         title={
                           <span className="flex min-w-0 items-center gap-2">
-                            <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="md" />
-                            <span className="truncate" title={invitation.candidate_name}>{invitation.candidate_name}</span>
+                            <span className="truncate" title={capitalizedCase(invitation.candidate_name)}>{capitalizedCase(invitation.candidate_name)}</span>
                           </span>
                         }
                         select={isBulkActionable(invitation) && !trackingInviteArchived(invitation) ? (

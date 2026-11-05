@@ -1965,6 +1965,42 @@ export const aiInterviewService = {
   },
 
   /**
+   * Count of INVITED/CONSENT_PENDING candidate sessions on this interview
+   * config that the bulk revoke action would invalidate right now. Used by
+   * the confirmation modal — mirrors assessmentService.getRevokableInvitationsCount.
+   */
+  async getRevokableInvitationsCount(interviewId: string): Promise<number> {
+    try {
+      const response = await api.get<{ count: number }>(
+        `/ai-interview/${interviewId}/invitations/revokable-count`
+      );
+      return response.data.count;
+    } catch (error) {
+      console.error('Failed to fetch revokable invitations count:', error);
+      return 0;
+    }
+  },
+
+  /**
+   * Revoke all INVITED/CONSENT_PENDING candidate sessions on this interview
+   * config at once. Candidates who already reached system check or further
+   * are untouched — distinct from revokeInvitation, which revokes one
+   * session at a time. Mirrors assessmentService.revokePendingInvitations.
+   */
+  async revokePendingInvitations(
+    interviewId: string
+  ): Promise<{ revoked_count: number; revoked_ids: string[] }> {
+    try {
+      const response = await api.post<{ revoked_count: number; revoked_ids: string[] }>(
+        `/ai-interview/${interviewId}/invitations/revoke-pending`
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Edit a REVOKED invitation's candidate name/email. Only allowed while
    * the invitation is revoked — does not change status.
    */
@@ -2048,6 +2084,7 @@ withListCacheInvalidation(aiInterviewService, [
   'createInviteLink',
   'sendSessionEmail',
   'revokeInvitation',
+  'revokePendingInvitations',
   'updateInvitation',
   'triggerEvaluation',
   'reEvaluatePartial',

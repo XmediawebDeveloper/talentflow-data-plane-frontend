@@ -477,7 +477,7 @@ export default function AssessmentDetailsView({
   /* WHICH of Assessment Details' two horizontal views is open. Configure
      Details — the rounds, Technical / Coding / HR — unless the reader asked
      for `?tab=info`, which is what keeps the old deep link working. */
-  type DetailsSubTab = 'configure' | 'info' | 'analytics';
+  type DetailsSubTab = 'configure' | 'info';
   const [detailsSubTab, setDetailsSubTab] = useState<DetailsSubTab>(
     requestedTab === 'info' ? 'info' : 'configure',
   );
@@ -941,7 +941,6 @@ export default function AssessmentDetailsView({
   const detailsSubTabs: { id: DetailsSubTab; label: string; icon: typeof FileText }[] = [
     { id: 'configure', label: 'Configure Details', icon: Sliders },
     { id: 'info', label: 'Assessment Info', icon: Info },
-    { id: 'analytics', label: 'Performance Analytics', icon: TrendingUp },
   ];
   /* The invitation timeline, held WITH the assessment it was built from —
      the shape the JD and the sibling list use, for the same reason. The view
@@ -1558,77 +1557,6 @@ export default function AssessmentDetailsView({
     return `${minutes} min`;
   }, [assessment.duration_minutes]);
 
-  // Analytics data derived from assessment - uses correct API field names
-  const formatTime = (seconds: number | null | undefined): string => {
-    if (seconds == null) return 'N/A';
-    const mins = Math.floor(seconds / 60);
-    if (mins >= 60) {
-      const hrs = Math.floor(mins / 60);
-      const remainingMins = mins % 60;
-      return `${hrs}h ${remainingMins}m`;
-    }
-    return `${mins} min`;
-  };
-
-  // Same single-bucket classifier as the Track Invites popup so the cards
-  // here stay in sync. recentActivity is now an expanded event list (one
-  // row per lifecycle moment), so we dedupe by invitation id before
-  // bucketing.
-  const _uniqueInvites: any[] = (() => {
-    const seen = new Map<string, any>();
-    for (const ev of recentActivity) {
-      if (ev?.id && !seen.has(ev.id)) seen.set(ev.id, ev);
-    }
-    return Array.from(seen.values());
-  })();
-  const _now = new Date();
-  const _bucket = (inv: any): 'completed' | 'failed' | 'terminated' | 'expired' | 'started' | 'sent' => {
-    const s = (inv.status || '').toLowerCase();
-    if (s === 'completed' || inv.completed_at) return 'completed';
-    // 'abandoned' = candidate left mid-assessment → its own "Terminated"
-    // bucket (AI Interview wording), not an invite-delivery failure.
-    if (s === 'abandoned') return 'terminated';
-    if (['failed', 'bounced'].includes(s)) return 'failed';
-    if (s === 'expired') return 'expired';
-    if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
-      return 'expired';
-    }
-    if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
-    return 'sent';
-  };
-  const _bucketCounts = {
-    completed: 0,
-    failed: 0,
-    terminated: 0,
-    expired: 0,
-    started: 0,
-    sent: 0,
-  };
-  for (const inv of _uniqueInvites) {
-    _bucketCounts[_bucket(inv)] += 1;
-  }
-  const _totalInvites = assessment.candidates || assessment.invitations_count || _uniqueInvites.length || 0;
-  const _completed = _bucketCounts.completed || assessment.completed_count || 0;
-  const analyticsData = {
-    totalInvites: _totalInvites,
-    expired: _bucketCounts.expired,
-    failed: _bucketCounts.failed,
-    terminated: _bucketCounts.terminated,
-    started: _bucketCounts.started || assessment.in_progress_count || 0,
-    completed: _completed,
-    inProgress: _bucketCounts.started || assessment.in_progress_count || 0,
-    notStarted: assessment.pending_count || 0,
-    completionRate: _totalInvites > 0 ? Math.round((_completed / _totalInvites) * 100) : 0,
-    averageScore: assessment.average_score as number | null,
-    averageTime: formatTime(assessment.average_time_seconds),
-    passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
-      ? `${assessment.pass_rate}%`
-      : 'N/A',
-    hrScore: assessment.hr_score as number | null,
-    technicalScore: assessment.technical_score as number | null,
-    codingScore: assessment.coding_score as number | null,
-  };
-
   // Outer/inner chrome matches job-details: scrolling <main>, centred
   // max-w-[1400px] column, then one padded white card that owns ALL horizontal
   // padding. Sections below therefore carry no px-* of their own.
@@ -2097,22 +2025,29 @@ export default function AssessmentDetailsView({
                   Share: a labelled primary "Continue Editing", the AI Interview
                   details page's draft button (`AIInterviewDetailsView`), in
                   place of the pencil. */}
-              {onEdit && draftLocked && (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={canEditAssessment ? onEdit : undefined}
-                  aria-disabled={!canEditAssessment}
-                  aria-label="Continue editing this draft assessment"
-                  title={!canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
-                  icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={` px-3 sm:px-4 min-h-[40px] flex-shrink-0 whitespace-nowrap ${canEditAssessment ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : 'opacity-50 cursor-not-allowed'}`}
-                >
-                  <span className="hidden sm:inline">Continue Editing</span>
-                  <span className="sm:hidden">Edit</span>
-                </Button>
-              )}
+              {onEdit && draftLocked && (() => {
+                // A disabled/archived JD locks edits the same way it locks
+                // Share below — a draft left pointing at a dead job version
+                // should not be editable just because it never sent an invite.
+                const editJdLockMessage = assessmentJobLockMessage(jobVersions.find((v) => v.id === assessment?.jd_id)?.status);
+                const editBlocked = !canEditAssessment || !!editJdLockMessage;
+                return (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={editBlocked ? undefined : onEdit}
+                    aria-disabled={editBlocked}
+                    aria-label="Continue editing this draft assessment"
+                    title={editJdLockMessage ? editJdLockMessage : !canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
+                    icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
+                    className={` px-3 sm:px-4 min-h-[40px] flex-shrink-0 whitespace-nowrap ${editBlocked ? 'opacity-50 cursor-not-allowed' : 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20'}`}
+                  >
+                    <span className="hidden sm:inline">Continue Editing</span>
+                    <span className="sm:hidden">Edit</span>
+                  </Button>
+                );
+              })()}
               {onShare && (() => {
         // Share is blocked for Archived (out of circulation) AND
         // once invites have been revoked (assessment is sealed —
@@ -2194,22 +2129,34 @@ export default function AssessmentDetailsView({
                   action (there a labelled button; here the icon-only shape
                   every other action on this header already uses). Active only:
                   a draft has nothing published yet to duplicate, and an
-                  archived record is restored, not duplicated. */}
-              {assessment.status === 'Active' && (
+                  archived record is restored, not duplicated. Also mirrors the
+                  All Assessments table's own gate: nobody invited yet means
+                  this version is still editable, so it's edited, not duplicated. */}
+              {assessment.status === 'Active' && (() => {
+                const notInvited = (assessment.invitations_count ?? 0) === 0;
+                const duplicateDisabled = !canCreateAssessments || notInvited;
+                return (
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={canCreateAssessments ? handleDuplicate : undefined}
-                  disabled={isDuplicating}
-                  aria-disabled={!canCreateAssessments}
+                  onClick={duplicateDisabled ? undefined : handleDuplicate}
+                  disabled={isDuplicating || duplicateDisabled}
+                  aria-disabled={duplicateDisabled}
                   aria-label="Duplicate assessment"
-                  title={canCreateAssessments ? 'Duplicate as a new version' : 'You do not have permission to duplicate assessments'}
-                  className={`h-8 w-8 flex-shrink-0 ${canCreateAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
+                  title={
+                    !canCreateAssessments
+                      ? 'You do not have permission to duplicate assessments'
+                      : notInvited
+                      ? 'No candidates invited yet — edit this version instead.'
+                      : 'Duplicate as a new version'
+                  }
+                  className={`h-8 w-8 flex-shrink-0 ${duplicateDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-menu-icon-download" />}
                 </Button>
-              )}
+                );
+              })()}
               {onEdit && !isArchivedAssessment && (() => {
                 /* The Assessments page's own edit rule (`handleEditAssessment`):
                    an Active assessment that has gone out to even one candidate
@@ -2268,7 +2215,9 @@ export default function AssessmentDetailsView({
             right — the AI Interview / AI Assessment candidate result pages'
             layout. Tablet/mobile: the wrapping horizontal `tabPill` bar. */}
         <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
-          <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
+          {/* Phones / tablets (globals.css, `.tf-detail-nav`): the Job Details page's
+              underlined tab strip, scrolling sideways. From lg the vertical rail. */}
+          <nav className="tf-detail-nav p-2 sm:p-3" aria-label="Assessment details sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -2814,153 +2763,6 @@ export default function AssessmentDetailsView({
                   );
                 })()}
 
-                {/* PERFORMANCE ANALYTICS — its own horizontal view.
-
-                    It used to sit at the foot of Configure Details, beneath the
-                    rounds, which ended a configuration panel with results. Same
-                    block and same data; only its parent changed — and the
-                    `mt-8 pt-6 border-t` that divided it from the rounds above
-                    went with the division, since a rule across the top of a tab
-                    panel separates it from nothing. */}
-                {detailsSubTab === 'analytics' && (
-                  <div>
-                    <h4 className="tf-label mb-4">Performance Analytics</h4>
-
-                    {analyticsData.completed === 0 ? (
-                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02]">
-                        <TrendingUp className="w-10 h-10 text-brand-blue/30 mx-auto mb-2" />
-                        <p className="tf-body-secondary mb-1">No performance data available yet</p>
-                        <p className="tf-meta">Data will appear after candidates complete the assessment</p>
-                      </div>
-                    ) : (
-                      <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'lg:grid-cols-2' : ''} gap-4 sm:gap-5`}>
-                        {/* Technical Performance */}
-                        {assessment.technical_enabled && (
-                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
-                            <h5 className="tf-row-title mb-4 tracking-tight">Technical Performance</h5>
-                            <div className="space-y-3">
-                              {(() => {
-                                const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
-                                const denom = completedInvites.length || analyticsData.completed || 0;
-                                const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
-                                const passed = completedInvites.filter((a: any) => (a.technical_score || 0) >= 70).length;
-                                const average = completedInvites.filter((a: any) => (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length;
-                                const below = completedInvites.filter((a: any) => (a.technical_score || 0) < 50).length;
-                                return (
-                                  <>
-                                    {/* Passed (≥70%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(passed)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Average (50-69%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Average (50-69%)</span>
-                                        <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-brand-orange h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(average)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Below Average (<50%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(below)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Coding Performance */}
-                        {assessment.coding_enabled && (
-                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
-                            <h5 className="tf-row-title mb-4 tracking-tight">Coding Performance</h5>
-                            <div className="space-y-3">
-                              {(() => {
-                                const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
-                                const denom = completedInvites.length || analyticsData.completed || 0;
-                                const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
-                                const passed = completedInvites.filter((a: any) => (a.coding_score || 0) >= 70).length;
-                                const average = completedInvites.filter((a: any) => (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length;
-                                const below = completedInvites.filter((a: any) => (a.coding_score || 0) < 50).length;
-                                return (
-                                  <>
-                                    {/* Passed (≥70%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(passed)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Average (50-69%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Average (50-69%)</span>
-                                        <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-brand-orange h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(average)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Below Average (<50%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(below)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
@@ -3038,10 +2840,10 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              /* Phone: one swipeable row with full labels — the Assessments
-                 page's Invite Status popup treatment; three to a row cut every
-                 label short. */
-              gridClassName="flex gap-2 overflow-x-auto scrollbar-hide [&>*]:shrink-0 [&>*]:min-w-[6.75rem] sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:gap-3 sm:overflow-visible sm:[&>*]:min-w-0"
+              /* The Job Openings module's Track Invites stat grid (globals.css,
+                 `.tf-tracker-stats`): 2 per row on phones, so every label shows in
+                 full without a sideways-scrolling strip; 3 / 4 / 7 as it widens. */
+              gridClassName="tf-tracker-stats"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });

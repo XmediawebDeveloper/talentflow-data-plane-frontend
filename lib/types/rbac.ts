@@ -29,6 +29,8 @@ export interface Role {
   parent_role_name?: string;
   permissions: RolePermission[];
   user_count: number;
+  /** Update Role: how many people's access this save rewrote. */
+  affected_user_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -53,6 +55,17 @@ export interface RoleListItem {
   parent_role_name?: string;
   permission_count: number;
   user_count: number;
+  /** Effective access (own + parent chain + always-on baseline). */
+  permission_codes?: string[];
+  /** First few people with this role. */
+  holders?: RoleHolder[];
+  updated_at?: string;
+}
+
+export interface RoleHolder {
+  id: string;
+  name: string;
+  email: string;
 }
 
 // User role types
@@ -94,6 +107,8 @@ export interface RoleCreateRequest {
   priority?: number;
   parent_role_id?: number;
   permission_ids: number[];
+  /** Duplicate Role: copy this role's access when permission_ids is empty. */
+  source_role_id?: number;
 }
 
 export interface RoleUpdateRequest {

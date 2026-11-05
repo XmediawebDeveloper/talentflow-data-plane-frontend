@@ -20,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
@@ -165,6 +165,28 @@ const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
   { value: 'no_match', label: 'Rating Below 7' },
 ];
 const isJobSortKey = (v: unknown): v is JobSortKey => JOB_SORT_OPTIONS.some(o => o.value === v);
+/** The two orders of a job-list sort, worded for the field (the phone Sort menu). */
+const jobSortOrderLabels = (field: JobSortKey): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'title' || field === 'jdId'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
+/* View by Candidates' Sort by — one list for the inline control and the phone Sort menu. */
+const CANDIDATE_SORT_OPTIONS: { value: CandidateSortKey; label: string }[] = [
+  { value: 'jobs', label: 'Matched Jobs' },
+  { value: 'score', label: 'Best Match' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'scored', label: 'Scored' },
+  { value: 'titles', label: 'Job Titles' },
+  { value: 'date', label: 'Last Matched' },
+];
+const candidateSortOrderLabels = (field: CandidateSortKey): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'name' || field === 'titles'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
 
 /* Same labels as Resume Scoring's filters: 'full_time' → "Full Time",
    and work mode mapped so "onsite" reads "On-site". */
@@ -3592,7 +3614,7 @@ export default function AITalentMatchPage({
       const interviewAllowed = canInviteAIInterviewFromMatch && !selectionJobLock;
       const interviewReason = selectionJobLock ?? AI_INTERVIEW_INVITE_DENIED;
       return (
-        <StickyBulkBar className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+        <StickyBulkBar className="mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -3764,9 +3786,12 @@ export default function AITalentMatchPage({
       { id: 'no_match', label: 'Rating Below 7', count: pillCounts.no_match },
     ];
     const isCandidatesView = historyPageView === 'candidates' || historyPageView === 'resumes';
+    /* Phones (globals.css, `.tf-jobs-toolbar`): the rating pills become the Job
+       Openings list's underlined status tabs and View by its full-width
+       segmented row — as Resume Scoring. From sm unchanged. */
     const viewPills = (
-      <div className="flex items-center gap-2 flex-wrap">
-        <div role="group" aria-label="Filter by match rating" className="flex items-center gap-2 flex-wrap">
+      <div className="tf-jobs-contents flex items-center gap-2 flex-wrap">
+        <div role="group" aria-label="Filter by match rating" className="tf-jobs-status-tabs flex items-center gap-2 flex-wrap">
           {ratingFilters.map(f => {
             const active = candidateRatingBand === f.id;
             return (
@@ -3795,12 +3820,12 @@ export default function AITalentMatchPage({
 
         <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
 
-        <div className="flex items-center gap-2">
+        <div className="tf-jobs-method flex w-full sm:w-auto items-center gap-2">
           <span className="tf-label whitespace-nowrap">View by</span>
           <div
             role="radiogroup"
             aria-label="View by"
-            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+            className="relative grid grid-cols-2 flex-1 sm:flex-none h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
           >
             <span
               aria-hidden
@@ -3824,11 +3849,11 @@ export default function AITalentMatchPage({
                 role="radio"
                 aria-checked={view.active}
                 onClick={view.open}
-                className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
                   view.active ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                 }`}
               >
-                <view.icon className="w-4 h-4" />
+                <view.icon className="hidden sm:block w-4 h-4" />
                 {view.label}
               </button>
             ))}
@@ -3852,7 +3877,7 @@ export default function AITalentMatchPage({
           title="AI Talent Match"
           description="Review jobs with AI-matched candidates and their results"
           actions={
-            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
               {onBack && (
                 <Button
                   variant="secondary"
@@ -3877,7 +3902,8 @@ export default function AITalentMatchPage({
                 }}
                 aria-disabled={!canRunAiMatch}
                 title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-                className={`${(!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+                /* Full width on phones, like Job Openings' Create New Job and Resume Scoring's Score Resumes. */
+                className={`w-full sm:w-auto ${(!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               >
                 Run AI Match
               </Button>
@@ -3997,7 +4023,9 @@ export default function AITalentMatchPage({
           <div>
             <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-            <div className="mb-4">
+            {/* Phones / tablets: the Job Openings list's toolbar card and phone
+                line layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
+            <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
               <ListToolbar
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
@@ -4006,7 +4034,7 @@ export default function AITalentMatchPage({
                 searchPlaceholder="Search candidates by name, email or job..."
                 controlsFollowSearch
                 leadingActions={
-                  <>
+                  <div className="tf-jobs-filter-pills contents">
                     <SearchableSelect
                       className="w-full sm:w-52"
                       value={candidateFilterJob === 'all' ? '' : candidateFilterJob}
@@ -4027,7 +4055,7 @@ export default function AITalentMatchPage({
                       searchPlaceholder="Search..."
                       ariaLabel="Filter by minimum match"
                     />
-                  </>
+                  </div>
                 }
                 onToggleFilters={() => {
                   setShowCandidateFilters(!showCandidateFilters);
@@ -4038,29 +4066,25 @@ export default function AITalentMatchPage({
                 onClearFilters={clearCandidateFilters}
                 className="mb-0"
               >
+                {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
+                <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={candidateSortBy}
                   order={candidateSortOrder}
-                  options={[
-                    { value: 'jobs' as const, label: 'Matched Jobs' },
-                    { value: 'score' as const, label: 'Best Match' },
-                    { value: 'name' as const, label: 'Candidate Name' },
-                    { value: 'scored' as const, label: 'Scored' },
-                    { value: 'titles' as const, label: 'Job Titles' },
-                    { value: 'date' as const, label: 'Last Matched' },
-                  ]}
+                  options={CANDIDATE_SORT_OPTIONS}
                   onChange={(v) => setCandidateSortBy(v)}
                   onToggleOrder={() => setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
                 />
+                </div>
                 <ListViewToggle
                   value={matchDisplayMode}
                   onChange={setDisplayModeEverywhere}
-                  className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
+                  className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px] !border-brand-blue/10"
                 />
               </ListToolbar>
 
               {showCandidateFilters && (
-                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
+                <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
                   <div className="tf-grid-4">
                     {candidateLocations.length > 0 && (
                       <div>
@@ -4166,9 +4190,10 @@ export default function AITalentMatchPage({
 
               {/* Row 2: Select All, the rating pills and View by toggle, Expand
                   all — the same row View by Job has. */}
-              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+              <div className="tf-jobs-row2 mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
                 {candKeys.length > 0 && (
                   <>
+                    <div className="tf-jobs-select">
                     <SelectAllMenu
                       selectedCount={tickedCands.length}
                       pageCount={pageCandKeys.length}
@@ -4186,10 +4211,22 @@ export default function AITalentMatchPage({
                       onSelectAll={() => { void selectAllMatchingCandidates(); }}
                       onClear={clearCandSelection}
                     />
+                    </div>
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                   </>
                 )}
                 {viewPills}
+                {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+                {candKeys.length > 0 && (
+                  <PhoneSortMenu<CandidateSortKey>
+                    value={candidateSortBy}
+                    order={candidateSortOrder}
+                    options={CANDIDATE_SORT_OPTIONS}
+                    orderLabels={candidateSortOrderLabels}
+                    onChange={(v) => setCandidateSortBy(v)}
+                    onOrderChange={setCandidateSortOrder}
+                  />
+                )}
                 {pageCandKeys.length > 0 && (() => {
                   const allOpen = pageCandKeys.every(k => expandedCandidateGroups.has(k));
                   return (
@@ -4203,10 +4240,12 @@ export default function AITalentMatchPage({
                         })
                       }
                       aria-pressed={allOpen}
-                      className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                      title={allOpen ? 'Collapse all' : 'Expand all'}
+                      /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                      className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
                     >
                       {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                      {allOpen ? 'Collapse all' : 'Expand all'}
+                      <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
                     </button>
                   );
                 })()}
@@ -5630,8 +5669,10 @@ export default function AITalentMatchPage({
 
         {/* Row 1 — Resume Scoring's View by Job toolbar: Search (fills the
             row), Location and Industry inline, More Filters, Reset, Sort by,
-            List / Grid. No count badge — the pagination carries the totals. */}
-        <div className="mb-4">
+            List / Grid. No count badge — the pagination carries the totals.
+            Phones / tablets: the Job Openings list's toolbar card and phone line
+            layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
+        <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
           <ListToolbar
             searchValue={historySearchQuery}
             onSearchChange={historySearch.setQuery}
@@ -5649,7 +5690,7 @@ export default function AITalentMatchPage({
               const locations = facets?.job_locations ?? [];
               const industries = facets?.industries ?? [];
               return (
-                <>
+                <div className="tf-jobs-filter-pills contents">
                   <SearchableSelect
                     className="w-full sm:w-48"
                     value={historyJobLocation}
@@ -5670,12 +5711,14 @@ export default function AITalentMatchPage({
                     searchPlaceholder="Search industry..."
                     ariaLabel="Filter by industry"
                   />
-                </>
+                </div>
               );
             })()}
             className="mb-0"
           >
+            {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
             {sortedHistory.length > 0 && (
+              <div className="tf-jobs-sort contents">
               <SortByControl
                 value={historySortBy}
                 order={historySortOrder}
@@ -5683,11 +5726,12 @@ export default function AITalentMatchPage({
                 onChange={(v) => setHistorySortBy(v)}
                 onToggleOrder={() => setHistorySortOrder(o => (o === 'asc' ? 'desc' : 'asc'))}
               />
+              </div>
             )}
             <ListViewToggle
               value={jobListDisplayMode}
               onChange={setDisplayModeEverywhere}
-              className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
+              className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px] !border-brand-blue/10"
             />
           </ListToolbar>
 
@@ -5700,7 +5744,7 @@ export default function AITalentMatchPage({
             const selectCls = FIELD_SELECT_CLASS;
             const labelCls = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5';
             return (
-              <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
+              <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
                 <div className="tf-grid-3">
                   <div>
                     <label className={labelCls}>Matched By</label>
@@ -5822,9 +5866,10 @@ export default function AITalentMatchPage({
           {/* Row 2: Select All, the rating pills and View by toggle, Expand
               all (Actions and Clear get their own row once jobs are ticked)
               — Resume Scoring's View by Job. */}
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+          <div className="tf-jobs-row2 mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
             {(pageJobKeys.length > 0 || jobKeys.length > 0) && (
               <>
+                <div className="tf-jobs-select">
                 <SelectAllMenu
                   selectedCount={selectedJobCount}
                   pageCount={pageJobKeys.length}
@@ -5842,10 +5887,22 @@ export default function AITalentMatchPage({
                   onSelectAll={() => { void selectAllMatchingJobs(); }}
                   onClear={clearJobSelection}
                 />
+                </div>
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
               </>
             )}
             {viewPills}
+            {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+            {sortedHistory.length > 0 && (
+              <PhoneSortMenu<JobSortKey>
+                value={historySortBy}
+                order={historySortOrder}
+                options={JOB_SORT_OPTIONS}
+                orderLabels={jobSortOrderLabels}
+                onChange={(v) => setHistorySortBy(v)}
+                onOrderChange={setHistorySortOrder}
+              />
+            )}
             {pageJobKeys.length > 0 && (() => {
               const allOpen = pageJobKeys.every(k => expandedJobKeys.has(k));
               return (
@@ -5860,10 +5917,12 @@ export default function AITalentMatchPage({
                     });
                   }}
                   aria-pressed={allOpen}
-                  className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                  title={allOpen ? 'Collapse all' : 'Expand all'}
+                  /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                  className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
                 >
                   {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                  {allOpen ? 'Collapse all' : 'Expand all'}
+                  <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
                 </button>
               );
             })()}
@@ -6630,8 +6689,8 @@ export default function AITalentMatchPage({
                           // Under a rating pill the others are muted.
                           const muted = !!candidateRatingBand && id !== candidateRatingBand;
                           return (
-                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={muted ? 'opacity-60' : undefined}>
-                              <span className="tabular-nums">{count}</span> {label}
+                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={`tf-verdict-chip${muted ? ' opacity-60' : ''}`}>
+                              <span className="tabular-nums">{count}</span> <span>{label}</span>
                             </MobileStatChip>
                           );
                         })}
@@ -8087,7 +8146,10 @@ export default function AITalentMatchPage({
               active count and Clear), the list actions, then the count badge.
               Rating, Scored Status, Experience and Sort live in the panel. */}
           {!isLoadingResultsFromHistory && matchedCandidates.length > 0 && (
-          <div className="mb-4 space-y-3">
+          /* Phones / tablets: the Job Openings list's toolbar card; phones get its
+             line layout (globals.css, `.tf-jobs-toolbar`): search · filter icon ·
+             List / Grid, the panel under it, then Actions on a line of its own. */
+          <div className="tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3">
             <ListToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}
@@ -8203,7 +8265,7 @@ export default function AITalentMatchPage({
                 const jobLock = resolveSelectionJobLock(target);
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
                 return (
-                  <>
+                  <div className="tf-jobs-actions-line contents">
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -8291,14 +8353,14 @@ export default function AITalentMatchPage({
                         })()}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </>
+                  </div>
                 );
               })()}
-              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} className="h-9 [&>button]:p-[7px]" />
+              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px]" />
             </ListToolbar>
 
             {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg">
+              <div className="basis-full order-last flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg">
                 <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
                 <span className="text-xs text-brand-orange-deep font-medium">
                   Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.

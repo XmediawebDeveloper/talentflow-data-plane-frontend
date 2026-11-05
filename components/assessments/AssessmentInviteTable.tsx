@@ -1,6 +1,6 @@
 'use client';
 
-import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X } from 'lucide-react';
+import { Mail, Clock, Loader2, Users, Eye, Pencil, MoreVertical, Check, Send} from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -15,7 +15,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
+import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import {
   timelineEvents,
@@ -130,45 +131,19 @@ export const isValidInviteEmail = (email: string) => isValidEmailFormat(email);
  *  status with a chip beside it. */
 export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   const s = inv.status;
-  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
-  if (isInviteExpired(inv)) {
-    return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
-  }
+  if (isInviteExpired(inv)) return <InviteStatusChip kind="expired" />;
   if (s === 'completed' || inv.completed_at) {
     const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
-    return (
-      <span
-        className={`${base} bg-status-completed/10 dark:bg-status-completed/15 text-status-completed ring-status-completed/20 dark:ring-status-completed/25`}
-        title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
-      >
-        <CheckCircle className="w-3 h-3" />
-        Completed
-        {autoCompleted && <span className="text-status-completed/80">(Auto)</span>}
-      </span>
-    );
+    return <InviteStatusChip kind="completed" auto={autoCompleted} title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined} />;
   }
-  if (s === 'failed') {
-    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
-  }
-  if (s === 'bounced' || inv.bounced_at) {
-    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
-  }
-  if (s === 'expired') {
-    return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
-  }
-  if (s === 'abandoned') {
-    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
-  }
-  if (s === 'started' || inv.started_at) {
-    return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
-  }
-  if (s === 'opened' || inv.opened_at) {
-    return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
-  }
-  if (s === 'sent' || inv.sent_at) {
-    return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
-  }
-  return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`} title="Link created — no email sent yet"><Mail className="w-3 h-3" /> Invited</span>;
+  if (s === 'failed') return <InviteStatusChip kind="invite_failed" />;
+  if (s === 'bounced' || inv.bounced_at) return <InviteStatusChip kind="bounced" />;
+  if (s === 'expired') return <InviteStatusChip kind="expired" />;
+  if (s === 'abandoned') return <InviteStatusChip kind="terminated" title="Ended before completion — the candidate left the assessment" />;
+  if (s === 'started' || inv.started_at) return <InviteStatusChip kind="in_progress" />;
+  if (s === 'opened' || inv.opened_at) return <InviteStatusChip kind="system_check" title="Consent accepted — the candidate is on the system check step" />;
+  if (s === 'sent' || inv.sent_at) return <InviteStatusChip kind="invited" />;
+  return <InviteStatusChip kind="link_created" title="Link created — no email sent yet" />;
 };
 
 /* A score column as a phone-card footer chip: the same readiness rule and the
@@ -394,12 +369,11 @@ export default function AssessmentInviteTable({
                     </td>
                     <td className="tf-td align-top">
                       <div className="flex items-center gap-3">
-                        <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                         {/* Capped rather than free: under auto layout a
                             single long email would otherwise set the
                             column width for the whole table. */}
                         <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
-                          <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                          <p className="tf-row-name truncate" title={capitalizedCase(invitation.candidate_name)}>{capitalizedCase(invitation.candidate_name)}</p>
                           <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
                       </div>
@@ -641,8 +615,7 @@ export default function AssessmentInviteTable({
                 badges={<InviteStatusBadge inv={invitation} />}
                 title={
                   <span className="flex min-w-0 items-center gap-2">
-                    <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="md" />
-                    <span className="truncate" title={invitation.candidate_name}>{invitation.candidate_name}</span>
+                    <span className="truncate" title={capitalizedCase(invitation.candidate_name)}>{capitalizedCase(invitation.candidate_name)}</span>
                   </span>
                 }
                 actions={actions.length > 0 ? <InvitationActionsMenu actions={actions} /> : undefined}

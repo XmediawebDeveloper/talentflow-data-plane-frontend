@@ -3,8 +3,7 @@
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { Fragment, useState, type ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import {
-  X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
+import { Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil, Check,
   MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,7 +14,8 @@ import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isIntervi
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
-import NameAvatar from '@/components/ui/name-avatar';
+import InviteStatusChip from '@/components/ui/invite-status-chip';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { type ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -477,30 +477,20 @@ const buildFullTimeline = (
 /** Badge wording and colours kept in one place so a recruiter reads the same
  *  status regardless of where tracking was opened from. */
 export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
-  const base =
-    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
   switch (inv.status) {
     case 'completed': {
       // (Auto) surfaces when the timeout monitor finalized an abandoned session —
       // closing_reason starts with 'time_limit' (ai_interview_timeout_monitor.py).
       const reason: string = (inv.ai_evaluation?.closing_reason || '').toString().toLowerCase();
       const autoCompleted = reason.startsWith('time_limit');
-      return (
-        <span
-          className={`${base} bg-success-subtle text-success ring-success-line`}
-          title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
-        >
-          <CheckCircle className="w-3 h-3" /> Completed
-          {autoCompleted && <span className="text-success/80">(Auto)</span>}
-        </span>
-      );
+      return <InviteStatusChip kind="completed" auto={autoCompleted} title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined} />;
     }
     case 'in_progress':
-      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-3 h-3" /> In Progress</span>;
+      return <InviteStatusChip kind="in_progress" />;
     case 'invited':
-      return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
+      return <InviteStatusChip kind="invited" />;
     case 'cancelled':
-      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Cancelled</span>;
+      return <InviteStatusChip kind="cancelled" />;
     case 'terminated': {
       // closing_reason is set by evaluate_and_persist_session as
       // "proctoring_terminated: <human message>" (candidate_ai_interview.py) once
@@ -509,28 +499,14 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       // wording when no evaluation exists yet (still evaluating, or it failed).
       const rawReason: string = (inv.ai_evaluation?.closing_reason || '').toString();
       const detail = rawReason.replace(/^proctoring_terminated:\s*/i, '').trim();
-      return (
-        <span
-          className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}
-          title={detail || 'Auto-ended by the proctoring policy — candidate left the interview screen'}
-        >
-          <Ban className="w-3 h-3" /> Terminated
-        </span>
-      );
+      return <InviteStatusChip kind="terminated" title={detail || 'Auto-ended by the proctoring policy — candidate left the interview screen'} />;
     }
     case 'expired':
-      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-3 h-3" /> Expired</span>;
+      return <InviteStatusChip kind="expired" />;
     case 'revoked':
-      return (
-        <span
-          className={`${base} bg-slate-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300 ring-gray-300 dark:ring-slate-600`}
-          title="Revoked by recruiter — the old link no longer works"
-        >
-          <Ban className="w-3 h-3" /> Revoked
-        </span>
-      );
+      return <InviteStatusChip kind="revoked" title="Revoked by recruiter — the old link no longer works" />;
     default:
-      return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> {inv.status || 'Pending'}</span>;
+      return <InviteStatusChip kind="other" label={inv.status || 'Pending'} />;
   }
 };
 
@@ -596,6 +572,14 @@ interface RowAction {
 type InviteColumnId =
   | 'candidate' | 'timeline' | 'status' | 'score' | 'inviteSource' | 'cid'
   | 'jobId' | 'jobTitle' | 'jobVersion' | 'interviewVersion';
+/* autoHeight: every row at least the height of one whose Timeline carries its
+   two events and View full history (69px). A table row's height is its minimum. */
+const AUTO_HEIGHT_ROW_MIN_H = 'h-[69px]';
+const AUTO_HEIGHT_COL_MIN_W: Record<string, string> = {
+  candidate: 'min-w-[15rem]', timeline: 'min-w-[17.5rem]', status: 'min-w-[10.5rem]', score: 'min-w-[9rem]',
+  inviteSource: 'min-w-[8.5rem]', cid: 'min-w-[7rem]', jobId: 'min-w-[7rem]', jobTitle: 'min-w-[12rem]',
+  jobVersion: 'min-w-[7rem]', interviewVersion: 'min-w-[8.5rem]', actions: 'min-w-[5rem]',
+};
 /* With `expandableRows`, the six columns the desktop row shows; the rest open
    in the row's expanded panel (the Resume Scoring list's expand pattern). */
 const PRIMARY_INVITE_COLUMNS: InviteColumnId[] = ['candidate', 'jobId', 'jobTitle', 'status', 'score', 'inviteSource'];
@@ -607,6 +591,12 @@ export interface AIInterviewInviteTableProps {
   hasActiveFilters: boolean;
   /** Extra line under the empty state when nothing is filtered. */
   emptyHint?: string;
+  /** A button (or two) under the empty state — the guided tracker's "Clear
+   *  filters" / "Invite candidates". */
+  emptyAction?: ReactNode;
+  /** The desktop table grows to its rows instead of scrolling inside itself
+   *  (the paged trackers, a few rows a page), with tighter rows. */
+  autoHeight?: boolean;
 
   /**
    * Adds a "Job / Interview" column (desktop) / line (mobile) reading each
@@ -671,6 +661,8 @@ export default function AIInterviewInviteTable({
   isLoading,
   hasActiveFilters,
   emptyHint,
+  emptyAction,
+  autoHeight = false,
   showJobColumn = false,
   jobVersion,
   interviewVersion,
@@ -692,6 +684,14 @@ export default function AIInterviewInviteTable({
   displayMode = 'list',
 }: AIInterviewInviteTableProps) {
   const selectable = !!onToggleSelect;
+  /* Row height: tighter when the table grows to its rows (autoHeight). */
+  const cellY = autoHeight ? 'py-2' : 'py-3';
+  /* autoHeight (the paged trackers): the latest two timeline events in the
+     cell; the rest are one click away in View full history. */
+  const timelineLimit = autoHeight ? 2 : undefined;
+  /* autoHeight (the paged trackers): every column a set minimum, at least its
+     widest content, so filtering to fewer rows never re-sizes the columns. */
+  const colMinW = (id: string) => (autoHeight ? AUTO_HEIGHT_COL_MIN_W[id] ?? '' : '');
   const inRow = (id: InviteColumnId) => !expandableRows || PRIMARY_INVITE_COLUMNS.includes(id);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const toggleExpanded = (id: string) =>
@@ -852,6 +852,7 @@ export default function AIInterviewInviteTable({
         {!hasActiveFilters && emptyHint && (
           <p className="tf-hint mt-1">{emptyHint}</p>
         )}
+        {emptyAction && <div className="mt-3 flex justify-center">{emptyAction}</div>}
       </div>
     );
   }
@@ -866,7 +867,7 @@ export default function AIInterviewInviteTable({
       <div className="tf-grid-4 p-4 content-start flex-1 min-h-0 overflow-y-auto">
         {invitations.map((inv: any) => {
           const score = displayInviteScore(inv);
-          const events = timelineEvents(inv);
+          const events = timelineEvents(inv, timelineLimit);
           const actions = rowActions(inv);
           const openable = canOpenDetails(inv);
           const canSelect = selectable && !rowLocked(inv) && (isSelectable ?? isRevocableInvite)(inv);
@@ -894,10 +895,9 @@ export default function AIInterviewInviteTable({
                 />
               )}
               <div className="flex items-start gap-2.5">
-                <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={inv.candidate_name || 'Unknown'}>
-                    {inv.candidate_name || 'Unknown'}
+                  <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={capitalizedCase(inv.candidate_name) || 'Unknown'}>
+                    {capitalizedCase(inv.candidate_name) || 'Unknown'}
                   </p>
                   <p className="tf-meta truncate" title={inv.candidate_email}>
                     {inv.candidate_email || '—'}
@@ -955,7 +955,7 @@ export default function AIInterviewInviteTable({
                     <span className={`truncate ${tone}`}>{label}: {formatIST(at)}</span>
                   </div>
                 )) : <span className="text-gray-400 dark:text-slate-500">—</span>}
-                {hasMoreTimelineHistory(inv) && (
+                {hasMoreTimelineHistory(inv, timelineLimit) && (
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
@@ -1027,8 +1027,7 @@ export default function AIInterviewInviteTable({
               }
               title={
                 <span className="flex min-w-0 items-center gap-2">
-                  <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="sm" />
-                  <span className="truncate">{inv.candidate_name || 'Unknown'}</span>
+                  <span className="truncate">{capitalizedCase(inv.candidate_name) || 'Unknown'}</span>
                 </span>
               }
               badges={
@@ -1097,9 +1096,9 @@ export default function AIInterviewInviteTable({
             >
               {/* Timeline — two columns from sm so entries line up instead of
                   staggering by label width; one column on a phone. */}
-              {timelineEvents(inv).length > 0 && (
+              {timelineEvents(inv, timelineLimit).length > 0 && (
                 <div className="tf-grid-2 mt-2 text-xs text-gray-500 dark:text-slate-400">
-                  {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                  {timelineEvents(inv, timelineLimit).map(({ label, at, Icon, tone }, i) => (
                     <div key={`${label}-${i}`} className="flex items-center gap-1.5 min-w-0">
                       <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
                       <span className="truncate">{label}: {formatIST(at)}</span>
@@ -1107,7 +1106,7 @@ export default function AIInterviewInviteTable({
                   ))}
                 </div>
               )}
-              {hasMoreTimelineHistory(inv) && (
+              {hasMoreTimelineHistory(inv, timelineLimit) && (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
@@ -1127,7 +1126,10 @@ export default function AIInterviewInviteTable({
           content. tf-table-shell--fill + flex-1/min-h-0 makes this shell the one
           vertical scroller, which is what keeps the sticky header and the pinned
           Actions column in place. */}
-      <div className="hidden lg:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+      <div
+        className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? '' : 'tf-table-shell--fill flex-1 min-h-0'}`}
+        style={autoHeight ? { maxHeight: 'none' } : undefined}
+      >
         {/* Auto layout, not table-fixed: columns size to their own content and the
             shell scrolls sideways, rather than every column being scaled down
             until the sticky header stops lining up with the rows. */}
@@ -1155,7 +1157,7 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+              <th className={`tf-th-cell text-left tf-th ${colMinW('candidate')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
               {/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
@@ -1164,30 +1166,30 @@ export default function AIInterviewInviteTable({
               {/* hidden md:table-cell mirrors this column's <td> — without it the
                   header carries one more cell than the body between sm and md and
                   every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className="tf-th-cell text-left tf-th hidden md:table-cell"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
-              {inRow('status') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
-              {inRow('score') && <th className="tf-th-cell text-center tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
-              {inRow('inviteSource') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
-              {inRow('cid') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
+              {inRow('timeline') && <th className={`tf-th-cell text-left tf-th hidden md:table-cell ${colMinW('timeline')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
+              {inRow('status') && <th className={`tf-th-cell text-left tf-th ${colMinW('status')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
+              {inRow('score') && <th className={`tf-th-cell text-center tf-th ${colMinW('score')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
+              {inRow('inviteSource') && <th className={`tf-th-cell text-left tf-th ${colMinW('inviteSource')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
+              {inRow('cid') && <th className={`tf-th-cell text-left tf-th ${colMinW('cid')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
               {showJobColumn && (
                 <>
-                  {inRow('jobId') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
-                  {inRow('jobTitle') && <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
+                  {inRow('jobId') && <th className={`tf-th-cell text-left tf-th ${colMinW('jobId')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
+                  {inRow('jobTitle') && <th className={`tf-th-cell text-left tf-th ${colMinW('jobTitle')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
                 </>
               )}
               {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                <th className={`tf-th-cell text-left tf-th ${colMinW('jobVersion')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
               )}
               {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                <th className={`tf-th-cell text-left tf-th ${colMinW('interviewVersion')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
               )}
-              <th className="tf-th-cell text-left tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+              <th className={`tf-th-cell text-left tf-th tf-sticky-col ${colMinW('actions')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
             {invitations.map((inv: any) => {
               const score = displayInviteScore(inv);
-              const events = timelineEvents(inv);
+              const events = timelineEvents(inv, timelineLimit);
               const actions = rowActions(inv);
               const openable = canOpenDetails(inv);
               /* Each column once, in the table's order — placed in the row, or
@@ -1195,15 +1197,14 @@ export default function AIInterviewInviteTable({
                  expanded panel. */
               const columns: { id: InviteColumnId; label: string; className: string; content: ReactNode }[] = [
                 {
-                  id: 'candidate', label: 'Candidate', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                  id: 'candidate', label: 'Candidate', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (
                     <div className="flex items-center gap-3">
-                      <NameAvatar name={inv.candidate_name} fallback={inv.candidate_email} size="md" />
                       {/* Capped rather than free: with auto layout a single long
                           email would otherwise set the column width. */}
                       <div className="min-w-0 max-w-[220px]">
-                        <p className="tf-row-name truncate" title={inv.candidate_name || 'Unknown'}>
-                          {inv.candidate_name || 'Unknown'}
+                        <p className="tf-row-name truncate" title={capitalizedCase(inv.candidate_name) || 'Unknown'}>
+                          {capitalizedCase(inv.candidate_name) || 'Unknown'}
                         </p>
                         <p className="tf-meta truncate" title={inv.candidate_email}>
                           {inv.candidate_email}
@@ -1215,11 +1216,11 @@ export default function AIInterviewInviteTable({
                 {
                   // Every milestone on its own line, oldest first. align-top so
                   // the first line sits level with the other columns.
-                  id: 'timeline', label: 'Timeline', className: 'py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell',
+                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
                   content: (
                     <div className="tf-meta">
                       {events.length > 0 ? (
-                        <div className="space-y-1">
+                        <div className={autoHeight ? 'space-y-0.5' : 'space-y-1'}>
                           {events.map(({ label, at, Icon, tone }, i) => (
                             <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
                               <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
@@ -1230,7 +1231,7 @@ export default function AIInterviewInviteTable({
                       ) : (
                         <span className="text-gray-400 dark:text-slate-500">—</span>
                       )}
-                      {hasMoreTimelineHistory(inv) && (
+                      {hasMoreTimelineHistory(inv, timelineLimit) && (
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
@@ -1243,7 +1244,7 @@ export default function AIInterviewInviteTable({
                   ),
                 },
                 {
-                  id: 'status', label: 'Status', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                  id: 'status', label: 'Status', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (
                     <div className="flex items-center gap-1.5 flex-nowrap">
                       <AIInviteStatusBadge inv={inv} />
@@ -1256,28 +1257,28 @@ export default function AIInterviewInviteTable({
                   ),
                 },
                 {
-                  id: 'score', label: 'Score', className: 'py-3 px-4 align-middle text-center text-sm whitespace-nowrap',
+                  id: 'score', label: 'Score', className: `${cellY} px-4 align-middle text-center text-sm whitespace-nowrap`,
                   content: <ScoreCell value={score} result={inviteResult(inv, score)} />,
                 },
                 {
-                  id: 'inviteSource', label: 'Invite Source', className: 'py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400',
+                  id: 'inviteSource', label: 'Invite Source', className: `${cellY} px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400`,
                   content: inviteSourceLabel(inv)
                     ? <InviteSourceValue inv={inv} iconClassName="w-3.5 h-3.5" />
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
                 },
                 {
-                  id: 'cid', label: 'CID', className: 'py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400',
+                  id: 'cid', label: 'CID', className: `${cellY} px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400`,
                   content: inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>,
                 },
                 ...(showJobColumn ? [
                   {
-                    id: 'jobId' as const, label: 'JD ID', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                    id: 'jobId' as const, label: 'JD ID', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                     content: inv._jd_short_id
                       ? <JobIdBadge>{inv._jd_short_id}</JobIdBadge>
                       : <span className="text-gray-400 dark:text-slate-500">—</span>,
                   },
                   {
-                    id: 'jobTitle' as const, label: 'Job Title', className: 'py-3 px-4 align-middle max-w-[200px]',
+                    id: 'jobTitle' as const, label: 'Job Title', className: `${cellY} px-4 align-middle max-w-[200px]`,
                     content: (
                       <p className="tf-body truncate" title={inv._config_title || ''}>
                         {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
@@ -1286,13 +1287,13 @@ export default function AIInterviewInviteTable({
                   },
                 ] : []),
                 ...((showJobColumn || jobVersion != null || showRowVersions) ? [{
-                  id: 'jobVersion' as const, label: 'Job Version', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                  id: 'jobVersion' as const, label: 'Job Version', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (jobVersion ?? inv._jd_version) != null
                     ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
                 }] : []),
                 ...((showJobColumn || interviewVersion != null || showRowVersions) ? [{
-                  id: 'interviewVersion' as const, label: 'Interview Version', className: 'py-3 px-4 align-middle whitespace-nowrap',
+                  id: 'interviewVersion' as const, label: 'Interview Version', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (interviewVersion ?? inv._interview_version) != null
                     ? <VersionPill kind="interview" version={interviewVersion ?? inv._interview_version} />
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
@@ -1319,7 +1320,7 @@ export default function AIInterviewInviteTable({
                     rowInteractive
                       ? 'cursor-pointer hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
                       : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'
-                  } ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''}`}
+                  } ${isExpanded ? 'bg-brand-blue/[0.03] dark:bg-brand-blue/5' : ''} ${autoHeight ? AUTO_HEIGHT_ROW_MIN_H : ''}`}
                 >
                   {selectable && (
                     <td className="tf-td pl-4 pr-0 tf-sticky-col-left">
@@ -1421,7 +1422,7 @@ export default function AIInterviewInviteTable({
             <DialogTitle>Invitation History</DialogTitle>
             {/* Name, then the email — the Assessments history pop-up's header. */}
             <DialogDescription className="break-words">
-              {timelineTarget?.candidate_name || timelineTarget?.candidate_email || 'Candidate'}
+              {capitalizedCase(timelineTarget?.candidate_name) || timelineTarget?.candidate_email || 'Candidate'}
               {timelineTarget?.candidate_name && timelineTarget?.candidate_email && (
                 <span className="text-gray-400 dark:text-slate-500"> · {timelineTarget.candidate_email}</span>
               )}

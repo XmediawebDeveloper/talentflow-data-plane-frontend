@@ -1,7 +1,8 @@
 'use client';
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, RefreshCw, Layers, Radar } from 'lucide-react';
-import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
+import { ListBulkActions, useListSortSlot, MasterListLayout } from '@/components/ui/list-toolbar-slot';
+import { PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -355,6 +356,14 @@ export default function AIInterview() {
   const [trackerBulkResendOpen, setTrackerBulkResendOpen] = useState(false);
   const [isTrackerBulkResending, setIsTrackerBulkResending] = useState(false);
   const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+  // One-click "Revoke pending invites" from the version row's 3-dot menu —
+  // distinct from the Track popup's checkbox-driven bulk revoke above: this
+  // one needs no manual selection, it revokes every INVITED/CONSENT_PENDING
+  // candidate on the config at once, mirroring the Assessment module's
+  // kebab-menu "Revoke pending invites" action.
+  const [revokePendingTarget, setRevokePendingTarget] = useState<AIInterviewResponse | null>(null);
+  const [revokePendingCount, setRevokePendingCount] = useState<number | null>(null);
+  const [isRevokingPending, setIsRevokingPending] = useState(false);
   // Edit invitation modal target — only ever set for a REVOKED invitation
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [editInviteForm, setEditInviteForm] = useState({ candidate_name: '', candidate_email: '' });
@@ -1782,6 +1791,43 @@ export default function AIInterview() {
     }
   };
 
+  /* One-click "Revoke pending invites" — opens the confirm modal and fetches
+     the eligible count up front, same two-step flow as Assessments'
+     handleOpenRevokeModal. */
+  const handleOpenRevokePendingModal = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
+    setOpenMenuId(null);
+    setRevokePendingTarget(config);
+    setRevokePendingCount(null);
+    try {
+      const count = await aiInterviewService.getRevokableInvitationsCount(config.id);
+      setRevokePendingCount(count);
+    } catch (err) {
+      console.error('Failed to fetch revokable invitations count:', err);
+      setRevokePendingCount(null);
+    }
+  };
+
+  const confirmRevokePendingInvites = async () => {
+    if (!revokePendingTarget || isRevokingPending) return;
+    setIsRevokingPending(true);
+    try {
+      const result = await aiInterviewService.revokePendingInvitations(revokePendingTarget.id);
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
+      toast.success(
+        result.revoked_count > 0
+          ? `Revoked ${result.revoked_count} pending invite link(s).`
+          : 'No pending invites to revoke.'
+      );
+      setRevokePendingTarget(null);
+    } catch (error: any) {
+      toast.error(friendlyErrorMessage(error, "Couldn't revoke pending invites. Please try again."));
+    } finally {
+      setIsRevokingPending(false);
+    }
+  };
+
   const handleCopyLink = async (config: AIInterviewResponse) => {
     if (blockIfJdDisabled(config)) return;
     if (config.interview_link) {
@@ -2759,6 +2805,40 @@ export default function AIInterview() {
                   </button>
                 );
               })()}
+              {/* Revoke pending invites — one click, no manual selection,
+                  unlike the Track popup's checkbox-driven bulk revoke.
+                  Mirrors the Assessments kebab-menu action: only meaningful
+                  once at least one invite exists, and repeatable (unlike
+                  Assessment's one-shot invite batch, an AI Interview config
+                  can be shared with new candidates at any time, so there is
+                  no "already revoked" permanent seal here — the confirm
+                  modal's live count simply reads 0 once nothing is pending). */}
+              {isPublished && hasBeenShared && (() => {
+                const revokeBlocked = jdLocked
+                  ? jdLockReason
+                  : !canInviteAIInterviews
+                    ? 'You do not have permission to invite candidates'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (revokeBlocked) return;
+                      void handleOpenRevokePendingModal(config);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!revokeBlocked}
+                    title={revokeBlocked || 'Revoke every invite not yet opened by its candidate'}
+                    className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                      revokeBlocked
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-destructive'
+                    }`}
+                  >
+                    <Ban className={`w-4 h-4 flex-shrink-0 ${revokeBlocked ? 'text-gray-300' : ''}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Revoke pending invites</span>
+                  </button>
+                );
+              })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               {/* No Archive on a Draft — the Assessments rule: an unpublished
                   version has nothing to archive; it is deleted instead. */}
@@ -3094,7 +3174,8 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap">
+          {/* Phones: the buttons stack full width, as the Job Openings header's. From sm unchanged. */}
+          <div className="flex max-sm:flex-col max-sm:items-stretch sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -3113,7 +3194,7 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+              className={`inline-flex items-center justify-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
@@ -3251,7 +3332,7 @@ export default function AIInterview() {
         })()}
 
         {pageView === 'list' && (
-        <>
+        <MasterListLayout>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {invitedOnly && (
         <div className="mb-4 flex items-center justify-end gap-2 flex-wrap">
@@ -3282,14 +3363,19 @@ export default function AIInterview() {
             stray line above the pills; `[&>*:last-child:not(:first-child)]:mb-3`
             spaces an open filter panel off that rule the way the toolbar row's
             own mb-3 already does when it is alone. */}
-        <div className="tf-card p-3 sm:p-4 mb-4">
+        {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's lines —
+              ( search ............ ) (⚙) [≡ ⊞]
+              Configured Jobs 0  All Interviews 2  Act…   ← underlined tabs, scroll sideways
+                                         [⇅ Sort ▾] [↻]
+            From sm the card is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
 
         {/* Shared toolbar slot — every tab's search/filter row renders here:
             the config-list tabs' toolbar just below, and All Interviews /
             Candidate Results / Invitation Status / Activity Logs portal theirs
             in (see their `toolbarSlot` prop), so the search box sits in the
             same spot whichever tab is active. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
+        <div ref={setToolbarSlotEl} className="tf-jobs-slot empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
           <>
@@ -3412,8 +3498,10 @@ export default function AIInterview() {
 
         {/* Tabs — below the search row inside the same card, in the Job
             Descriptions page's status-pill row (no "Show:" label). */}
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap w-full">
+        <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
+        <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
+          {/* `contents` from sm (the row as before); on phones one underlined strip. */}
+          <div className="tf-jobs-status-tabs contents">
           {(() => {
             // Server counts (/configs/stats, the same shared WHERE the lists
             // page with), as on Assessments. `configs` now holds only the
@@ -3504,6 +3592,9 @@ export default function AIInterview() {
               );
             })}
           </div>
+          </div>
+          {/* Phones: Clear Sort, the Sort menu and Refresh on a line of their own, right. */}
+          <div className="tf-jobs-tools contents">
           {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
               tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
@@ -3514,29 +3605,41 @@ export default function AIInterview() {
               options carry their own direction (Newest / Oldest), so there is
               no order toggle. Only on the grouped job list, the one list it sorts. */}
           {(isConfigListTab || activeTab === 'all-interviews' || dateOnlySort) && (() => {
+            const sortOptions = [
+              { value: 'newest', label: 'Newest' },
+              { value: 'oldest', label: 'Oldest' },
+              ...(dateOnlySort ? [] : [
+                { value: 'active', label: 'Active first' },
+                { value: 'draft', label: 'Draft first' },
+              ]),
+            ];
+            const sortValue = dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy;
             const sortControl = (
-            <div className="flex items-center gap-2">
+            <div className="tf-jobs-sort flex items-center gap-2">
               <label htmlFor="ai-interview-sort" className="tf-label whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <Dropdown
                   id="ai-interview-sort"
                   ariaLabel="Sort by"
-                  value={dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy}
+                  value={sortValue}
                   onChange={(v) => setSortBy(v as typeof sortBy)}
                   className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
-                  options={[
-                    { value: 'newest', label: 'Newest' },
-                    { value: 'oldest', label: 'Oldest' },
-                    ...(dateOnlySort ? [] : [
-                      { value: 'active', label: 'Active first' },
-                      { value: 'draft', label: 'Draft first' },
-                    ]),
-                  ]}
+                  options={sortOptions}
                 />
               </div>
             </div>
             );
-            return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+            return (
+              <>
+                {sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl}
+                {/* Phones: the Job Openings list's Sort menu beside Refresh (the inline Sort by hides). */}
+                <PhoneSortMenu
+                  value={sortValue}
+                  options={sortOptions}
+                  onChange={(v) => setSortBy(v as typeof sortBy)}
+                />
+              </>
+            );
           })()}
 
           {/* Refresh — right corner of the pill row. Refetches whichever tab
@@ -3553,15 +3656,16 @@ export default function AIInterview() {
             title="Refresh"
             aria-label="Refresh"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0 !h-9 sm:ml-auto"
+            className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           )}
           </div>
+          </div>
         </div>
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
-        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
+        <div data-list-bulk-slot className="empty:hidden mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2" />
         </div>{/* closes toolbar card */}
 
         {/* Main Content. Like the Job Descriptions and Assessments pages, the
@@ -5085,7 +5189,7 @@ export default function AIInterview() {
             </div>
           )}
         </div>
-        </>
+        </MasterListLayout>
         )}
       </div>
       </div>
@@ -5248,7 +5352,8 @@ export default function AIInterview() {
                   loadInvitationOverview, which queries unfiltered — selecting a
                   bucket narrows the table without collapsing the other cards. */}
               <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+                /* The Job Openings module's Track Invites stat grid (`.tf-tracker-stats`). */
+                gridClassName="tf-tracker-stats"
                 activeStatus={inviteFilters.status}
                 onSelect={(status) => {
                   setInviteFilters({ ...inviteFilters, status });
@@ -5545,6 +5650,37 @@ export default function AIInterview() {
         onConfirm={confirmDeleteConfig}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* One-click "Revoke pending invites" from the version row's menu —
+          invalidates only INVITED / CONSENT_PENDING links. Candidates who
+          have reached system check or further are deliberately not touched. */}
+      <ConfirmationDialog
+        isOpen={!!revokePendingTarget}
+        onClose={() => { if (!isRevokingPending) setRevokePendingTarget(null); }}
+        onConfirm={confirmRevokePendingInvites}
+        title="Revoke pending invite links?"
+        description={
+          revokePendingTarget
+            ? `Pending invite links for "${revokePendingTarget.jd_title || revokePendingTarget.position || 'this interview'}" will stop working immediately.`
+            : ''
+        }
+        confirmText={isRevokingPending ? 'Revoking…' : 'Revoke links'}
+        cancelText="Cancel"
+        variant="warning"
+      >
+        {revokePendingTarget && (
+          <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
+            <p className="text-warning-strong font-medium mb-1">
+              {revokePendingCount === null
+                ? 'Counting eligible invitations…'
+                : `${revokePendingCount} link${revokePendingCount === 1 ? '' : 's'} will be revoked.`}
+            </p>
+            <p className="text-warning-strong text-xs mt-1">
+              Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
+            </p>
+          </div>
+        )}
+      </ConfirmationDialog>
 
       {/* Version History's eye icon — read-only Review & Publish peek. */}
       <AIInterviewReviewPreviewModal

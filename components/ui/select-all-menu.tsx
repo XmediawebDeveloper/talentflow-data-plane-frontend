@@ -1,11 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -61,7 +64,11 @@ export function SelectAllMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          /* tf-jobs-selectall + data-active: the Job Openings list's phone look
+             (globals.css, `.tf-jobs-toolbar`) wherever this sits in such a toolbar. */
+          data-active={active || undefined}
           className={cn(
+            'tf-jobs-selectall',
             TRIGGER_CLASS,
             active
               ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
@@ -176,5 +183,69 @@ export function SortByControl<T extends string>({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Phones only: the Job Openings list's "⇅ Sort ▾" menu button — the fields, then the
+ * order worded for the field (JobsListing.tsx). Inside a `.tf-jobs-toolbar` it replaces
+ * the inline SortByControl below `sm`; from `sm` it is hidden.
+ */
+export function PhoneSortMenu<T extends string>({
+  value,
+  order,
+  options,
+  orderLabels,
+  onChange,
+  onOrderChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  /** Omit the three below for a single list of sorts (e.g. Newest / Oldest / Active first). */
+  order?: 'asc' | 'desc';
+  /** The two orders, worded for the field (e.g. Newest / Oldest first). */
+  orderLabels?: (field: T) => { desc: string; asc: string };
+  onOrderChange?: (order: 'asc' | 'desc') => void;
+}) {
+  const labels = orderLabels && order ? orderLabels(value) : null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="tf-jobs-sortmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue data-[state=open]:border-brand-blue/40 data-[state=open]:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          aria-label={`Sort: ${options.find((o) => o.value === value)?.label ?? ''}${labels && order ? `, ${labels[order]}` : ''}`}
+        >
+          <ArrowUpDown className="w-4 h-4 text-brand-blue" />
+          Sort
+          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
+        <DropdownMenuLabel className="text-xs text-gray-500">Sort by</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {labels && order && onOrderChange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-gray-500">Order</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={order} onValueChange={(v) => onOrderChange(v as 'asc' | 'desc')}>
+              <DropdownMenuRadioItem value="desc">
+                <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
+                {labels.desc}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="asc">
+                <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                {labels.asc}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

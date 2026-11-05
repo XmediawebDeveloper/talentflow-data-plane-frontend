@@ -10,7 +10,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TimelineStamps from '@/components/ui/timeline-stamps';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import {
@@ -36,12 +36,11 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AICandidateResultRow, AICandidateResultsFilters, AICandidateResultsFilterOptions, AICandidateResultsQuery, AICandidateResultsStats } from '@/lib/services/aiInterviewService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import {
-  getStatusVariant,
   getStatusLabel,
+  SessionStatusChip,
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
@@ -535,6 +534,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         leadingActions={
           /* Result (Pass / Fail) first, ahead of More Filters — the same
              toolbar order as the per-interview results view. */
+          <div className="tf-jobs-filter-pills contents">
           <Dropdown
             value={search.filters.result}
             onChange={(v) => search.setFilter('result', v)}
@@ -545,6 +545,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               ...RESULT_FILTER_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
             ]}
           />
+          </div>
         }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,
@@ -809,10 +810,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       selectionActive={selectedKeys.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
-                          {row.candidate_name || 'Unknown'}
+                          {capitalizedCase(row.candidate_name) || 'Unknown'}
                         </p>
                         <p className="tf-meta truncate">
                           {row.candidate_email || '—'}
@@ -836,7 +836,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     )}
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                      <SessionStatusChip session={row} />
                       {row.status === 'in_progress' && (
                         <span className="tf-badge flex bg-destructive text-white text-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -976,12 +976,11 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         content: (
                           <>
                             <div className="flex items-center gap-2">
-                              <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
-                                  {row.candidate_name || 'Unknown'}
+                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={capitalizedCase(row.candidate_name) || 'Unknown'}>
+                                  {capitalizedCase(row.candidate_name) || 'Unknown'}
                                 </p>
                                 <p className="tf-meta truncate" title={row.candidate_email || undefined}>
                                   {row.candidate_email || '—'}
@@ -1006,7 +1005,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         content: (
                           <>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                              <SessionStatusChip session={row} />
                               {row.status === 'in_progress' && (
                                 <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -1183,7 +1182,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     }
                     badges={
                       <>
-                        <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                        <SessionStatusChip session={row} />
                         {row.status === 'in_progress' && (
                           <span className="tf-badge flex bg-destructive text-white text-2xs">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -1192,7 +1191,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         )}
                       </>
                     }
-                    title={row.candidate_name || 'Unknown'}
+                    title={capitalizedCase(row.candidate_name) || 'Unknown'}
                     actions={<ResultRowActions session={row} onView={() => openSession(row)} />}
                     meta={[
                       { icon: <Mail className="w-3.5 h-3.5" />, label: row.candidate_email || '—' },

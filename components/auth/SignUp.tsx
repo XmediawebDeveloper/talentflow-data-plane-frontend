@@ -9,8 +9,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Mail, Lock, Eye, EyeOff, AlertCircle, ArrowRight, ArrowLeft,
   Building2, User, CheckCircle, Loader2, Phone, CreditCard, Check, Sparkles,
-  FileText, Shield, X
+  FileText, Shield, X, Briefcase
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -49,6 +50,7 @@ interface SignUpProps {
 
 interface SignUpForm {
   companyName: string;
+  companyType: string;
   adminEmail: string;
   adminName: string;
   phoneNumber: string;
@@ -57,6 +59,12 @@ interface SignUpForm {
 }
 
 type SignUpStep = 'form' | 'terms' | 'payment' | 'success';
+
+// Same two tenant types (and API values) as Tenant Provisioning in the control plane.
+const COMPANY_TYPES = [
+  { value: 'agencies', label: 'Recruiting Agency' },
+  { value: 'companies', label: 'Companies' },
+];
 
 interface PlanDetails {
   id: number;
@@ -151,6 +159,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
   const [form, setForm] = useState<SignUpForm>({
     companyName: '',
+    companyType: '',
     adminEmail: '',
     adminName: '',
     phoneNumber: '',
@@ -347,7 +356,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const validateCompanyName = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return 'Company name is required';
-    if (trimmed.length < 2) return 'Company name must be at least 2 characters';
+    if (trimmed.length < 3) return 'Company name must be at least 3 characters';
     if (trimmed.length > 100) return 'Company name must be 100 characters or less';
     if (!/^[a-zA-Z0-9 &.\-'()]+$/.test(trimmed))
       return "Only letters, numbers, spaces and & . - ' ( ) are allowed";
@@ -479,8 +488,9 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
   const isFormComplete =
     (freeTrialAcknowledged || !!selectedPlanDetails) &&
-    form.companyName.trim().length >= 2 &&
+    form.companyName.trim().length >= 3 &&
     !companyNameError &&
+    !!form.companyType &&
     !emailError &&
     otpVerified &&
     form.adminName.trim().length >= 2 &&
@@ -583,6 +593,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         password: form.password,
         full_name: form.adminName,
         company_name: form.companyName,
+        tenant_type: form.companyType || null,
         phone_number: form.phoneNumber,
       };
 
@@ -849,6 +860,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
         },
         body: JSON.stringify({
           company_name: form.companyName || 'Pending',
+          tenant_type: form.companyType || null,
           subdomain: subdomain,
           email: form.adminEmail,
           full_name: form.adminName || 'Pending',
@@ -1896,7 +1908,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
             <form onSubmit={handleSubmit} className="tf-su-form">
               <section className="tf-su-sec">
-              {sectionHead(1, 'Workspace', 'Your company and who will manage it', !!form.companyName.trim() && !!form.adminName.trim() && !companyNameError && !adminNameError)}
+              {sectionHead(1, 'Workspace', 'Your company details', !!form.companyName.trim() && !!form.companyType && !companyNameError)}
               <div className="tf-su-sec-body">
               {/* Company Name */}
               <div className="tf-auth-field">
@@ -1924,6 +1936,35 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 )}
               </div>
 
+              {/* Company Type */}
+              <div className="tf-auth-field">
+                <label className="tf-auth-label" htmlFor="tf-signup-company-type">Company type</label>
+                <div className="tf-auth-control">
+                  <span className="tf-auth-control-icon">
+                    <Briefcase style={{ width: 17, height: 17 }} />
+                  </span>
+                  <Select
+                    value={form.companyType}
+                    onValueChange={(value) => setForm((prev) => ({ ...prev, companyType: value }))}
+                  >
+                    <SelectTrigger id="tf-signup-company-type" className="tf-auth-input">
+                      <SelectValue placeholder="Select type" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {COMPANY_TYPES.map((type) => (
+                        <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              </div>
+              </section>
+
+              <section className="tf-su-sec">
+              {sectionHead(2, 'Contact & verification', 'Who will manage it — we send a 6-digit code to your work email', !!form.adminName.trim() && !adminNameError && otpVerified && !!form.phoneNumber.trim() && !phoneInvalid)}
+              <div className="tf-su-sec-body is-contact">
               {/* Admin Name */}
               <div className="tf-auth-field">
                 <label className="tf-auth-label" htmlFor="tf-signup-name">Your name</label>
@@ -1950,19 +1991,13 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                 )}
               </div>
 
-              </div>
-              </section>
-
-              <section className="tf-su-sec">
-              {sectionHead(2, 'Contact & verification', 'We send a 6-digit code to your work email', otpVerified && !!form.phoneNumber.trim() && !phoneInvalid)}
-              <div className="tf-su-sec-body">
               {/* Work Email with OTP */}
               <div className="tf-auth-field">
                 <label className="tf-auth-label" htmlFor="tf-signup-email">
                   Work email <span className="tf-auth-label-note">(business email only)</span>
                 </label>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                  <div className="tf-auth-control" style={{ flex: 1 }}>
+                <div className={`tf-su-email-group${otpVerified ? '' : ' is-joined'}`}>
+                  <div className="tf-auth-control">
                     <span className="tf-auth-control-icon">
                       <Mail style={{ width: 17, height: 17 }} />
                     </span>
@@ -1985,8 +2020,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
                       type="button"
                       onClick={handleGetOtp}
                       disabled={!isEmailValidForOtp() || isSendingOtp || otpSent}
-                      className={`tf-auth-btn tf-auth-btn--auto${otpSent || isSendingOtp ? ' tf-auth-btn--busy' : ''}`}
-                      style={{ flexShrink: 0, whiteSpace: 'nowrap' }}
+                      className={`tf-auth-btn tf-auth-btn--auto tf-su-email-btn${otpSent || isSendingOtp ? ' tf-auth-btn--busy' : ''}`}
                     >
                       {isSendingOtp ? (
                         <>
@@ -2285,6 +2319,35 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-sec-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; align-items: start; }
 .tf-su-sec-body > * { grid-column: 1 / -1; }
 .tf-su-sec-body > .tf-auth-field { grid-column: auto; }
+/* Work email + Get code as one control: the button sits inside the field's
+   right end (like a search box's button), so the two read as a single piece. */
+.tf-su-email-group { position: relative; }
+.tf-su-email-group.is-joined .tf-auth-input { padding-right: 118px; }
+.tf-su-email-group .tf-su-email-btn {
+  position: absolute; top: 5px; right: 5px; bottom: 5px; width: auto;
+  height: auto !important; min-height: 0 !important; margin: 0;
+  padding: 0 14px; gap: 6px; font-size: 13.5px; white-space: nowrap;
+  border-radius: calc(var(--tf-radius-md) - 4px); box-shadow: none;
+}
+.tf-su-email-group .tf-su-email-btn:hover:not(:disabled) { box-shadow: none; }
+.tf-su-email-group .tf-su-email-btn:disabled { border-color: transparent; }
+/* Contact: name | email (+ Get code, a little wider) | phone on one row; stacks on phones. */
+@media (min-width: 641px) {
+  .tf-su-sec-body.is-contact { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); column-gap: 12px; }
+}
+/* Narrower screens: keep the one row by compacting it — email gets the most
+   room, smaller text/icons, tighter Get code, the label note drops (the
+   field's placeholder already says "work email"). */
+@media (min-width: 641px) and (max-width: 1279px) {
+  .tf-su-sec-body.is-contact { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr) minmax(0, 0.9fr); column-gap: 8px; }
+  .tf-su-sec-body.is-contact .tf-auth-label-note { display: none; }
+  .tf-su-sec-body.is-contact .tf-auth-input { font-size: 13.5px; padding-left: 34px; padding-right: 8px; }
+  .tf-su-sec-body.is-contact .tf-auth-control-icon { left: 11px; }
+  .tf-su-sec-body.is-contact .tf-auth-control-icon svg { width: 15px !important; height: 15px !important; }
+  .tf-su-sec-body.is-contact .tf-su-email-btn { font-size: 12.5px; padding-left: 10px; padding-right: 10px; }
+  .tf-su-sec-body.is-contact .tf-su-email-group.is-joined .tf-auth-input { padding-right: 92px; }
+}
+.tf-signup-page [data-slot="select-trigger"][data-placeholder] { color: var(--tf-ink-subtle); }
 .tf-su-sec-body .tf-auth-field { margin-bottom: 12px; }
 .tf-su-foot { padding-top: 12px; border-top: 1px solid var(--tf-border); }
 @media (max-width: 640px) {

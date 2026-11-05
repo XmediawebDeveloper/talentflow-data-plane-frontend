@@ -13,7 +13,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
+  Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check, FileType2, ScrollText,
   ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase, AudioLines,
 } from 'lucide-react';
 import { jdService, type JDResponse } from '@/lib/services/jdService';
@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import NameAvatar from '@/components/ui/name-avatar';
 import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
+import ExportColumnsModal, { type ExportFormatOption } from '@/components/ExportColumnsModal';
 import { exportRows, exportTextFile, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
@@ -595,6 +596,12 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
+/* The chat transcript's two files, in the Export popups' card style. */
+const CHAT_DOWNLOAD_FORMATS: ExportFormatOption<'pdf' | 'txt'>[] = [
+  { key: 'pdf', title: 'PDF Format', description: 'Print-ready document, easy to share or attach.', Icon: FileType2, iconWrap: 'bg-red-100', iconColor: 'text-red-600' },
+  { key: 'txt', title: 'Text Format (.txt)', description: 'Plain text that opens anywhere — Notepad, email, any editor.', Icon: ScrollText, iconWrap: 'bg-gray-100', iconColor: 'text-gray-600' },
+];
+
 export default function CandidateResultsView({ interview, onBack, tabInUrl = true, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
   // Measured height of the sticky breadcrumb, published as --crumb-h so a
   // second sticky layer (Question Analysis' All / Sections bar) pins just below
@@ -624,6 +631,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [chatDownloadOpen, setChatDownloadOpen] = useState(false);
+  const [chatDownloadFormat, setChatDownloadFormat] = useState<'pdf' | 'txt'>('pdf');
+  const [chatDownloading, setChatDownloading] = useState(false);
   // Transcript table's Question / Raw Transcript columns: 4-word pills
   // (default) or full text, toggled together from the toolbar — same pill
   // as Resume Scoring's AI Reasoning.
@@ -3747,6 +3756,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         onRetryAnalysis={() => retryEnvAnalysis(v.verification_id)}
                         reanalyzing={!!envReanalyzing[v.verification_id]}
                         reanalyzeError={envReanalyzeError[v.verification_id]}
+                        watchInRecording={renderWatchInRecording(v.triggered_at)}
                         interviewRef={{
                           candidate: interview.candidate_name || liveSession.candidate_name || 'Candidate',
                           role: (interview as any).job_title || (interview as any).role || interview.position || '',
@@ -4193,18 +4203,35 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             title="Download full chat transcript"
                           >
                             <Download className="w-3.5 h-3.5" />
-                            Download
+                            Chat Download
                           </Button>
                         )}
-                        <ExportFormatModal
-                          open={chatDownloadOpen}
-                          onClose={() => setChatDownloadOpen(false)}
-                          title="Download Chat Transcript"
-                          recordCount={labeled.length}
-                          formats={['pdf', 'txt']}
-                          defaultFormat="pdf"
-                          onExport={downloadChat}
-                        />
+                        {/* The AI Interview Results Export popup's look (white
+                            header, format cards), with no columns to pick. */}
+                        {chatDownloadOpen && (
+                          <ExportColumnsModal<'pdf' | 'txt'>
+                            title="Download Chat Transcript"
+                            recordCount={labeled.length}
+                            recordNoun={['message', 'messages']}
+                            formats={CHAT_DOWNLOAD_FORMATS}
+                            format={chatDownloadFormat}
+                            onFormatChange={setChatDownloadFormat}
+                            exporting={chatDownloading}
+                            onExport={async () => {
+                              setChatDownloading(true);
+                              try {
+                                await downloadChat(chatDownloadFormat);
+                                setChatDownloadOpen(false);
+                              } catch (error) {
+                                console.error('Chat download failed:', error);
+                                toast.error(`Failed to download the chat as ${chatDownloadFormat === 'pdf' ? 'PDF' : 'text'}`);
+                              } finally {
+                                setChatDownloading(false);
+                              }
+                            }}
+                            onClose={() => setChatDownloadOpen(false)}
+                          />
+                        )}
                       </div>
                     </div>
 

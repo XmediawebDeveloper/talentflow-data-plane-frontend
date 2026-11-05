@@ -847,7 +847,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   toggle while the feature is unapproved, so the client never sees
                   the feature named anywhere. */}
               {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
-              <SectionCard title="Mobile Environment Verification" icon={QrCode}>
+              <SectionCard title="QR Verification" icon={QrCode}>
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${config.environment_verification_enabled ? 'bg-brand-blue/10 ring-1 ring-brand-blue/20' : 'bg-gray-100 ring-1 ring-gray-200'}`}>
@@ -1755,7 +1755,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             wrapping onto a second row so every tab stays visible). Desktop
             (lg+): a sticky vertical rail on the left, content on the right. */}
         <div className="lg:sticky lg:top-20 lg:self-start tf-card-soft">
-          <nav className="p-2 sm:p-3" aria-label="Interview details sections">
+          {/* Phones / tablets (globals.css, `.tf-detail-nav`): the Job Details page's
+              underlined tab strip, scrolling sideways. From lg the vertical rail. */}
+          <nav className="tf-detail-nav p-2 sm:p-3" aria-label="Interview details sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },
@@ -2009,7 +2011,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                               <QrCode className="w-4 h-4 text-brand-blue" />
                             </div>
-                            <span className="tf-eyebrow tracking-wide">Mobile Environment Verification</span>
+                            <span className="tf-eyebrow tracking-wide">QR Verification</span>
                           </div>
                           <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                             {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}

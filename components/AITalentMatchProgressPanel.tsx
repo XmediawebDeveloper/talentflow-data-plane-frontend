@@ -120,7 +120,7 @@ export default function AITalentMatchProgressPanel({
             </div>
           </div>
           <h2 className="tf-section-title sm:text-2xl mb-1">AI Matching in Progress</h2>
-          <p className="text-sm sm:text-base font-semibold text-gray-500 truncate px-2 sm:px-4 mb-1">{jobTitle}</p>
+          <p className="text-sm sm:text-base font-semibold text-gray-500 break-words sm:truncate px-2 sm:px-4 mb-1">{jobTitle}</p>
           <p className="tf-body-muted px-2 sm:px-6">
             Our AI is analyzing the job and candidate details to find the best match for you.
           </p>
@@ -171,14 +171,15 @@ export default function AITalentMatchProgressPanel({
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-sm font-semibold truncate ${
+                  {/* Phones: title and description wrap instead of being cut with "…". */}
+                  <p className={`text-sm font-semibold break-words sm:truncate ${
                     isCurrent ? 'text-brand-blue' :
                     isComplete ? 'text-success' :
                     'text-gray-700'
                   }`}>
                     {step.title}
                   </p>
-                  <p className="tf-meta truncate">{step.description}</p>
+                  <p className="tf-meta break-words sm:truncate">{step.description}</p>
                 </div>
                 <span className={`flex-shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full ${
                   isCurrent ? 'bg-brand-blue/10 text-brand-blue' :

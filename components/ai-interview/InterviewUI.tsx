@@ -25,7 +25,7 @@ import { startClientLogForwarder, stopClientLogForwarder, flushClientLogBeacon }
 import SectionTransitionOverlay from "./SectionTransitionOverlay";
 import { toast } from 'sonner';
 import { requestFullscreen, getFullscreenChangeEvent, exitFullscreen } from "@/lib/utils/browserCompat";
-import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowDown, ArrowRight, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
+import { Clock, Timer, LogOut, Mic, Headset, Check, ArrowDown, MicOff, SkipForward, Maximize, RefreshCw, PictureInPicture2, Camera, Loader2, WifiOff, Wifi } from "lucide-react";
 import { isFlexibleDuration, modeFromConfig } from "@/lib/constants/aiInterviewMode";
 import { isTranscriptMeaningful } from "@/lib/utils/whisperFilter";
 import { detectDeviceCapability, type DeviceCapability } from "@/lib/utils/deviceCapability";
@@ -9749,6 +9749,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     stopRecording();
   }, [setMidSilenceConfirm_, stopRecording]);
 
+  // AII14 — "Continue": the candidate keeps answering the SAME question.
+  // Same effect as resumed speech closing the popup (see the VAD popup-dismiss
+  // block): hide the popup and restart the silence clock from now. Recording
+  // is never touched — the mic stayed open the whole time.
+  const handleContinueResponse = useCallback(() => {
+    const nowMs = Date.now();
+    speechAccumMsRef.current = 0;
+    popupVadFrameAtRef.current = null;
+    silenceHoldLoggedRef.current = false;
+    lastMeaningfulAudioAtRef.current = nowMs;
+    lastStrongVoiceAtRef.current = nowMs;
+    silenceStartRef.current = null;
+    silenceClockRef.current.voiceAt = nowMs;
+    silenceClockRef.current.source = 'popup_dismiss';
+    setMidSilenceConfirm_(false);
+    // Server-detected popup: reset the server's silence clock too, otherwise it
+    // still thinks the popup is up and never raises it again until speech.
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: 'done_prompt_continue' }));
+    }
+  }, [setMidSilenceConfirm_]);
+
   const disconnect = useCallback(() => {
     const wasCompleted = isClosingRef.current || shouldDisconnectAfterAudioRef.current;
 
@@ -12111,7 +12133,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                                   : 'bg-emerald-600 hover:bg-emerald-700 border-emerald-600 text-white'
                               }`}
                             >
-                              {nextSkipInFlight ? 'Moving on…' : 'Next'}
+                              {nextSkipInFlight ? 'Moving on…' : 'Submit'}
                               <SkipForward className="w-3.5 h-3.5" />
                             </button>
                           );
@@ -12261,7 +12283,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 the mic stays open and recording continues underneath, so the
                 candidate can simply keep talking and the popup disappears (AC3).
                 Ending the turn is always an explicit choice — Submit (finalize
-                this answer, AC4) or Next (AC5). */}
+                this answer, AC4). */}
             {midSilenceConfirm && (() => {
               const isLastQ = questionNumber !== null && totalQuestions !== null && questionNumber >= totalQuestions;
               return (
@@ -12299,15 +12321,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       Submit
                     </button>
                     )}
-                    {!isLastQ && (
-                      <button
-                        type="button"
-                        onClick={() => handleNextQuestion()}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
-                      >
-                        Next question <ArrowRight className="w-4 h-4" />
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={handleContinueResponse}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-sky-50 dark:bg-sky-500/15 text-brand-blue dark:text-sky-300 text-sm font-semibold ring-1 ring-sky-100 dark:ring-sky-500/30 hover:bg-sky-100 dark:hover:bg-sky-500/25 transition-colors"
+                    >
+                      Continue
+                    </button>
                   </div>
                   <p className="mt-3 text-2xs text-slate-500 dark:text-slate-400">Still recording — just keep speaking to continue.</p>
                 </div>

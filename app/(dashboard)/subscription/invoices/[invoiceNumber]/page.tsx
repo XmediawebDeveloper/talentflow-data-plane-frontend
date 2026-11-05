@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { AlertCircle, ArrowLeft, RotateCcw } from 'lucide-react';
@@ -10,9 +10,28 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { billToFromAuth, generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
+import { billToFromAuth, generateBillingInvoicePDF, type InvoiceParty } from '@/lib/utils/pdfInvoice';
 import InvoiceDetailView from '@/components/subscription/InvoiceDetailView';
 import { BILLING_HISTORY_URL, normalizeBillingInvoice, type BillingInvoice } from '@/lib/utils/billingInvoices';
+
+/** The parts of Settings → Company Profile printed in "Bill to". */
+interface OrganizationProfile {
+  company_name?: string | null;
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  street_address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  country?: string | null;
+}
+
+/** "Street" / "City, State 600001" / "Country" — empty parts left out. */
+function addressLines(p: OrganizationProfile | null): string[] {
+  if (!p) return [];
+  const cityLine = [[p.city, p.state].filter(Boolean).join(', '), p.zip_code].filter(Boolean).join(' ');
+  return [p.street_address, cityLine, p.country].map((l) => (l || '').trim()).filter(Boolean);
+}
 
 /**
  * One billing invoice as its own page (was a popup on Billing History) —
@@ -28,6 +47,9 @@ export default function InvoicePage() {
   const [invoice, setInvoice] = useState<BillingInvoice | null>(null);
   const [status, setStatus] = useState<'loading' | 'ready' | 'not-found' | 'error'>('loading');
   const [downloading, setDownloading] = useState(false);
+  // The tenant's company profile (address, contact) for "Bill to"; the
+  // invoice still shows if it can't be read.
+  const [profile, setProfile] = useState<OrganizationProfile | null>(null);
 
   // Bumped by Retry to load again. Status starts 'loading'; Retry resets it.
   const [reloadKey, setReloadKey] = useState(0);
@@ -54,10 +76,29 @@ export default function InvoicePage() {
     return () => { cancelled = true; };
   }, [invoiceNumber, reloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/settings/organization-profile')
+      .then((res) => { if (!cancelled) setProfile(res.data as OrganizationProfile); })
+      .catch((err) => console.warn('[InvoicePage] Company profile unavailable:', err));
+    return () => { cancelled = true; };
+  }, []);
+
+  const billTo = useMemo<InvoiceParty>(() => {
+    const fromAuth = billToFromAuth(user, tenant);
+    return {
+      ...fromAuth,
+      company: profile?.company_name || fromAuth.company,
+      address: addressLines(profile),
+      email: profile?.contact_email || fromAuth.email,
+      phone: profile?.contact_phone || fromAuth.phone,
+    };
+  }, [user, tenant, profile]);
+
   const handleDownload = async (inv: BillingInvoice) => {
     setDownloading(true);
     try {
-      await generateBillingInvoicePDF(inv, billToFromAuth(user, tenant));
+      await generateBillingInvoicePDF(inv, billTo);
     } catch (error) {
       console.error('PDF generation failed:', error);
       toast.error('Failed to generate PDF. Please try again.');
@@ -96,7 +137,7 @@ export default function InvoicePage() {
               </div>
             </div>
           ) : status === 'ready' && invoice ? (
-            <InvoiceDetailView invoice={invoice} downloading={downloading} onDownload={handleDownload} />
+            <InvoiceDetailView invoice={invoice} billTo={billTo} downloading={downloading} onDownload={handleDownload} />
           ) : (
             <div className="space-y-4">
               <Link

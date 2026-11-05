@@ -366,7 +366,7 @@ export default function PermissionsPage() {
                   </div>
                   <p className="tf-body-muted mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
                   <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 tf-meta">
-                    <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
+                    
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
                 </button>
