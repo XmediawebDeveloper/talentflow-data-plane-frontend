@@ -261,6 +261,27 @@ export interface QuotaInfo {
   status: 'OK' | 'APPROACHING' | 'WARNING' | 'CRITICAL' | 'EXCEEDED' | 'NOT_PROVISIONED';
 }
 
+/**
+ * The full limit for one quota: plan limit + add-on units the tenant was given.
+ * Units added from the admin panel only show up in `addon.total_purchased`, so
+ * showing `subscription.limit` alone hides them (e.g. "1235 / 1200").
+ * Returns null when the quota is unlimited or the limit is unknown.
+ */
+export function getQuotaTotalLimit(
+  q?: {
+    subscription?: { limit?: number | string } | null;
+    addon?: { total_purchased?: number | string } | null;
+  } | null
+): number | null {
+  const rawLimit = q?.subscription?.limit;
+  if (rawLimit === undefined || rawLimit === null) return null;
+  if (rawLimit === -1 || String(rawLimit).toLowerCase() === 'unlimited') return null;
+  const planLimit = Number(rawLimit);
+  if (!Number.isFinite(planLimit)) return null;
+  const addon = Number(q?.addon?.total_purchased ?? 0);
+  return planLimit + (Number.isFinite(addon) ? addon : 0);
+}
+
 export interface QuotaStatusResponse {
   status: 'success' | 'error';
   data?: {

@@ -77,7 +77,7 @@ const ADDITIONAL_SETTING_TABS: { key: AdditionalSettingTab; label: string; icon:
   { key: 'video', label: 'Introduction Video', icon: Video },
   { key: 'languages', label: 'Candidate Languages', icon: Globe },
   ...(PROXY_INTEGRITY_VERIFICATION_ENABLED
-    ? [{ key: 'proxy' as const, label: 'Proxy Integrity', icon: QrCode }]
+    ? [{ key: 'proxy' as const, label: 'QR Verification', icon: QrCode }]
     : []),
 ];
 
@@ -3966,7 +3966,7 @@ export default function AIInterviewConfig() {
                       <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                         <QrCode className="w-5 h-5 text-brand-blue" />
                       </div>
-                      <span className="tf-row-name tracking-tight">Enable Proxy Integrity Verification</span>
+                      <span className="tf-row-name tracking-tight">Enable QR Verification</span>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                       <input

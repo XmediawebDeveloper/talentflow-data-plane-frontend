@@ -31,6 +31,7 @@ import {
 } from 'recharts';
 import { useRouter } from 'next/navigation';
 import { User, Tenant } from '@/lib/types/tenant';
+import { getQuotaTotalLimit } from '@/lib/services/usageTrackingService';
 import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -49,8 +50,15 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
   const subscription = tenant?.subscription;
   const planName = quotaData?.plan_name || subscription?.planName || '—';
   const renewalDate = subscription?.renewalDate;
-  const seatsUsed = subscription?.usage?.currentSeats ?? 0;
-  const seatsLimit = subscription?.limits?.maxSeats ?? 0;
+  // Seats come from live quota-status (plan seats + add-on seats); the tenant
+  // object's plan snapshot is only a fallback before quota data arrives.
+  const liveSeats = quotaData?.quotas?.max_seats;
+  const seatsUsed = typeof liveSeats?.subscription?.used === 'number'
+    ? liveSeats.subscription.used
+    : subscription?.usage?.currentSeats ?? 0;
+  const seatsLimit = liveSeats
+    ? getQuotaTotalLimit(liveSeats) ?? 0
+    : subscription?.limits?.maxSeats ?? 0;
 
   const canExportUsage = hasPermission('canExportUsage');
   const canAddPaymentMethod = hasPermission('canAddPaymentMethod');
@@ -81,7 +89,8 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
       .filter(([k]) => k in labelMap)
       .map(([k, q]) => {
         const used = typeof q?.subscription?.used === 'number' ? q!.subscription!.used : 0;
-        const limit = typeof q?.subscription?.limit === 'number' ? q!.subscription!.limit : 0;
+        // Plan + add-on units, so units added by an admin raise the bar's total.
+        const limit = getQuotaTotalLimit(q) ?? 0;
         return { name: labelMap[k], used, limit };
       })
       .filter((q) => q.limit > 0);
