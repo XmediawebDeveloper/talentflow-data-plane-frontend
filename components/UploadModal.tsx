@@ -7,7 +7,7 @@ import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
-import { hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
+import { hasAvailableQuota, checkQuotaStatus, QuotaInfo, getQuotaTotalLimit } from '@/lib/services/usageTrackingService';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { toast } from 'sonner';
@@ -839,7 +839,8 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
     const numericValue = Number(value);
     return Number.isFinite(numericValue) ? numericValue : fallback;
   };
-  const quotaLimit = toFiniteNumber(quotaInfo?.subscription?.limit);
+  // Plan limit + add-on units, so units added by an admin raise the total.
+  const quotaLimit = getQuotaTotalLimit(quotaInfo) ?? 0;
   const quotaUsed = toFiniteNumber(quotaInfo?.subscription?.used);
   const quotaRemaining = toFiniteNumber(quotaInfo?.total_remaining);
   const quotaPercentageFromApi = Number(quotaInfo?.percentage);

@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2 } from 'lucide-react';
+import type { InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
 import { toast } from 'sonner';
+import ListPagination from '@/components/ListPagination';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -105,9 +108,37 @@ interface AIInterviewTrackInvitesModalProps {
   /** Opens pre-filtered to one candidate (their email) — the bulk-send
    *  popup's per-row "Track status". */
   initialSearch?: string;
+  /** Rows a page. Default 5 in the popup, 10 embedded. */
+  pageSize?: number;
+  /** Paging under the table (the house ListPagination) instead of in the
+   *  footer; the footer keeps just Cancel / Invite More. Default: on in the
+   *  popup, off embedded. */
+  paginationBelowTable?: boolean;
+  /** First-time-user aids, added on top of everything the tracker has: a
+   *  card-filter hint, a status legend, each row's main action as a visible
+   *  button, "Updated … ago" by Refresh, a clearer Select All, helpful empty
+   *  states, a red Revoked card and swipeable cards on phones. Default: on in
+   *  the popup, off embedded. */
+  guided?: boolean;
 }
 
 const PAGE_SIZE = 10;
+/* The popup (not the embedded Track tab): five rows a page, paged under the table. */
+const POPUP_PAGE_SIZE = 5;
+
+/* Pagination under the table: the table shows its whole page (no scrollbar of
+   its own); on a screen too short for it the popup scrolls as one instead. */
+const NO_INNER_SCROLL_PANEL = '!overflow-y-auto [scrollbar-gutter:stable] [&>.tf-tracker-header]:sticky [&>.tf-tracker-header]:top-0 [&>.tf-tracker-header]:z-20 [&>.tf-tracker-footer]:sticky [&>.tf-tracker-footer]:bottom-0 [&>.tf-tracker-footer]:z-20 xl:!max-w-[80rem] 2xl:!max-w-[88rem] h-[min(54rem,calc(100dvh-1.5rem))] sm:h-[min(54rem,calc(100dvh-2rem))] md:h-[min(54rem,calc(100dvh-3rem))]';
+
+/* guided: the count cards as one swipeable row on phones. */
+const GUIDED_STATS_PHONE = 'max-sm:flex max-sm:overflow-x-auto max-sm:pb-1 max-sm:[&>*]:min-w-[6.5rem] max-sm:[&>*]:shrink-0';
+/* guided: the active card's name in the "Showing only" chip. */
+const STATUS_CARD_LABEL: Record<string, string> = {
+  invited: 'Invited', in_progress: 'In Progress', completed: 'Completed', expired: 'Expired', terminated: 'Terminated', revoked: 'Revoked',
+};
+/* guided: every card in the Status dropdown, Revoked included. */
+const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }];
+const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked'];
 
 /**
  * Invite tracking for a job's AI interview, opened from the Job Details page.
@@ -137,6 +168,9 @@ export default function AIInterviewTrackInvitesModal({
   onChanged,
   refreshSignal,
   initialSearch,
+  pageSize = embedded ? PAGE_SIZE : POPUP_PAGE_SIZE,
+  paginationBelowTable = !embedded,
+  guided = !embedded,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -203,6 +237,7 @@ export default function AIInterviewTrackInvitesModal({
   /* Same filter contract the AI Interviews page's tracker uses. The endpoint
      already accepted search/status/date — this tracker just never passed them,
      so it always showed the unfiltered first page. */
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
   const [filters, setFilters] = useState<InviteFilterState>(() => (
     initialSearch ? { ...EMPTY_INVITE_FILTERS, search: initialSearch } : EMPTY_INVITE_FILTERS
   ));
@@ -346,7 +381,7 @@ export default function AIInterviewTrackInvitesModal({
              Fail) have no server-side filter, so with either set the whole
              matching list is fetched and paged here instead. */
           page: fetchAllForClientFilters ? 1 : page,
-          page_size: fetchAllForClientFilters ? 1000 : PAGE_SIZE,
+          page_size: fetchAllForClientFilters ? 1000 : pageSize,
         }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'invited' }),
@@ -358,9 +393,9 @@ export default function AIInterviewTrackInvitesModal({
       if (fetchAllForClientFilters) {
         const matching = (result.items || []).filter((inv: any) =>
           (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
-        const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+        const pages = Math.max(1, Math.ceil(matching.length / pageSize));
         const safePage = Math.min(page, pages);
-        setInvitations(matching.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE));
+        setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
         setFilteredTotal(matching.length);
         setTotalPages(pages);
         if (safePage !== page) setPage(safePage);
@@ -379,6 +414,7 @@ export default function AIInterviewTrackInvitesModal({
         revoked: revokedOnly.total || 0,
         expired: expiredOnly.total || 0,
       });
+      setLoadedAt(Date.now());
 
       /* Filtering can empty the page you were on — drop back rather than showing
          "no candidates" over a list that still has results. */
@@ -393,7 +429,7 @@ export default function AIInterviewTrackInvitesModal({
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
     }
-  }, [configId, page, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
+  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
 
   /* Header Refresh — re-reads in place: the rows stay put under a veil and the
      dialog's height is pinned until the new data lands, so nothing jumps. */
@@ -449,8 +485,8 @@ export default function AIInterviewTrackInvitesModal({
 
   const filtersActive = hasActiveInviteFilters(filters);
   const completionRate = overview.total > 0 ? Math.round((overview.completed / overview.total) * 100) : 0;
-  const startIndex = filteredTotal === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const endIndex = Math.min(page * PAGE_SIZE, filteredTotal);
+  const startIndex = filteredTotal === 0 ? 0 : (page - 1) * pageSize + 1;
+  const endIndex = Math.min(page * pageSize, filteredTotal);
   const resultsLabel = filtersActive
     ? `${filteredTotal} matching candidate${filteredTotal === 1 ? '' : 's'}`
     : `Showing ${startIndex} to ${endIndex} of ${filteredTotal} invites`;
@@ -470,9 +506,9 @@ export default function AIInterviewTrackInvitesModal({
         {...(embedded ? {} : heightLock.dialogProps)}
         className={embedded
           ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
-          : TRACKER_DIALOG_PANEL_CLASS}>
+          : `${TRACKER_DIALOG_PANEL_CLASS} ${paginationBelowTable ? NO_INNER_SCROLL_PANEL : ''}`}>
         {/* Header */}
-        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+        <div className={`${paginationBelowTable ? 'tf-tracker-header ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0`}>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
@@ -516,6 +552,7 @@ export default function AIInterviewTrackInvitesModal({
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+            {guided && <span className="max-sm:hidden"><UpdatedAgo at={loadedAt} /></span>}
             <Button
               variant="secondary"
               size="sm"
@@ -557,7 +594,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
-          gridClassName="tf-tracker-stats"
+          gridClassName={guided ? `tf-tracker-stats ${GUIDED_STATS_PHONE}` : 'tf-tracker-stats'}
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -570,18 +607,30 @@ export default function AIInterviewTrackInvitesModal({
             { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overview.completed, ...INVITE_CARD_TONES.green },
             { key: 'expired', label: 'Expired', Icon: Clock, value: overview.expired, ...INVITE_CARD_TONES.orange },
             { key: 'terminated', label: 'Terminated', Icon: Ban, value: overview.terminated, ...INVITE_CARD_TONES.red },
-            { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
+            guided
+              ? { key: 'revoked', label: 'Revoked', Icon: Undo2, value: overview.revoked, ...INVITE_CARD_TONES.red }
+              : { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
+        {guided && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2.5 sm:px-6 pt-2 flex-shrink-0">
+            <StatCardsHint
+              activeLabel={filters.status !== 'all' ? (STATUS_CARD_LABEL[filters.status] ?? filters.status) : null}
+              onClear={() => { setFilters({ ...filters, status: 'all' }); setPage(1); }}
+            />
+            <StatusLegend kinds={INTERVIEW_LEGEND} />
+          </div>
+        )}
 
         <InviteFilterBar
+          moreFilters={guided}
           filters={filters}
           onChange={(nextFilters) => {
             setFilters(nextFilters);
             // A narrowed list has its own page 1; staying on page 4 would look empty.
             setPage(1);
           }}
-          statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
+          statusOptions={guided ? AI_CARD_STATUS_OPTIONS : AI_INTERVIEW_INVITE_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name or email..."
           extraSelects={[
             ...(hideVersionDetails ? [] : [...(hideJobVersionFilter ? [] : [{
@@ -632,7 +681,9 @@ export default function AIInterviewTrackInvitesModal({
                 >
                   {allSelected && <Check className="w-3 h-3 text-white" />}
                 </span>
-                Select All ({selectableIds.length})
+                {guided
+                  ? `Select all ${selectableIds.length} you can resend or revoke (Invited / Expired)`
+                  : `Select All (${selectableIds.length})`}
               </button>
             ) : (
               <span />
@@ -674,7 +725,7 @@ export default function AIInterviewTrackInvitesModal({
 
         {/* Candidate list. overflow-hidden, not overflow-auto: the table shell (or
             the mobile card stack) inside is the single vertical scroller. */}
-        <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className={`relative px-2.5 sm:px-6 py-2.5 sm:py-4 flex flex-col ${paginationBelowTable ? 'flex-1' : 'overflow-hidden flex-1 min-h-0'}`}>
           {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
             invitations={invitations}
@@ -683,6 +734,16 @@ export default function AIInterviewTrackInvitesModal({
             isLoading={initialLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
+            autoHeight={paginationBelowTable}
+            emptyAction={guided ? (filtersActive ? (
+              <Button variant="secondary" size="sm" onClick={() => { setFilters(EMPTY_INVITE_FILTERS); setJobVersionFilter(''); setVersionFilter(''); setSourceFilter(''); setResultFilter(''); setPage(1); }}>
+                Clear filters
+              </Button>
+            ) : onInviteMore ? (
+              <Button variant="primary" size="sm" onClick={onInviteMore} icon={<Send className="w-3.5 h-3.5" />}>
+                Invite candidates
+              </Button>
+            ) : undefined) : undefined}
             jobVersion={jobVersion}
             interviewVersion={interviewVersion}
             onResend={(inv) => setResendTarget(inv)}
@@ -698,6 +759,22 @@ export default function AIInterviewTrackInvitesModal({
             onToggleSelect={(jdDisabled || configArchived) ? undefined : toggleSelectOne}
             isSelectable={isBulkActionable}
           />
+          {paginationBelowTable && !initialLoading && filteredTotal > 0 && (
+            <div className="mt-auto pt-3 shrink-0">
+              <ListPagination
+                currentPage={page}
+                itemsPerPage={pageSize}
+                totalItems={filteredTotal}
+                onPageChange={setPage}
+                onItemsPerPageChange={() => setPage(1)}
+                pageSizeOptions={[pageSize]}
+                itemLabel="invites"
+                minimalOnMobile
+                compact
+                alwaysShow
+              />
+            </div>
+          )}
           {refreshVeil && (
             <div
               className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
@@ -808,12 +885,13 @@ export default function AIInterviewTrackInvitesModal({
         {/* Footer — stacks on phones; First/Last drop out below sm. Nothing to
             count or page when nobody is invited, so embedded it goes too. */}
         {!(isUnstarted && embedded) && (
-        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+        <div className={`${paginationBelowTable ? 'tf-tracker-footer ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0`}>
           <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
-            {resultsLabel}
+            {/* Under the table instead when the paging is there. */}
+            {!paginationBelowTable && resultsLabel}
           </p>
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
-            {totalPages > 1 && (
+            {totalPages > 1 && !paginationBelowTable && (
               <>
                 <div className="flex items-center gap-1.5">
                   <span className="tf-body-secondary whitespace-nowrap">Go to</span>

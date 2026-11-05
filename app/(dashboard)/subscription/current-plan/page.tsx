@@ -654,11 +654,12 @@ export function CurrentPlanLoadingSkeleton() {
 function CurrentPlanContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { logout, user, isBillingManager, isTenantAdmin, hasPermission } = useAuth();
+  const { logout, user, isTenantAdmin, hasPermission } = useAuth();
   const canUpgradePlan = hasPermission('canUpgradePlan');
-  // RBAC03: a Billing Manager sees the plans but cannot change them — the
-  // cards stay visible with every Choose/Upgrade button greyed (never hidden).
-  const planChangeLocked = !canUpgradePlan || isBillingManager;
+  // Plan changes follow the Upgrade Plan permission only. Billing Manager has
+  // full Subscription & Billing access (2026-11-05), so it can change plans;
+  // without the permission the cards stay visible with Choose/Upgrade greyed.
+  const planChangeLocked = !canUpgradePlan;
 
   // Subscription navigation tabs — surfaced on this page instead of the sidebar.
   // `visible: false` = no permission: the tab stays rendered, greyed, with a

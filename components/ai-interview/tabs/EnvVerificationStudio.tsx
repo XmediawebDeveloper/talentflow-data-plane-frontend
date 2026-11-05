@@ -69,6 +69,9 @@ type Props = {
   onRetryAnalysis?: () => void;
   reanalyzing?: boolean;
   reanalyzeError?: string;
+  /** Optional "Watch in recording" link that opens the main interview
+   *  recording at the moment the QR was shown (rendered by the parent). */
+  watchInRecording?: React.ReactNode;
 };
 
 const FRAME_STEP = 0.5;       // stored frames are 2fps → index × 0.5s
@@ -127,7 +130,7 @@ function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na'; titl
 
 export default function EnvVerificationStudio({
   v, videoSrc, videoStillLoading, frames, framesLoading, framesError, openViewer, registerVideo, formatTs, interviewRef,
-  isInProgress = false, attemptLabel, onRetryAnalysis, reanalyzing = false, reanalyzeError,
+  isInProgress = false, attemptLabel, onRetryAnalysis, reanalyzing = false, reanalyzeError, watchInRecording,
 }: Props) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -240,6 +243,7 @@ export default function EnvVerificationStudio({
 
   const rgb = v.rgb_sequence_results || [];
   const rgbPass = rgb.length > 0 ? rgb.every(r => r.match) : null;
+  const rgbMatched = rgb.filter(r => r.match).length;
   const timedRows = rows.filter(r => r.range && r.seekSeconds != null);
   // Next flagged moment after the playhead (wraps to the first).
   const nextIssue = () => {
@@ -251,8 +255,11 @@ export default function EnvVerificationStudio({
   const visualIssues = rows.filter(r => !/voice|speech/i.test(r.label)).length;
   const analysing = v.analysis_status === 'pending' || v.analysis_status === 'running';
   const analysed = v.analysis_status === 'done';
-  const flagged = analysed && v.result_severity === 'flagged';
   const liveCheck = v.color_match ?? rgbPass;
+  // A failed code / live-recording check needs review on its own, even if the
+  // AI found nothing — keeps the card status in line with the red tab badge.
+  const checksFailed = v.id_match === false || liveCheck === false;
+  const flagged = (analysed && v.result_severity === 'flagged') || (v.video_uploaded && checksFailed);
 
   // What happened on the phone when no video arrived. pending/opened rows only
   // count as "waiting" while the interview is still live; after it ends they're final.
@@ -278,15 +285,17 @@ export default function EnvVerificationStudio({
   const statusLabel = waitingOnPhone ? 'In progress'
     : notCompleted ? 'Not completed'
     : uploadFailed ? 'Upload failed'
+    : flagged ? 'Needs review'
     : analysing ? 'In progress'
     : v.analysis_status === 'error' ? 'Not checked'
-    : flagged ? 'Needs review'
     : analysed ? 'Clear'
     : 'Pending';
   const title = !v.video_uploaded ? notUploadedMessage
+    : flagged ? (rows.length > 0 ? `${rows.length} ${rows.length === 1 ? 'thing needs' : 'things need'} your review`
+        : v.id_match === false ? 'The verification code did not match — please review'
+        : 'The video may not have been recorded live — please review')
     : analysing ? 'Checking the video…'
     : v.analysis_status === 'error' ? 'We could not check this video — please watch it yourself'
-    : flagged ? (rows.length > 0 ? `${rows.length} ${rows.length === 1 ? 'thing needs' : 'things need'} your review` : 'Something needs your review')
     : analysed ? 'No problems found'
     : 'Waiting for the review';
 
@@ -309,7 +318,7 @@ export default function EnvVerificationStudio({
         <div className="flex flex-col sm:flex-row sm:items-start gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">Proxy integrity verification</span>
+              <span className="text-2xs font-semibold uppercase tracking-wide text-gray-500">QR verification</span>
               {attemptLabel && <span className="text-2xs font-semibold text-gray-500">· {attemptLabel}</span>}
               <span className={`inline-flex items-center gap-1 text-2xs font-bold px-2 py-0.5 rounded-full ${
                 flagged || uploadFailed ? 'bg-destructive-subtle text-destructive'
@@ -345,6 +354,7 @@ export default function EnvVerificationStudio({
                 Submitted{' '}
                 {v.submitted_at ? <span className="font-mono">{formatTs(v.submitted_at)}</span> : <span className="text-gray-400">—</span>}
               </span>
+              {watchInRecording}
             </div>
             {v.analysis_status === 'error' && v.video_uploaded && onRetryAnalysis && (
               <div className="mt-2 flex items-center gap-2 flex-wrap">
@@ -507,7 +517,7 @@ export default function EnvVerificationStudio({
               />
               <CheckLine
                 state={liveCheck === null ? 'na' : liveCheck ? 'pass' : 'fail'}
-                title="Recorded live"
+                title={rgb.length > 0 ? `Recorded live (${rgbMatched}/${rgb.length} colours seen)` : 'Recorded live'}
                 hint="The colours flashed on the laptop screen showed up in the video."
               />
               <CheckLine
@@ -661,7 +671,9 @@ export default function EnvVerificationStudio({
             <div className="px-4 pb-4 pt-3 space-y-4 border-t border-gray-100">
               {rgb.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-gray-700 mb-1.5">Colour check, second by second</p>
+                  <p className="text-xs font-semibold text-gray-700 mb-1.5">
+                    Colour check, second by second · {rgbMatched}/{rgb.length} matched
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {rgb.map((r) => (
                       <span

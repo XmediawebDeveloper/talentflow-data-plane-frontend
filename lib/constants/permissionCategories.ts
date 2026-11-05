@@ -1,8 +1,7 @@
 /**
  * SINGLE SOURCE OF TRUTH for permission categories shown in:
  *   1. Edit User popup        — components/users/UserManagement.tsx
- *   2. Edit Role form         — components/roles/EditRoleForm.tsx
- *   3. Create Role form       — components/roles/CreateRoleForm.tsx
+ *   2. Role editor (Advanced) — components/roles/access/RoleAccessEditor.tsx (PermissionTilesEditor)
  *
  * ⚠️  Edit THIS file only. All three UIs will automatically reflect your changes.
  *     Do NOT duplicate this list in any of the three files above.

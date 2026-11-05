@@ -72,11 +72,13 @@ export const formatRoleName = (name: string | null | undefined): string => (name
 export async function getRoles(): Promise<{
   roles: RoleListItem[];
   total: number;
+  /** Max roles per tenant, system roles included. */
+  role_limit?: number;
 }> {
   const response = await api.get(`${RBAC_BASE_URL}/roles`);
 
   // Ensure core system roles are always marked as system roles
-  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
+  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer', 'billing_manager'];
   const roles = response.data.roles.map((raw: RoleListItem) => {
     const role = { ...raw, name: formatRoleName(raw.name), parent_role_name: raw.parent_role_name ? formatRoleName(raw.parent_role_name) : raw.parent_role_name };
     if (systemRoleCodes.includes(role.code.toLowerCase())) {
@@ -109,7 +111,7 @@ export async function getRoleById(roleId: number): Promise<Role> {
   const response = await api.get(`${RBAC_BASE_URL}/roles/${roleId}`);
 
   // Ensure core system roles are always marked as system roles
-  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer'];
+  const systemRoleCodes = ['tenant_admin', 'admin', 'recruiter', 'viewer', 'billing_manager'];
   const role = { ...response.data, name: formatRoleName(response.data.name) };
   if (systemRoleCodes.includes(role.code.toLowerCase())) {
     return { ...role, is_system: true };

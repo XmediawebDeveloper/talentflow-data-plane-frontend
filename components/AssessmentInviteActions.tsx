@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import {
   Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Eye, Pencil, Send,
   MoreVertical, Monitor, RefreshCw, X, History, Link2,
@@ -873,7 +874,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
               popup names the address. */}
           <DialogDescription className="break-words">
             
-            {target?.candidate_name || (!target?.candidate_email ? 'Candidate' : null)}
+            {capitalizedCase(target?.candidate_name) || (!target?.candidate_email ? 'Candidate' : null)}
             {target?.candidate_name && target?.candidate_email && ' — '}
             {target?.candidate_email && <span className="break-all">{target.candidate_email}</span>}
           

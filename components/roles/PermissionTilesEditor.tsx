@@ -45,9 +45,15 @@ export interface PermissionTilesEditorProps {
   onToggleGroup: (codes: string[], label: string) => void;
   /** Baseline codes every account keeps — shown "(always on)", not clickable. */
   alwaysOn?: Set<string>;
+  /** Extra content under a section's tiles (role editor: "on other screens" strip). */
+  renderSectionExtra?: (category: CustomPermissionCategory) => React.ReactNode;
+  /** Only show tiles whose label or section matches (case-insensitive). */
+  filter?: string;
 }
 
-export default function PermissionTilesEditor({ selected, onToggleCode, onToggleGroup, alwaysOn }: PermissionTilesEditorProps) {
+export default function PermissionTilesEditor({ selected, onToggleCode, onToggleGroup, alwaysOn, renderSectionExtra, filter = '' }: PermissionTilesEditorProps) {
+  const q = filter.trim().toLowerCase();
+  const matches = (label: string, section: string) => !q || label.toLowerCase().includes(q) || section.toLowerCase().includes(q);
   const renderTile = (code: string, label: string) => {
     const isMandatory = !!alwaysOn?.has(code);
     const isOn = isMandatory || selected.has(code);
@@ -90,6 +96,14 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
   return (
     <div className="space-y-4">
       {CUSTOM_PERMISSION_CATEGORIES.map((category) => {
+        const topTiles: [string, string][] = [
+          ...(category.viewCode ? [[category.viewCode, `View ${category.name}`] as [string, string]] : []),
+          ...(category.actions?.map((a) => [a.code, a.label] as [string, string]) || []),
+        ].filter(([, label]) => matches(label, category.name));
+        const subs = (category.subCategories || []).filter((sub) =>
+          [...(sub.viewCode ? [`View ${sub.name}`] : []), ...sub.actions.map((a) => (a.label === 'View' ? `View ${sub.name}` : a.label))]
+            .some((label) => matches(label, `${category.name} ${sub.name}`)));
+        if (q && !topTiles.length && !subs.length) return null;
         const allCodes = codesOfCategory(category);
         const selectedCount = allCodes.filter((c) => selected.has(c)).length;
         const state = groupCheckState(isGroupFullyOn(allCodes, selected), selectedCount);
@@ -102,12 +116,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
             >
               <div className="flex items-center gap-3">
                 <GroupCheckbox state={state} label={category.name} />
-                <div>
-                  <h4 className="tf-section-title max-sm:text-sm">{category.name}</h4>
-                  <p className="tf-meta">
-                    {allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
+                <h4 className="tf-section-title max-sm:text-sm">{category.name}</h4>
                 {category.isMenuToggle && selectedCount > 0 && (
                   <span className="tf-badge text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20">
                     Menu
@@ -117,14 +126,15 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
               <span className="tf-caption">{selectedCount} selected</span>
             </div>
 
-            {(category.viewCode || category.actions?.length) && (
+            {topTiles.length > 0 && (
               <div className="tf-grid-3 p-4">
-                {category.viewCode && renderTile(category.viewCode, `View ${category.name}`)}
-                {category.actions?.map((a) => renderTile(a.code, a.label))}
+                {topTiles.map(([code, label]) => renderTile(code, label))}
               </div>
             )}
 
-            {category.subCategories?.map((sub) => {
+            {!q && renderSectionExtra?.(category)}
+
+            {subs.map((sub) => {
               const subCodes = codesOfSub(sub);
               const subSelected = subCodes.filter((c) => selected.has(c)).length;
               return (

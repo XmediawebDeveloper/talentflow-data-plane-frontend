@@ -63,6 +63,10 @@ export interface AppModalAction {
   onClick: () => void;
   variant?: 'primary' | 'secondary' | 'destructive';
   disabled?: boolean;
+  /** Not allowed (RBAC): stays visible and greyed with `title` as the tooltip,
+   *  click does nothing. Uses aria-disabled, not native disabled, so the
+   *  tooltip still shows. */
+  locked?: boolean;
   loading?: boolean;
   icon?: ReactNode;
   type?: 'button' | 'submit';
@@ -141,12 +145,13 @@ export function AppModalFooterButtons({
           form={action.form}
           variant={action.variant ?? 'primary'}
           size={buttonSize}
-          onClick={action.onClick}
+          onClick={action.locked ? undefined : action.onClick}
           disabled={action.disabled}
+          aria-disabled={action.locked || undefined}
           loading={action.loading}
           icon={action.icon}
           title={action.title}
-          className={`${buttonClass} ${tone === 'warning' && (action.variant ?? 'primary') === 'primary' ? WARNING_PRIMARY_BUTTON_CLASS : ''}`}
+          className={`${buttonClass} ${tone === 'warning' && (action.variant ?? 'primary') === 'primary' ? WARNING_PRIMARY_BUTTON_CLASS : ''} ${action.locked ? 'cursor-not-allowed opacity-60' : ''}`}
         >
           {action.label}
         </Button>

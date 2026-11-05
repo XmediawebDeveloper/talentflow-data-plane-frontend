@@ -28,6 +28,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import PlanLockedOverlay from '@/components/shared/PlanLockedOverlay';
 import { useQuota } from '@/contexts/QuotaContext';
+import { getQuotaTotalLimit } from '@/lib/services/usageTrackingService';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { Button } from '@/components/ui/button';
@@ -95,9 +96,10 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
   const resumeQ = quotaData?.quotas?.RU;
   const scoringQ = quotaData?.quotas?.RS;
   const aiInterviewQ = quotaData?.quotas?.AIU;
-  const resumeQuota = { used: toNum(resumeQ?.subscription?.used), limit: toNum(resumeQ?.subscription?.limit) };
-  const scoringQuota = { used: toNum(scoringQ?.subscription?.used), limit: toNum(scoringQ?.subscription?.limit) };
-  const aiInterviewQuota = { used: toNum(aiInterviewQ?.subscription?.used), limit: toNum(aiInterviewQ?.subscription?.limit) };
+  // Limit = plan + add-on units, so units added by an admin show up here.
+  const resumeQuota = { used: toNum(resumeQ?.subscription?.used), limit: getQuotaTotalLimit(resumeQ) ?? 0 };
+  const scoringQuota = { used: toNum(scoringQ?.subscription?.used), limit: getQuotaTotalLimit(scoringQ) ?? 0 };
+  const aiInterviewQuota = { used: toNum(aiInterviewQ?.subscription?.used), limit: getQuotaTotalLimit(aiInterviewQ) ?? 0 };
 
   return (
     <main className="tf-page">
