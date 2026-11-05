@@ -57,7 +57,7 @@ import ListPagination from '@/components/ListPagination';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 
@@ -2271,7 +2271,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         /* Embedded: the AI Talent Match tab's spacing — the row's own `mb-3`
            under the controls and the More Filters panel's `pb-4` under the
            fields, nothing on the block itself. */
-        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-3 sm:mb-4'}>
+        /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
+           list's lines — search · filter icon, Result, Customize Columns · Export,
+           the status tabs (underlined), then Select All · Sort · List / Grid. */
+        <div className={toolbarPortal ? '' : 'tf-jobs-toolbar tf-card p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
             /* Keystroke-by-keystroke, as the search field always was. */
@@ -2323,6 +2326,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             ) : (
               /* Result inline with Search, as Location / Industry are on the
                  Job Openings page (and so not repeated in More Filters). */
+              <div className="tf-jobs-filter-pills contents">
               <SearchableSelect
                 className="w-full sm:w-44"
                 value={passFailFilter === 'all' ? '' : passFailFilter}
@@ -2336,11 +2340,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 searchPlaceholder="Search result..."
                 ariaLabel="Filter by result"
               />
+              </div>
             )}
             trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
-            afterFiltersActions={toolbarActions}
+            /* Standalone phones: the page's Invite leaves line 1 for a full line of its
+               own, above Customize Columns / Export (globals.css, `.tf-jobs-invite`). */
+            afterFiltersActions={toolbarActions && !portaled ? <div className="tf-jobs-invite contents">{toolbarActions}</div> : toolbarActions}
             activeFilterCount={activeFilterCount}
             filtersApplied={activeFilterCount > 0}
             /* Reset — search, status, result and every panel filter at once. */
@@ -2353,6 +2360,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 standalone page; embedded in Job Details they are items in the
                 Actions pill beside Select All (see `beforeSearch` above). */}
             {!portaled && (
+              <div className="tf-jobs-actions-line contents">
               <Button
                 variant="secondary"
                 size="sm"
@@ -2363,8 +2371,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               >
                 Customize Columns ({enabledColumnsCount})
               </Button>
-            )}
-            {!portaled && (
               <Button
                 variant="primary"
                 size="sm"
@@ -2376,6 +2382,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               >
                 Export
               </Button>
+              </div>
             )}
           </ListToolbar>
 
@@ -2463,7 +2470,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
             </div>
           ) : (
-            <div className="mt-3 pt-3 border-t border-brand-blue/10">
+            <div className="tf-jobs-filter-panel mt-3 pt-3 border-t border-brand-blue/10">
               <div className="tf-grid-4 [&>div]:min-w-0">
                 {filterFields}
               </div>
@@ -2473,7 +2480,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {/* Standalone row 2 — the Job Openings page's: Select All, the
               status pills, then Sort by and List / Grid at the row's end. */}
           {!portaled && (
-            <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <div className="tf-jobs-row2 flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+              <div className="tf-jobs-select">
               <ToolbarSelectAll
                 selectedCount={selectedRows.length}
                 allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
@@ -2489,6 +2497,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
                 onClear={() => setSelectedRows([])}
               />
+              </div>
               {/* AS-26: Bulk PDF download — once a row is ticked. */}
               {selectedRows.length > 0 && (
               <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
@@ -2544,6 +2553,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               {/* Status pills — as the Job Openings page's All Jobs /
                   Published / Draft … Same state the dropdown drove. */}
+              <div className="tf-jobs-status-tabs contents">
               {([
                 ['all', 'All Candidates'],
                 ['In Progress', 'In Progress'],
@@ -2557,13 +2567,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(value);
                     setCurrentPage(1);
                   }}
+                  aria-pressed={statusFilter === value}
                   className={tabPill(statusFilter === value)}
                 >
                   {label}
                 </button>
               ))}
-              <div className="flex items-center gap-2 sm:ml-auto">
-                {resultsSortControl}
+              </div>
+              <div className="tf-jobs-trail flex items-center gap-2 sm:ml-auto">
+                <div className="tf-jobs-sort contents">{resultsSortControl}</div>
+                {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+                <PhoneSortMenu<typeof sortField>
+                  value={sortField}
+                  order={sortDirection}
+                  options={[
+                    { value: 'name', label: 'Name' },
+                    { value: 'score', label: 'Score' },
+                    { value: 'date', label: 'Submitted' },
+                  ]}
+                  orderLabels={(f) => (f === 'date'
+                    ? { desc: 'Newest first', asc: 'Oldest first' }
+                    : f === 'score' ? { desc: 'Highest first', asc: 'Lowest first' } : { desc: 'Z → A', asc: 'A → Z' })}
+                  onChange={setSortField}
+                  onOrderChange={setSortDirection}
+                />
                 <ListViewToggle value={displayMode} onChange={setDisplayMode} />
               </div>
             </div>

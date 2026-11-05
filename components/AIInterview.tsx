@@ -1,7 +1,8 @@
 'use client';
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, RefreshCw, Layers, Radar } from 'lucide-react';
-import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
+import { ListBulkActions, useListSortSlot, MasterListLayout } from '@/components/ui/list-toolbar-slot';
+import { PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -3094,7 +3095,8 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap">
+          {/* Phones: the buttons stack full width, as the Job Openings header's. From sm unchanged. */}
+          <div className="flex max-sm:flex-col max-sm:items-stretch sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -3113,7 +3115,7 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+              className={`inline-flex items-center justify-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
@@ -3251,7 +3253,7 @@ export default function AIInterview() {
         })()}
 
         {pageView === 'list' && (
-        <>
+        <MasterListLayout>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {invitedOnly && (
         <div className="mb-4 flex items-center justify-end gap-2 flex-wrap">
@@ -3282,14 +3284,19 @@ export default function AIInterview() {
             stray line above the pills; `[&>*:last-child:not(:first-child)]:mb-3`
             spaces an open filter panel off that rule the way the toolbar row's
             own mb-3 already does when it is alone. */}
-        <div className="tf-card p-3 sm:p-4 mb-4">
+        {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's lines —
+              ( search ............ ) (⚙) [≡ ⊞]
+              Configured Jobs 0  All Interviews 2  Act…   ← underlined tabs, scroll sideways
+                                         [⇅ Sort ▾] [↻]
+            From sm the card is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
 
         {/* Shared toolbar slot — every tab's search/filter row renders here:
             the config-list tabs' toolbar just below, and All Interviews /
             Candidate Results / Invitation Status / Activity Logs portal theirs
             in (see their `toolbarSlot` prop), so the search box sits in the
             same spot whichever tab is active. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
+        <div ref={setToolbarSlotEl} className="tf-jobs-slot empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
           <>
@@ -3412,8 +3419,10 @@ export default function AIInterview() {
 
         {/* Tabs — below the search row inside the same card, in the Job
             Descriptions page's status-pill row (no "Show:" label). */}
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap w-full">
+        <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
+        <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
+          {/* `contents` from sm (the row as before); on phones one underlined strip. */}
+          <div className="tf-jobs-status-tabs contents">
           {(() => {
             // Server counts (/configs/stats, the same shared WHERE the lists
             // page with), as on Assessments. `configs` now holds only the
@@ -3504,6 +3513,9 @@ export default function AIInterview() {
               );
             })}
           </div>
+          </div>
+          {/* Phones: Clear Sort, the Sort menu and Refresh on a line of their own, right. */}
+          <div className="tf-jobs-tools contents">
           {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
               tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
@@ -3514,29 +3526,41 @@ export default function AIInterview() {
               options carry their own direction (Newest / Oldest), so there is
               no order toggle. Only on the grouped job list, the one list it sorts. */}
           {(isConfigListTab || activeTab === 'all-interviews' || dateOnlySort) && (() => {
+            const sortOptions = [
+              { value: 'newest', label: 'Newest' },
+              { value: 'oldest', label: 'Oldest' },
+              ...(dateOnlySort ? [] : [
+                { value: 'active', label: 'Active first' },
+                { value: 'draft', label: 'Draft first' },
+              ]),
+            ];
+            const sortValue = dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy;
             const sortControl = (
-            <div className="flex items-center gap-2">
+            <div className="tf-jobs-sort flex items-center gap-2">
               <label htmlFor="ai-interview-sort" className="tf-label whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <Dropdown
                   id="ai-interview-sort"
                   ariaLabel="Sort by"
-                  value={dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy}
+                  value={sortValue}
                   onChange={(v) => setSortBy(v as typeof sortBy)}
                   className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
-                  options={[
-                    { value: 'newest', label: 'Newest' },
-                    { value: 'oldest', label: 'Oldest' },
-                    ...(dateOnlySort ? [] : [
-                      { value: 'active', label: 'Active first' },
-                      { value: 'draft', label: 'Draft first' },
-                    ]),
-                  ]}
+                  options={sortOptions}
                 />
               </div>
             </div>
             );
-            return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+            return (
+              <>
+                {sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl}
+                {/* Phones: the Job Openings list's Sort menu beside Refresh (the inline Sort by hides). */}
+                <PhoneSortMenu
+                  value={sortValue}
+                  options={sortOptions}
+                  onChange={(v) => setSortBy(v as typeof sortBy)}
+                />
+              </>
+            );
           })()}
 
           {/* Refresh — right corner of the pill row. Refetches whichever tab
@@ -3553,15 +3577,16 @@ export default function AIInterview() {
             title="Refresh"
             aria-label="Refresh"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0 !h-9 sm:ml-auto"
+            className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           )}
           </div>
+          </div>
         </div>
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
-        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
+        <div data-list-bulk-slot className="empty:hidden mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2" />
         </div>{/* closes toolbar card */}
 
         {/* Main Content. Like the Job Descriptions and Assessments pages, the
@@ -5085,7 +5110,7 @@ export default function AIInterview() {
             </div>
           )}
         </div>
-        </>
+        </MasterListLayout>
         )}
       </div>
       </div>
@@ -5248,7 +5273,8 @@ export default function AIInterview() {
                   loadInvitationOverview, which queries unfiltered — selecting a
                   bucket narrows the table without collapsing the other cards. */}
               <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+                /* The Job Openings module's Track Invites stat grid (`.tf-tracker-stats`). */
+                gridClassName="tf-tracker-stats"
                 activeStatus={inviteFilters.status}
                 onSelect={(status) => {
                   setInviteFilters({ ...inviteFilters, status });

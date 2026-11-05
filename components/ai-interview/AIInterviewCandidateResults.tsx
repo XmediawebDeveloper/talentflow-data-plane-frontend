@@ -535,6 +535,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         leadingActions={
           /* Result (Pass / Fail) first, ahead of More Filters — the same
              toolbar order as the per-interview results view. */
+          <div className="tf-jobs-filter-pills contents">
           <Dropdown
             value={search.filters.result}
             onChange={(v) => search.setFilter('result', v)}
@@ -545,6 +546,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               ...RESULT_FILTER_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
             ]}
           />
+          </div>
         }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,

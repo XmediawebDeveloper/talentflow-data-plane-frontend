@@ -50,6 +50,22 @@ export function ListToolbarSlotProvider({
   );
 }
 
+/* A tabbed master list that places its toolbars itself (AI Interviews portals them
+   into its own slot) says so with this provider — same effect as the slot context. */
+const MasterListLayoutContext = React.createContext(false);
+export function MasterListLayout({ children }: { children: React.ReactNode }) {
+  return <MasterListLayoutContext.Provider value>{children}</MasterListLayoutContext.Provider>;
+}
+
+/** True inside a page's `ListToolbarSlotProvider` or `MasterListLayout` (a tabbed master
+ *  list such as AI Assessments / AI Interviews) — its toolbars use that page's list
+ *  layout (`.tf-jobs-toolbar`), not a tab card's. */
+export function useInListToolbarSlot(): boolean {
+  const slot = React.useContext(ListToolbarSlotContext);
+  const master = React.useContext(MasterListLayoutContext);
+  return slot !== null || master;
+}
+
 /**
  * The slot element and the callback ref that registers it.
  *

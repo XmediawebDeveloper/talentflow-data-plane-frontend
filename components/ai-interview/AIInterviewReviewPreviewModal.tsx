@@ -323,7 +323,8 @@ export default function AIInterviewReviewPreviewModal({
                   </div>
 
                   <SectionCard title="Interview Overview" icon={Brain}>
-                    <div className="flex flex-col lg:flex-row gap-4 items-start">
+                    {/* Phones / tablets: the fact tiles take the full width (items-stretch). */}
+                    <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-start">
                       <div className="flex flex-col gap-3 lg:w-64 lg:flex-shrink-0">
                         <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
                           <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center flex-shrink-0">
