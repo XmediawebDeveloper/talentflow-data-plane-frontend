@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { Calendar, Clock, Eye } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 
 /* ── Candidate result card ─────────────────────────────────────────────────
    The Candidate Results tab's card (Assessments page, Card View), lifted out so
@@ -100,10 +100,9 @@ export default function CandidateResultCard({
             className="tf-checkbox focus:ring-brand-blue/40"
           />
         )}
-        <NameAvatar name={name} fallback={email} size="md" />
         <div className="min-w-0 flex-1">
-          <p className="tf-row-name truncate" title={name || 'Unknown'}>
-            {name || 'Unknown'}
+          <p className="tf-row-name truncate" title={capitalizedCase(name) || 'Unknown'}>
+            {capitalizedCase(name) || 'Unknown'}
           </p>
           <p className="mt-0.5 tf-meta truncate" title={email || undefined}>
             {email || '—'}

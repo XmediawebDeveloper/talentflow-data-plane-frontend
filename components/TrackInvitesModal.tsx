@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban, Send, FileText } from 'lucide-react';
+import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, Loader2, Ban, Send, FileText, RefreshCw, Undo2 } from 'lucide-react';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -11,7 +11,6 @@ import { assessmentInviteSource, InviteSourceValue } from '@/components/AIInterv
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
-import { Badge } from '@/components/ui/badge';
 import api from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
 import InviteFilterBar, {
@@ -40,7 +39,10 @@ import {
   canResendInvite,
 } from '@/components/AssessmentInviteActions';
 import { formatScore, SCORE_CELL_TEXT } from '@/lib/utils/score';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
+import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
+import ListPagination from '@/components/ListPagination';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
@@ -85,10 +87,49 @@ interface TrackInvitesModalProps {
   /** Opens pre-filtered to one candidate (their email) — the bulk-send
    *  popup's per-row "Track status". */
   initialSearch?: string;
+  /** Rows a page. Default 5. */
+  pageSize?: number;
+  /** Paging under the table (the house ListPagination) instead of in the
+   *  footer; the footer keeps just Cancel / Invite More. Default: on. */
+  paginationBelowTable?: boolean;
+  /** First-time-user aids, added on top of everything the tracker has: a
+   *  card-filter hint, a status legend, each row's main action as a visible
+   *  button, Refresh with "Updated … ago", a clearer Select All, helpful
+   *  empty states, a red Revoked card and swipeable cards on phones. Default: on. */
+  guided?: boolean;
 }
 
 
-const INVITES_PAGE_SIZE = 10;
+const INVITES_PAGE_SIZE = 5;
+
+/* Paging under the table: the popup, not the table, scrolls on a short
+   screen — scrollbar room reserved (no sideways jump), header and footer
+   pinned. */
+/* Paging under the table: every row at least the height of one whose Timeline
+   carries its two events and View full history (69px), so rows with and
+   without the link line up the same. A table row's height is its minimum. */
+const ROW_MIN_H = 'h-[69px]';
+const PAGED_PANEL_CLASS = '!overflow-y-auto [scrollbar-gutter:stable] [&>.tf-tracker-header]:sticky [&>.tf-tracker-header]:top-0 [&>.tf-tracker-header]:z-20 [&>.tf-tracker-footer]:sticky [&>.tf-tracker-footer]:bottom-0 [&>.tf-tracker-footer]:z-20 xl:!max-w-[80rem] 2xl:!max-w-[88rem] h-[min(54rem,calc(100dvh-1.5rem))] sm:h-[min(54rem,calc(100dvh-2rem))] md:h-[min(54rem,calc(100dvh-3rem))]';
+/* guided: the count cards as one swipeable row on phones. */
+const GUIDED_STATS_PHONE = 'max-sm:flex max-sm:overflow-x-auto max-sm:pb-1 max-sm:[&>*]:min-w-[6.5rem] max-sm:[&>*]:shrink-0';
+/* guided: the active card's name in the "Showing only" chip. */
+const STATUS_CARD_LABEL: Record<string, string> = {
+  invited: 'Invited', in_progress: 'In Progress', completed: 'Completed', expired: 'Expired', terminated: 'Terminated', revoked: 'Revoked',
+};
+/* guided: the Status dropdown in the cards' own keys, so a picked card always
+   shows its name there (the default list uses the stored statuses, which
+   left the dropdown blank for Invited / In Progress / Terminated / Revoked). */
+const ASSESSMENT_CARD_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'terminated', label: 'Terminated' },
+  { value: 'revoked', label: 'Revoked' },
+  { value: 'failed', label: 'Invite Failed' },
+];
+const ASSESSMENT_LEGEND: InviteStatusKind[] = ['invited', 'read', 'system_check', 'in_progress', 'completed', 'terminated', 'expired', 'revoked', 'invite_failed', 'bounced'];
 
 // Effective status + expiry + timeline milestones now live in
 // AssessmentInviteActions (resolveInviteStatus / isInviteExpired /
@@ -111,7 +152,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged, initialSearch }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, canModifyInvites = false, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -150,6 +191,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
      aggregates every assessment attached to the JD, and the stat cards are
      computed from that whole set — filtering server-side would silently
      narrow the totals too. */
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<InviteFilterState>(() => (
     initialSearch ? { ...EMPTY_INVITE_FILTERS, search: initialSearch } : EMPTY_INVITE_FILTERS
   ));
@@ -247,6 +290,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
       setInvitations(allInvitations);
       setStats(newStats);
+      setLoadedAt(Date.now());
     } catch (error) {
       console.error('Failed to load invitations:', error);
     } finally {
@@ -342,12 +386,35 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     });
   }, [invitations, filters, assessmentVersionFilter, sourceFilter, resultFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredInvitations.length / INVITES_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredInvitations.length / pageSize));
   // Clamped rather than stored: the list refreshes every 15s and a filter can
   // shrink it under the current page at any moment.
   const currentPage = Math.min(page, totalPages);
-  const pageStart = (currentPage - 1) * INVITES_PAGE_SIZE;
-  const visibleInvitations = filteredInvitations.slice(pageStart, pageStart + INVITES_PAGE_SIZE);
+  const pageStart = (currentPage - 1) * pageSize;
+  const visibleInvitations = filteredInvitations.slice(pageStart, pageStart + pageSize);
+  /* Row height: tighter when the table grows to its rows (paging under it). */
+  const cellY = paginationBelowTable ? 'py-2' : 'py-3';
+  const tdY = paginationBelowTable ? '!py-2' : '';
+  /* guided: Status and scores right after the candidate, then Timeline, Job
+     Version, Assessment, Assessment Version, and Invite Source last before
+     Actions. */
+  const reorderColumns = guided;
+  /* guided: the Timeline cell shows the latest two events; the rest are one
+     click away in View full history. */
+  const timelineLimit = guided ? 2 : undefined;
+  /* guided: the score over its Pass / Fail badge, one under the other, in the
+     Results tab's colours — green for a pass, red for a fail. */
+  const scoreStack = (v: number) => {
+    const pass = v >= 70;
+    return (
+      <div className="inline-flex flex-col items-center gap-1">
+        <span className={`${SCORE_CELL_TEXT} ${pass ? 'text-success' : 'text-destructive'}`}>{Math.round(v)}%</span>
+        <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${pass ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
+          {pass ? 'Pass' : 'Fail'}
+        </span>
+      </div>
+    );
+  };
 
   /* Bulk selection — same control, wording and rules as the Assessments
      page's own job-scoped Track Invites popup: any row this popup's own
@@ -484,17 +551,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   // -> Completed / Terminated); the underlying status values are unchanged.
   const getStatusBadge = (inv: any) => {
     const effective = getEffectiveStatus(inv);
-    if (effective === 'completed') return <Badge variant="success"><CheckCircle /> Completed</Badge>;
-    if (effective === 'failed') return <Badge variant="destructive"><X /> Invite Failed</Badge>;
-    if (effective === 'bounced') return <Badge variant="destructive"><RefreshCw /> Bounced</Badge>;
-    if (effective === 'revoked') return <Badge variant="destructive"><Ban /> Revoked</Badge>;
-    if (effective === 'expired') return <Badge variant="destructive"><Clock /> Expired</Badge>;
-    if (effective === 'abandoned') return <Badge variant="destructive" title="Ended before completion — the candidate left the assessment"><Ban /> Terminated</Badge>;
-    if (effective === 'started') return <Badge variant="info"><Play /> In Progress</Badge>;
-    if (effective === 'opened') return <Badge variant="info" title="Consent accepted — the candidate is on the system check step"><Monitor /> System Check</Badge>;
-    if (inv.email_read_at) return <Badge variant="info"><Eye /> Read</Badge>;
-    if (effective === 'sent') return <Badge variant="info"><Mail /> Invited</Badge>;
-    return <Badge variant="info" title="Link created — no email sent yet"><Mail /> Invited</Badge>;
+    if (effective === 'completed') return <InviteStatusChip kind="completed" />;
+    if (effective === 'failed') return <InviteStatusChip kind="invite_failed" />;
+    if (effective === 'bounced') return <InviteStatusChip kind="bounced" />;
+    if (effective === 'revoked') return <InviteStatusChip kind="revoked" />;
+    if (effective === 'expired') return <InviteStatusChip kind="expired" />;
+    if (effective === 'abandoned') return <InviteStatusChip kind="terminated" title="Ended before completion — the candidate left the assessment" />;
+    if (effective === 'started') return <InviteStatusChip kind="in_progress" />;
+    if (effective === 'opened') return <InviteStatusChip kind="system_check" title="Consent accepted — the candidate is on the system check step" />;
+    if (inv.email_read_at) return <InviteStatusChip kind="read" />;
+    if (effective === 'sent') return <InviteStatusChip kind="invited" />;
+    return <InviteStatusChip kind="invited" title="Link created — no email sent yet" />;
   };
 
   // timelineEvents / isInviteExpired now come from AssessmentInviteActions.
@@ -504,7 +571,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh, so a
           short list no longer stretches the dialog down a large monitor. */}
-      <div className={TRACKER_DIALOG_PANEL_CLASS}>
+      <div className={`${TRACKER_DIALOG_PANEL_CLASS} ${paginationBelowTable ? PAGED_PANEL_CLASS : ''}`}>
         {/* Modal Header */}
         {/* Header — the AI Interview tracker's: solid icon tile, title, then
             JD ID · job name · job version. */}
@@ -529,9 +596,27 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               </div>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close">
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            {guided && (
+              <>
+                <span className="max-sm:hidden"><UpdatedAgo at={loadedAt} /></span>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={async () => { setRefreshing(true); try { await loadInvitations(true); } finally { setRefreshing(false); } }}
+                  disabled={refreshing}
+                  aria-label="Refresh"
+                  title="Refresh the list"
+                  icon={<RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />}
+                >
+                  <span className="max-sm:hidden">Refresh</span>
+                </Button>
+              </>
+            )}
+            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close">
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+          </div>
         </div>
 
         {/* Stat row doubles as the status filter — identical buckets, wording and
@@ -539,7 +624,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             over the loaded list, and getEffectiveStatus returns exactly these
             keys, so a card and its rows always agree. */}
         <InviteStatCards
-          gridClassName="tf-tracker-stats"
+          gridClassName={guided ? `tf-tracker-stats ${GUIDED_STATS_PHONE}` : 'tf-tracker-stats'}
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -552,9 +637,20 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             { key: 'completed', label: 'Completed', Icon: CheckCircle, value: stats.completed, ...INVITE_CARD_TONES.green },
             { key: 'expired', label: 'Expired', Icon: Clock, value: stats.expired, ...INVITE_CARD_TONES.orange },
             { key: 'terminated', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
-            { key: 'revoked', label: 'Revoked', Icon: Ban, value: stats.revoked, ...INVITE_CARD_TONES.indigo },
+            guided
+              ? { key: 'revoked', label: 'Revoked', Icon: Undo2, value: stats.revoked, ...INVITE_CARD_TONES.red }
+              : { key: 'revoked', label: 'Revoked', Icon: Ban, value: stats.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
+        {guided && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2.5 sm:px-6 pt-2 flex-shrink-0">
+            <StatCardsHint
+              activeLabel={filters.status !== 'all' ? (STATUS_CARD_LABEL[filters.status] ?? filters.status) : null}
+              onClear={() => { setFilters({ ...filters, status: 'all' }); setPage(1); }}
+            />
+            <StatusLegend kinds={ASSESSMENT_LEGEND} />
+          </div>
+        )}
 
         <InviteFilterBar
           filters={filters}
@@ -563,8 +659,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             // A narrowed list has its own page 1; staying on page 4 would look empty.
             setPage(1);
           }}
-          statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS}
+          statusOptions={guided ? ASSESSMENT_CARD_STATUS_OPTIONS : ASSESSMENT_INVITE_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name, email, or CID..."
+          moreFilters={guided}
           extraSelects={[
             {
               key: 'assessment-version', ariaLabel: 'Assessment Version', anyLabel: 'All Assessment Versions', value: assessmentVersionFilter,
@@ -606,9 +703,22 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               >
                 {allSelected && <Check className="w-3 h-3 text-white" />}
               </span>
-              Select All ({selectableIds.length})
+              {guided
+                ? `Select all ${selectableIds.length} you can resend or revoke (Invited / Expired)`
+                : `Select All (${selectableIds.length})`}
             </button>
             <div className="flex items-center gap-2">
+              {/* Paging under the table: the count and completion sit on this
+                  row too, so the table gets the height. */}
+              {paginationBelowTable && (
+                <>
+                  <p className="tf-meta max-sm:hidden">{resultsLabel}</p>
+                  <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                    <TrendingUp className="w-3.5 h-3.5" />
+                    {completionRate}% Completion
+                  </span>
+                </>
+              )}
               {/* Uniform selection's bulk action — never both at once. */}
               {allResendable && (
                 <Button
@@ -638,7 +748,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           </div>
         )}
 
-        {!isLoading && invitations.length > 0 && (
+        {!isLoading && invitations.length > 0 && !(paginationBelowTable && selectableIds.length > 0) && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             <p className="tf-meta">{resultsLabel}</p>
             {/* Completion rate — the AI tracker's badge, in place of the old card. */}
@@ -650,7 +760,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         )}
 
         {/* Invitations Table / Cards */}
-        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className={`px-2.5 sm:px-6 py-2.5 sm:py-4 flex flex-col ${paginationBelowTable ? 'flex-1' : 'overflow-hidden flex-1 min-h-0'}`}>
           {isLoading ? (
             /* Fills the body rather than sitting in a 200px box - see
                TRACKER_DIALOG_PLACEHOLDER_CLASS. The dialog's min-height
@@ -669,6 +779,15 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   ? 'No invitations match the current filters.'
                   : "No invitations found for this job's assessments."}
               </p>
+              {guided && (filtersActive ? (
+                <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setFilters(EMPTY_INVITE_FILTERS); setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); setPage(1); }}>
+                  Clear filters
+                </Button>
+              ) : onInviteMore ? (
+                <Button variant="primary" size="sm" className="mt-3" onClick={onInviteMore} icon={<Send className="w-3.5 h-3.5" />}>
+                  Invite candidates
+                </Button>
+              ) : null)}
             </div>
           ) : (
             <>
@@ -686,8 +805,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                       }
                       title={
                         <span className="flex min-w-0 items-center gap-2">
-                          <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="sm" />
-                          <span className="truncate">{invitation.candidate_name}</span>
+                          <span className="truncate">{capitalizedCase(invitation.candidate_name)}</span>
                         </span>
                       }
                       badges={
@@ -753,9 +871,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                       {/* Timeline — a two-column grid rather than a free wrap,
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
-                      {timelineEvents(invitation).length > 0 && (
+                      {timelineEvents(invitation, timelineLimit).length > 0 && (
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
-                          {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                          {timelineEvents(invitation, timelineLimit).map(({ label, at, Icon, tone }, i) => (
                             <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                               <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
                               <span className="truncate">{label}: {formatIST(at)}</span>
@@ -763,7 +881,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           ))}
                         </div>
                       )}
-                      {hasMoreTimelineHistory(invitation) && (
+                      {hasMoreTimelineHistory(invitation, timelineLimit) && (
                         <ViewFullHistoryLink compact onClick={() => setHistoryTarget(invitation)} />
                       )}
                     </MobileRecordCard>
@@ -775,7 +893,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   when at least one row in the JD's invitations belongs to
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
-              <div className="hidden lg:block tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0">
+              <div
+                className={`hidden lg:block tf-table-shell tf-table-shell--compact ${paginationBelowTable ? 'border border-gray-200 dark:border-slate-700 rounded-lg' : 'tf-table-shell--fill flex-1 min-h-0'}`}
+                style={paginationBelowTable ? { maxHeight: 'none' } : undefined}
+              >
                 {/* Auto layout, not table-fixed. The fixed column widths
                     summed well past the table's min-width, so every column
                     was scaled down and the Actions cell wrapped its two
@@ -786,31 +907,80 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   <thead>
                     <tr className="border-b border-gray-200 dark:border-slate-700">
                       <th className="w-8 py-3 pl-3 lg:pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select" />
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">CID</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Candidate</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Timeline</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Status</th>
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[7.5rem]' : ''}`}>CID</th>
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[15rem]' : ''}`}>Candidate</th>
+                      {!reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[14rem]' : ''}`}>Assessment</th>}
+                      {!reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[17rem]' : ''}`}>Timeline</th>}
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[10rem]' : ''}`}>Status</th>
                       {invitations.some(inv => inv.assessment_technical_enabled) && (
-                        <th className="tf-th-cell text-center tf-th">Tech Score</th>
+                        <th className={`tf-th-cell text-center tf-th ${reorderColumns ? 'min-w-[7rem]' : ''}`}>Tech Score</th>
                       )}
                       {invitations.some(inv => inv.assessment_coding_enabled) && (
-                        <th className="tf-th-cell text-center tf-th">Coding Score</th>
+                        <th className={`tf-th-cell text-center tf-th ${reorderColumns ? 'min-w-[7rem]' : ''}`}>Coding Score</th>
                       )}
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Invite Source</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Job Version</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap">Assessment Version</th>
-                      <th className="text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap tf-sticky-col">Actions</th>
+                      {reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[17rem]' : ''}`}>Timeline</th>}
+                      {!reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[8.5rem]' : ''}`}>Invite Source</th>}
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[7rem]' : ''}`}>Job Version</th>
+                      {reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[14rem]' : ''}`}>Assessment</th>}
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[9.5rem]' : ''}`}>Assessment Version</th>
+                      {reorderColumns && <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap ${reorderColumns ? 'min-w-[8.5rem]' : ''}`}>Invite Source</th>}
+                      <th className={`text-left py-3 px-3 lg:px-4 tf-th whitespace-nowrap tf-sticky-col ${reorderColumns ? 'min-w-[5rem]' : ''}`}>Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                     {visibleInvitations.map((invitation: any) => {
+                      const assessmentCell = (
+                      <td className={`tf-td ${tdY} whitespace-nowrap`}>
+                        <p className="tf-body truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
+                      </td>
+                      );
+                      /* Every milestone on its own line, oldest first, the
+                         way the Assessments page's Invite Status Tracking
+                         table shows it. This used to print only the newest
+                         with a "+N" counter, which hid the progression
+                         behind a tooltip. align-top so the first line sits
+                         level with the other columns' single line. */
+                      /* Invite Source — how this candidate was actually
+                         invited, from the invitation's own resume_id. */
+                      const inviteSourceCell = (
+                        <td className={`${cellY} px-3 lg:px-4 align-middle tf-td whitespace-nowrap`}>
+                          <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
+                        </td>
+                      );
+                      const timelineCell = (
+                      <td className={`tf-td ${tdY} align-top tf-meta whitespace-nowrap`}>
+                        {(() => {
+                          const events = timelineEvents(invitation, timelineLimit);
+                          return (
+                            <>
+                              {events.length === 0 ? (
+                                <span className="text-gray-400 dark:text-slate-500">—</span>
+                              ) : (
+                                <div className={paginationBelowTable ? 'space-y-0.5' : 'space-y-1'}>
+                                  {events.map(({ label, at, Icon, tone }, i) => (
+                                    <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                      <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                      <span className={tone}>
+                                        {label}: {formatIST(at)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {hasMoreTimelineHistory(invitation, timelineLimit) && (
+                                <ViewFullHistoryLink onClick={() => setHistoryTarget(invitation)} />
+                              )}
+                            </>
+                          );
+                        })()}
+                      </td>
+                      );
                       return (
-                        <tr key={invitation.id} className="hover:bg-gray-50 dark:hover:bg-slate-800">
+                        <tr key={invitation.id} className={`hover:bg-gray-50 dark:hover:bg-slate-800 ${paginationBelowTable ? ROW_MIN_H : ''}`}>
                           {/* stopPropagation: this row has no row-level click
                               handler today, but kept consistent with the
                               Assessments page popup's own checkbox cell. */}
-                          <td className="py-3 pl-3 lg:pl-4 pr-0 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                          <td className={`${cellY} pl-3 lg:pl-4 pr-0 align-middle tf-sticky-col-left`} onClick={(e) => e.stopPropagation()}>
                             {isBulkActionable(invitation) && !inviteArchived(invitation) && !jdDisabled ? (
                               <button
                                 type="button"
@@ -830,58 +1000,24 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               <span className="inline-block w-5" />
                             )}
                           </td>
-                          <td className="tf-td whitespace-nowrap">
+                          <td className={`tf-td ${tdY} whitespace-nowrap`}>
                             <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                               {invitation.candidate_display_id || '-'}
                             </span>
                           </td>
-                          <td className="tf-td whitespace-nowrap">
+                          <td className={`tf-td ${tdY} whitespace-nowrap`}>
                             <div className="flex items-center gap-2 lg:gap-3">
-                              <NameAvatar name={invitation.candidate_name} fallback={invitation.candidate_email} size="lg" />
                               {/* Capped rather than free: with auto layout a single
                                   long email would otherwise set the column width. */}
                               <div className="min-w-0 max-w-[220px]">
-                                <p className="tf-row-name truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                <p className="tf-row-name truncate" title={capitalizedCase(invitation.candidate_name)}>{capitalizedCase(invitation.candidate_name)}</p>
                                 <p className="tf-meta truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                               </div>
                             </div>
                           </td>
-                          <td className="tf-td whitespace-nowrap">
-                            <p className="tf-body truncate max-w-[200px]" title={invitation.assessment_title}>{invitation.assessment_title}</p>
-                          </td>
-                          {/* Every milestone on its own line, oldest first, the
-                              way the Assessments page's Invite Status Tracking
-                              table shows it. This used to print only the newest
-                              with a "+N" counter, which hid the progression
-                              behind a tooltip. align-top so the first line sits
-                              level with the other columns' single line. */}
-                          <td className="tf-td align-top tf-meta whitespace-nowrap">
-                            {(() => {
-                              const events = timelineEvents(invitation);
-                              return (
-                                <>
-                                  {events.length === 0 ? (
-                                    <span className="text-gray-400 dark:text-slate-500">—</span>
-                                  ) : (
-                                    <div className="space-y-1">
-                                      {events.map(({ label, at, Icon, tone }, i) => (
-                                        <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
-                                          <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
-                                          <span className={tone}>
-                                            {label}: {formatIST(at)}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                  {hasMoreTimelineHistory(invitation) && (
-                                    <ViewFullHistoryLink onClick={() => setHistoryTarget(invitation)} />
-                                  )}
-                                </>
-                              );
-                            })()}
-                          </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          {!reorderColumns && assessmentCell}
+                          {!reorderColumns && timelineCell}
+                          <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap`}>
                             {/* Badges stay on one line — the row height is set by
                                 the candidate cell, and a wrapping second badge
                                 was what pushed neighbouring columns out of line. */}
@@ -902,7 +1038,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               is gated identically). For a row whose source
                               assessment doesn't have tech, render '—'. */}
                           {invitations.some(inv => inv.assessment_technical_enabled) && (
-                            <td className="tf-td text-sm text-center whitespace-nowrap">
+                            <td className={`tf-td ${tdY} text-sm text-center whitespace-nowrap`}>
                               {(() => {
                                 if (!invitation.assessment_technical_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -911,6 +1047,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                   && invitation.scoring_status !== 'pending';
                                 if (!ready) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const v = invitation.technical_score;
+                                if (guided) return scoreStack(v);
                                 return (
                                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                                     <span className={`${SCORE_CELL_TEXT} ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
@@ -925,7 +1062,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                             </td>
                           )}
                           {invitations.some(inv => inv.assessment_coding_enabled) && (
-                            <td className="tf-td text-sm text-center whitespace-nowrap">
+                            <td className={`tf-td ${tdY} text-sm text-center whitespace-nowrap`}>
                               {(() => {
                                 if (!invitation.assessment_coding_enabled) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const ready =
@@ -934,6 +1071,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                   && invitation.scoring_status !== 'pending';
                                 if (!ready) return <span className="text-gray-400 dark:text-slate-500">—</span>;
                                 const v = invitation.coding_score;
+                                if (guided) return scoreStack(v);
                                 return (
                                   <div className="flex items-center justify-center gap-1.5 whitespace-nowrap">
                                     <span className={`${SCORE_CELL_TEXT} ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
@@ -947,11 +1085,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               })()}
                             </td>
                           )}
-                          {/* Invite Source — how this candidate was actually
-                              invited, from the invitation's own resume_id. */}
-                          <td className="py-3 px-3 lg:px-4 align-middle tf-td whitespace-nowrap">
-                            <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
-                          </td>
+                          {reorderColumns && timelineCell}
+                          {!reorderColumns && inviteSourceCell}
                           {/* Job Version / Assessment Version — this popup
                               aggregates every assessment attached to the JD,
                               so each row says which job version its
@@ -959,21 +1094,26 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               assessment itself it is, the same two chips the
                               Assessments page's job-scoped Track Invites
                               popup shows. */}
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap`}>
                             <VersionChip kind="job" version={invitation._jd_version} />
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap">
+                          {reorderColumns && assessmentCell}
+                          <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap`}>
                             <VersionChip kind="assessment" version={invitation._assessment_version} />
                           </td>
-                          <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
-                            <InvitationActionsMenu
-                              actions={buildInvitationRowActions(invitation, {
+                          {reorderColumns && inviteSourceCell}
+                          <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col`}>
+                            {(() => {
+                              const rowActs = buildInvitationRowActions(invitation, {
                                 ...rowActionOptions,
                                 onViewResult: openResult,
                                 archived: isAssessmentArchived(invitation.assessment_status),
                                 jdDisabled,
-                              })}
-                            />
+                              });
+                              return (
+                                <InvitationActionsMenu actions={rowActs} />
+                              );
+                            })()}
                           </td>
                         </tr>
                       );
@@ -982,6 +1122,22 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 </table>
               </div>
             </>
+          )}
+          {paginationBelowTable && !isLoading && filteredInvitations.length > 0 && (
+            <div className="mt-auto pt-3 shrink-0">
+              <ListPagination
+                currentPage={currentPage}
+                itemsPerPage={pageSize}
+                totalItems={filteredInvitations.length}
+                onPageChange={(p) => setPage(() => p)}
+                onItemsPerPageChange={() => setPage(() => 1)}
+                pageSizeOptions={[pageSize]}
+                itemLabel="invites"
+                minimalOnMobile
+                compact
+                alwaysShow
+              />
+            </div>
           )}
         </div>
 
@@ -992,11 +1148,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
           {/* Phones show this count above the cards already, so it isn't repeated here. */}
           <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1 max-sm:hidden">
             {/* The filtered count, not the raw total — the number has to agree
-                with the rows actually on screen. */}
-            {resultsLabel}
+                with the rows actually on screen. Under the table instead when
+                the paging is there. */}
+            {!paginationBelowTable && resultsLabel}
           </p>
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
-            {totalPages > 1 && (
+            {totalPages > 1 && !paginationBelowTable && (
               <>
                 <div className="flex items-center gap-1.5">
                   <span className="tf-body-secondary whitespace-nowrap">Go to</span>

@@ -42,7 +42,8 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
 import { Button } from '@/components/ui/button';
 import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
-import { Badge } from '@/components/ui/badge';
+import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import ListToolbar from '@/components/ui/list-toolbar';
 import SearchableSelect from '@/components/ui/searchable-select';
 import FilterSelect from '@/components/ui/filter-select';
@@ -276,7 +277,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
   const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
   const openExportModal = () => { if (canExportAssessments) setShowExportModal(true); };
-  const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
+  /* Every name in Capitalized Case (the invite trackers' rule), after the host's own formatter. */
+  const showName = (name: string) => capitalizedCase(formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
      that card's slot) → toolbar controls drop to the 36px AI Talent Match
@@ -1269,19 +1271,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        full set the cards are counted from. */
   }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo, refreshTick]);
 
-  // Canonical status → Badge variant (shared mapping so statuses don't drift).
-  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
-    switch (status) {
-      case 'Completed': return 'success';
-      case 'In Progress': return 'info';
-      case 'Terminated': return 'destructive';
-      case 'Pending': return 'warning';
-      case 'Failed':
-      case 'Abandoned': return 'destructive';
-      default: return 'muted';
-    }
-  };
-
   /** What a result status reads as on screen.
    *
    *  'Pending' is the STORED value and stays one: it is what `statusFilter`
@@ -1295,6 +1284,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const PENDING_STATUS_LABEL = 'Invited';
   const statusLabel = (status: CandidateResult['status']) =>
     status === 'Pending' ? PENDING_STATUS_LABEL : status;
+  /* A result's status in the shared invite-status look (InviteStatusChip). */
+  const RESULT_STATUS_KIND: Record<CandidateResult['status'], InviteStatusKind> = {
+    Completed: 'completed', 'In Progress': 'in_progress', Terminated: 'terminated', Pending: 'invited',
+  };
+  const resultStatusChip = (status: CandidateResult['status']) => (
+    <InviteStatusChip kind={RESULT_STATUS_KIND[status] ?? 'other'} label={statusLabel(status)} />
+  );
 
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
@@ -2659,11 +2655,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   jobTitle={jdTitle}
                   jobVersion={candidate.jobVersion}
                   assessmentVersion={candidate.assessmentVersion}
-                  statusBadge={
-                    <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                      {statusLabel(candidate.status)}
-                    </Badge>
-                  }
+                  statusBadge={resultStatusChip(candidate.status)}
                   /* Only the rounds this assessment runs, as the table's
                      score columns. */
                   scores={[
@@ -2723,11 +2715,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="tf-checkbox focus:ring-brand-blue/40"
                         />
                       }
-                      badges={
-                        <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                          {statusLabel(candidate.status)}
-                        </Badge>
-                      }
+                      badges={resultStatusChip(candidate.status)}
                       title={showName(candidate.name) || 'Unknown'}
                       actions={renderRowMenu(candidate)}
                       meta={[{ icon: <Mail />, label: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null }]}
@@ -2773,9 +2761,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {showName(candidate.name) || 'Unknown'}
                           </p>
                           <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                              {statusLabel(candidate.status)}
-                            </Badge>
+                            {resultStatusChip(candidate.status)}
                             {renderRowMenu(candidate)}
                           </div>
                         </div>
@@ -3053,9 +3039,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </div>
                           ) : (
                           <div className="flex min-w-0 items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-2xs font-semibold">
-                              {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                            </div>
                             {/* Name over email, one identity cell — the same
                                 shape the invite tracker uses, which is what
                                 let the separate Email column go. */}
@@ -3076,9 +3059,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('status') && (
                         <td className={`${cellPad}`}>
-                          <Badge variant={getStatusVariant(candidate.status)}>
-                            {statusLabel(candidate.status)}
-                          </Badge>
+                          {resultStatusChip(candidate.status)}
                         </td>
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
