@@ -1,6 +1,7 @@
 import { Cta } from "@/components/marketing/Cta";
 import { DISPLAY } from "@/components/marketing/fonts";
 import { FaqCategories } from "@/components/marketing/faq/FaqCategories";
+import { FaqHeroStage } from "@/components/marketing/faq/FaqHeroStage";
 import { SECTION, SHELL } from "@/components/marketing/layout";
 import { MarketingPage, PageHero } from "@/components/marketing/PageShell";
 
@@ -10,6 +11,7 @@ export default function FAQPage() {
       <PageHero
         lines={["Frequently asked", "questions"]}
         lead="Straight answers on how TalentFlow works, from job description to AI interview, and how plans and units are counted."
+        aside={<FaqHeroStage />}
       />
 
       <section className={`${SECTION} border-t border-slate-900/[0.07] dark:border-white/[0.08]`}>

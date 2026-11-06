@@ -600,7 +600,7 @@ export default function PricingPage() {
             )}
           </div>
           {/* 3D cost flow: plan → usage units → what you pay, from live plan data. */}
-          <div className="min-w-0 overflow-hidden lg:overflow-visible">
+          <div className="order-first min-w-0 overflow-hidden lg:order-none lg:overflow-visible">
             <PricingHeroStack plans={gridPlans} isYearly={isYearly} />
           </div>
         </div>
