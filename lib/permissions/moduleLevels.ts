@@ -90,8 +90,10 @@ const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: b
   teams: { name: 'Teams', group: 'Administration', about: 'Group people into teams', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
   subscription_billing: { name: 'Subscription & Billing', group: 'Administration', about: 'Plan, usage, payments and invoices', can: { view: 'See the plan, usage, payment methods and billing history', full: 'Upgrade the plan, manage payment methods and export usage' } },
   settings: { name: 'Settings', group: 'Administration', about: 'Company settings, roles, API keys and branding', can: { view: 'See general, roles, API and branding settings', full: 'Change general, roles, API and branding settings' } },
-  analytics: { name: 'Analytics', group: 'Administration', always: true, about: 'Dashboard and reports', can: { view: 'See the dashboard (always on for everyone)', full: 'Export analytics and build custom reports' } },
-  support: { name: 'Support', group: 'Administration', always: true, about: 'Get help and raise support tickets', can: { view: 'Raise support tickets (always on for everyone)', full: 'Also manage security settings' } },
+  analytics: { name: 'Analytics', group: 'Administration', always: true, about: 'Dashboard (everyone always has it)', can: { view: 'See the dashboard (always on for everyone)', full: 'See the dashboard (always on for everyone)' } },
+  // Always on, like Analytics (user decision 2026-11-06): everyone can raise
+  // support tickets and manage their OWN security settings (password, 2FA, sessions).
+  support: { name: 'Support', group: 'Administration', always: true, about: 'Support tickets and your own security settings (everyone always has it)', can: { view: 'Raise support tickets and manage their own security settings', full: 'Raise support tickets and manage their own security settings' } },
 };
 
 const MODULE_ORDER = [
@@ -141,6 +143,9 @@ const buildModules = (): AccessModule[] => {
 };
 
 export const ACCESS_MODULES: AccessModule[] = buildModules();
+/** Areas shown on role screens. Always-on areas (Analytics, Support) are the
+ *  same for every role, so they are hidden (user decision 2026-11-06). */
+export const SHOWN_MODULES: AccessModule[] = ACCESS_MODULES.filter((m) => !m.always);
 export const MODULE_BY_ID: Record<string, AccessModule> = Object.fromEntries(ACCESS_MODULES.map((m) => [m.id, m]));
 export const MODULE_GROUPS: ModuleGroup[] = ['Hiring', 'Candidates', 'Administration'];
 
@@ -218,7 +223,8 @@ export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string
 };
 
 export const accessCounts = (codes: Set<string>) => {
-  const ds = ACCESS_MODULES.filter((m) => !m.always).map((m) => describeModule(codes, m));
+  // Always-on areas (Analytics, Support) are hidden on role screens, so not counted.
+  const ds = SHOWN_MODULES.map((m) => describeModule(codes, m));
   return {
     full: ds.filter((d) => d.base === 'full').length,
     view: ds.filter((d) => d.base === 'view').length,

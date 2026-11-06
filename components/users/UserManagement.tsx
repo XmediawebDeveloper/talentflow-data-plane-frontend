@@ -301,6 +301,31 @@ export default function UserManagement() {
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
 
+  // "Invite a new person" from a role's View popup lands here as
+  // ?invite=1&role=<id>: open Invite User with that role already picked
+  // (same permission / seat checks as the Invite User button). Runs once,
+  // after the seat limits load, then clears the query.
+  const inviteFromLinkHandled = useRef(false);
+  useEffect(() => {
+    if (inviteFromLinkHandled.current || !limits || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('invite') !== '1') return;
+    inviteFromLinkHandled.current = true;
+    const roleId = Number(params.get('role'));
+    router.replace('/organization/user-management');
+    if (!canCreateUser) {
+      toast.error('You do not have permission to invite users');
+      return;
+    }
+    if (isAtLimit) {
+      if (isTrial) toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+      else setShowAddSeatsModal(true);
+      return;
+    }
+    if (Number.isFinite(roleId) && roleId > 0) setSelectedRoleId(roleId);
+    setIsCreateModalOpen(true);
+  }, [limits, isAtLimit, isTrial, canCreateUser, router]);
+
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
   const [showAddSeatsModal, setShowAddSeatsModal] = useState(false);
@@ -786,6 +811,21 @@ export default function UserManagement() {
       </div>
     </div>
   );
+
+  /** Role pill; a system (built-in) role shows a lock — it can't be edited. */
+  const renderRoleBadge = (user: (typeof users)[number], sizeClass: string) => {
+    const label = getRoleLabel(user.role, availableRoles);
+    const isSystem = !!roleOfUser(user)?.is_system;
+    return (
+      <span
+        title={isSystem ? `${label} · System role (can't be edited)` : label}
+        className={`inline-flex items-center gap-1 align-middle font-semibold rounded-full ring-1 ring-inset ring-black/5 ${sizeClass} ${getRoleBadgeColor(user.role, availableRoles)}`}
+      >
+        {isSystem && <Lock className="h-3 w-3 shrink-0" aria-label="System role" />}
+        <span className="min-w-0 truncate">{label}</span>
+      </span>
+    );
+  };
 
   const toggleUserDetails = (id: string) => setExpandedUserId((cur) => (cur === id ? null : id));
   // A click on the row opens its details, except on its own buttons / toggles / links.
@@ -1862,16 +1902,16 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'id')}>
+                  <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(userSort, 'id')}>
                     <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
                   <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'user')}>
-                    <SortableHeader label="User" column="user" sort={userSortWithReset} />
+                    <SortableHeader label="User" column="user" sort={userSortWithReset} className="ml-12" />
                   </th>
                   <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'role')}>
-                    <SortableHeader label="Role" column="role" sort={userSortWithReset} />
+                    <SortableHeader label="Role" column="role" sort={userSortWithReset} className="ml-3" />
                   </th>
-                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'status')}>
+                  <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(userSort, 'status')}>
                     <SortableHeader label="Status" column="status" sort={userSortWithReset} />
                   </th>
                   <th className="tf-th-cell text-center tf-th tf-sticky-col">
@@ -1886,7 +1926,11 @@ export default function UserManagement() {
                   <React.Fragment key={user.id}>
                   <tr
                     onClick={(e) => { if (!isRowControl(e.target)) toggleUserDetails(user.id); }}
-                    className={`cursor-pointer transition-colors hover:bg-brand-blue/5 ${open ? 'bg-brand-blue/5' : ''}`}
+                    // Same tints globals.css repaints on the pinned Actions cell
+                    // (hover: #fafbfc; open = selected: brand 8%, 12% on hover),
+                    // so the whole row reads as one colour.
+                    data-row-selected={open || undefined}
+                    className={`cursor-pointer transition-colors ${open ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12]' : 'hover:bg-[#fafbfc] dark:hover:bg-brand-blue/5'}`}
                   >
                     <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
                       <div className="flex items-center gap-2">
@@ -1939,9 +1983,7 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.675rem] font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
-                        {getRoleLabel(user.role, availableRoles)}
-                      </span>
+                      {renderRoleBadge(user, 'max-w-[140px] lg:max-w-[180px] px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.675rem]')}
                     </td>
                     <td className="tf-td">
                       {renderUserStatus(user, true)}
@@ -1952,8 +1994,10 @@ export default function UserManagement() {
                   </tr>
                   {open && (
                     <tr id={`user-details-${user.id}`} className="bg-slate-50/70 dark:bg-slate-800/40">
-                      <td colSpan={5} className={`px-5 py-4 xl:px-6 ${user.is_active ? '' : 'opacity-80'}`}>
-                        {renderUserDetails(user)}
+                      <td colSpan={5} className={`py-4 pl-10 pr-6 xl:pl-14 ${user.is_active ? '' : 'opacity-80'}`}>
+                        <div className="border-l-2 border-brand-blue/25 pl-5">
+                          {renderUserDetails(user)}
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -2016,9 +2060,7 @@ export default function UserManagement() {
                   badges={
                     <>
                       {renderYouTag(user)}
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`min-w-0 truncate px-2 py-0.5 text-2xs font-semibold rounded-full ring-1 ring-inset ring-black/5 sm:px-2.5 sm:py-1 sm:text-xs ${getRoleBadgeColor(user.role, availableRoles)} ${fade}`}>
-                        {getRoleLabel(user.role, availableRoles)}
-                      </span>
+                      {renderRoleBadge(user, `min-w-0 px-2 py-0.5 text-2xs sm:px-2.5 sm:py-1 sm:text-xs ${fade}`)}
                     </>
                   }
                   meta={[
