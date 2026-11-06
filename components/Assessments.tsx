@@ -5438,7 +5438,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
           )}
           <h3
-            className="tf-row-name truncate min-w-0"
+            /* Phones / tablets: the name in full (wraps), as the Job Openings card. */
+            className="tf-row-name break-words lg:truncate min-w-0"
             title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
           >
             {assessment.job?.title || stripVersionFromTitle(assessment.title)}

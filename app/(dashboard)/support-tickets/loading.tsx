@@ -6,9 +6,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // the hero footprint doesn't reshuffle when the client component takes over.
 export default function Loading() {
   return (
-    <div className="tf-page">
+    <div className="tf-page max-xl:bg-white">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="w-full bg-white rounded-none xl:rounded-2xl my-0 xl:my-5 shadow-none xl:shadow-2xl">
           {/* Breadcrumb */}
           <div className="mx-4 md:mx-8 mt-4 md:mt-6 mb-0">
             <Skeleton className="h-3 w-56" />

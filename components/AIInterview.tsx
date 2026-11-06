@@ -3864,7 +3864,8 @@ export default function AIInterview() {
                                 <JobIdBadge className={JOB_ID_BADGE_FIT}>{config.jd_short_id}</JobIdBadge>
                               )}
                               <h3
-                                className="tf-row-name truncate min-w-0"
+                                /* Phones / tablets: the name in full (wraps), as the Job Openings card. */
+                                className="tf-row-name break-words lg:truncate min-w-0"
                                 title={config.jd_title || config.position || 'Untitled'}
                               >
                                 {config.jd_title || config.position || 'Untitled'}

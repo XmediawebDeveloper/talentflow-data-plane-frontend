@@ -34,6 +34,7 @@ import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
+import { ResumeHeadline, ResumeLine } from '@/components/resumes/ResumeDocLine';
 import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -3632,59 +3633,64 @@ Best regards`);
               'languages', 'contact', 'personal', 'references', 'hobbies', 'interests',
             ];
             const firstNonEmpty = lines.findIndex((l) => l.trim().length > 0);
+            // The line under the name — usually the candidate's headline / title.
+            const headlineIdx = lines.findIndex((l, i) => i > firstNonEmpty && l.trim().length > 0);
             // View Resume always lands here on the newest upload, so say which
             // one it is — the eye can also open older versions.
             const isLatestPreview = [...resumeVersions].sort(byNewestVersion)[0]?.id === versionPreview.id;
 
             return (
-              <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[60] p-3 sm:p-6">
-                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[calc(100dvh-1.5rem)] sm:h-[90dvh] flex flex-col overflow-hidden">
+              /* Design: globals.css, `.tf-preview-*` / `.tf-resume-*` — a full-screen sheet on
+                 phones, the centred panel from sm; the resume as a paper page on a light mat. */
+              <div className="tf-preview-overlay z-[60]">
+                <div className="tf-preview-panel">
                   {/* Header */}
-                  <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="hidden sm:flex w-10 h-10 rounded-xl bg-brand-blue items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                        <Eye className="w-5 h-5 text-white" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
-                          {isLatestPreview && (
-                            <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                              Latest
-                            </span>
-                          )}
-                        </div>
-                        <p className="tf-body-muted truncate">{versionPreview.fileName}</p>
-                      </div>
+                  <div className="tf-preview-head">
+                    <div className="tf-preview-icon">
+                      <Eye className="w-5 h-5" />
                     </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => handleVersionDownload(
-                          { id: versionPreview.id, fileName: versionPreview.fileName },
-                          versionPreview.versionNumber,
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h2 className="tf-section-title sm:text-lg tracking-tight truncate">Version {versionPreview.versionNumber}</h2>
+                        {isLatestPreview && (
+                          <span className="px-2 py-0.5 bg-brand-blue text-white rounded text-xs flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            Latest
+                          </span>
                         )}
-                        icon={<Download className="w-4 h-4" />}
-                      >
-                        <span className="hidden sm:inline">Download</span>
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => setVersionPreview(null)}
-                        className=""
-                        aria-label="Close"
-                      >
-                        <X className="w-5 h-5 text-gray-500" />
-                      </Button>
+                      </div>
+                      <p className="tf-preview-file tf-body-muted" title={versionPreview.fileName}>
+                        <FileText />
+                        <span className="truncate">{versionPreview.fileName}</span>
+                      </p>
                     </div>
+                    <button
+                      type="button"
+                      className="tf-preview-btn"
+                      onClick={() => handleVersionDownload(
+                        { id: versionPreview.id, fileName: versionPreview.fileName },
+                        versionPreview.versionNumber,
+                      )}
+                      aria-label="Download"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span className="hidden sm:inline">Download</span>
+                    </button>
+                    <button
+                      type="button"
+                      className="tf-preview-btn"
+                      onClick={() => setVersionPreview(null)}
+                      aria-label="Close"
+                      title="Close"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
                   </div>
 
-                  {/* Resume content — document style */}
-                  <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
+                  {/* Resume content — a paper page on a light mat */}
+                  <div className="tf-preview-mat">
                     {versionPreview.text ? (
-                      <div className="tf-card-soft p-4 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
+                      <div className="tf-resume-doc">
                         {lines.map((line, idx) => {
                           const trimmed = line.trim();
                           if (!trimmed) return <div key={idx} className="h-3" />;
@@ -3696,7 +3702,7 @@ Best regards`);
 
                           if (isHeader) {
                             return (
-                              <h3 key={idx} className="tf-section-title mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
+                              <h3 key={idx} className="tf-section-title tf-resume-section">
                                 {trimmed}
                               </h3>
                             );
@@ -3704,19 +3710,17 @@ Best regards`);
 
                           // The first line of a CV is almost always the name.
                           if (idx === firstNonEmpty) {
-                            return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1 break-words [overflow-wrap:anywhere]">{trimmed}</h2>;
+                            return <h2 key={idx} className="tf-resume-name">{trimmed}</h2>;
                           }
-
-                          const isBullet = /^[•\-*]\s?/.test(trimmed);
-                          return (
-                            <p key={idx} className={`text-sm text-gray-700 leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere] ${isBullet ? 'pl-4' : ''}`}>
-                              {trimmed}
-                            </p>
-                          );
+                          // …and the line under it the candidate's headline.
+                          if (idx === headlineIdx) {
+                            return <ResumeHeadline key={idx} text={trimmed} />;
+                          }
+                          return <ResumeLine key={idx} text={trimmed} />;
                         })}
                       </div>
                     ) : (
-                      <div className="tf-card-soft p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+                      <div className="tf-resume-doc flex flex-col items-center justify-center text-center">
                         <FileText className="w-10 h-10 text-gray-400 mb-3" />
                         <p className="tf-row-name">Preview not available</p>
                         <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>

@@ -4,6 +4,7 @@ import { usePathname } from 'next/navigation';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs, { type OrganizationTabGroup } from '@/components/organization/OrganizationTabs';
 import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIndicator';
+import { MobileRecordCardVariantProvider } from '@/components/ui/mobile-record-card';
 
 /**
  * Persistent frame for the organization tab groups:
@@ -53,11 +54,11 @@ export default function OrganizationLayout({ children }: { children: React.React
   const fill = isChat ? 'flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:flex-none' : '';
 
   return (
-    <main className={`flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col [@media(max-height:500px)]:h-auto [@media(max-height:500px)]:flex-none' : ''}`}>
+    <main className={`flex-1 overflow-x-clip bg-white xl:bg-slate-50 dark:bg-slate-900 xl:dark:bg-slate-950 ${isChat ? 'flex h-full min-h-0 flex-col [@media(max-height:500px)]:h-auto [@media(max-height:500px)]:flex-none' : ''}`}>
       <div className={`mx-auto w-full max-w-[1400px] ${fill}`}>
         {/* Standard page panel: 16px inset on phones, 32px from md (same as
             every other page). OrganizationTabs' sticky band mirrors this padding. */}
-        <div className={`my-4 w-full rounded-2xl bg-white shadow-2xl md:my-5 md:p-8 dark:bg-slate-900 p-4 ${fill}`}>
+        <div className={`my-0 xl:my-5 w-full rounded-none xl:rounded-2xl bg-white shadow-none xl:shadow-2xl md:p-8 dark:bg-slate-900 p-4 ${fill}`}>
           <PageBreadcrumb
             barRef={crumbRef}
             className="mb-4 shrink-0 md:mb-6"
@@ -76,7 +77,11 @@ export default function OrganizationLayout({ children }: { children: React.React
                 only — a transform here would re-anchor the pages' fixed-position
                 popups to this box while it animates. */}
             <div key={pathname} className={`animate-in fade-in duration-200 motion-reduce:animate-none ${fill}`}>
-              {children}
+              {/* User Management tabs: phone / tablet cards, toolbars, menus and
+                  selects use the Job Openings module's layout (MobileRecordCardVariant). */}
+              {group === 'users'
+                ? <MobileRecordCardVariantProvider variant="jd">{children}</MobileRecordCardVariantProvider>
+                : children}
             </div>
           </div>
         </div>

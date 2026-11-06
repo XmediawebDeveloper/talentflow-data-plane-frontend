@@ -3459,7 +3459,9 @@ export default function ResumeScoringPage({
           title="Resume Scoring"
           description="View and manage previously scored resumes"
           actions={
-            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-nowrap sm:w-auto sm:justify-end [&>[role=status]]:flex-shrink-0">
+              {/* Phones / tablets: units left and Score Resumes on ONE line — the badge at its
+                  own width, the button taking the rest. */}
               {onBack && (
                 <Button
                   variant="secondary"
@@ -3493,7 +3495,7 @@ export default function ResumeScoringPage({
                   requestJobPickerScroll();
                 }}
                 aria-disabled={!canRunScoring}
-                className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 min-w-0 sm:flex-none ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 icon={<ClipboardList className="w-4 h-4" />}
               >
@@ -5581,7 +5583,8 @@ export default function ResumeScoringPage({
                   picker on the right, stretched to the left column's height. */}
               <div className="tf-grid-3 px-4 sm:px-6 py-4 items-stretch">
                 <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
-                <div className="flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                {/* Bordered box from lg only (around the table); phones show the cards bare. */}
+                <div className="flex flex-col lg:rounded-lg lg:border lg:border-gray-100 lg:dark:border-slate-700/60 lg:overflow-hidden">
                   {groups.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center py-10 text-center tf-body-muted">
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
@@ -5601,7 +5604,8 @@ export default function ResumeScoringPage({
                     <>
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
-                    <div className="lg:hidden tf-record-list p-2 rounded-lg border border-gray-200 dark:border-slate-700 max-h-[320px] overflow-y-auto overscroll-contain">
+                    {/* No outer border or padding — just the cards, as the JD Version History. */}
+                    <div className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto overscroll-contain">
                       {groups.map((g) => (
                         <MobileRecordCard
                           key={`${g.version}||${g.scoredBy}||${g.date}`}

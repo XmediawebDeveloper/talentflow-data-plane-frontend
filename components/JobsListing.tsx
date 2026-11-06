@@ -2157,16 +2157,6 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                         5. divider, then Scored / Assessed / Interviewed — three tiles */}
                     <div className="lg:hidden">
                       <div className="tf-jd-card-top">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          className="flex-shrink-0"
-                        >
-                          {selectedJobs.has(job.id)
-                            ? <CheckSquare className="w-5 h-5 text-brand-blue" />
-                            : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
-                        </button>
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
                           const method = getCreationMethodConfig(job.creation_method);
@@ -2189,7 +2179,20 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
                       <div className="tf-jd-card-head">
                         <div className="tf-jd-card-name">
-                          <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          {/* Checkbox beside the name (same as every module's JD-style card). */}
+                          <div className="tf-jdv-name-line">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                              title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              className="tf-jdv-select"
+                            >
+                              {selectedJobs.has(job.id)
+                                ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                                : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
+                            </button>
+                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          </div>
                           {job.versionNumber && job.versionNumber >= 1 ? (
                             hasVersionHistory ? (
                               /* Version dropdown: opens / closes this job's version history. */

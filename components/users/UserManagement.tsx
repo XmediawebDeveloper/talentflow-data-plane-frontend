@@ -1590,7 +1590,7 @@ export default function UserManagement() {
         // Hidden on phones — the title is enough there and the line costs a row.
         description={<span className="hidden sm:inline">Add people and give each one a role. What a person can do comes only from their role.</span>}
         actions={
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <div className="flex w-full sm:w-auto flex-wrap items-center gap-2 sm:gap-3">
             {/* RBAC07: Dependency Matrix button */}
             <Button
               variant="secondary"
@@ -1609,7 +1609,9 @@ export default function UserManagement() {
               icon={<Plus className="w-4 h-4" />}
               aria-disabled={!canCreateUser}
               title={!canCreateUser ? 'You do not have permission to invite users' : undefined}
-              className={`${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
+              /* Phones: takes the rest of the row beside the icon button (Job Openings'
+                 full-width header buttons). */
+              className={`max-sm:flex-1 ${!canCreateUser ? 'opacity-60 cursor-not-allowed' : ''}`}
               onClick={() => {
                 if (!canCreateUser) return;
                 if (isAtLimit) {
@@ -1646,7 +1648,10 @@ export default function UserManagement() {
           click) and seat usage. Bottom row: search and the result count. */}
       <div className="tf-card-soft mb-4 sm:mb-5 p-3 sm:p-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div role="group" aria-label="Filter users by status" className="-mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's underlined
+              status tabs; from sm the pills as before. */}
+          <div className="tf-jobs-toolbar">
+          <div role="group" aria-label="Filter users by status" className="tf-jobs-status-tabs -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {([
               { key: 'all', label: 'All users', Icon: UsersIcon, count: totalUsersCount, of: null },
               { key: 'active', label: 'Active', Icon: UserCheck, count: activeUsersCount, of: limits?.max_users === -1 ? '∞' : (limits?.max_users ?? null) },
@@ -1682,6 +1687,7 @@ export default function UserManagement() {
                 </button>
               );
             })}
+          </div>
           </div>
 
           {limits && limits.max_users > 0 && (
@@ -1997,6 +2003,8 @@ export default function UserManagement() {
               return (
                 <MobileRecordCard
                   key={user.id}
+                  /* Toggle + four icons would crush the name on the name row. */
+                  actionsBelow
                   idBadge={
                     user.user_display_id ? (
                       <button
