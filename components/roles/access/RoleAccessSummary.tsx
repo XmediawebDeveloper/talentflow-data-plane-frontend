@@ -2,7 +2,7 @@
 
 import React from 'react';
 import {
-  ACCESS_MODULES,
+  SHOWN_MODULES,
   MODULE_GROUPS,
   accessCounts,
   describeModule,
@@ -90,7 +90,7 @@ export default function RoleAccessSummary({ codes, roleName, description, eyebro
       {MODULE_GROUPS.map((group) => (
         <div key={group} className="mt-3.5">
           <div className="mb-0.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
-          {ACCESS_MODULES.filter((m) => m.group === group).map((m) => (
+          {SHOWN_MODULES.filter((m) => m.group === group).map((m) => (
             <ModuleRow key={m.id} codes={codes} module={m} />
           ))}
         </div>

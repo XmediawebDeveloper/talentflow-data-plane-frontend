@@ -626,6 +626,7 @@ export default function RoleManagement() {
           setEditor(null);
           loadData();
         }}
+        onPeopleChanged={() => loadData()}
       />
 
       <AppModal

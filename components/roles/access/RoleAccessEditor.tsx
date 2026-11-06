@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Check, Info, Undo2 } from 'lucide-react';
 import { getMainPermission, getPermissionParts } from '@/lib/constants/permissionCategories';
 import {
-  ACCESS_MODULES,
+  SHOWN_MODULES,
   MODULE_BY_ID,
   MODULE_GROUPS,
   accessCounts,
@@ -240,7 +240,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         <div key={group} className="mb-4">
           <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
           <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            {ACCESS_MODULES.filter((m) => m.group === group).map(moduleRow)}
+            {SHOWN_MODULES.filter((m) => m.group === group).map(moduleRow)}
           </div>
         </div>
       ))}

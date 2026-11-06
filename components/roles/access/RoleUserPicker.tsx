@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Search, X } from 'lucide-react';
 import { userService, type ApiUser } from '@/lib/services/userService';
 import NameAvatar from '@/components/ui/name-avatar';
@@ -20,38 +20,54 @@ interface RoleUserPickerProps {
   roleNames: Record<string, string>;
   /** Not allowed (no permission): field stays visible, greyed, with this tooltip. */
   lockedReason?: string;
+  /** People who already have this role show as "Has this role" and can't be picked. */
+  currentRoleCode?: string;
 }
 
-/**
- * Optional "Give this role to" field in Create / Duplicate Role. Searches the
- * server as you type (works for any number of users), picked people show as
- * chips with the role they move from. The account owner can't be picked.
- */
-export default function RoleUserPicker({ value, onChange, roleNames, lockedReason }: RoleUserPickerProps) {
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<ApiUser[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const requestId = useRef(0);
+/** Rows drawn at a time; scrolling near the bottom draws the next batch. */
+const BATCH = 100;
 
+/**
+ * "Give this role to" field (Create / Duplicate Role, and the role's View
+ * popup). Loads every active person once when the list first opens, then
+ * filters on each letter typed (name or email) with no server round trip; the
+ * whole list scrolls, drawn 100 rows at a time. The account owner can't be picked.
+ */
+export default function RoleUserPicker({ value, onChange, roleNames, lockedReason, currentRoleCode }: RoleUserPickerProps) {
+  const [query, setQuery] = useState('');
+  const [everyone, setEveryone] = useState<ApiUser[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [shown, setShown] = useState(BATCH);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const locked = !!lockedReason;
+
+  // Load the full list once, the first time it opens (a failed load retries on the next open).
+  const inFlight = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => () => { mounted.current = false; }, []);
   useEffect(() => {
-    const q = query.trim();
-    if (!open || lockedReason) return;
-    const id = ++requestId.current;
+    if (!open || locked || everyone || inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
-    const timer = window.setTimeout(async () => {
-      try {
-        const res = await userService.listUsersPaged({ search: q || undefined, is_active: true, page: 1, page_size: 8 });
-        if (id === requestId.current) setResults((res.items || []).filter((u) => (u.role || '').toLowerCase() !== 'tenant_admin'));
-      } catch {
-        if (id === requestId.current) setResults([]);
-      } finally {
-        if (id === requestId.current) setLoading(false);
-      }
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query, open, lockedReason]);
+    setFailed(false);
+    userService.listAllActiveUsers()
+      .then((users) => {
+        if (!mounted.current) return;
+        setEveryone(
+          users
+            .filter((u) => (u.role || '').toLowerCase() !== 'tenant_admin')
+            .sort((a, b) => (a.name || a.email || '').localeCompare(b.name || b.email || '', undefined, { sensitivity: 'base' })),
+        );
+      })
+      .catch(() => { if (mounted.current) setFailed(true); })
+      .finally(() => {
+        inFlight.current = false;
+        if (mounted.current) setLoading(false);
+      });
+  }, [open, locked, everyone]);
 
   // Close the list on a click outside the field.
   useEffect(() => {
@@ -63,14 +79,33 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
     return () => document.removeEventListener('mousedown', onDown);
   }, [open]);
 
+  // Letter-by-letter filter on name or email.
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!everyone) return [];
+    if (!q) return everyone;
+    return everyone.filter((u) => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q));
+  }, [everyone, query]);
+
+  // A new search starts at the top again.
+  useEffect(() => {
+    setShown(BATCH);
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [query]);
+
+  const onListScroll = (e: React.UIEvent<HTMLUListElement>) => {
+    const el = e.currentTarget;
+    if (shown < matches.length && el.scrollTop + el.clientHeight >= el.scrollHeight - 80) setShown((n) => n + BATCH);
+  };
+
   const pickedIds = new Set(value.map((u) => u.id));
+  const hasRole = (u: ApiUser) => !!currentRoleCode && (u.role || '').toLowerCase() === currentRoleCode.toLowerCase();
   const add = (u: ApiUser) => {
-    if (pickedIds.has(u.id)) return;
+    if (pickedIds.has(u.id) || hasRole(u)) return;
     onChange([...value, { id: u.id, name: u.name || u.email, email: u.email, currentRole: roleNames[(u.role || '').toLowerCase()] || u.role }]);
     setQuery('');
   };
   const remove = (id: string) => onChange(value.filter((u) => u.id !== id));
-  const locked = !!lockedReason;
 
   return (
     <div ref={boxRef} className="relative" title={lockedReason}>
@@ -89,43 +124,60 @@ export default function RoleUserPicker({ value, onChange, roleNames, lockedReaso
           aria-label="Give this role to"
           aria-disabled={locked || undefined}
           readOnly={locked}
+          // The field's own border shows focus; the site-wide input outline
+          // (globals.css input:focus-visible) would draw a second box inside it.
+          style={{ outline: 'none' }}
           className="min-w-0 flex-1 border-0 bg-transparent text-gray-900 outline-none placeholder:text-gray-400 dark:text-slate-100"
         />
         {loading && open && <Loader2 className="h-4 w-4 shrink-0 animate-spin text-gray-400" aria-hidden />}
       </label>
 
       {open && !locked && (
-        <ul
-          role="listbox"
-          className="absolute left-0 right-0 top-full z-10 mt-1 max-h-64 overflow-y-auto rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-slate-700 dark:bg-slate-900"
-        >
-          {!loading && results.length === 0 && (
-            <li className="px-3 py-2 text-[13px] text-gray-500 dark:text-slate-400">{query.trim() ? 'No one matches' : 'No people to show'}</li>
+        <div className="absolute left-0 right-0 top-full z-10 mt-1 overflow-hidden rounded-xl border border-gray-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          {everyone && (
+            <div className="border-b border-gray-100 px-3 py-1.5 text-[11.5px] text-gray-500 dark:border-slate-800 dark:text-slate-400">
+              {query.trim() ? `${matches.length} of ${everyone.length} people` : `${everyone.length} people`}
+            </div>
           )}
-          {results.map((u) => {
-            const picked = pickedIds.has(u.id);
-            const roleName = roleNames[(u.role || '').toLowerCase()] || u.role;
-            return (
-              <li key={u.id}>
-                <button
-                  type="button"
-                  role="option"
-                  aria-selected={picked}
-                  disabled={picked}
-                  onClick={() => add(u)}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-brand-blue/[0.06] disabled:cursor-default disabled:opacity-50"
-                >
-                  <NameAvatar name={u.name || u.email} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-[13px] font-medium text-gray-900 dark:text-slate-100">{u.name || u.email}</span>
-                    <span className="block truncate text-xs text-gray-500 dark:text-slate-400">{u.email}</span>
-                  </span>
-                  <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">{picked ? 'Added' : roleName}</span>
-                </button>
+          <ul ref={listRef} role="listbox" onScroll={onListScroll} className="max-h-72 overflow-y-auto py-1">
+            {loading && !everyone && (
+              <li className="flex items-center gap-2 px-3 py-2 text-[13px] text-gray-500 dark:text-slate-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading people…
               </li>
-            );
-          })}
-        </ul>
+            )}
+            {failed && <li className="px-3 py-2 text-[13px] text-red-600">Couldn&apos;t load people. Close and open the list to try again.</li>}
+            {everyone && matches.length === 0 && (
+              <li className="px-3 py-2 text-[13px] text-gray-500 dark:text-slate-400">{query.trim() ? 'No one matches' : 'No people to show'}</li>
+            )}
+            {matches.slice(0, shown).map((u) => {
+              const picked = pickedIds.has(u.id);
+              const already = hasRole(u);
+              const roleName = roleNames[(u.role || '').toLowerCase()] || u.role;
+              return (
+                <li key={u.id}>
+                  <button
+                    type="button"
+                    role="option"
+                    aria-selected={picked}
+                    disabled={picked || already}
+                    onClick={() => add(u)}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-brand-blue/[0.06] disabled:cursor-default disabled:opacity-50"
+                  >
+                    <NameAvatar name={u.name || u.email} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-medium text-gray-900 dark:text-slate-100">{u.name || u.email}</span>
+                      <span className="block truncate text-xs text-gray-500 dark:text-slate-400">{u.email}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-gray-400 dark:text-slate-500">{already ? 'Has this role' : picked ? 'Added' : roleName}</span>
+                  </button>
+                </li>
+              );
+            })}
+            {shown < matches.length && (
+              <li className="px-3 py-2 text-center text-xs text-gray-400 dark:text-slate-500">Scroll for more…</li>
+            )}
+          </ul>
+        </div>
       )}
 
       {value.length > 0 && (

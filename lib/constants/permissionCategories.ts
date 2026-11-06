@@ -354,10 +354,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'Dashboard and analytics permissions',
     isMenuToggle: true,
     viewCode: 'analytics:read',
-    actions: [
-      { code: 'analytics:export', label: 'Export' },
-      { code: 'analytics:custom_reports', label: 'Custom Reports' },
-    ],
+    // 'analytics:export' / 'analytics:custom_reports' are hidden from the role
+    // screens (user decision 2026-11-06): nothing in the app uses them — the only
+    // Export button (components/Analytics.tsx, unreachable /reports page) does
+    // nothing and there are no custom reports. Re-add them here once built.
+    actions: [],
   },
   {
     id: 'subscription_billing',
@@ -521,7 +522,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
  * User popup shows them as "(always on)". Role popups include them so a role's
  * count matches what its users actually get (Standard User = 2, not 0).
  */
-export const ALWAYS_ON_PERMISSION_CODES = ['analytics:read', 'support:read', 'my_resumes:read'] as const;
+export const ALWAYS_ON_PERMISSION_CODES = [
+  'analytics:read', 'support:read', 'my_resumes:read',
+  // Own security settings (password, 2FA, sessions) — for everyone, 2026-11-06.
+  'security_settings:read', 'support:security_settings',
+] as const;
 
 export interface PermissionDisplayItem {
   code: string;
