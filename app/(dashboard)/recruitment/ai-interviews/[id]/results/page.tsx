@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewResults, { type ResultsJobScopeEntry } from '@/components/ai-interview/AIInterviewResults';
-import { aiInterviewService, isJdDisabled, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, jdActionLockReason, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -119,7 +119,8 @@ function AIInterviewResultsContent() {
   const [jdId, setJdId] = useState('');
   const [jdShortId, setJdShortId] = useState('');
   const [jdVersion, setJdVersion] = useState<number | undefined>(undefined);
-  const [jdDisabled, setJdDisabled] = useState(false);
+  // Disabled or Archived job — either greys the Invite button, with its own reason.
+  const [jobLockMessage, setJobLockMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +137,7 @@ function AIInterviewResultsContent() {
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
           setJdVersion(response.jd_version ?? undefined);
-          setJdDisabled(isJdDisabled(response.jd_status));
+          setJobLockMessage(jdActionLockReason(response.jd_status));
           // Failing that lookup still shows this interview's own results.
           if (jobScoped) setJobScope(await loadJobScope(response).catch(() => null));
         } else {
@@ -159,7 +160,7 @@ function AIInterviewResultsContent() {
   const { user, isTenantAdmin } = useAuth();
   const canInvite = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
   const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
-    : jdDisabled ? 'This job description is disabled, so nothing can be sent for it.'
+    : jobLockMessage ? jobLockMessage
     : !jdId ? 'This AI interview is not linked to a job' : null;
   const inviteAction = (
     <Button
@@ -229,7 +230,7 @@ function AIInterviewResultsContent() {
       jdShortId={jdShortId}
       hideVersionDetails={versionScoped}
       jobScope={jobScope}
-      readOnly={jdDisabled}
+      readOnly={!!jobLockMessage}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
       toolbarActions={inviteAction}
