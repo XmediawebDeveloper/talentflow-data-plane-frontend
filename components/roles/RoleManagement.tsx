@@ -11,7 +11,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
-import { accessCounts, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
+import { accessCounts, copyBlockedReason, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
 import type { AuditLogEntry, RoleListItem } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -475,7 +475,7 @@ export default function RoleManagement() {
                           <CardAction
                             label={`Duplicate ${role.name}`}
                             icon={<Copy />}
-                            disabledReason={duplicateReason()}
+                            disabledReason={duplicateReason() || copyBlockedReason(role)}
                             onClick={() => setEditor({ mode: 'dup', role })}
                           />
                           <CardAction

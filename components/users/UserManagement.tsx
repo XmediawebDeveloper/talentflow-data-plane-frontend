@@ -13,7 +13,6 @@ import { ArrowLeft,
   Loader2,
   UserCog,
   Check,
-  Link2,
   AlertCircle,
   Eye,
   Lock,
@@ -33,7 +32,6 @@ import { handleUnauthorized } from '@/lib/services/api';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem } from '@/lib/types/rbac';
-import DependencyMatrix from './DependencyMatrix';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
@@ -60,6 +58,7 @@ import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from 
 import RoleAccessSummary from '@/components/roles/access/RoleAccessSummary';
 import RoleEditorModal, { roleCodes } from '@/components/roles/access/RoleEditorModal';
 import { AccessInline, AccessLegend } from '@/components/roles/access/AccessDots';
+import { copyBlockedReason } from '@/lib/permissions/moduleLevels';
 
 // Access is ROLE-ONLY: a user has exactly one role and everything they can do
 // comes from it. There is no per-user permission editing on this page; to give
@@ -294,7 +293,6 @@ export default function UserManagement() {
   const canCreateRole = hasPermissionCode('roles:create');
   const roleLimitReached = availableRoles.length >= roleLimit;
 
-  const [isDependencyMatrixOpen, setIsDependencyMatrixOpen] = useState(false);
 
   // RBAC01: User limits hook
   const { limits, isAtLimit, refresh: refreshLimits } = useUserLimits();
@@ -1465,7 +1463,7 @@ export default function UserManagement() {
     const role = roleOfUser(user);
     if (role) return <AccessInline codes={codesOfRole(role)} max={max} />;
     if ((user.role || '').toLowerCase() === 'tenant_admin') {
-      return <span className="text-xs text-gray-500 dark:text-slate-400">Full access (account owner)</span>;
+      return <span className="text-xs text-gray-500 dark:text-slate-400">Access to everything (account owner)</span>;
     }
     if (!rolesLoaded) return <Skeleton className="h-4 w-32" />;
     return <span className="tf-hint">—</span>;
@@ -1501,7 +1499,7 @@ export default function UserManagement() {
         ? `Role limit reached (${roleLimit}). Delete an unused role first.`
         : !role
           ? 'Choose a role first'
-          : '';
+          : copyBlockedReason(role) ?? '';
     return (
       <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[280px_minmax(0,1fr)] md:gap-7">
         <div className="min-w-0 space-y-4">
@@ -1591,17 +1589,6 @@ export default function UserManagement() {
         description={<span className="hidden sm:inline">Add people and give each one a role. What a person can do comes only from their role.</span>}
         actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* RBAC07: Dependency Matrix button */}
-            <Button
-              variant="secondary"
-              onClick={() => setIsDependencyMatrixOpen(true)}
-              icon={<Link2 className="w-4 h-4" />}
-              aria-label="View Feature Dependencies" title="View Feature Dependencies"
-              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
-            >
-              {/* Icon-only on phones so it sits beside Invite User on one row */}
-              <span className="hidden sm:inline">Dependencies</span>
-            </Button>
             {/* RBAC01: Check user limits before showing Add User button — also
                 requires users:create (greyed with a hover tooltip, never hidden). */}
             <Button
@@ -2364,11 +2351,6 @@ export default function UserManagement() {
         </AppModal>
       )}
 
-      {/* RBAC07: Dependency Matrix Modal */}
-      <DependencyMatrix
-        isOpen={isDependencyMatrixOpen}
-        onClose={() => setIsDependencyMatrixOpen(false)}
-      />
 
       {/* Add Seats Modal - opens when user limit is exhausted */}
       <AddSeatsModal

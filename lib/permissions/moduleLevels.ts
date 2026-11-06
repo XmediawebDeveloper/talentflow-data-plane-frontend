@@ -30,11 +30,25 @@ import { planTurnOff, withRequired } from '@/lib/permissions/permissionRules';
  *  access) or off (No access). Read-only people use the Viewer system role.
  *  Anything less than Full (e.g. Viewer, or something ticked off in Advanced)
  *  shows as "Full access · N turned off". */
-export type AccessLevel = 'none' | 'full';
+export type AccessLevel = 'none' | 'view' | 'full';
+
+/** Levels an admin can pick in the role editor. "View only" is NOT one of
+ *  them: it only appears on an area that is exactly view-only (the system
+ *  Viewer role). Such an area shows neither button selected; picking one
+ *  changes it, leaving it keeps it View only. */
+export const PICKABLE_LEVELS: AccessLevel[] = ['none', 'full'];
+
+/** The Viewer role can't be copied (user decision 2026-11-06): custom roles
+ *  are Full access / No access only, and a View-only copy contradicts that.
+ *  Returns why a role can't be copied, or undefined when it can. */
+export const copyBlockedReason = (role: { code?: string | null; name?: string }): string | undefined =>
+  role.code?.toLowerCase() === 'viewer'
+    ? `${role.name ?? 'Viewer'} can't be copied. Custom roles give Access or No access to each area.`
+    : undefined;
 
 /** The ONE name of each level, used on every screen (buttons, key, labels,
  *  totals, legend) so the wording never differs between places. */
-export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Full access', none: 'No access' };
+export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Access', view: 'View only', none: 'No access' };
 export type ModuleGroup = 'Hiring' | 'Candidates' | 'Administration';
 
 export interface ModuleEntry {
@@ -64,11 +78,13 @@ export interface AccessModule {
 const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: boolean; about: string; can: { view: string; full: string } }> = {
   job_description: { name: 'Job Descriptions', group: 'Hiring', about: 'Create and manage job descriptions', can: { view: 'See job descriptions and their versions', full: 'Create, edit, archive, disable, delete and export job descriptions' } },
   resume_scoring: { name: 'Resume Scoring', group: 'Hiring', about: 'Score resumes against a job description', can: { view: 'See scoring results and scorecards', full: 'Score resumes, export results and download scorecards' } },
-  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and export results' } },
+  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job from all company resumes, and work with the ones it finds', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and open, score, invite and export the resumes it finds' } },
   assessments: { name: 'Assessments', group: 'Hiring', about: 'Create assessments and invite candidates to take them', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
   ai_interviews: { name: 'AI Interviews', group: 'Hiring', about: 'Set up AI interviews and invite candidates', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
-  my_resumes: { name: 'My Resumes', group: 'Candidates', about: 'Upload resumes and manage your own', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete their own resumes' } },
-  internal_database: { name: 'Shared Database', group: 'Candidates', about: "Everyone's uploaded resumes in one place (nobody uploads here directly)", can: { view: 'Browse and use resumes uploaded by anyone in the company', full: "Also share, archive and delete anyone's resumes" } },
+  // Everyone can always see My Resumes (my_resumes:read is always on, 2026-11-06);
+  // this area adds uploading and managing them.
+  my_resumes: { name: 'Resume Upload', group: 'Candidates', about: 'Upload resumes and manage them in My Resumes (everyone can always see My Resumes)', can: { view: 'See their own resumes in My Resumes', full: 'Upload, share, archive and delete resumes in My Resumes' } },
+  internal_database: { name: 'Shared Database', group: 'Candidates', about: "Everyone's uploaded resumes in one place. Only people with Access can see it", can: { view: 'Browse and use resumes uploaded by anyone in the company', full: "Also share, archive and delete anyone's resumes" } },
   hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', about: 'Keep a set of reusable HR questions', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
   user_management: { name: 'User Management', group: 'Administration', about: 'Add people and give them a role', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
   teams: { name: 'Teams', group: 'Administration', about: 'Group people into teams', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
@@ -158,6 +174,7 @@ const fullPool = (codes: Set<string>, m: AccessModule): string[] =>
 /** Set one module to a level. Required permissions in other modules come along. */
 export const setModuleLevel = (codes: Set<string>, m: AccessModule, level: AccessLevel): Set<string> => {
   if (level === 'none') return turnOff(codes, moduleCodes(m));
+  if (level === 'view') return turnOn(turnOff(codes, [...m.full, ...m.entries.map((e) => e.code)]), m.view);
   let next = turnOn(codes, [...m.view, ...m.full]);
   next = turnOn(next, m.entries.filter((e) => isHostOn(next, e.host)).map((e) => e.code));
   return next;
@@ -183,16 +200,20 @@ export interface ModuleDescription {
 export const describeModule = (codes: Set<string>, m: AccessModule): ModuleDescription => {
   const on = moduleCodes(m).some((c) => codes.has(c) && !ALWAYS_ON.has(c));
   if (!on && !m.always) return { base: 'none', missing: [], extra: [], distance: 0 };
+  // Exactly view-only (a Viewer copy): every View code on, nothing else.
+  const acting = [...m.full, ...m.entries.map((e) => e.code)].some((c) => codes.has(c) && !ALWAYS_ON.has(c));
+  if (!m.always && !acting && m.view.every((c) => codes.has(c))) return { base: 'view', missing: [], extra: [], distance: 0 };
   const missing = fullPool(codes, m).filter((c) => !ALWAYS_ON.has(c) && !codes.has(c));
   return { base: 'full', missing, extra: [], distance: missing.length };
 };
 
 export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => describeModule(codes, m).base;
 
-export type LevelTone = 'full' | 'exc' | 'none';
+export type LevelTone = 'full' | 'view' | 'exc' | 'none';
 
 export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string } => {
   if (d.base === 'full') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.full} · ${d.distance} turned off` } : { tone: 'full', text: LEVEL_NAMES.full };
+  if (d.base === 'view') return { tone: 'view', text: LEVEL_NAMES.view };
   return { tone: 'none', text: LEVEL_NAMES.none };
 };
 
@@ -200,6 +221,7 @@ export const accessCounts = (codes: Set<string>) => {
   const ds = ACCESS_MODULES.filter((m) => !m.always).map((m) => describeModule(codes, m));
   return {
     full: ds.filter((d) => d.base === 'full').length,
+    view: ds.filter((d) => d.base === 'view').length,
     none: ds.filter((d) => d.base === 'none').length,
   };
 };
@@ -216,18 +238,17 @@ export const moduleCount = (codes: Set<string>, m: AccessModule): [number, numbe
 
 export interface LevelChange { module: AccessModule; from: AccessLevel; to: AccessLevel }
 
-const RANK: Record<AccessLevel, number> = { none: 0, full: 1 };
+const RANK: Record<AccessLevel, number> = { none: 0, view: 1, full: 2 };
 export const isUpgrade = (c: LevelChange) => RANK[c.to] > RANK[c.from];
 
 /**
- * Areas that need ANOTHER area at Full access to be useful (user decision
- * 2026-11-05): scoring, assessments and AI interviews work on the person's own
- * resumes, and a new user's My Resumes is empty unless they can upload.
+ * Areas that need ANOTHER area at Access to be useful (user decision
+ * 2026-11-05): scoring works on the person's own resumes, and a new user's My
+ * Resumes is empty unless they can upload. Assessments and AI Interviews no
+ * longer need Resume Upload (user decision 2026-11-06).
  */
 export const NEEDS_FULL: Record<string, string[]> = {
   resume_scoring: ['my_resumes'],
-  assessments: ['my_resumes'],
-  ai_interviews: ['my_resumes'],
 };
 
 const isCleanFull = (d: ModuleDescription) => d.base === 'full' && d.distance === 0;
@@ -264,6 +285,7 @@ export const applyQuickSetup = (
   if (level === 'full') {
     keepFull.add(m.id);
     (NEEDS_FULL[m.id] ?? []).forEach((id) => keepFull.add(id));
+    moduleNeeds(m).forEach((o) => keepFull.add(o.id));
   } else {
     keepFull.delete(m.id);
   }
@@ -273,7 +295,7 @@ export const applyQuickSetup = (
       if (o.always) continue;
       const a = describeModule(next, o);
       // Newly switched on by a dependency (was off): make it Full access.
-      if (level === 'full' && before[o.id].base === 'none' && a.base === 'full') keepFull.add(o.id);
+      if (level === 'full' && before[o.id].base === 'none' && a.base !== 'none') keepFull.add(o.id);
       if (!keepFull.has(o.id) || isCleanFull(a)) continue;
       if (level === 'none') {
         // Lost something it needs. Putting it back to Full would switch the
@@ -300,5 +322,6 @@ export const shortLabel = (code: string): string => getPermissionParts(code).lab
 /** Modules a module needs (any code it owns requires a View of theirs). */
 export const moduleNeeds = (m: AccessModule): AccessModule[] => {
   const required = withRequired([...m.view, ...m.full]);
-  return ACCESS_MODULES.filter((o) => o.id !== m.id && !o.always && o.view.some((v) => required.has(v)));
+  // A need met by an always-on code (My Resumes view) is not a need for that area.
+  return ACCESS_MODULES.filter((o) => o.id !== m.id && !o.always && o.view.some((v) => required.has(v) && !ALWAYS_ON.has(v)));
 };

@@ -9,7 +9,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import rbacService from '@/lib/services/rbacService';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { withRequired, withoutOrphanEntryPoints, getAllCatalogCodes } from '@/lib/permissions/permissionRules';
-import { ALWAYS_ON } from '@/lib/permissions/moduleLevels';
+import { ALWAYS_ON, copyBlockedReason } from '@/lib/permissions/moduleLevels';
 import type { Role, RoleListItem } from '@/lib/types/rbac';
 import RoleAccessEditor from './RoleAccessEditor';
 import RoleAccessSummary from './RoleAccessSummary';
@@ -119,8 +119,8 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
             label: 'Duplicate',
             variant: 'secondary' as const,
             onClick: () => onDuplicate(),
-            locked: !!duplicateDisabledReason,
-            title: duplicateDisabledReason,
+            locked: !!(duplicateDisabledReason || copyBlockedReason(role)),
+            title: duplicateDisabledReason || copyBlockedReason(role),
           }] : []),
           ...(!role.is_system ? [{
             label: 'Edit Role',
@@ -244,7 +244,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                   const src = roles.find((r) => String(r.id) === v);
                   setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
                 }}
-                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
+                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.filter((r) => !copyBlockedReason(r)).map((r) => ({ value: String(r.id), label: r.name }))]}
                 ariaLabel="Copy permissions from"
                 className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-1 sm:py-1 px-3 sm:px-3 rounded-md sm:rounded-md border-input"
               />
