@@ -39,12 +39,11 @@ export const ModuleIcon = ({ module, className }: { module: AccessModule; classN
 
 const DOT_CLASS: Record<LevelTone, string> = {
   full: 'bg-brand-blue',
-  view: 'bg-transparent ring-2 ring-inset ring-brand-blue',
   exc: 'bg-amber-500',
   none: 'bg-gray-300 dark:bg-slate-600',
 };
 
-/** Level dot: Full = solid, View = ring, has exceptions = amber, No access = grey. */
+/** Level dot: Full = solid, some turned off = amber, No access = grey. */
 export const AccessDot = ({ tone, className = 'h-2 w-2' }: { tone: LevelTone; className?: string }) => (
   <span className={`inline-block shrink-0 rounded-full ${DOT_CLASS[tone]} ${className}`} aria-hidden />
 );
@@ -52,7 +51,6 @@ export const AccessDot = ({ tone, className = 'h-2 w-2' }: { tone: LevelTone; cl
 export const AccessLegend = ({ className = '' }: { className?: string }) => (
   <div className={`flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-slate-400 ${className}`}>
     <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{LEVEL_NAMES.full}</span>
-    <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />{LEVEL_NAMES.view}</span>
     <span className="inline-flex items-center gap-1.5"><AccessDot tone="exc" />Some turned off</span>
   </div>
 );
@@ -99,13 +97,12 @@ export const AccessLevelKey = ({
   counts,
   className = '',
 }: {
-  counts?: { full: number; view: number; none: number };
+  counts?: { full: number; none: number };
   className?: string;
 }) => (
-  <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 sm:grid-cols-3 sm:gap-4 ${className}`}>
+  <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 sm:grid-cols-2 sm:gap-4 ${className}`}>
     {([
       ['full', 'Can see it and do everything in it'],
-      ['view', 'Can see it, but not change anything'],
       ['none', "Can't see this area"],
     ] as const).map(([level, text]) => (
       <div key={level}>

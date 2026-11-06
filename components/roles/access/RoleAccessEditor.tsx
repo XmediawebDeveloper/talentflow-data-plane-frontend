@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { Check, Info, Lock, Search, SlidersHorizontal, ToggleRight, Undo2 } from 'lucide-react';
 import PermissionTilesEditor from '@/components/roles/PermissionTilesEditor';
-import { getMainPermission, getPermissionLabel, getPermissionParts } from '@/lib/constants/permissionCategories';
+import { getMainPermission, getPermissionParts } from '@/lib/constants/permissionCategories';
 import {
   ACCESS_MODULES,
   ALWAYS_ON,
@@ -143,23 +143,18 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
       const entry = m.entries.find((e) => e.code === c);
       return entry ? `${shortLabel(c)} on ${moduleName(entry.host)}` : shortLabel(c);
     };
-    const needs = level === 'none' ? moduleNeeds(m) : [];
+    // What choosing Full here also switches on (each at Full access).
+    const alsoGives = level === 'none'
+      ? Array.from(new Set([...moduleNeeds(m).map((n) => n.name), ...(NEEDS_FULL[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name ?? id)]))
+      : [];
     let can: React.ReactNode;
     if (!adjusted) can = m.about;
     else if (level === 'full') {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.full}, {d.missing.length + d.extra.length} turned off</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.full}, {d.missing.length} turned off</span>
           {' · '}
           <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Back to {LEVEL_NAMES.full}</button>
-        </>
-      );
-    } else {
-      can = (
-        <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.view}, plus {d.extra.length} more</span>
-          {' · '}
-          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'view')}>Back to {LEVEL_NAMES.view}</button>
         </>
       );
     }
@@ -184,7 +179,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
         </button>
       );
     };
-    const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : level === 'view' ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
+    const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
     return (
       <div key={m.id} className="border-b border-gray-100 px-4 py-3.5 last:border-b-0 dark:border-slate-800">
         <div className="flex items-center gap-3 max-[720px]:flex-wrap">
@@ -194,7 +189,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
               {m.name}
               {adjusted && (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                  {level === 'full' ? `${d.missing.length + d.extra.length} turned off` : `+${d.extra.length} more`}
+                  {d.missing.length} turned off
                 </span>
               )}
               {m.always && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">Always on</span>}
@@ -202,7 +197,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             <div className="text-[13px] text-gray-500 dark:text-slate-400">{can}</div>
           </div>
           <div role="radiogroup" aria-label={`${m.name} access`} className="flex shrink-0 gap-0.5 rounded-[9px] bg-gray-100 p-[3px] dark:bg-slate-800 max-[720px]:ml-[46px] max-[720px]:w-[calc(100%-46px)]">
-            {(['none', 'view', 'full'] as AccessLevel[]).map(levelButton)}
+            {(['none', 'full'] as AccessLevel[]).map(levelButton)}
           </div>
         </div>
         {ownMissing.length > 0 && (
@@ -210,14 +205,6 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Turned off</span>
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {ownMissing.map((c) => <Chip key={c} state="off" label={missingLabel(c)} title="Tick to turn it back on" onClick={() => toggleOne(c)} />)}
-            </div>
-          </div>
-        )}
-        {d.extra.length > 0 && (
-          <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Extra access</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {d.extra.map((c) => <Chip key={c} state="on" label={getPermissionLabel(c)} title="Untick to take it away" onClick={() => toggleOne(c)} />)}
             </div>
           </div>
         )}
@@ -233,14 +220,9 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             </button>
           </div>
         )}
-        {level !== 'full' && (NEEDS_FULL[m.id] ?? []).length > 0 && (
+        {level === 'none' && alsoGives.length > 0 && (
           <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            {LEVEL_NAMES.full} here also gives {(NEEDS_FULL[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).join(' and ')} {LEVEL_NAMES.full}, so they can upload resumes to work with.
-          </div>
-        )}
-        {needs.length > 0 && (
-          <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            Works only with {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. We turn {needs.length === 1 ? 'it' : 'them'} on for you when you choose {LEVEL_NAMES.view} or {LEVEL_NAMES.full}.
+            {LEVEL_NAMES.full} here also gives {alsoGives.join(' and ')} {LEVEL_NAMES.full}.
           </div>
         )}
       </div>

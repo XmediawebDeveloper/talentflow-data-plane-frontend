@@ -513,7 +513,6 @@ export default function RoleManagement() {
                         <span className="truncate">{n ? plural(n, 'user') : 'No users yet'}</span>
                         <span className="ml-auto flex shrink-0 gap-3">
                           <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{counts.full} {LEVEL_NAMES.full}</span>
-                          <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />{counts.view} {LEVEL_NAMES.view}</span>
                         </span>
                       </div>
                     </article>

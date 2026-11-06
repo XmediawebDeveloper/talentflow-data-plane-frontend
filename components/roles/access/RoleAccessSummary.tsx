@@ -20,10 +20,9 @@ import { AccessDot, AccessLevelKey, ModuleIcon } from './AccessDots';
 const listText = (items: string[]) =>
   items.length <= 1 ? (items[0] ?? '') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
-const TONE_TEXT = { full: 'text-brand-blue', view: 'text-gray-900 dark:text-slate-100', exc: 'text-amber-700 dark:text-amber-400', none: 'text-gray-400 dark:text-slate-500' } as const;
+const TONE_TEXT = { full: 'text-brand-blue', exc: 'text-amber-700 dark:text-amber-400', none: 'text-gray-400 dark:text-slate-500' } as const;
 const TONE_TILE = {
   full: 'bg-brand-blue/10 text-brand-blue',
-  view: 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300',
   exc: 'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400',
   none: 'bg-gray-100 text-gray-400 opacity-60 dark:bg-slate-800 dark:text-slate-500',
 } as const;

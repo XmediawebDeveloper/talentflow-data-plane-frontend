@@ -26,11 +26,15 @@ import {
 } from '@/lib/constants/permissionCategories';
 import { planTurnOff, withRequired } from '@/lib/permissions/permissionRules';
 
-export type AccessLevel = 'none' | 'view' | 'full';
+/** Two levels only (user decision 2026-11-06): an area is either on (Full
+ *  access) or off (No access). Read-only people use the Viewer system role.
+ *  Anything less than Full (e.g. Viewer, or something ticked off in Advanced)
+ *  shows as "Full access · N turned off". */
+export type AccessLevel = 'none' | 'full';
 
 /** The ONE name of each level, used on every screen (buttons, key, labels,
  *  totals, legend) so the wording never differs between places. */
-export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Full access', view: 'View only', none: 'No access' };
+export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Full access', none: 'No access' };
 export type ModuleGroup = 'Hiring' | 'Candidates' | 'Administration';
 
 export interface ModuleEntry {
@@ -154,7 +158,6 @@ const fullPool = (codes: Set<string>, m: AccessModule): string[] =>
 /** Set one module to a level. Required permissions in other modules come along. */
 export const setModuleLevel = (codes: Set<string>, m: AccessModule, level: AccessLevel): Set<string> => {
   if (level === 'none') return turnOff(codes, moduleCodes(m));
-  if (level === 'view') return turnOn(turnOff(codes, [...m.full, ...m.entries.map((e) => e.code)]), m.view);
   let next = turnOn(codes, [...m.view, ...m.full]);
   next = turnOn(next, m.entries.filter((e) => isHostOn(next, e.host)).map((e) => e.code));
   return next;
@@ -165,39 +168,31 @@ export const setModuleLevel = (codes: Set<string>, m: AccessModule, level: Acces
 // ---------------------------------------------------------------------------
 
 export interface ModuleDescription {
-  /** Nearest clean level. */
+  /** On (full) when the role has anything in the area, else none. */
   base: AccessLevel;
-  /** Codes of `base` that are off (named exceptions). */
+  /** Full-access codes that are off (shown as "turned off"). */
   missing: string[];
-  /** Codes on beyond `base`. */
+  /** Kept for callers; always empty now that there is no View level. */
   extra: string[];
-  /** missing + extra: 0 means exactly `base`. */
+  /** missing.length: 0 means exactly Full access. */
   distance: number;
 }
 
-/** Nearest clean level + exactly what differs from it. Never a vague "Custom". */
+/** Full access (minus whatever is turned off) when the role has anything in
+ *  the area; otherwise No access. Never a vague "Custom". */
 export const describeModule = (codes: Set<string>, m: AccessModule): ModuleDescription => {
-  const on = moduleCodes(m).filter((c) => codes.has(c) && !ALWAYS_ON.has(c));
-  const pools: Record<AccessLevel, string[]> = { full: fullPool(codes, m), view: [...m.view], none: [] };
-  let best: ModuleDescription | null = null;
-  for (const base of ['full', 'view', 'none'] as AccessLevel[]) {
-    if (m.always && base === 'none') continue;
-    const pool = pools[base].filter((c) => !ALWAYS_ON.has(c));
-    const missing = pool.filter((c) => !codes.has(c));
-    const extra = on.filter((c) => !pool.includes(c));
-    const distance = missing.length + extra.length;
-    if (!best || distance < best.distance) best = { base, missing, extra, distance };
-  }
-  return best!;
+  const on = moduleCodes(m).some((c) => codes.has(c) && !ALWAYS_ON.has(c));
+  if (!on && !m.always) return { base: 'none', missing: [], extra: [], distance: 0 };
+  const missing = fullPool(codes, m).filter((c) => !ALWAYS_ON.has(c) && !codes.has(c));
+  return { base: 'full', missing, extra: [], distance: missing.length };
 };
 
 export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => describeModule(codes, m).base;
 
-export type LevelTone = 'full' | 'view' | 'exc' | 'none';
+export type LevelTone = 'full' | 'exc' | 'none';
 
 export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string } => {
   if (d.base === 'full') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.full} · ${d.distance} turned off` } : { tone: 'full', text: LEVEL_NAMES.full };
-  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.view} · ${d.extra.length} more` } : { tone: 'view', text: LEVEL_NAMES.view };
   return { tone: 'none', text: LEVEL_NAMES.none };
 };
 
@@ -205,7 +200,6 @@ export const accessCounts = (codes: Set<string>) => {
   const ds = ACCESS_MODULES.filter((m) => !m.always).map((m) => describeModule(codes, m));
   return {
     full: ds.filter((d) => d.base === 'full').length,
-    view: ds.filter((d) => d.base === 'view').length,
     none: ds.filter((d) => d.base === 'none').length,
   };
 };
@@ -222,23 +216,13 @@ export const moduleCount = (codes: Set<string>, m: AccessModule): [number, numbe
 
 export interface LevelChange { module: AccessModule; from: AccessLevel; to: AccessLevel }
 
-const RANK: Record<AccessLevel, number> = { none: 0, view: 1, full: 2 };
+const RANK: Record<AccessLevel, number> = { none: 0, full: 1 };
 export const isUpgrade = (c: LevelChange) => RANK[c.to] > RANK[c.from];
 
 /**
- * Set module `m` to `level`, then tidy the modules it affected:
- *   - a module that was exactly Full stays Full (new screens that just turned on
- *     get its buttons too) or drops to a clean View / No access;
- *   - a module that was exactly View and now has extras drops back to clean.
- * Returns the new codes and every OTHER module whose level changed.
- */
-/**
  * Areas that need ANOTHER area at Full access to be useful (user decision
  * 2026-11-05): scoring, assessments and AI interviews work on the person's own
- * resumes, and a new user's My Resumes is empty unless they can upload. So
- * setting one of these to Full also sets My Resumes to Full. View only needs
- * nothing extra (looking at results needs no resumes). This is a Quick Setup
- * rule between areas; the permission-level rules stay in permissionRules.ts.
+ * resumes, and a new user's My Resumes is empty unless they can upload.
  */
 export const NEEDS_FULL: Record<string, string[]> = {
   resume_scoring: ['my_resumes'],
@@ -246,14 +230,29 @@ export const NEEDS_FULL: Record<string, string[]> = {
   ai_interviews: ['my_resumes'],
 };
 
-/** Areas `m` needs at Full access that are not Full in `codes` (for a warning). */
+const isCleanFull = (d: ModuleDescription) => d.base === 'full' && d.distance === 0;
+
+/** Areas `m` needs at Full access that are not exactly Full in `codes` (for a warning). */
 export const missingFullNeeds = (codes: Set<string>, m: AccessModule): AccessModule[] =>
   levelOf(codes, m) !== 'full'
     ? []
     : (NEEDS_FULL[m.id] ?? [])
         .map((id) => MODULE_BY_ID[id])
-        .filter((o): o is AccessModule => !!o && !(levelOf(codes, o) === 'full' && describeModule(codes, o).distance === 0));
+        .filter((o): o is AccessModule => !!o && !isCleanFull(describeModule(codes, o)));
 
+/**
+ * Set module `m` to `level`, then keep the others clean (user decision
+ * 2026-11-06, no View level):
+ *   - Full: everything it switches on in other areas is set to Full access too
+ *     (any Hiring area gives Job Descriptions Full access; AI Talent Match gives
+ *     Shared Database Full access; managing roles gives User Management Full
+ *     access), plus NEEDS_FULL. Areas that were Full pick up their buttons on
+ *     pages that just became available.
+ *   - No access: an area that was Full and lost something it needs goes to No
+ *     access (there is no View level to fall back to).
+ * Areas already partly set in Advanced and not touched by this change are left
+ * as they are. Returns the new codes and every OTHER area whose level changed.
+ */
 export const applyQuickSetup = (
   codes: Set<string>,
   m: AccessModule,
@@ -261,31 +260,35 @@ export const applyQuickSetup = (
 ): { codes: Set<string>; changed: LevelChange[] } => {
   const before = Object.fromEntries(ACCESS_MODULES.map((o) => [o.id, describeModule(codes, o)]));
   let next = setModuleLevel(codes, m, level);
+  const keepFull = new Set<string>(ACCESS_MODULES.filter((o) => isCleanFull(before[o.id])).map((o) => o.id));
   if (level === 'full') {
-    for (const id of NEEDS_FULL[m.id] ?? []) {
-      const needed = MODULE_BY_ID[id];
-      if (needed) next = setModuleLevel(next, needed, 'full');
-    }
-    // Areas just turned Full may host this area's buttons: add them too.
-    next = setModuleLevel(next, m, 'full');
+    keepFull.add(m.id);
+    (NEEDS_FULL[m.id] ?? []).forEach((id) => keepFull.add(id));
+  } else {
+    keepFull.delete(m.id);
   }
-  for (let pass = 0; pass < 3; pass++) {
+  for (let pass = 0; pass < 6; pass++) {
+    let changedThisPass = false;
     for (const o of ACCESS_MODULES) {
-      if (o.id === m.id) continue;
-      const b = before[o.id];
+      if (o.always) continue;
       const a = describeModule(next, o);
-      if (b.base === 'full' && b.distance === 0 && (a.base !== 'full' || a.distance)) {
-        const viewOn = o.view.every((c) => next.has(c));
-        next = viewOn && o.full.every((c) => next.has(c)) ? setModuleLevel(next, o, 'full') : next;
-        const again = describeModule(next, o);
-        if (again.base !== 'full' || again.distance) next = setModuleLevel(next, o, o.view.every((c) => next.has(c)) ? 'view' : 'none');
-      } else if (b.base === 'view' && b.distance === 0 && a.distance) {
-        next = setModuleLevel(next, o, o.view.every((c) => next.has(c)) ? 'view' : 'none');
+      // Newly switched on by a dependency (was off): make it Full access.
+      if (level === 'full' && before[o.id].base === 'none' && a.base === 'full') keepFull.add(o.id);
+      if (!keepFull.has(o.id) || isCleanFull(a)) continue;
+      if (level === 'none') {
+        // Lost something it needs. Putting it back to Full would switch the
+        // removed area on again, so it goes to No access too.
+        next = setModuleLevel(next, o, 'none');
+        keepFull.delete(o.id);
+      } else {
+        next = setModuleLevel(next, o, 'full');
       }
+      changedThisPass = true;
     }
+    if (!changedThisPass) break;
   }
   const changed = ACCESS_MODULES
-    .filter((o) => o.id !== m.id)
+    .filter((o) => o.id !== m.id && !o.always)
     .map((o) => ({ module: o, from: before[o.id].base, to: levelOf(next, o) }))
     .filter((c) => c.from !== c.to);
   return { codes: next, changed };
