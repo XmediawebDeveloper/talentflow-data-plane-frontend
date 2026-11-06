@@ -356,7 +356,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const validateCompanyName = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return 'Company name is required';
-    if (trimmed.length < 2) return 'Company name must be at least 2 characters';
+    if (trimmed.length < 3) return 'Company name must be at least 3 characters';
     if (trimmed.length > 100) return 'Company name must be 100 characters or less';
     if (!/^[a-zA-Z0-9 &.\-'()]+$/.test(trimmed))
       return "Only letters, numbers, spaces and & . - ' ( ) are allowed";
@@ -488,7 +488,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
   const isFormComplete =
     (freeTrialAcknowledged || !!selectedPlanDetails) &&
-    form.companyName.trim().length >= 2 &&
+    form.companyName.trim().length >= 3 &&
     !companyNameError &&
     !!form.companyType &&
     !emailError &&

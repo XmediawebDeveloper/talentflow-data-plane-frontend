@@ -3164,6 +3164,9 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 
   /* ── Surfaces & spacing ── */
   .tf-card { @apply bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 dark:bg-[var(--surface)] dark:border-[var(--border-dark)] dark:ring-white/[0.02]; }
+  /* The Job Openings list's toolbar card (JobsListing: tf-card p-3 sm:p-4), on phones and
+     tablets only — for list toolbars that sit bare on the page from lg (Resume Scoring). */
+  .tf-toolbar-card { @apply max-lg:bg-white max-lg:rounded-xl max-lg:border max-lg:border-gray-300 max-lg:ring-1 max-lg:ring-black/[0.02] max-lg:shadow-sm max-lg:shadow-brand-blue/5 max-lg:p-3 sm:max-lg:p-4 dark:max-lg:bg-[var(--surface)] dark:max-lg:border-[var(--border-dark)] dark:max-lg:ring-white/[0.02]; }
   .tf-card-muted { @apply bg-slate-50 rounded-lg border border-gray-200 dark:bg-[#111827] dark:border-[var(--border)]; }
   .tf-card-soft { @apply bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 dark:bg-[var(--surface)] dark:border-[var(--border)] dark:ring-white/[0.02]; }   /* card with a lighter hairline */
   .tf-panel { @apply bg-white rounded-xl border border-gray-200 dark:bg-[var(--surface)] dark:border-[var(--border)]; }   /* plain bordered panel, no shadow */
@@ -3404,10 +3407,14 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
      directly in the card. From sm the toolbar is unchanged. */
   @media (width < theme(--breakpoint-sm)) {
     .tf-jobs-toolbar { display: flex; flex-wrap: wrap; align-items: center; column-gap: 0.5rem; row-gap: 0.625rem; }
-    .tf-jobs-toolbar > .tf-tb-row,
-    .tf-jobs-toolbar > div:has(> .tf-tb-row),
+    /* Any depth: every wrapper between the card and the toolbar row (a container-sized
+       ListToolbar, a filter-panel wrapper, a page's toolbar slot) drops its box. */
+    .tf-jobs-toolbar .tf-tb-row,
+    .tf-jobs-toolbar div:has(.tf-tb-row),
     .tf-jobs-toolbar .tf-tb-controls,
-    .tf-jobs-toolbar > .tf-jobs-row2 { display: contents !important; }
+    .tf-jobs-toolbar > .tf-jobs-row2,
+    /* Resume Scoring: wrappers around the toolbar row and the verdict / View by group. */
+    .tf-jobs-toolbar .tf-jobs-contents { display: contents !important; }
     /* Line 1: search · filter icon. */
     .tf-jobs-toolbar .tf-tb-search { order: 1; flex: 1 1 0% !important; min-width: 0; }
     .tf-jobs-toolbar .tf-tb-search input { border-radius: 9999px !important; }
@@ -3418,26 +3425,59 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
       position: absolute; top: -0.375rem; right: -0.375rem; padding: 0 0.3rem; line-height: 1rem;
     }
     .tf-jobs-toolbar .tf-tb-controls > button:not([data-tb-filters]) { order: 2; flex: none; }   /* Reset */
+    /* The row's count badge ("12 of 40", "1 event"): after the search line, never squeezing it. */
+    .tf-jobs-toolbar .tf-tb-count { display: block !important; order: 4 !important; flex: 1 1 100% !important; }
+    .tf-jobs-toolbar .tf-tb-count > * { width: max-content !important; max-width: 100%; }
+    /* A list / grid switch (Resume Scoring) stays on line 1, after the filter icon — as on the
+       Job Details tab toolbars. Beside it Reset becomes an icon square so the search keeps room. */
+    .tf-jobs-toolbar .tf-jobs-viewtoggle,
+    .tf-jobs-toolbar .tf-tb-controls > [data-list-view-toggle],
+    .tf-jobs-toolbar .tf-tb-trailing { order: 2; flex: none; margin-left: 0 !important; }
+    .tf-jobs-toolbar:has(:is(.tf-jobs-viewtoggle, .tf-tb-trailing, .tf-tb-controls > [data-list-view-toggle])) .tf-tb-controls > button:not([data-tb-filters]) {
+      width: 2.25rem; padding: 0 !important; gap: 0 !important; justify-content: center; font-size: 0 !important;
+    }
     /* Line 2: Location / Industry / Creator as rounded pills sharing the width. */
     .tf-jobs-toolbar .tf-jobs-filter-pills { order: 3; display: flex !important; flex-wrap: wrap; gap: 0.5rem; flex: 1 1 100%; }
     .tf-jobs-toolbar .tf-jobs-filter-pills > * { flex: 1 1 40%; min-width: 0; width: auto !important; }
     .tf-jobs-toolbar .tf-jobs-filter-pills button[aria-haspopup="listbox"] { border-radius: 9999px !important; }
     /* More Filters panel, when open. */
-    .tf-jobs-toolbar > div.mb-3.pt-3 { order: 4; flex: 1 1 100%; margin: 0 !important; }
+    .tf-jobs-toolbar > div.mb-3.pt-3,
+    .tf-jobs-toolbar .tf-jobs-filter-panel,
+    /* ListToolbar's own `filterPanel` (drawn after its row). */
+    .tf-jobs-toolbar div:has(.tf-tb-row) > :not(.tf-tb-row):not(:has(.tf-tb-row)) { order: 4; flex: 1 1 100%; margin: 0 !important; }
+    /* A page's toolbar slot holding a hand-built toolbar (AI Interviews' All Interviews): a full line. */
+    .tf-jobs-toolbar .tf-jobs-slot { order: 1; flex: 1 1 100%; }
+    /* A selection's Actions inside the toolbar row (AI Talent Match results): a line of its own. */
+    .tf-jobs-toolbar .tf-jobs-actions-line { order: 10; display: flex !important; flex: 1 1 100%; flex-wrap: wrap; gap: 0.5rem; }
+    /* Toolbar buttons (Customize Columns · Export, AI Assessment results) right under the filters. */
+    .tf-jobs-toolbar .tf-tb-controls > .tf-jobs-actions-line { order: 3; }
+    .tf-jobs-toolbar .tf-jobs-invite { order: 3; display: flex !important; flex: 1 1 100%; }
+    .tf-jobs-toolbar .tf-jobs-invite > * { flex: 1 1 auto; }
+    /* Sort menu + List / Grid sharing Select all's line, on the right (AI Assessment results). */
+    .tf-jobs-toolbar .tf-jobs-trail { order: 8; flex: none; margin-left: auto !important; }
+    .tf-jobs-toolbar .tf-jobs-actions-line > button { flex: 1 1 auto; }
     /* Line 3: status tabs — underlined, scrolling sideways, the card's divider under them. */
     .tf-jobs-toolbar .tf-jobs-status-tabs {
-      order: 5; display: flex !important; flex: 1 1 100%; gap: 1rem; overflow-x: auto; scrollbar-width: none;
+      order: 5; display: flex !important; flex: 1 1 100%; flex-wrap: nowrap !important; gap: 1rem; overflow-x: auto; scrollbar-width: none;
       border-bottom: 1px solid var(--color-gray-200); margin-top: 0.125rem;
     }
     .tf-jobs-toolbar .tf-jobs-status-tabs::-webkit-scrollbar { display: none; }
-    .tf-jobs-toolbar .tf-jobs-status-tabs > button {
+    /* Grouped tabs (AI Assessments): the groups' boxes drop, their tabs join the strip. */
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div { display: contents !important; }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button,
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button {
       flex: none; height: 2.25rem !important; padding: 0 0.125rem !important; border-radius: 0 !important;
       background: transparent !important; box-shadow: none !important; color: var(--color-gray-600) !important;
       border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
     }
-    .tf-jobs-toolbar .tf-jobs-status-tabs > button[aria-selected="true"] { color: var(--color-brand-blue) !important; font-weight: 600; border-bottom-color: var(--color-brand-blue); }
-    .tf-jobs-toolbar .tf-jobs-status-tabs > button > span { background: var(--color-gray-100) !important; color: var(--color-gray-600) !important; box-shadow: none !important; }
-    .tf-jobs-toolbar .tf-jobs-status-tabs > button[aria-selected="true"] > span { background: color-mix(in srgb, var(--color-brand-blue) 10%, white) !important; color: var(--color-brand-blue) !important; }
+    /* aria-pressed: Resume Scoring's verdict pills (All / Exact / Partial / No Match). */
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]),
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) { color: var(--color-brand-blue) !important; font-weight: 600; border-bottom-color: var(--color-brand-blue); }
+    /* The count chip (tabular-nums) — never a tab's label spans. */
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button > span.tabular-nums,
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button > span.tabular-nums { background: var(--color-gray-100) !important; color: var(--color-gray-600) !important; box-shadow: none !important; }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) > span.tabular-nums,
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) > span.tabular-nums { background: color-mix(in srgb, var(--color-brand-blue) 10%, white) !important; color: var(--color-brand-blue) !important; }
     .dark .tf-jobs-toolbar .tf-jobs-status-tabs { border-color: var(--color-slate-700); }
     /* Line 4: All / AI / Manual. */
     .tf-jobs-toolbar .tf-jobs-method { order: 6; flex: 1 1 100%; }
@@ -3449,6 +3489,8 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jobs-toolbar .tf-jobs-select { order: 7; min-width: 0; }
     .tf-jobs-toolbar .tf-jobs-sortmenu { order: 8; flex: none; }
     .tf-jobs-toolbar .tf-jobs-refresh { order: 9; flex: none; width: 2.25rem; padding: 0 !important; justify-content: center; }
+    /* A Sort + Refresh group with no Select all before it (AI Assessments): its own line, on the right. */
+    .tf-jobs-toolbar .tf-jobs-tools { order: 8; display: flex !important; flex: 1 1 100%; justify-content: flex-end; margin-left: 0 !important; }
     /* Select all: the same boxed button as Sort beside it — white, light border, 36px, with
        its checkbox, label and ▾ (it opens a menu). Ticked rows: a light-blue box,
        "● N Selected ▾" in blue. */
@@ -3483,6 +3525,29 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jobs-toolbar > .tf-tb-row { flex-wrap: wrap; }
     .tf-jobs-toolbar > .tf-tb-row > .tf-tb-search { flex: 1 1 100%; }
     .tf-jobs-toolbar > .tf-tb-row > .tf-tb-controls { flex: 1 1 100%; margin-left: 0 !important; }
+  }
+  /* Detail-page section navs (AI Assessment / AI Interview details, `.tf-detail-nav`) below lg:
+     the Job Details page's underlined tab strip (tf-tab-line) — one line, scrolling sideways —
+     instead of pills wrapping over four lines. From lg the vertical rail is unchanged. */
+  @media (width < theme(--breakpoint-lg)) {
+    .tf-detail-nav { padding: 0 0.5rem !important; }
+    .tf-detail-nav > div {
+      flex-wrap: nowrap !important; overflow-x: auto; scrollbar-width: none; gap: 0.25rem !important;
+      border-bottom: 1px solid var(--color-gray-200);
+    }
+    .tf-detail-nav > div::-webkit-scrollbar { display: none; }
+    .tf-detail-nav > div > div { flex: none; border-left: 0 !important; margin-left: 0 !important; padding-left: 0 !important; }
+    .tf-detail-nav button {
+      flex: none; height: auto !important; padding: 0.75rem 0.75rem !important; border-radius: 0 !important;
+      background: transparent !important; box-shadow: none !important; outline-offset: -2px;
+      color: var(--color-gray-500) !important; font-weight: 500; white-space: nowrap;
+      border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .tf-detail-nav button:hover { color: var(--color-gray-800) !important; }
+    .tf-detail-nav button[aria-current="page"] { color: var(--color-brand-blue) !important; border-bottom-color: var(--color-brand-blue); }
+    .dark .tf-detail-nav > div { border-color: var(--color-slate-700); }
+    .dark .tf-detail-nav button { color: var(--color-slate-400) !important; }
+    .dark .tf-detail-nav button[aria-current="page"] { color: #93c5fd !important; border-bottom-color: #2563eb; }
   }
   /* Track Invites popups on phones (TRACKER_DIALOG_PANEL_CLASS adds .tf-tracker-panel):
      the stat chips (three rows) and filters fill the height, and the card list — the one
@@ -3579,6 +3644,11 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* Divider, then count chips as tiles (other footer items keep their own look). */
   .tf-jdv-footer      { @apply mt-3 flex flex-wrap items-center gap-2 border-t border-gray-200 pt-3 dark:border-slate-700; }
   .tf-jdv-footer > .tf-stat-chip { @apply flex-auto justify-center rounded-lg px-2.5 py-2 font-semibold; }
+  /* Verdict tiles (Resume Scoring Exact / Partial / No Match, AI Talent Match Rating 10 /
+     9–7 / Below 7): always one row of three equal tiles, like the JD count tiles. On phones
+     the number sits above the label (the JD tiles do the same under 360px). */
+  .tf-jdv-footer:has(> .tf-verdict-chip) { @apply flex-nowrap; }
+  .tf-jdv-footer > .tf-verdict-chip { @apply min-w-0 flex-1 basis-0 max-sm:flex-col max-sm:gap-0 max-sm:px-1 max-sm:py-1.5 max-sm:whitespace-normal max-sm:text-center max-sm:leading-tight max-sm:[&>svg]:hidden; }
   /* Icon actions on the name row (JD card buttons); text actions on their own bottom row. */
   .tf-jdv-actions     { @apply mt-0 ml-auto flex-shrink-0 flex-nowrap; }
   .tf-jdv-actions-below { @apply mt-3 ml-0 flex-wrap justify-end gap-2 [&>*]:shrink-0; }

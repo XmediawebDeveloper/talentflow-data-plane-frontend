@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import FilterSelect from '@/components/ui/filter-select';
 
@@ -1102,7 +1102,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           />
         );
         const toolbarBlock = (
-        <div className={toolbarPortal ? '' : 'tf-card p-3 sm:p-4 mb-4'}>
+        /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
+           list's lines — search · filter icon, Result, Invite, Columns · Export,
+           the status tabs (underlined), then Select All · Sort · List / Grid —
+           as the AI Assessment results page. Embedded in Job Details: unchanged. */
+        <div className={toolbarPortal ? '' : 'tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4'}>
         <ListToolbar
           searchValue={search.query}
           onSearchChange={search.setQuery}
@@ -1163,7 +1167,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              status pills → Sort by → List / Grid. Embedded in Job Details:
              the AI Talent Match row as before. */
           /* Status is in More Filters when embedded, to make room here. */
-          afterFiltersActions={toolbarActions}
+          afterFiltersActions={toolbarActions && !portaled ? <div className="tf-jobs-invite contents">{toolbarActions}</div> : toolbarActions}
           leadingActions={
             <>
               {portaled ? (
@@ -1180,6 +1184,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               ) : (
                 /* Inline with Search, as Location / Industry are on the Job
                    Openings page. */
+                <div className="tf-jobs-filter-pills contents">
                 <SearchableSelect
                   className="w-full sm:w-44"
                   value={resultFilter}
@@ -1190,6 +1195,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   searchPlaceholder="Search result..."
                   ariaLabel="Filter by result"
                 />
+                </div>
               )}
               {portaled && sortControl}
             </>
@@ -1202,6 +1208,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           {/* Customize Columns / Export — standalone only as buttons;
               embedded in Job Details they are items in the Actions pill. */}
           {!portaled && (
+            <div className="tf-jobs-actions-line contents">
             <Button
               variant="secondary"
               size="sm"
@@ -1212,8 +1219,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               <span className="hidden md:inline">Customize Columns</span>
               <span className="md:hidden">Columns</span>
             </Button>
-          )}
-          {!portaled && (
             <Button
               variant="primary"
               size="sm"
@@ -1225,6 +1230,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             >
               Export{selected.size > 0 ? ` (${selected.size})` : ''}
             </Button>
+            </div>
           )}
         </ListToolbar>
 
@@ -1452,7 +1458,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             between the two rows. Each field applies as it changes; the
             toolbar's Reset clears them all. */}
         {showFilters && !portaled && (
-          <div className="mt-3 pt-3 border-t border-brand-blue/10">
+          <div className="tf-jobs-filter-panel mt-3 pt-3 border-t border-brand-blue/10">
             <div className="tf-grid-4 [&>div]:min-w-0">
               <div>
                 <label className={filterLabelClass}>Score Range (%)</label>
@@ -1546,7 +1552,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             Actions once a row is ticked, the status pills, then Sort by and
             List / Grid at the row's end. */}
         {!portaled && (
-          <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+          <div className="tf-jobs-row2 flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <div className="tf-jobs-select">
             <ToolbarSelectAll
               selectedCount={selected.size}
               allSelected={allOnPageSelected}
@@ -1568,6 +1575,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               }
               onClear={() => setSelected(new Map())}
             />
+            </div>
             {selected.size > 0 && (
               <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
               <DropdownMenu>
@@ -1641,18 +1649,36 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
+            <div className="tf-jobs-status-tabs contents">
             {RESULT_STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => search.setFilter('status', opt.value)}
+                aria-pressed={statusFilter === opt.value}
                 className={tabPill(statusFilter === opt.value)}
               >
                 {opt.label}
               </button>
             ))}
-            <div className="flex items-center gap-2 sm:ml-auto">
-              {sortControl}
+            </div>
+            <div className="tf-jobs-trail flex items-center gap-2 sm:ml-auto">
+              <div className="tf-jobs-sort contents">{sortControl}</div>
+              {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+              <PhoneSortMenu<typeof sortField>
+                value={sortField}
+                order={sortDirection}
+                options={[
+                  { value: 'name', label: 'Name' },
+                  { value: 'score', label: 'Score' },
+                  { value: 'date', label: 'Completed' },
+                ]}
+                orderLabels={(f) => (f === 'date'
+                  ? { desc: 'Newest first', asc: 'Oldest first' }
+                  : f === 'score' ? { desc: 'Highest first', asc: 'Lowest first' } : { desc: 'Z → A', asc: 'A → Z' })}
+                onChange={(v) => { setSortField(v); setCurrentPage(1); }}
+                onOrderChange={(o) => { setSortDirection(o); setCurrentPage(1); }}
+              />
               <ListViewToggle value={displayMode} onChange={setDisplayMode} />
             </div>
           </div>
