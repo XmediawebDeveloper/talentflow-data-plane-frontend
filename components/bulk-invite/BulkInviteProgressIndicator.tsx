@@ -51,7 +51,7 @@ const HINT = {
   queue: 'Waiting their turn — they go out one after another.',
   processing: 'Being sent right now.',
   sent: 'The invitation reached the candidate’s mail server.',
-  skipped: 'Not sent on purpose — e.g. already invited to this version, or no email.',
+  skipped: 'Left out on purpose — e.g. already invited to this version, or no email. Nothing to do.',
   failed: 'Could not be delivered — open it to see why, then send again or edit.',
 };
 
@@ -74,7 +74,11 @@ const stateOf = (j: TrackedBulkInvite): { label: string; tone: 'run' | 'wait' | 
   if (isBulkInviteActive(j)) {
     if (j.stalled) return { label: 'Stopped moving', tone: 'warn', icon: <AlertTriangle className="w-3 h-3" /> };
     if (j.waiting_turn) return { label: 'Waiting its turn', tone: 'wait', icon: <Hourglass className="w-3 h-3" /> };
-    if (j.status === 'queued' && j.processed === 0 && !j.is_sending) return { label: 'Waiting to start', tone: 'wait', icon: <Loader2 className="w-3 h-3 animate-spin" /> };
+    /* Only the send holding the account's turn is really sending; the rest
+       wait for the background sender to pick them up. */
+    if (j.is_sending === false) {
+      return { label: j.processed === 0 ? 'Waiting to start' : 'Waiting to carry on', tone: 'wait', icon: <Hourglass className="w-3 h-3" /> };
+    }
     return { label: 'Sending', tone: 'run', icon: <Loader2 className="w-3 h-3 animate-spin" /> };
   }
   if (j.status === 'done') {
@@ -104,6 +108,9 @@ export default function BulkInviteProgressIndicator() {
   const removed = jobs.filter((j) => j.dismissed);
   const open = openResultsFor ? jobs.find((j) => j.job_id === openResultsFor) ?? null : null;
   const miniOpen = widget === 'mini' && shown.length > 0 && !open;
+  /* Anything not finished yet (sending, waiting, paused, stopped moving)?
+     Only then does the round icon stay on the page. */
+  const hasUnfinished = shown.some((j) => isBulkInviteActive(j) || j.status === 'paused' || !!j.stalled);
 
   const [filter, setFilter] = useState<Filter>('all');
   /* Groups opened / closed by hand; the rest follow the default (running or
@@ -124,13 +131,22 @@ export default function BulkInviteProgressIndicator() {
     try { localStorage.setItem(COACH_KEY, '1'); } catch { /* storage blocked */ }
   };
 
-  /* Esc closes the mini popup to the icon. */
+  /* Close (✕ / Esc): back to the icon while something is unfinished; once
+     everything has finished the widget goes away and the finished batches
+     are cleared (the toast and the bell still open their results). */
+  const closeWidget = () => {
+    if (hasUnfinished) { setWidget('icon'); return; }
+    dismiss(shown.map((j) => j.job_id));
+    setWidget('hidden');
+  };
+  const closeRef = useRef(closeWidget);
+  useEffect(() => { closeRef.current = closeWidget; });
   useEffect(() => {
     if (!miniOpen) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setWidget('icon'); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closeRef.current(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [miniOpen, setWidget]);
+  }, [miniOpen]);
 
   /* A toast for EACH send that finishes — even while others still run —
      with sends finishing within a few seconds of each other sharing one
@@ -172,7 +188,7 @@ export default function BulkInviteProgressIndicator() {
           action: { label: 'View', onClick: () => setOpenResultsFor(j.job_id, j.failed > 0 ? 'failed' : 'all') },
         });
       } else {
-        show(`${finished.length} sends finished`, {
+        show(`${finished.length} batches finished`, {
           description: outcome,
           action: { label: 'View', onClick: () => { setFilter(clean ? 'all' : 'look'); setWidget('mini'); } },
         });
@@ -190,7 +206,8 @@ export default function BulkInviteProgressIndicator() {
       onMinimize={() => { setOpenResultsFor(null); setWidget('icon'); }}
     />
   ) : null;
-  if (shown.length === 0 || widget === 'hidden') {
+  // All finished and the mini popup closed: no icon left on the page.
+  if (shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished)) {
     return <>{results}{cancelDialog}</>;
   }
 
@@ -204,17 +221,23 @@ export default function BulkInviteProgressIndicator() {
   const runTotal = sum((j) => j.total, active);
   const runDone = sum((j) => j.processed, active);
   const pct = running > 0 ? (runTotal > 0 ? Math.round((runDone / runTotal) * 100) : 0) : 100;
-  const eta = formatTimeLeft(active.reduce((m, j) => Math.max(m, j.eta_seconds ?? 0), 0));
+  /* Time left only means something while a send is really moving. */
+  const moving = (j: TrackedBulkInvite) => isBulkInviteActive(j) && !j.stalled && (j.is_sending !== false || !!j.waiting_turn);
+  const eta = formatTimeLeft(active.filter(moving).reduce((m, j) => Math.max(m, j.eta_seconds ?? 0), 0));
   const failedAll = sum((j) => j.failed);
   const pausedN = shown.filter((j) => j.status === 'paused' || j.stalled).length;
   const finishedIds = shown.filter((j) => !isBulkInviteActive(j) && j.status !== 'paused').map((j) => j.job_id);
   const title = running > 0
-    ? `Sending ${running} of ${shown.length}`
+    ? (active.some((j) => j.is_sending !== false) ? `Sending ${running} of ${shown.length} batches` : `${running} of ${shown.length} batches waiting to send`)
     : look.length > 0 ? 'Finished — some need a look' : 'All invitations sent';
   const ringColour = look.length > 0 ? 'var(--raw-f59e0b, #f59e0b)' : running > 0 ? 'var(--raw-ffffff)' : 'var(--raw-22c55e)';
 
   /* Sends grouped by job (and job version), newest first. */
-  const visible = shown.filter((j) => filter === 'all' || (filter === 'running' ? isBulkInviteActive(j) : bulkInviteNeedsLook(j)));
+  /* A chip whose list emptied (everything finished, nothing needs a look)
+     falls back to All rather than showing an empty list. */
+  const chipCount = filter === 'running' ? running : filter === 'look' ? look.length : shown.length;
+  const view: Filter = chipCount === 0 ? 'all' : filter;
+  const visible = shown.filter((j) => view === 'all' || (view === 'running' ? isBulkInviteActive(j) : bulkInviteNeedsLook(j)));
   const groupKey = (j: TrackedBulkInvite) => `${j.jdCode ?? j.jd_code ?? j.jd_id}|${j.jobVersion ?? j.job_version ?? ''}`;
   const sentAt = (j: TrackedBulkInvite) => j.created_at ?? j.trackedAt;
   const groups: { key: string; head: TrackedBulkInvite; items: TrackedBulkInvite[] }[] = [];
@@ -227,9 +250,9 @@ export default function BulkInviteProgressIndicator() {
 
   const totals = [
     { key: 'queue', label: 'In queue', n: sum(queuedOf), icon: <Clock className="w-3.5 h-3.5" />, tone: 'text-gray-600 dark:text-slate-300', hint: HINT.queue },
-    { key: 'processing', label: 'Sending now', n: sum(processingOf), icon: <Loader2 className={`w-3.5 h-3.5 ${sum(processingOf) > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue', hint: HINT.processing },
+    { key: 'processing', label: 'Sending', n: sum(processingOf), icon: <Loader2 className={`w-3.5 h-3.5 ${sum(processingOf) > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue', hint: HINT.processing },
     { key: 'sent', label: 'Sent', n: sum((j) => j.sent), icon: <CheckCircle2 className="w-3.5 h-3.5" />, tone: 'text-success', hint: HINT.sent },
-    { key: 'skipped', label: 'Skipped', n: sum((j) => j.skipped), icon: <SkipForward className="w-3.5 h-3.5" />, tone: 'text-warning-strong', hint: HINT.skipped },
+    { key: 'skipped', label: 'Skipped', n: sum((j) => j.skipped), icon: <SkipForward className="w-3.5 h-3.5" />, tone: 'text-gray-500 dark:text-slate-400', hint: HINT.skipped },
     { key: 'failed', label: 'Failed', n: failedAll, icon: <XCircle className="w-3.5 h-3.5" />, tone: 'text-destructive', hint: HINT.failed },
   ];
   const side = onLeft ? 'left-3 sm:left-6' : 'right-3 sm:right-6';
@@ -262,7 +285,7 @@ export default function BulkInviteProgressIndicator() {
     const st = stateOf(j);
     const isActive = isBulkInviteActive(j);
     const processing = processingOf(j);
-    const left = formatTimeLeft(j.eta_seconds);
+    const left = moving(j) ? formatTimeLeft(j.eta_seconds) : null;
     const isInterview = j.kind !== 'assessment';
     const details = [
       `${j.total} candidate${j.total === 1 ? '' : 's'}`,
@@ -317,18 +340,18 @@ export default function BulkInviteProgressIndicator() {
           {isActive && <span className="text-gray-600 dark:text-slate-300" title={HINT.queue}>Queue {queuedOf(j)}</span>}
           {isActive && processing > 0 && <span className="text-brand-blue" title={HINT.processing}>Sending now {processing}</span>}
           {countLink(j, 'sent', 'Sent', j.sent, 'text-success', HINT.sent)}
-          {j.skipped > 0 && countLink(j, 'skipped', 'Skipped', j.skipped, 'text-warning-strong', HINT.skipped)}
+          {j.skipped > 0 && countLink(j, 'skipped', 'Skipped', j.skipped, 'text-gray-500 dark:text-slate-400', HINT.skipped)}
           {j.failed > 0 && countLink(j, 'failed', 'Failed', j.failed, 'text-destructive font-medium', HINT.failed)}
           {isActive && left && <span className="text-gray-500 dark:text-slate-400">· {left}</span>}
         </p>
         {j.waiting_turn && (
-          <p className="mt-1 tf-micro-hint">Another send is going out first — one send goes out at a time.</p>
+          <p className="mt-1 tf-micro-hint">Another batch is going out first — one batch goes out at a time.</p>
         )}
         {(j.status === 'paused' || j.stalled || j.status === 'failed') && (
           <p className="mt-1 rounded-md bg-warning-subtle px-2 py-1 text-2xs text-warning-strong [overflow-wrap:anywhere]">
             {j.status === 'paused' ? (j.paused_reason || 'Paused.')
-              : j.stalled ? 'This send stopped moving. We try to restart it on our own; you can also press Resume.'
-              : (j.error_message || 'The send stopped with an error.')}
+              : j.stalled ? 'This batch stopped moving. We try to restart it on our own; you can also press Resume.'
+              : (j.error_message || 'This batch stopped with an error.')}
           </p>
         )}
         {j.can_manage !== false && (isActive || j.can_resume || (j.retryable_failed ?? 0) > 0 || (j.cancelled_unsent ?? 0) > 0) && (
@@ -348,7 +371,7 @@ export default function BulkInviteProgressIndicator() {
             )}
             {isActive && (
               <Button variant="secondary" size="sm" className="h-7 text-2xs" onClick={() => askCancel(j)}>
-                Cancel send
+                Cancel sending
               </Button>
             )}
           </div>
@@ -386,13 +409,13 @@ export default function BulkInviteProgressIndicator() {
                 <button
                   type="button"
                   onClick={() => dismiss(finishedIds)}
-                  title="Remove every finished send from this list"
+                  title="Remove every finished batch from this list"
                   className="text-2xs font-medium text-brand-blue hover:underline underline-offset-2 whitespace-nowrap"
                 >
                   Clear finished ({finishedIds.length})
                 </button>
               )}
-              <Button variant="secondary" size="sm" onClick={() => setWidget('icon')} className="w-7 h-7 !px-0" aria-label="Close" title="Close — sending carries on; the icon stays">
+              <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title={hasUnfinished ? 'Close — sending carries on; the icon stays' : 'Close — everything has finished'}>
                 <X className="w-3.5 h-3.5" />
               </Button>
             </div>
@@ -409,11 +432,14 @@ export default function BulkInviteProgressIndicator() {
               </div>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
-              <span className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
+              <span
+                className="inline-flex items-center gap-1.5 text-gray-700 dark:text-slate-300 cursor-help"
+                title="A batch is one press of Send in the invite popup — one job version and one assessment or interview version, to all the candidates picked that time."
+              >
                 <Users className="w-3.5 h-3.5" />
                 {running > 0
-                  ? `Running now: ${sum(queuedOf) + sum(processingOf)} left · ${sum(processingOf)} sending`
-                  : `${sum((j) => j.total)} candidates · ${shown.length} ${shown.length === 1 ? 'send' : 'sends'}`}
+                  ? `Not sent yet: ${sum(queuedOf) + sum(processingOf)}${sum(processingOf) > 0 ? ` · ${sum(processingOf)} going out now` : ''}`
+                  : `${sum((j) => j.total)} candidates in ${shown.length} ${shown.length === 1 ? 'batch' : 'batches'}`}
               </span>
               {(failedAll > 0 || pausedN > 0) && (
                 <button
@@ -429,11 +455,14 @@ export default function BulkInviteProgressIndicator() {
                 </button>
               )}
             </div>
-            <ul className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+            <ul className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
               {totals.map((r) => (
-                <li key={r.key} title={r.hint} className="flex sm:flex-col items-center sm:items-start justify-between gap-1 rounded-lg border border-gray-100 dark:border-slate-700/60 px-2 py-1.5 text-xs cursor-help">
-                  <span className={`inline-flex items-center gap-1 min-w-0 ${r.tone}`}>{r.icon}<span className="truncate">{r.label}</span></span>
-                  <span className="font-semibold tabular-nums text-gray-900 dark:text-slate-100">{r.n}</span>
+                <li key={r.key} title={r.hint} className="min-w-0 flex flex-col gap-0.5 rounded-lg border border-gray-100 dark:border-slate-700/60 px-2 py-1.5 cursor-help">
+                  <span className={`flex items-center gap-1 min-w-0 w-full text-2xs font-medium ${r.tone}`}>
+                    <span className="shrink-0">{r.icon}</span>
+                    <span className="min-w-0 truncate">{r.label}</span>
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-100">{r.n}</span>
                 </li>
               ))}
             </ul>
@@ -443,9 +472,10 @@ export default function BulkInviteProgressIndicator() {
                   <button
                     key={c.key}
                     type="button"
-                    aria-pressed={filter === c.key}
+                    aria-pressed={view === c.key}
+                    disabled={c.n === 0 && c.key !== 'all'}
                     onClick={() => setFilter(c.key)}
-                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-2xs font-medium transition-colors ${filter === c.key
+                    className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-2xs font-medium transition-colors ${view === c.key
                       ? 'bg-brand-blue border-brand-blue text-white'
                       : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'}`}
                   >
@@ -460,7 +490,7 @@ export default function BulkInviteProgressIndicator() {
           <ul className="flex-1 min-h-0 overflow-y-auto border-t border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
             {groups.length === 0 && (
               <li className="px-3.5 py-6 text-center tf-body-muted">
-                {filter === 'running' ? 'Nothing is sending right now.' : 'Nothing needs a look.'}
+                {view === 'running' ? 'Nothing is sending right now.' : 'Nothing needs a look.'}
               </li>
             )}
             {groups.map((g) => {
@@ -468,7 +498,10 @@ export default function BulkInviteProgressIndicator() {
               const gLook = g.items.filter((j) => bulkInviteNeedsLook(j)).length;
               const isOpen = single || (toggled[g.key] ?? (gRunning > 0 || gLook > 0));
               const gFailed = sum((j) => j.failed, g.items);
-              const gState = gRunning > 0 ? { t: 'Sending', c: 'text-brand-blue', i: <Loader2 className="w-3 h-3 animate-spin" /> }
+              const gState = gRunning > 0
+                ? (g.items.some((j) => isBulkInviteActive(j) && j.is_sending !== false)
+                  ? { t: 'Sending', c: 'text-brand-blue', i: <Loader2 className="w-3 h-3 animate-spin" /> }
+                  : { t: 'Waiting to send', c: 'text-gray-600 dark:text-slate-300', i: <Hourglass className="w-3 h-3" /> })
                 : g.items.some((j) => j.status === 'paused' || j.stalled) ? { t: 'Paused', c: 'text-warning-strong', i: <Pause className="w-3 h-3" /> }
                 : g.items.some((j) => j.status === 'failed') ? { t: 'Stopped', c: 'text-destructive', i: <XCircle className="w-3 h-3" /> }
                 : g.items.every((j) => j.status === 'cancelled') ? { t: 'Cancelled', c: 'text-warning-strong', i: <XCircle className="w-3 h-3" /> }
@@ -485,7 +518,7 @@ export default function BulkInviteProgressIndicator() {
                         type="button"
                         onClick={() => !single && setToggled((t) => ({ ...t, [g.key]: !isOpen }))}
                         aria-expanded={single ? undefined : isOpen}
-                        title={single ? undefined : isOpen ? 'Hide this job’s sends' : 'Show this job’s sends'}
+                        title={single ? undefined : isOpen ? 'Hide this job’s batches' : 'Show this job’s batches'}
                         className={`flex items-start gap-1.5 min-w-0 text-left ${single ? 'cursor-default' : ''}`}
                       >
                         {!single && <ChevronRight className={`w-4 h-4 mt-0.5 shrink-0 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />}
@@ -497,14 +530,14 @@ export default function BulkInviteProgressIndicator() {
                       </button>
                       <div className="flex items-center gap-1 shrink-0">
                         <span className="tf-micro-hint whitespace-nowrap">
-                          {g.items.length} {g.items.length === 1 ? 'send' : 'sends'}{gRunning > 0 ? ` · ${gRunning} running` : ''}
+                          {g.items.length} {g.items.length === 1 ? 'batch' : 'batches'}{gRunning > 0 ? ` · ${gRunning} running` : ''}
                         </span>
                         {!single && (
                           <button
                             type="button"
                             onClick={() => dismiss(g.items.map((j) => j.job_id))}
                             aria-label={`Remove ${code || 'this job'} from this list`}
-                            title={gRunning > 0 ? 'Remove this job from the list — its sends carry on' : 'Remove this job from the list'}
+                            title={gRunning > 0 ? 'Remove this job from the list — its batches carry on' : 'Remove this job from the list'}
                             className="h-6 w-6 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 dark:hover:bg-slate-800"
                           >
                             <X className="w-3.5 h-3.5" />
@@ -519,7 +552,7 @@ export default function BulkInviteProgressIndicator() {
                           <span className={`inline-flex items-center gap-1 font-medium ${gState.c}`}>{gState.i}{gState.t}</span>
                           {gRunning > 0 && <span className="text-gray-600 dark:text-slate-300">Queue {sum(queuedOf, g.items)}</span>}
                           <span className="text-success">Sent {sum((j) => j.sent, g.items)}</span>
-                          {sum((j) => j.skipped, g.items) > 0 && <span className="text-warning-strong">Skipped {sum((j) => j.skipped, g.items)}</span>}
+                          {sum((j) => j.skipped, g.items) > 0 && <span className="text-gray-500 dark:text-slate-400">Skipped {sum((j) => j.skipped, g.items)}</span>}
                           {gFailed > 0 && <span className="text-destructive font-medium">Failed {gFailed}</span>}
                         </p>
                       </>
@@ -540,7 +573,7 @@ export default function BulkInviteProgressIndicator() {
             <p className="flex items-start gap-1.5 tf-micro-hint">
               <Info className="w-3.5 h-3.5 mt-px shrink-0 text-brand-blue" />
               <span>
-                Sending runs on our servers — keep working, or even close this tab. One send goes out at a time.{' '}
+                Sending runs on our servers — keep working, or even close this tab. One batch goes out at a time.{' '}
                 <button type="button" onClick={() => setLegendOpen((o) => !o)} aria-expanded={legendOpen} className="font-medium text-brand-blue hover:underline underline-offset-2">
                   {legendOpen ? 'Hide' : 'What do these mean?'}
                 </button>

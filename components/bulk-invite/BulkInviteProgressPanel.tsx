@@ -34,7 +34,7 @@ const CHIP: Record<BulkInviteItemStatus, { label: string; className: string }> =
   queued: { label: 'Queued', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
   processing: { label: 'Sending…', className: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' },
   sent: { label: 'Sent', className: 'bg-success-subtle text-success ring-success-line' },
-  skipped: { label: 'Skipped', className: 'bg-warning-subtle text-warning-strong ring-warning-line' },
+  skipped: { label: 'Skipped', className: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300 ring-gray-200 dark:ring-slate-700' },
   failed: { label: 'Failed', className: 'bg-destructive-subtle text-destructive ring-destructive-line' },
 };
 
@@ -260,7 +260,8 @@ export default function BulkInviteProgressPanel({
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const timeLeft = formatTimeLeft(job.eta_seconds);
+  /* Time left only while the send is really moving (sending, or next in line). */
+  const timeLeft = active && !job.stalled && (job.is_sending !== false || job.waiting_turn) ? formatTimeLeft(job.eta_seconds) : null;
   const share = (n: number) => (job.total > 0 ? (n / job.total) * 100 : 0);
   const pctLabel = (n: number) => `${Math.round(share(n))}%`;
   const finished = job.status === 'done';
@@ -271,32 +272,32 @@ export default function BulkInviteProgressPanel({
     : job.status === 'failed' ? 'Invitation process stopped'
     : job.stalled ? 'Sending stopped moving'
     : job.waiting_turn ? 'Waiting its turn…'
-    : job.status === 'queued' && !job.is_sending ? 'Waiting to start…'
+    : active && job.is_sending === false ? (job.processed === 0 ? 'Waiting to start…' : 'Waiting to carry on…')
     : job.mode === 'resend' ? 'Sending new links…' : 'Sending invitations…';
   const subline = finished
     ? `${job.total} candidate${job.total === 1 ? ' was' : 's were'} processed. Review the status and reasons below.`
     : job.status === 'paused' ? (job.paused_reason || 'Press Resume to carry on.')
     : job.status === 'failed' ? (job.error_message || 'The send stopped with an error.')
     : job.status === 'cancelled' ? `${job.sent} sent before it was stopped. Nothing more goes out.`
-    : job.waiting_turn ? `Another send is going out first — one send goes out at a time.${timeLeft ? ` Done in ${timeLeft.replace(/ left$/, '')}.` : ''}`
+    : job.waiting_turn ? `Another batch is going out first — one batch goes out at a time.${timeLeft ? ` Done in ${timeLeft.replace(/ left$/, '')}.` : ''}`
     : `${job.processed} of ${job.total} processed${timeLeft ? ` · ${timeLeft}` : ''}${job.version_label ? ` · ${job.version_label}` : ''}`;
 
   const stats: { key: Exclude<Tab, 'all'>; label: string; n: number; icon: typeof Send; card: string; iconBox: string }[] = [
     { key: 'sent', label: 'Sent', n: job.sent, icon: Send, card: 'bg-success-subtle/60 border-success-line', iconBox: 'bg-success-subtle text-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, card: 'bg-warning-subtle/60 border-warning-line', iconBox: 'bg-warning-subtle text-warning-strong' },
+    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, card: 'bg-slate-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700', iconBox: 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400' },
     { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, card: 'bg-destructive-subtle/60 border-destructive-line', iconBox: 'bg-destructive-subtle text-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, card: 'bg-brand-blue/5 border-brand-blue/20', iconBox: 'bg-brand-blue/10 text-brand-blue' },
   ];
   const segments = [
     { key: 'sent', label: 'Sent', n: job.sent, bar: 'bg-success', dot: 'bg-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, bar: 'bg-warning-strong', dot: 'bg-warning-strong' },
+    { key: 'skipped', label: 'Skipped', n: job.skipped, bar: 'bg-gray-400 dark:bg-slate-500', dot: 'bg-gray-400 dark:bg-slate-500' },
     { key: 'failed', label: 'Failed', n: job.failed, bar: 'bg-destructive', dot: 'bg-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, bar: 'bg-gray-300 dark:bg-slate-600', dot: 'bg-gray-400 dark:bg-slate-500' },
   ].filter((seg) => seg.n > 0);
   const tabs: { key: Tab; label: string; n: number; icon?: typeof Send; iconClass?: string }[] = [
     { key: 'all', label: 'All', n: job.total },
     { key: 'sent', label: 'Sent', n: job.sent, icon: CheckCircle2, iconClass: 'text-success' },
-    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, iconClass: 'text-warning-strong' },
+    { key: 'skipped', label: 'Skipped', n: job.skipped, icon: SkipForward, iconClass: 'text-gray-500 dark:text-slate-400' },
     { key: 'failed', label: 'Failed', n: job.failed, icon: AlertCircle, iconClass: 'text-destructive' },
     { key: 'remaining', label: 'Remaining', n: job.remaining, icon: Users, iconClass: 'text-brand-blue' },
   ];
@@ -358,7 +359,7 @@ export default function BulkInviteProgressPanel({
             )}
             {canManage && active && (
               <Button variant="secondary" size="sm" onClick={() => actions.askCancel(job)}>
-                Cancel send
+                Cancel sending
               </Button>
             )}
           </div>
@@ -370,12 +371,12 @@ export default function BulkInviteProgressPanel({
         )}
         {job.stalled && (
           <p role="status" className="mt-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
-            This send has not moved for a few minutes. We try to restart it on our own{canManage ? ' — or press Resume now' : ''}. Nothing is sent twice.
+            This batch has not moved for a few minutes. We try to restart it on our own{canManage ? ' — or press Resume now' : ''}. Nothing is sent twice.
           </p>
         )}
         {active && (
           <p className="mt-2 tf-meta">
-            You can minimize or close this popup — the send carries on in the background; the round icon at the bottom of the page follows it.
+            You can minimize or close this popup — the batch carries on in the background; the round icon at the bottom of the page follows it.
           </p>
         )}
         {!canManage && (
@@ -506,11 +507,11 @@ export default function BulkInviteProgressPanel({
           const chip = CHIP[r.status] ?? CHIP.queued;
           const isSent = r.status === 'sent';
           const avatar = isSent ? 'bg-brand-blue/10 text-brand-blue'
-            : r.status === 'skipped' ? 'bg-warning-subtle text-warning-strong'
+            : r.status === 'skipped' ? 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400'
             : r.status === 'failed' ? 'bg-destructive-subtle text-destructive'
             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
           const reasonColor = r.status === 'failed' ? 'text-destructive'
-            : r.status === 'skipped' ? 'text-warning-strong'
+            : r.status === 'skipped' ? 'text-gray-500 dark:text-slate-400'
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>

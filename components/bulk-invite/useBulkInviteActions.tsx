@@ -58,7 +58,7 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
     try {
       const fresh = await bulkInviteService.cancel(job.job_id);
       apply(fresh);
-      toast.success('Send cancelled — nothing more goes out');
+      toast.success('Batch cancelled — nothing more goes out');
     } catch (err) {
       toast.error((err as Error)?.message || 'Could not cancel the send.');
     } finally {
@@ -74,10 +74,10 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
       cancelLabel="Keep sending"
       size="sm"
       tone="warning"
-      title="Cancel this send?"
+      title="Cancel this batch?"
       zIndexClass="z-[90]"
       actions={[{
-        label: 'Cancel send',
+        label: 'Cancel sending',
         variant: 'destructive',
         onClick: () => void doCancel(),
         loading: !!confirmCancel && busy === `cancel:${confirmCancel.job_id}`,
