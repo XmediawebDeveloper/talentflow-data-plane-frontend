@@ -2,9 +2,10 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertCircle, Check, CheckCircle2, Copy, ListChecks, Loader2, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, Copy, Hourglass, ListChecks, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import AppModal from '@/components/ui/app-modal';
 import ListPagination from '@/components/ListPagination';
 import {
   bulkInviteService,
@@ -14,6 +15,8 @@ import {
   type BulkInviteResultRow,
 } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
+import { formatTimeLeft } from '@/lib/services/bulkInviteService';
+import { useBulkInviteActions } from './useBulkInviteActions';
 import dynamic from 'next/dynamic';
 
 /* On demand: this panel is mounted from the dashboard layout, and both track
@@ -50,17 +53,20 @@ export const bulkInviteStatusLine = (job: BulkInviteJob) => {
     case 'running': return `Sending ${job.processed} of ${job.total}…`;
     case 'done': return `${job.sent} sent · ${job.skipped} skipped · ${job.failed} failed`;
     case 'cancelled': return `Cancelled — ${job.sent} sent before stopping`;
+    case 'paused': return job.paused_reason || 'Paused';
     case 'failed': return job.error_message || 'The send stopped with an error';
     default: return '';
   }
 };
 
 /**
- * One bulk run: the live counts and progress bar, Cancel while it runs, and
- * the per-candidate rows (all / sent / skipped / failed, searchable, paged
- * from the server) with each failed or skipped row's reason and each sent
- * row's link to copy. Polls the job itself while it is active and hands every
- * snapshot to the global tracker, so the floating widget agrees with it.
+ * One bulk run: the live counts and progress bar, Cancel while it runs,
+ * Resume when it is paused or stopped, Send again for what failed, and the
+ * per-candidate rows (all / sent / skipped / failed, searchable, paged from
+ * the server) with each row's reason, each sent row's link, and — on failed
+ * and skipped rows — Edit (fix the address and send) and Send again, one by
+ * one or ticked together. Polls the job itself while it is active and hands
+ * every snapshot to the global tracker, so the floating widget agrees.
  */
 export default function BulkInviteProgressPanel({
   jobId,
@@ -68,6 +74,7 @@ export default function BulkInviteProgressPanel({
   onJobChange,
   onCancelled,
   compact = false,
+  initialTab = 'all',
 }: {
   jobId: string;
   initialJob?: BulkInviteJob | null;
@@ -75,11 +82,13 @@ export default function BulkInviteProgressPanel({
   onCancelled?: (job: BulkInviteJob) => void;
   /** Inside the Create / Send popup: tighter spacing, shorter list. */
   compact?: boolean;
+  /** The tab to open on (a count clicked in the widget). */
+  initialTab?: Tab;
 }) {
   const tracker = useOptionalBulkInviteProgress();
   const [job, setJob] = useState<BulkInviteJob | null>(initialJob ?? null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('all');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [search, setSearch] = useState('');
   const [rows, setRows] = useState<BulkInviteResultRow[]>([]);
   const [rowsTotal, setRowsTotal] = useState(0);
@@ -87,18 +96,34 @@ export default function BulkInviteProgressPanel({
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [loadingRows, setLoadingRows] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  /* Ticked failed / skipped rows for "Send again to selected". */
+  const [picked, setPicked] = useState<ReadonlySet<string>>(() => new Set());
+  /* Edit & send: the row being fixed, and the form. */
+  const [editRow, setEditRow] = useState<BulkInviteResultRow | null>(null);
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '' });
+  const [editError, setEditError] = useState<string | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  /* Bumped after Retry / Edit / Resume: the run is active again, so polling
+     (which stops when it finishes) starts over. */
+  const [pollKick, setPollKick] = useState(0);
   /* "Track status" on a sent row: the tracker for this send's interview /
      assessment, opened over this popup, filtered to that candidate. */
   const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
   const active = !!job && isBulkInviteActive(job);
+  const actions = useBulkInviteActions((fresh) => {
+    setJob(fresh);
+    onJobChange?.(fresh);
+    if (fresh.status === 'cancelled') onCancelled?.(fresh);
+    setPicked(new Set());
+    setPollKick((k) => k + 1);
+  });
 
   /* A run that no worker has picked up for two minutes: say so, rather
      than spin on "Waiting to start" (the background sender is down or is
      running an older build). */
   const [waitingLong, setWaitingLong] = useState(false);
-  const queuedSince = job?.status === 'queued' ? job.created_at : null;
+  const queuedSince = job?.status === 'queued' && !job.waiting_turn && !job.is_sending ? job.created_at : null;
   useEffect(() => {
     if (!queuedSince) {
       const t = setTimeout(() => setWaitingLong(false), 0);
@@ -141,7 +166,7 @@ export default function BulkInviteProgressPanel({
     };
     void load();
     return () => { cancelled = true; if (timer) clearTimeout(timer); };
-  }, [jobId]);
+  }, [jobId, pollKick]);
 
   /* The rows: re-read on tab / search / page, and on every poll tick while
      the run is active (processed counts change), debounced on the search. */
@@ -171,24 +196,36 @@ export default function BulkInviteProgressPanel({
       }
     }, search ? 300 : 0);
     return () => { cancelled = true; controller.abort(); clearTimeout(timer); };
-  }, [jobId, tab, search, page, pageSize, processed, status]);
+  }, [jobId, tab, search, page, pageSize, processed, status, pollKick]);
 
-  const switchTab = (next: Tab) => { setTab(next); setPage(1); };
+  const switchTab = (next: Tab) => { setTab(next); setPage(1); setPicked(new Set()); };
   const onSearch = (v: string) => { setSearch(v); setPage(1); };
 
-  const cancel = async () => {
-    if (!job) return;
-    setCancelling(true);
+  const openEdit = (r: BulkInviteResultRow) => {
+    setEditRow(r);
+    setEditForm({ name: r.name || '', email: r.email || '', phone: r.phone || '' });
+    setEditError(null);
+  };
+  const saveEdit = async () => {
+    if (!job || !editRow) return;
+    setSavingEdit(true);
+    setEditError(null);
     try {
-      const fresh = await bulkInviteService.cancel(job.job_id);
-      setJob(fresh);
-      tracker?.sync(fresh);
-      onCancelled?.(fresh);
-      toast.success('Send cancelled — nothing more goes out');
+      const res = await bulkInviteService.editItem(job.job_id, editRow.id, {
+        name: editForm.name.trim(),
+        email: editForm.email.trim(),
+        phone: editForm.phone.trim() || undefined,
+      });
+      setJob(res.job);
+      tracker?.sync(res.job);
+      onJobChange?.(res.job);
+      setPollKick((k) => k + 1);
+      setEditRow(null);
+      toast.success(`Sending to ${res.item.email}`);
     } catch (err) {
-      toast.error((err as Error)?.message || 'Could not cancel the send.');
+      setEditError((err as Error)?.message || 'Could not save. Please try again.');
     } finally {
-      setCancelling(false);
+      setSavingEdit(false);
     }
   };
 
@@ -213,20 +250,36 @@ export default function BulkInviteProgressPanel({
     );
   }
 
+  const canManage = job.can_manage !== false;
+  const againCount = (job.retryable_failed ?? 0) + (job.cancelled_unsent ?? 0);
+  const pickable = rows.filter((r) => r.can_retry);
+  const showPick = canManage && (tab === 'failed' || tab === 'skipped') && pickable.length > 0;
+  const allPicked = showPick && pickable.every((r) => picked.has(r.id));
+  const togglePick = (id: string) => setPicked((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const timeLeft = formatTimeLeft(job.eta_seconds);
   const share = (n: number) => (job.total > 0 ? (n / job.total) * 100 : 0);
   const pctLabel = (n: number) => `${Math.round(share(n))}%`;
   const finished = job.status === 'done';
 
-  const heading = finished ? 'Invitation process completed'
+  const heading = finished ? (job.failed > 0 ? 'Finished — some need a look' : 'Invitation process completed')
     : job.status === 'cancelled' ? 'Invitation process cancelled'
+    : job.status === 'paused' ? 'Sending paused'
     : job.status === 'failed' ? 'Invitation process stopped'
-    : job.status === 'queued' ? 'Waiting to start…'
-    : 'Sending invitations…';
+    : job.stalled ? 'Sending stopped moving'
+    : job.waiting_turn ? 'Waiting its turn…'
+    : job.status === 'queued' && !job.is_sending ? 'Waiting to start…'
+    : job.mode === 'resend' ? 'Sending new links…' : 'Sending invitations…';
   const subline = finished
     ? `${job.total} candidate${job.total === 1 ? ' was' : 's were'} processed. Review the status and reasons below.`
+    : job.status === 'paused' ? (job.paused_reason || 'Press Resume to carry on.')
     : job.status === 'failed' ? (job.error_message || 'The send stopped with an error.')
     : job.status === 'cancelled' ? `${job.sent} sent before it was stopped. Nothing more goes out.`
-    : `${job.processed} of ${job.total} processed${job.version_label ? ` · ${job.version_label}` : ''}`;
+    : job.waiting_turn ? `Another send is going out first — one send goes out at a time.${timeLeft ? ` Done in ${timeLeft.replace(/ left$/, '')}.` : ''}`
+    : `${job.processed} of ${job.total} processed${timeLeft ? ` · ${timeLeft}` : ''}${job.version_label ? ` · ${job.version_label}` : ''}`;
 
   const stats: { key: Exclude<Tab, 'all'>; label: string; n: number; icon: typeof Send; card: string; iconBox: string }[] = [
     { key: 'sent', label: 'Sent', n: job.sent, icon: Send, card: 'bg-success-subtle/60 border-success-line', iconBox: 'bg-success-subtle text-success' },
@@ -268,10 +321,16 @@ export default function BulkInviteProgressPanel({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center ${
-              active ? 'bg-brand-blue/10 text-brand-blue'
-                : finished ? 'bg-success text-white'
+              job.stalled || job.status === 'paused' ? 'bg-warning-subtle text-warning-strong'
+                : active ? 'bg-brand-blue/10 text-brand-blue'
+                : finished && job.failed === 0 ? 'bg-success text-white'
                 : 'bg-warning-subtle text-warning-strong'}`}>
-              {active ? <Loader2 className="w-4 h-4 animate-spin" /> : finished ? <Check className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+              {job.status === 'paused' ? <Pause className="w-4 h-4" />
+                : job.stalled ? <AlertTriangle className="w-4 h-4" />
+                : job.waiting_turn ? <Hourglass className="w-4 h-4" />
+                : active ? <Loader2 className="w-4 h-4 animate-spin" />
+                : finished && job.failed === 0 ? <Check className="w-4 h-4" />
+                : finished ? <AlertTriangle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
             </span>
             <div className="min-w-0" aria-live="polite">
               <p className="text-base font-semibold leading-tight text-gray-900 dark:text-slate-50">{heading}</p>
@@ -284,8 +343,21 @@ export default function BulkInviteProgressPanel({
                 <Copy className="w-3.5 h-3.5" /> Copy all links
               </button>
             )}
-            {active && (
-              <Button variant="secondary" size="sm" onClick={() => void cancel()} disabled={cancelling} icon={cancelling ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}>
+            {canManage && job.can_resume && (
+              <Button variant="primary" size="sm" onClick={() => void actions.resume(job)} disabled={actions.busy === `resume:${job.job_id}`}
+                icon={actions.busy === `resume:${job.job_id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}>
+                Resume
+              </Button>
+            )}
+            {canManage && againCount > 0 && (
+              <Button variant="secondary" size="sm" onClick={() => void actions.retry(job)} disabled={actions.busy === `retry:${job.job_id}`}
+                icon={actions.busy === `retry:${job.job_id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                title="Send again to every candidate that failed for a reason a retry can fix, and to the ones a cancel stopped">
+                Send again ({againCount})
+              </Button>
+            )}
+            {canManage && active && (
+              <Button variant="secondary" size="sm" onClick={() => actions.askCancel(job)}>
                 Cancel send
               </Button>
             )}
@@ -296,10 +368,18 @@ export default function BulkInviteProgressPanel({
             Still waiting for the background sender to pick this up. Nothing has been sent yet. If this persists, the sender service is not running — ask your administrator to check it; the send will continue from here once it is back.
           </p>
         )}
+        {job.stalled && (
+          <p role="status" className="mt-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2 text-xs text-warning-strong">
+            This send has not moved for a few minutes. We try to restart it on our own{canManage ? ' — or press Resume now' : ''}. Nothing is sent twice.
+          </p>
+        )}
         {active && (
           <p className="mt-2 tf-meta">
-            You can minimize or close this popup — the send carries on in the background; the icon in the bottom-right corner follows it.
+            You can minimize or close this popup — the send carries on in the background; the round icon at the bottom of the page follows it.
           </p>
+        )}
+        {!canManage && (
+          <p className="mt-2 tf-meta">Only the person who sent these invitations (or an admin) can cancel, resume or send them again.</p>
         )}
       </div>
 
@@ -379,6 +459,29 @@ export default function BulkInviteProgressPanel({
         </div>
       </div>
 
+      {showPick && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-1.5">
+          <label className="inline-flex items-center gap-2 text-xs text-gray-700 dark:text-slate-300 cursor-pointer">
+            <input
+              type="checkbox"
+              className="h-4 w-4 accent-[var(--brand-blue,#2563eb)]"
+              checked={allPicked}
+              onChange={() => setPicked(allPicked ? new Set() : new Set(pickable.map((r) => r.id)))}
+            />
+            Select all on this page that can be sent again ({pickable.length})
+          </label>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={picked.size === 0 || actions.busy === `retry:${job.job_id}`}
+            onClick={() => void actions.retry(job, [...picked])}
+            icon={<RotateCcw className="w-3.5 h-3.5" />}
+          >
+            Send again to selected ({picked.size})
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       {/* A whole page shows at once (no scroll box of its own); the popup
           around it scrolls, and a page change brings the table's top back. */}
@@ -386,7 +489,7 @@ export default function BulkInviteProgressPanel({
       <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
         {rows.length > 0 && (
           <li aria-hidden="true" className={`hidden sm:grid ${GRID} gap-3 px-3 py-2 bg-slate-50 dark:bg-slate-800/60 text-xs font-semibold text-gray-700 dark:text-slate-300 sticky top-0 z-[1]`}>
-            <span>#</span>
+            <span>{showPick ? '' : '#'}</span>
             <span>Candidate</span>
             <span>Email</span>
             <span>Status</span>
@@ -411,7 +514,21 @@ export default function BulkInviteProgressPanel({
             : 'text-gray-700 dark:text-slate-300';
           return (
             <li key={r.id} className={`grid grid-cols-1 ${GRID} gap-x-3 gap-y-1.5 px-3 py-2.5 sm:items-center`}>
-              <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
+              {showPick ? (
+                <span className="flex items-center">
+                  {r.can_retry ? (
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${r.name || r.email}`}
+                      className="h-4 w-4 accent-[var(--brand-blue,#2563eb)]"
+                      checked={picked.has(r.id)}
+                      onChange={() => togglePick(r.id)}
+                    />
+                  ) : null}
+                </span>
+              ) : (
+                <span className="hidden sm:block text-sm tabular-nums text-gray-500 dark:text-slate-400">{(page - 1) * pageSize + i + 1}</span>
+              )}
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className={`h-8 w-8 shrink-0 rounded-full inline-flex items-center justify-center text-xs font-bold ${avatar}`} aria-hidden="true">{initials(r)}</span>
                 <span className="min-w-0">
@@ -419,7 +536,14 @@ export default function BulkInviteProgressPanel({
                   <span className="block sm:hidden tf-meta truncate">{r.email || 'No email'}</span>
                 </span>
               </div>
-              <span className="hidden sm:block text-sm text-gray-700 dark:text-slate-300 truncate" title={r.email || undefined}>{r.email || 'No email'}</span>
+              <span className="hidden sm:block min-w-0">
+                <span className="block text-sm text-gray-700 dark:text-slate-300 truncate" title={r.email || undefined}>{r.email || 'No email'}</span>
+                {r.original_email && r.original_email !== r.email && (
+                  <span className="block tf-micro-hint truncate" title={`Changed from ${r.original_email}${r.edited_by_name ? ` by ${r.edited_by_name}` : ''}`}>
+                    Changed from {r.original_email}{r.edited_by_name ? ` by ${r.edited_by_name}` : ''}
+                  </span>
+                )}
+              </span>
               <span>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium ring-1 ${chip.className}`}>
                   {isSent ? <CheckCircle2 className="w-3.5 h-3.5" />
@@ -454,6 +578,33 @@ export default function BulkInviteProgressPanel({
                       </button>
                     )}
                   </>
+                ) : canManage && (r.can_edit || r.can_retry) ? (
+                  <>
+                    {r.can_edit && (
+                      <button
+                        type="button"
+                        onClick={() => openEdit(r)}
+                        aria-label={`Edit and send to ${r.name || r.email || 'this candidate'}`}
+                        className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-xs font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                    )}
+                    {r.can_retry && (
+                      <button
+                        type="button"
+                        onClick={() => void actions.retry(job, [r.id])}
+                        disabled={actions.busy === `retry:${job.job_id}`}
+                        aria-label={`Send again to ${r.name || r.email}`}
+                        title="Send again"
+                        className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10 disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" /> {r.status === 'skipped' ? 'Send' : 'Retry'}
+                      </button>
+                    )}
+                  </>
+                ) : r.status === 'failed' ? (
+                  <span className="tf-meta text-warning-strong" title="Sending again unchanged would fail again — fix the address first">Fix first</span>
                 ) : (
                   <span className="hidden sm:inline tf-meta">—</span>
                 )}
@@ -475,6 +626,35 @@ export default function BulkInviteProgressPanel({
           pageSizeOptions={PAGE_SIZE_OPTIONS}
         />
       </div>
+
+      {actions.cancelDialog}
+
+      <AppModal
+        open={!!editRow}
+        onCancel={() => { if (!savingEdit) setEditRow(null); }}
+        size="sm"
+        title="Edit and send"
+        subtitle="Changes this invitation only — the candidate’s resume stays as it is."
+        zIndexClass="z-[85]"
+        actions={[{ label: 'Save & send', onClick: () => void saveEdit(), loading: savingEdit, disabled: !editForm.email.trim() || !editForm.name.trim() }]}
+      >
+        <div className="space-y-3">
+          {editRow?.reason && <p className="rounded-lg bg-warning-subtle px-3 py-2 text-xs text-warning-strong [overflow-wrap:anywhere]">{editRow.reason}</p>}
+          <label className="block">
+            <span className="tf-label">Name</span>
+            <input className="tf-input mt-1" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} maxLength={255} />
+          </label>
+          <label className="block">
+            <span className="tf-label">Email</span>
+            <input className="tf-input mt-1" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} maxLength={255} />
+          </label>
+          <label className="block">
+            <span className="tf-label">Phone <span className="tf-micro-hint">(optional)</span></span>
+            <input className="tf-input mt-1" value={editForm.phone} onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))} maxLength={50} />
+          </label>
+          {editError && <p role="alert" className="text-xs text-destructive">{editError}</p>}
+        </div>
+      </AppModal>
 
       {trackRow && typeof document !== 'undefined' && createPortal(
         /* Portaled above the invite popup (its open animation's transform

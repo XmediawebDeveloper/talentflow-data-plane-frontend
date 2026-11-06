@@ -27,6 +27,7 @@ import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTIO
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -192,6 +193,7 @@ const listFilterKey = (v: Record<string, unknown>) =>
   JSON.stringify([v.activeTab, v.invitedOnly, v.modeFilter, v.statusFilter, v.searchQuery, v.sortBy, v.creatorFilter, v.dateFilter, v.customDateFrom, v.customDateTo]);
 
 export default function AIInterview() {
+  const resendInBackground = useBackgroundResend('interview');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -2930,23 +2932,12 @@ export default function AIInterview() {
     : inviteStatusRows.filter((inv) =>
         selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at && !isInviteJdDisabled(inv));
 
-  /* A fresh link to each invitation, one at a time — each send emails a
-     candidate, and a failure on one must not stop the rest. Shared by the
-     Invitation Status tab's and the Track popup's bulk Resend. */
-  const resendInvitesInBulk = async (targets: any[]) => {
-    let sent = 0;
-    let failedCount = 0;
-    for (const inv of targets) {
-      try {
-        await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
-        sent++;
-      } catch (error) {
-        console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
-        failedCount++;
-      }
-    }
-    if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+  /* A fresh link to each invitation — as a background send (bulk invite
+     job, mode resend) that carries on when this page closes and shows in
+     the round progress icon. Shared by the Invitation Status tab's and the
+     Track popup's bulk Resend. */
+  const resendInvitesInBulk = async (targets: { id: string }[]) => {
+    await resendInBackground(targets);
   };
 
   const handleStatusBulkResend = async () => {

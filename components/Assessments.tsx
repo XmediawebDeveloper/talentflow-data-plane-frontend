@@ -118,6 +118,7 @@ import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessme
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
+import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
@@ -863,6 +864,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      whichever one did, the job version is read fresh first and a locked one
      shows the message instead of the popup. */
   const { open: openInviteDialog } = useInviteDialog();
+  const resendInBackground = useBackgroundResend('assessment');
   /** Reopen the tracking popup on the assessment / job Invite More left. */
   const reopenTracking = (ret: { assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob }) => {
     setIsLoadingInvitations(true);
@@ -4532,42 +4534,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  /* The resend loop itself, shared by both bulk callers — the Track Invites
-     popup's Bulk Resend and the Invitation Status tab's. Sequential on
-     purpose: a burst of parallel resends is exactly the kind of thing mail
-     rate-limiters punish. Each row is sent against its OWN assessment when it
-     carries one (the tab's rows span assessments), else the popup's pinned
-     one, the same rule handleResendInvitation follows.
-
-     Toasts live here because both callers reported identically; the caller
-     keeps what only it knows — which selection to clear, which dialog to
-     close, which list to refetch. */
-  const resendInvitationsSequentially = async (targets: any[]): Promise<{ sent: number; failedCount: number }> => {
-    let sent = 0;
-    let failedCount = 0;
-    for (const inv of targets) {
-      const assessmentId = inv._assessment_id || selectedAssessmentForTracking?.id;
-      if (!assessmentId) {
-        console.error(`No assessment for invitation ${inv.id}; skipped.`);
-        failedCount++;
-        continue;
-      }
-      try {
-        await api.post(`/assessments/${assessmentId}/invitations/${inv.id}/resend`);
-        sent++;
-      } catch (error) {
-        console.error(`Failed to resend invitation ${inv.id}:`, error);
-        failedCount++;
-      }
-    }
-    if (sent > 0) {
-      toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
-    }
-    if (failedCount > 0) {
-      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
-    }
-    return { sent, failedCount };
-  };
+  /* The bulk resend, shared by both bulk callers — the Track Invites
+     popup's Bulk Resend and the Invitation Status tab's. It runs as a
+     background send (bulk invite job, mode resend, one per assessment
+     version among the rows): it carries on when this page closes, goes out
+     at the account's email pace, and shows in the round progress icon. The
+     caller keeps what only it knows — which selection to clear, which dialog
+     to close, which list to refetch. */
+  const resendInvitationsSequentially = (targets: { id: string }[]): Promise<{ sent: number; failedCount: number }> =>
+    resendInBackground(targets);
 
   /* The revoke loop itself, shared by both bulk callers (Scenario 4's "all
      selected are Invited -> Revoke" case) — same shape as
