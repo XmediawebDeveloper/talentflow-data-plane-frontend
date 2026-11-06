@@ -5121,7 +5121,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdTitle={job.title}
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
-          jdDisabled={job.status === 'Disabled'}
+          jdDisabled={jobInactive}
           /* Footer Invite More — the one Create / Send Assessment popup over
              this tracker. The tracker spans every assessment version of this
              job, so there is no single tracked version to fix: the popup
@@ -5157,7 +5157,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           isOpen={!!trackAIInterviewConfig}
           onClose={() => setTrackAIInterviewConfig(null)}
           configId={trackAIInterviewConfig.id}
-          jdDisabled={job.status === 'Disabled'}
+          jdDisabled={jobInactive}
           configArchived={isInterviewConfigArchived(trackAIInterviewConfig.status)}
           jdTitle={job.title}
           jdShortId={job.job_id}

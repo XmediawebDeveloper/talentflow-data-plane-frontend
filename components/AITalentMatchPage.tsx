@@ -3414,6 +3414,8 @@ export default function AITalentMatchPage({
       // An existing team member's resume: every action is disabled except
       // View Scorecard, same as Resume Database.
       const teamLocked = !!row.best?.isTenantUserEmail;
+      // An archived resume can't be scored either — same lockout the invites use.
+      const archivedLocked = !!row.best?.isArchived;
       return (
       <>
         <DropdownMenuItem
@@ -3436,13 +3438,13 @@ export default function AITalentMatchPage({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
-            disabled={!job.resumeId || teamLocked || (canRunScoring && !!jobLockFor(job.jobId))}
+            className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || archivedLocked || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+            disabled={!job.resumeId || teamLocked || archivedLocked || (canRunScoring && !!jobLockFor(job.jobId))}
             aria-disabled={!canRunScoring || undefined}
-            title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+            title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : archivedLocked ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
             onSelect={(e) => {
-              if (!canRunScoring || teamLocked || jobLockFor(job.jobId)) {
+              if (!canRunScoring || teamLocked || archivedLocked || jobLockFor(job.jobId)) {
                 e.preventDefault();
                 return;
               }
@@ -3609,10 +3611,14 @@ export default function AITalentMatchPage({
       // outright, whatever the permission, with that as the reason — this
       // list has no JobActionLock provider (Job Details' own) around it.
       const selectionJobLock = resolveSelectionJobLock(targets);
-      const assessmentAllowed = canInviteAssessmentFromMatch && !selectionJobLock;
-      const assessmentReason = selectionJobLock ?? ASSESSMENT_INVITE_DENIED;
-      const interviewAllowed = canInviteAIInterviewFromMatch && !selectionJobLock;
-      const interviewReason = selectionJobLock ?? AI_INTERVIEW_INVITE_DENIED;
+      // Any archived resume in the selection blocks scoring and both invites
+      // outright too — same lockout the per-row menus use.
+      const selectionArchivedCount = rows.filter(r => r.isArchived).length;
+      const selectionLock = selectionJobLock ?? (selectionArchivedCount > 0 ? ARCHIVED_ACTION_MESSAGE : null);
+      const assessmentAllowed = canInviteAssessmentFromMatch && !selectionLock;
+      const assessmentReason = selectionLock ?? ASSESSMENT_INVITE_DENIED;
+      const interviewAllowed = canInviteAIInterviewFromMatch && !selectionLock;
+      const interviewReason = selectionLock ?? AI_INTERVIEW_INVITE_DENIED;
       return (
         <StickyBulkBar className="mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
@@ -3648,13 +3654,13 @@ export default function AITalentMatchPage({
                 </DropdownMenuItem>
               ) : (
               <DropdownMenuItem
-                className={`${actionsMenuItemClass} ${!canRunScoring || selectionJobLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                className={`${actionsMenuItemClass} ${!canRunScoring || selectionLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                 aria-disabled={!canRunScoring || undefined}
-                // A Disabled / Archived JD can't be scored against.
-                disabled={canRunScoring && !!selectionJobLock}
-                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionJobLock ?? undefined}
+                // A Disabled / Archived JD, or an archived resume in the selection, can't be scored against.
+                disabled={canRunScoring && !!selectionLock}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionLock ?? undefined}
                 onSelect={(e) => {
-                  if (!canRunScoring || selectionJobLock) {
+                  if (!canRunScoring || selectionLock) {
                     e.preventDefault();
                     return;
                   }
@@ -5553,13 +5559,13 @@ export default function AITalentMatchPage({
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canRunScoring || row.best?.isTenantUserEmail || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
-                                  disabled={!job.resumeId || row.best?.isTenantUserEmail || (canRunScoring && !!jobLockFor(job.jobId))}
+                                  className={`${actionsMenuItemClass} ${!canRunScoring || row.best?.isTenantUserEmail || row.best?.isArchived || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                                  disabled={!job.resumeId || row.best?.isTenantUserEmail || row.best?.isArchived || (canRunScoring && !!jobLockFor(job.jobId))}
                                   aria-disabled={!canRunScoring || undefined}
-                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
                                   onSelect={(e) => {
-                                    if (!canRunScoring || row.best?.isTenantUserEmail || jobLockFor(job.jobId)) {
+                                    if (!canRunScoring || row.best?.isTenantUserEmail || row.best?.isArchived || jobLockFor(job.jobId)) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -6083,6 +6089,8 @@ export default function AITalentMatchPage({
                 // An existing team member's resume: every action is disabled
                 // except View Scorecard, same as Resume Database.
                 const teamLocked = !!c.isTenantUserEmail;
+                // An archived resume can't be scored either.
+                const archivedLocked = !!c.isArchived;
                 return (
                 <div className="inline-flex items-center gap-1.5">
                 <DropdownMenu>
@@ -6118,13 +6126,13 @@ export default function AITalentMatchPage({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
-                        className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
-                        disabled={!c.resumeId || teamLocked || (canRunScoring && !!jobLockFor(item.jobId))}
+                        className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || archivedLocked || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                        disabled={!c.resumeId || teamLocked || archivedLocked || (canRunScoring && !!jobLockFor(item.jobId))}
                         aria-disabled={!canRunScoring || undefined}
-                        title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
+                        title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : archivedLocked ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
                         onSelect={(e) => {
-                          if (!canRunScoring || teamLocked || jobLockFor(item.jobId)) {
+                          if (!canRunScoring || teamLocked || archivedLocked || jobLockFor(item.jobId)) {
                             e.preventDefault();
                             return;
                           }
@@ -8262,7 +8270,11 @@ export default function AITalentMatchPage({
                 // Archived/Disabled → every Create/Send item below goes
                 // disabled with that as the reason, whatever the permission
                 // or the job's existing Assessment/AI Interview setup.
-                const jobLock = resolveSelectionJobLock(target);
+                const jobLockOnly = resolveSelectionJobLock(target);
+                // Any archived resume in the selection blocks scoring and
+                // both invites too — same lockout the per-row menus use.
+                const archivedCount = rows.filter(r => r.isArchived).length;
+                const jobLock = jobLockOnly ?? (archivedCount > 0 ? ARCHIVED_ACTION_MESSAGE : null);
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
                 return (
                   <div className="tf-jobs-actions-line contents">
@@ -8672,13 +8684,13 @@ export default function AITalentMatchPage({
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`${actionsMenuItemClass} ${!canRunScoring || candidate.isTenantUserEmail || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            // A Disabled / Archived JD, or an existing team member's resume, can't be scored against.
-                            disabled={!candidate.resumeId || candidate.isTenantUserEmail || (canRunScoring && !!jobLockFor(selectedJob))}
+                            className={`${actionsMenuItemClass} ${!canRunScoring || candidate.isTenantUserEmail || candidate.isArchived || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                            disabled={!candidate.resumeId || candidate.isTenantUserEmail || candidate.isArchived || (canRunScoring && !!jobLockFor(selectedJob))}
                             aria-disabled={!canRunScoring || undefined}
-                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
+                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : candidate.isArchived ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
                             onSelect={(e) => {
-                              if (!canRunScoring || candidate.isTenantUserEmail || jobLockFor(selectedJob)) {
+                              if (!canRunScoring || candidate.isTenantUserEmail || candidate.isArchived || jobLockFor(selectedJob)) {
                                 e.preventDefault();
                                 return;
                               }
