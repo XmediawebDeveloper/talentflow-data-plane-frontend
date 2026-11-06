@@ -233,6 +233,8 @@ const CSS = `
 @media (max-width: 1279px) { .chs-stage { height: 440px; } .chs-flip { --chs-scale: .92; } }
 @media (max-width: 620px) { .chs-stage { height: 390px; } .chs-flip { --chs-scale: .8; } .chs-chip--call { left: 22px; } .chs-chip--email { right: 18px; } }
 @media (max-width: 400px) { .chs-stage { height: 360px; } .chs-flip { --chs-scale: .72; } }
+/* Phones: straight-on card, flatter depth; "Talk to Sales" chip sits above the card header instead of over it. */
+@media (max-width: 639px) { .chs-stage { perspective: 2600px; } .chs-flip { transform: scale(calc(var(--chs-scale, 1) * .94)) rotateX(3deg) rotateY(-5deg) !important; } .chs-chip--call { left: 4px; top: 36px; } .chs-chip--email { right: 4px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .chs-stage *, .chs-stage *::before { animation: none !important; }

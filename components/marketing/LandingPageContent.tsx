@@ -19,6 +19,7 @@ import { MarketingFaq } from "./MarketingFaq";
 import { FAQ_CATEGORIES } from "./faq/faqData";
 import { MotionNoScript, PRE, RevealGroup, RevealHeading, Typewriter } from "./motion";
 import { PLAN_RAIL, PLAN_RAIL_ITEM, PlanCard, SwipeHint } from "./PlanCard";
+import { SWIPE_ITEM, SWIPE_RAIL, SwipeDots, useSwipeDeck } from "./SwipeDeck";
 import { fetchMarketingPlans, type MarketingPlan } from "./plans";
 import { DASHBOARD_HREF, useSignedIn } from "./session";
 import { ShortlistDemo } from "./ShortlistDemo";
@@ -209,6 +210,7 @@ export function LandingPageContent() {
   );
 
   const visiblePlans = plans.slice(0, VISIBLE_PLANS);
+  const deck = useSwipeDeck(visiblePlans.length);
   const hiddenPlanCount = plans.length - visiblePlans.length;
   const annualSavePercent = plans.reduce(
     (best, plan) => Math.max(best, Math.round(plan.discountPercentage ?? 0)),
@@ -286,7 +288,7 @@ export function LandingPageContent() {
             </RevealGroup>
           </div>
 
-          <div data-parallax className="mx-auto w-full max-w-lg lg:max-w-none">
+          <div data-parallax className="mx-auto hidden w-full max-w-lg lg:block lg:max-w-none">
             <ShortlistDemo />
           </div>
         </div>
@@ -394,14 +396,19 @@ export function LandingPageContent() {
 
           {plans.length > 0 ? (
             <>
-              <RevealGroup className={`mt-7 sm:mt-12 ${PLAN_RAIL} sm:grid-cols-2 xl:grid-cols-4`} stagger={0.1} y={40}>
+              <div ref={deck.wrapRef}>
+              <RevealGroup className={`mt-7 sm:mt-12 ${PLAN_RAIL} sm:grid-cols-2 xl:grid-cols-4 ${SWIPE_RAIL}`} stagger={0.1} y={40}>
                 {visiblePlans.map((plan) => (
-                  <div key={plan.id} data-reveal className={PLAN_RAIL_ITEM}>
-                    <PlanCard plan={plan} isYearly={isYearly} />
+                  <div key={plan.id} data-reveal className={`${PLAN_RAIL_ITEM} ${SWIPE_ITEM}`}>
+                    <div data-swipe-face className="h-full will-change-transform">
+                      <PlanCard plan={plan} isYearly={isYearly} />
+                    </div>
                   </div>
                 ))}
               </RevealGroup>
+              <SwipeDots labels={visiblePlans.map((p) => p.name)} current={deck.current} goTo={deck.goTo} />
               <SwipeHint count={visiblePlans.length} />
+              </div>
               <div className="mt-5 flex flex-col items-start justify-between gap-2 sm:mt-8 sm:gap-3 sm:flex-row sm:items-center">
                 <p className="text-sm text-slate-600 sm:text-[15px] dark:text-slate-400">
                   {hiddenPlanCount > 0

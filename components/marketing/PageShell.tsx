@@ -95,7 +95,7 @@ export function PageHero({
           </RevealGroup>
         </div>
         {/* The aside brings its own entrance (e.g. the 3D dashboard), so no wrapper fade. */}
-        {aside && <div className="lg:pl-4">{aside}</div>}
+        {aside && <div className="order-first lg:order-none lg:pl-4">{aside}</div>}
       </div>
     </section>
   );

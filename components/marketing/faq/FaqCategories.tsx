@@ -77,7 +77,7 @@ export function FaqCategories() {
         aria-label="FAQ categories"
         className="sticky top-14 z-20 -mx-4 border-b border-slate-900/[0.07] bg-mkt-canvas/90 px-4 py-2.5 backdrop-blur-md dark:border-white/[0.08] sm:top-16 sm:-mx-6 sm:px-6 lg:top-28 lg:mx-0 lg:self-start lg:border-0 lg:bg-transparent lg:p-0 lg:backdrop-blur-none"
       >
-        <ul ref={rail} className="relative -my-1 flex gap-2 overflow-x-auto py-1 [scrollbar-width:none] lg:flex-col lg:gap-1 lg:overflow-visible [&::-webkit-scrollbar]:hidden">
+        <ul ref={rail} className="relative -my-1 flex gap-1.5 overflow-x-auto py-1 max-lg:pr-8 max-lg:[mask-image:linear-gradient(to_right,#000_86%,transparent)] lg:gap-2 [scrollbar-width:none] lg:flex-col lg:gap-1 lg:overflow-visible [&::-webkit-scrollbar]:hidden">
           {FAQ_CATEGORIES.map((category) => {
             const Icon = ICONS[category.id];
             const current = category.id === active;
@@ -87,13 +87,13 @@ export function FaqCategories() {
                   href={`#${category.id}`}
                   aria-current={current ? "true" : undefined}
                   onClick={() => setActive(category.id)}
-                  className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid lg:rounded-lg lg:border-transparent lg:px-3 lg:py-2 lg:text-[15px] ${
+                  className={`flex items-center gap-2 whitespace-nowrap rounded-full border px-3 py-1 text-xs font-medium sm:px-3.5 sm:py-1.5 sm:text-[13px] transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid lg:rounded-lg lg:border-transparent lg:px-3 lg:py-2 lg:text-[15px] ${
                     current
                       ? "border-transparent bg-mkt-ink text-mkt-canvas lg:bg-mkt-surface lg:font-semibold lg:text-mkt-ink lg:shadow-sm"
                       : "border-slate-900/10 text-slate-600 hover:border-slate-900/25 hover:text-mkt-ink dark:border-white/15 dark:text-slate-300 lg:hover:bg-slate-900/[0.04] dark:lg:hover:bg-white/[0.05]"
                   }`}
                 >
-                  <Icon aria-hidden="true" className="h-4 w-4 shrink-0" />
+                  <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                   {category.title}
                   <span
                     className={`hidden text-xs tabular-nums lg:ml-auto lg:inline ${
@@ -125,7 +125,7 @@ export function FaqCategories() {
       </nav>
 
       {/* Categories */}
-      <div className="space-y-12 sm:space-y-16">
+      <div className="space-y-9 sm:space-y-16">
         {FAQ_CATEGORIES.map((category) => {
           const Icon = ICONS[category.id];
           const headingId = `${category.id}-heading`;
@@ -138,18 +138,18 @@ export function FaqCategories() {
             >
               <h2
                 id={headingId}
-                className={`${DISPLAY} flex items-center gap-3 text-[clamp(1.25rem,3vw,1.75rem)] font-bold leading-tight tracking-[-0.03em] text-mkt-ink`}
+                className={`${DISPLAY} flex items-center gap-2.5 text-[clamp(1.1rem,3vw,1.75rem)] sm:gap-3 font-bold leading-tight tracking-[-0.03em] text-mkt-ink`}
               >
                 <span
                   aria-hidden="true"
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-mkt-accent/10 text-mkt-accent sm:h-10 sm:w-10"
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mkt-accent/10 text-mkt-accent sm:h-10 sm:w-10"
                 >
-                  <Icon className="h-[18px] w-[18px]" />
+                  <Icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
                 </span>
                 {category.title}
               </h2>
 
-              <RevealGroup stagger={0.07} y={20} className="mt-4 sm:mt-6">
+              <RevealGroup stagger={0.07} y={20} className="mt-3 sm:mt-6">
                 <Accordion.Root
                   type="single"
                   collapsible
@@ -168,22 +168,22 @@ export function FaqCategories() {
                       />
                       {/* Radix renders the header as an h3, under the category h2. */}
                       <Accordion.Header>
-                          <Accordion.Trigger className="group flex w-full items-center justify-between gap-4 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid sm:gap-6 sm:py-6">
+                          <Accordion.Trigger className="group flex w-full items-center justify-between gap-3 py-3.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid sm:gap-6 sm:py-6">
                             <span
                               className={`${DISPLAY} text-sm font-semibold tracking-[-0.01em] text-mkt-ink transition-transform duration-300 ease-out group-hover:translate-x-1 motion-reduce:transition-none sm:text-lg`}
                             >
                               {item.q}
                             </span>
-                            <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border border-slate-900/10 text-slate-500 transition-[background-color,color,border-color,scale] duration-300 ease-out group-hover:scale-105 group-hover:border-slate-900/25 group-hover:text-mkt-ink group-data-[state=open]:border-transparent group-data-[state=open]:bg-mkt-ink group-data-[state=open]:text-mkt-canvas dark:border-white/15 sm:h-8 sm:w-8">
+                            <span className="grid h-6 w-6 shrink-0 sm:h-7 sm:w-7 place-items-center rounded-full border border-slate-900/10 text-slate-500 transition-[background-color,color,border-color,scale] duration-300 ease-out group-hover:scale-105 group-hover:border-slate-900/25 group-hover:text-mkt-ink group-data-[state=open]:border-transparent group-data-[state=open]:bg-mkt-ink group-data-[state=open]:text-mkt-canvas dark:border-white/15 sm:h-8 sm:w-8">
                               <Plus
                                 aria-hidden="true"
-                                className="h-4 w-4 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-data-[state=open]:rotate-[135deg] motion-reduce:transition-none"
+                                className="h-3.5 w-3.5 sm:h-4 sm:w-4 transition-transform duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-data-[state=open]:rotate-[135deg] motion-reduce:transition-none"
                               />
                             </span>
                           </Accordion.Trigger>
                       </Accordion.Header>
                       <Accordion.Content className="overflow-hidden data-[state=closed]:animate-accordion-up data-[state=open]:animate-accordion-down motion-reduce:animate-none">
-                        <p className="max-w-2xl pb-4 pr-9 text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:pb-6 sm:pr-12 sm:text-[15px]">
+                        <p className="max-w-2xl pb-4 pr-8 text-[13px] sm:text-sm leading-relaxed text-slate-600 dark:text-slate-400 sm:pb-6 sm:pr-12 sm:text-[15px]">
                           {item.a}
                         </p>
                       </Accordion.Content>

@@ -234,6 +234,8 @@ const CSS = `
 @media (max-width: 1279px) { .hhs-stage { height: 470px; } .hhs-scene { --hhs-scale: .92; } }
 @media (max-width: 620px) { .hhs-stage { height: 400px; } .hhs-scene { --hhs-scale: .78; } .hhs-chip--scan { left: 18px; } .hhs-chip--short { right: 12px; } .hhs-chip--count { left: 14px; } }
 @media (max-width: 400px) { .hhs-stage { height: 370px; } .hhs-scene { --hhs-scale: .7; } }
+/* Phones: face the scene almost straight on (the desktop side-tilt shifts it left and pushes chips off-screen), flatten depth, keep chips inside. */
+@media (max-width: 639px) { .hhs-stage { perspective: 2600px; } .hhs-scene { transform: scale(calc(var(--hhs-scale, 1) * .94)) rotateX(4deg) rotateY(-5deg) !important; } .hhs-chip--scan, .hhs-chip--count { left: 4px; } .hhs-chip--short { right: 4px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .hhs-stage *, .hhs-stage *::before { animation: none !important; }

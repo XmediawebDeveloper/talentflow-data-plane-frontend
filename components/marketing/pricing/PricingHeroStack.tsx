@@ -286,6 +286,8 @@ const CSS = `
 @media (max-width: 1023px) { .phs-stage { height: 440px; } .phs-stack { --phs-scale: .86; } }
 @media (max-width: 620px) { .phs-stage { height: 360px; } .phs-stack { --phs-scale: .66; } }
 @media (max-width: 400px) { .phs-stage { height: 330px; } .phs-stack { --phs-scale: .6; } }
+/* Phones: straight-on stack so the side cards are not clipped by the narrow column. */
+@media (max-width: 639px) { .phs-stage { perspective: 2400px; } .phs-stack { transform: scale(calc(var(--phs-scale, 1) * .92)) rotateX(3deg) rotateY(-4deg) !important; } }
 
 @media (prefers-reduced-motion: reduce) {
   .phs-layer, .phs-bar > i, .phs-bead { animation: none !important; }
