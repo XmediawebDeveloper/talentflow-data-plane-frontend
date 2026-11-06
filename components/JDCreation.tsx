@@ -2992,8 +2992,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // how the Control Plane ties a JD's LLM calls and tokens to that one JD. Without
   // it every AI generation call was reported with no resource_id at all.
   const reservedJdIdRef = useRef<string | null>(null);
-  const usageJdId = (): string => {
-    if (editingId) return editingId;
+  // The id this mount's new JD will be created under - made the first time ANYONE
+  // needs it (the autosave create or an LLM call), so both always agree.
+  const reserveJdId = (): string => {
     if (!reservedJdIdRef.current) {
       reservedJdIdRef.current = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
         ? crypto.randomUUID()
@@ -3004,13 +3005,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     }
     return reservedJdIdRef.current;
   };
+  const usageJdId = (): string => editingId || reserveJdId();
   // Every create of THIS mount's JD is made under the reserved id. It is kept after a
   // successful create (it is then the row's own id, and editingId takes over), so a
   // generation started while that create was still in flight is tagged with the
   // same id. It is released only when a create fails, so a retry can never be stuck
   // on an id the server may already hold.
+  //
+  // The create RESERVES the id itself when nothing has yet. It used to send only an
+  // id an LLM call had already reserved: when the autosave created the draft before
+  // Generate was clicked, the row got a server-made id, generation then reserved a
+  // different one, and the Control Plane counted one JD as two operations (staging,
+  // tenant 88d2a1b2, JD-1: generation on 763f5c63, the JD and its extraction on
+  // bc4b64f9).
   const createWorkingCopy = async (jdData: JDCreate) => {
-    const pre_generated_id = reservedJdIdRef.current ?? undefined;
+    const pre_generated_id = reserveJdId();
     try {
       return await jdService.create({ ...jdData, as_working_copy: true, pre_generated_id });
     } catch (err) {
