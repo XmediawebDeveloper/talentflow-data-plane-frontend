@@ -3957,6 +3957,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // Caption ticks served by the shared speech clock vs the legacy pacing —
   // logged per turn with the sync stats (saveAiMessage).
   const captionClockTicksRef = useRef(0);
+  // This turn's own audio has started (its first PCM chunk began the speech
+  // clock). Closed when a new turn is announced — the first llm_token or
+  // speaking_started — so nothing of the new text shows before Bina's voice.
+  // Without it, the caption loop read the PREVIOUS turn's finished clock and
+  // revealed the next question as the LLM streamed it, then wiped and retyped
+  // it on llm_correction (staging 2026-11-06, ai-424c44e6 / ai-67486e95).
+  const turnAudioStartedRef = useRef(false);
   const captionLegacyTicksRef = useRef(0);
   const revealTimerRef = useRef<NodeJS.Timeout | null>(null);
   // Main-thread stall telemetry while Bina speaks (staging 2026-11-02: voice
@@ -5171,6 +5178,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // the voice started (bounded by BINA_AUDIBLE_SAFETY_MS). The math below
       // then catches up to the REVEAL_LEAD_MS lead on the very next tick.
       if (!binaAudibleRef.current) return;
+      // And never before THIS turn's audio: binaAudible is only reset at
+      // speaking_started, but the next question's tokens stream in before it.
+      if (!turnAudioStartedRef.current) return;
       const firstPcmAt = firstPcmAtMsRef.current;
       let target = revealedCharsRef.current;
       // Seconds of Bina's voice actually heard so far (negative before she is
@@ -6581,6 +6591,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           lastPcmAtMsRef.current = null;
           currentTurnAudioMsRef.current = 0;
           firstChunkStartCtxSecRef.current = null;
+          turnAudioStartedRef.current = false;
         }
         if (!revealTimerRef.current) {
           startRevealingTokens();
@@ -6740,6 +6751,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         firstPcmAtMsRef.current = null;    // reset first-chunk anchor for this turn
         lastPcmAtMsRef.current = null;     // reset last-chunk anchor for this turn
         firstChunkStartCtxSecRef.current = null; // reset audio-clock anchor for this turn
+        turnAudioStartedRef.current = false;     // caption waits for THIS utterance's audio
         // Reset the playback tracker's per-turn counters. We deliberately
         // DO NOT reset `playbackScheduledEndAtRef` — that's the AudioContext
         // clock position. Each new chunk is scheduled at
@@ -10154,6 +10166,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           // New utterance → fresh speech clock + pause analysis (the re-arm
           // branch below is the SAME utterance and must keep its clock).
           talkingHeadRef.current?.beginSpeech();
+          turnAudioStartedRef.current = true;
           talkingHeadRef.current?.streamStart(24000, cb);
         } else if (talkingHeadEndedEarlyRef.current) {
           // Recovery path: TalkingHead's worklet ended early (buffer drained

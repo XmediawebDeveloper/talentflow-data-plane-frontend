@@ -9,11 +9,12 @@ import FilterSelect from '@/components/ui/filter-select';
 import rbacService from '@/lib/services/rbacService';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { withRequired, withoutOrphanEntryPoints, getAllCatalogCodes } from '@/lib/permissions/permissionRules';
-import { ALWAYS_ON } from '@/lib/permissions/moduleLevels';
+import { ALWAYS_ON, copyBlockedReason } from '@/lib/permissions/moduleLevels';
 import type { Role, RoleListItem } from '@/lib/types/rbac';
 import RoleAccessEditor from './RoleAccessEditor';
 import RoleAccessSummary from './RoleAccessSummary';
 import RoleUserPicker, { type PickedUser } from './RoleUserPicker';
+import RoleMembers from './RoleMembers';
 import { useAuth } from '@/lib/hooks/useAuth';
 
 export type RoleEditorMode = 'new' | 'edit' | 'dup' | 'view';
@@ -62,6 +63,8 @@ export interface RoleEditorModalProps {
   zIndexClass?: string;
   /** The caller shows its own success message (e.g. "Save to assign it"). */
   quietSuccess?: boolean;
+  /** View: people were given this role from the popup; refresh counts. */
+  onPeopleChanged?: () => void;
 }
 
 /**
@@ -70,7 +73,7 @@ export interface RoleEditorModalProps {
  * everyone who has it, so a role with holders asks "Update access for N users?"
  * first, naming them.
  */
-export default function RoleEditorModal({ open, mode, role, roles, onClose, onSaved, onEdit, canEdit = true, onDuplicate, duplicateDisabledReason, zIndexClass, quietSuccess = false }: RoleEditorModalProps) {
+export default function RoleEditorModal({ open, mode, role, roles, onClose, onSaved, onEdit, canEdit = true, onDuplicate, duplicateDisabledReason, zIndexClass, quietSuccess = false, onPeopleChanged }: RoleEditorModalProps) {
   const startCodes = useMemo(() => (role ? roleCodes(role) : new Set<string>(ALWAYS_ON)), [role]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -103,7 +106,6 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
   const nameError = !trimmed ? 'Enter a role name' : duplicateName ? 'A role with this name already exists' : '';
 
   if (mode === 'view' && role) {
-    const people = role.holders ?? [];
     return (
       <AppModal
         open={open}
@@ -112,15 +114,15 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
         icon={<Shield className="h-5 w-5" />}
         title={role.name}
         subtitle={role.is_system ? 'System role · read only' : 'Read only'}
-        closeButton
+        mobileSheet
         zIndexClass={zIndexClass}
         actions={[
           ...(onDuplicate ? [{
             label: 'Duplicate',
             variant: 'secondary' as const,
             onClick: () => onDuplicate(),
-            locked: !!duplicateDisabledReason,
-            title: duplicateDisabledReason,
+            locked: !!(duplicateDisabledReason || copyBlockedReason(role)),
+            title: duplicateDisabledReason || copyBlockedReason(role),
           }] : []),
           ...(!role.is_system ? [{
             label: 'Edit Role',
@@ -131,17 +133,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
         ]}
       >
         <RoleAccessSummary codes={roleCodes(role)} roleName={role.name} description={role.description} eyebrow={role.is_system ? 'System role' : 'Role'} />
-        <div className="mt-5 border-t border-gray-100 pt-4 dark:border-slate-800">
-          <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">People with this role · {role.user_count}</div>
-          {people.length ? (
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-gray-800 dark:text-slate-200">
-              {people.map((p) => <span key={p.id}>{p.name}</span>)}
-              {role.user_count > people.length && <span className="text-gray-500">+{role.user_count - people.length} more</span>}
-            </div>
-          ) : (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-400">Nobody has this role yet.</p>
-          )}
-        </div>
+        <RoleMembers role={role} roleNames={roleNames} onChanged={onPeopleChanged} />
       </AppModal>
     );
   }
@@ -244,7 +236,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                   const src = roles.find((r) => String(r.id) === v);
                   setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
                 }}
-                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
+                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.filter((r) => !copyBlockedReason(r)).map((r) => ({ value: String(r.id), label: r.name }))]}
                 ariaLabel="Copy permissions from"
                 className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-1 sm:py-1 px-3 sm:px-3 rounded-md sm:rounded-md border-input"
               />

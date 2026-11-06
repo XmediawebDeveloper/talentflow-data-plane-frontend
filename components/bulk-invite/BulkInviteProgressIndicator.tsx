@@ -133,7 +133,7 @@ export default function BulkInviteProgressIndicator() {
 
   /* Close (✕ / Esc): back to the icon while something is unfinished; once
      everything has finished the widget goes away and the finished batches
-     are cleared (the toast and the bell still open their results). */
+     are cleared (the finished toast still opens their results). */
   const closeWidget = () => {
     if (hasUnfinished) { setWidget('icon'); return; }
     dismiss(shown.map((j) => j.job_id));

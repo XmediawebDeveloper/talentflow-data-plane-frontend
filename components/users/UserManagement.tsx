@@ -13,7 +13,6 @@ import { ArrowLeft,
   Loader2,
   UserCog,
   Check,
-  Link2,
   AlertCircle,
   Eye,
   Lock,
@@ -33,7 +32,6 @@ import { handleUnauthorized } from '@/lib/services/api';
 import rbacService, { formatRoleName } from '@/lib/services/rbacService';
 import userService from '@/lib/services/userService';
 import { RoleListItem } from '@/lib/types/rbac';
-import DependencyMatrix from './DependencyMatrix';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
@@ -60,6 +58,7 @@ import { useTableSort, sortRows, ariaSort, SortableHeader, ClearSortChip } from 
 import RoleAccessSummary from '@/components/roles/access/RoleAccessSummary';
 import RoleEditorModal, { roleCodes } from '@/components/roles/access/RoleEditorModal';
 import { AccessInline, AccessLegend } from '@/components/roles/access/AccessDots';
+import { copyBlockedReason } from '@/lib/permissions/moduleLevels';
 
 // Access is ROLE-ONLY: a user has exactly one role and everything they can do
 // comes from it. There is no per-user permission editing on this page; to give
@@ -246,6 +245,8 @@ export default function UserManagement() {
   // Users whose Active toggle request is in flight — their switch is locked.
   const [togglingUserIds, setTogglingUserIds] = useState<Set<string>>(() => new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  // The user whose details row (access, created, last login) is open.
+  const [expandedUserId, setExpandedUserId] = useState<string | null>(null);
   // The page always opens on the Total Users list (client request 2026-10-17);
   // clicking a stat card re-filters it. `statusFilter` carries the card that was
   // clicked so the list is pre-filtered.
@@ -294,12 +295,36 @@ export default function UserManagement() {
   const canCreateRole = hasPermissionCode('roles:create');
   const roleLimitReached = availableRoles.length >= roleLimit;
 
-  const [isDependencyMatrixOpen, setIsDependencyMatrixOpen] = useState(false);
 
   // RBAC01: User limits hook
   const { limits, isAtLimit, refresh: refreshLimits } = useUserLimits();
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
+
+  // "Invite a new person" from a role's View popup lands here as
+  // ?invite=1&role=<id>: open Invite User with that role already picked
+  // (same permission / seat checks as the Invite User button). Runs once,
+  // after the seat limits load, then clears the query.
+  const inviteFromLinkHandled = useRef(false);
+  useEffect(() => {
+    if (inviteFromLinkHandled.current || !limits || typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('invite') !== '1') return;
+    inviteFromLinkHandled.current = true;
+    const roleId = Number(params.get('role'));
+    router.replace('/organization/user-management');
+    if (!canCreateUser) {
+      toast.error('You do not have permission to invite users');
+      return;
+    }
+    if (isAtLimit) {
+      if (isTrial) toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+      else setShowAddSeatsModal(true);
+      return;
+    }
+    if (Number.isFinite(roleId) && roleId > 0) setSelectedRoleId(roleId);
+    setIsCreateModalOpen(true);
+  }, [limits, isAtLimit, isTrial, canCreateUser, router]);
 
   // Refresh trigger for SeatQuotaCard
   const [seatQuotaRefreshTrigger, setSeatQuotaRefreshTrigger] = useState(0);
@@ -752,25 +777,60 @@ export default function UserManagement() {
 
   // Created + Last Login as two lines — icon-only in the xl+ table column
   // (the header names them), labelled under the email / on the phone cards.
-  const renderUserDates = (user: (typeof users)[number], labels = true) => (
-    <div className="space-y-0.5 tf-meta">
-      <div className="flex items-center gap-1.5" title="Created">
-        <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
-        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Created</span>}
-        <span className="text-gray-700 dark:text-slate-300">{formatIST(user.created_at)}</span>
+  /** Opened under a user (table row or card): what their role can do, when they
+   *  were added and when they last signed in. One column on phones, three from sm. */
+  const renderUserDetails = (user: (typeof users)[number]) => (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Access (from role)</div>
+        {renderUserAccess(user, 99)}
       </div>
-      {/* Last login reads relative ("2 days ago"); the exact time is on hover. */}
-      <div className="flex items-center gap-1.5" title={user.last_login ? `Last login: ${formatIST(user.last_login)}` : 'Last login'}>
-        <Clock className="w-3.5 h-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
-        {labels && <span className="w-14 shrink-0 text-gray-400 dark:text-slate-500">Last login</span>}
+      <div className="min-w-0">
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Created</div>
+        <div className="flex items-center gap-1.5 text-sm text-gray-700 dark:text-slate-300">
+          <Calendar className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+          {formatIST(user.created_at)}
+        </div>
+      </div>
+      <div className="min-w-0">
+        <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">Last Login</div>
         {user.last_login ? (
-          <span className="text-gray-700 dark:text-slate-300">{relativeTimeFromNow(user.last_login) ?? formatIST(user.last_login)}</span>
+          <div className="text-sm text-gray-700 dark:text-slate-300">
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 shrink-0 text-gray-400 dark:text-slate-500" />
+              {formatIST(user.last_login)}
+            </div>
+            <div className="ml-5 text-xs text-gray-500 dark:text-slate-400">{relativeTimeFromNow(user.last_login) ?? ''}</div>
+          </div>
         ) : (
-          <span className="italic text-gray-400 dark:text-slate-500">Not logged in yet</span>
+          <div className="flex items-center gap-1.5 text-sm italic text-gray-400 dark:text-slate-500">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
+            Not logged in yet
+          </div>
         )}
       </div>
     </div>
   );
+
+  /** Role pill; a system (built-in) role shows a lock — it can't be edited. */
+  const renderRoleBadge = (user: (typeof users)[number], sizeClass: string) => {
+    const label = getRoleLabel(user.role, availableRoles);
+    const isSystem = !!roleOfUser(user)?.is_system;
+    return (
+      <span
+        title={isSystem ? `${label} · System role (can't be edited)` : label}
+        className={`inline-flex items-center gap-1 align-middle font-semibold rounded-full ring-1 ring-inset ring-black/5 ${sizeClass} ${getRoleBadgeColor(user.role, availableRoles)}`}
+      >
+        {isSystem && <Lock className="h-3 w-3 shrink-0" aria-label="System role" />}
+        <span className="min-w-0 truncate">{label}</span>
+      </span>
+    );
+  };
+
+  const toggleUserDetails = (id: string) => setExpandedUserId((cur) => (cur === id ? null : id));
+  // A click on the row opens its details, except on its own buttons / toggles / links.
+  const isRowControl = (target: EventTarget | null) =>
+    target instanceof Element && !!target.closest('button, a, input, select, textarea, label, [role="switch"], [role="checkbox"], [role="menu"], [role="menuitem"]');
 
   // Click-to-copy for emails and user IDs.
   const copyText = async (text: string, what: string) => {
@@ -1465,7 +1525,7 @@ export default function UserManagement() {
     const role = roleOfUser(user);
     if (role) return <AccessInline codes={codesOfRole(role)} max={max} />;
     if ((user.role || '').toLowerCase() === 'tenant_admin') {
-      return <span className="text-xs text-gray-500 dark:text-slate-400">Full access (account owner)</span>;
+      return <span className="text-xs text-gray-500 dark:text-slate-400">Access to everything (account owner)</span>;
     }
     if (!rolesLoaded) return <Skeleton className="h-4 w-32" />;
     return <span className="tf-hint">—</span>;
@@ -1501,7 +1561,7 @@ export default function UserManagement() {
         ? `Role limit reached (${roleLimit}). Delete an unused role first.`
         : !role
           ? 'Choose a role first'
-          : '';
+          : copyBlockedReason(role) ?? '';
     return (
       <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[280px_minmax(0,1fr)] md:gap-7">
         <div className="min-w-0 space-y-4">
@@ -1591,17 +1651,6 @@ export default function UserManagement() {
         description={<span className="hidden sm:inline">Add people and give each one a role. What a person can do comes only from their role.</span>}
         actions={
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            {/* RBAC07: Dependency Matrix button */}
-            <Button
-              variant="secondary"
-              onClick={() => setIsDependencyMatrixOpen(true)}
-              icon={<Link2 className="w-4 h-4" />}
-              aria-label="View Feature Dependencies" title="View Feature Dependencies"
-              className="max-sm:h-8 max-sm:gap-0 max-sm:px-2"
-            >
-              {/* Icon-only on phones so it sits beside Invite User on one row */}
-              <span className="hidden sm:inline">Dependencies</span>
-            </Button>
             {/* RBAC01: Check user limits before showing Add User button — also
                 requires users:create (greyed with a hover tooltip, never hidden). */}
             <Button
@@ -1793,10 +1842,7 @@ export default function UserManagement() {
       <div className="tf-card tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
-             Role, Permissions, Status, Created / Last Login, Actions.
-             Column count per breakpoint mirrors the real <thead> below: User ID
-             hides below 2xl, Permissions below lg, Created / Last Login below xl
-             (both shown under the user's name instead); below lg, cards. */
+             Role, Status, Actions (access and dates open under a row); below lg, cards. */
           <>
           <div className="tf-grid-2 overflow-hidden rounded-xl p-3 lg:hidden">
             {Array.from({ length: 4 }).map((_, i) => (
@@ -1820,19 +1866,17 @@ export default function UserManagement() {
             ))}
           </div>
           <div className="hidden lg:block tf-table-shell">
-            <div className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
-              <div className="hidden 2xl:block"><Skeleton className="h-3 w-16" /></div>
+            <div className="grid grid-cols-5 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              <Skeleton className="h-3 w-16" />
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-3 w-12" />
-              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-14" />
-              <div className="hidden xl:block"><Skeleton className="h-3 w-24" /></div>
               <Skeleton className="h-3 w-16" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 8 }).map((_, r) => (
-                <div key={r} className="grid grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 items-center gap-4 px-6 py-4">
-                  <div className="hidden 2xl:block"><Skeleton className="h-5 w-16 rounded" /></div>
+                <div key={r} className="grid grid-cols-5 items-center gap-4 px-6 py-4">
+                  <Skeleton className="h-5 w-16 rounded" />
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                     <div className="space-y-1.5">
@@ -1841,14 +1885,7 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <Skeleton className="h-5 w-16 rounded-full" />
-                  <div className="hidden lg:block">
-                    <div className="flex flex-wrap gap-1">
-                      <Skeleton className="h-5 w-14 rounded" />
-                      <Skeleton className="h-5 w-10 rounded" />
-                    </div>
-                  </div>
                   <Skeleton className="h-5 w-14 rounded-full" />
-                  <div className="hidden xl:block space-y-1.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-3 w-28" /></div>
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-8 w-8 rounded-lg" />
@@ -1865,23 +1902,17 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="tf-th-cell text-left tf-th hidden 2xl:table-cell" aria-sort={ariaSort(userSort, 'id')}>
+                  <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(userSort, 'id')}>
                     <SortableHeader label="User ID" column="id" sort={userSortWithReset} />
                   </th>
                   <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'user')}>
-                    <SortableHeader label="User" column="user" sort={userSortWithReset} />
+                    <SortableHeader label="User" column="user" sort={userSortWithReset} className="ml-12" />
                   </th>
                   <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'role')}>
-                    <SortableHeader label="Role" column="role" sort={userSortWithReset} />
+                    <SortableHeader label="Role" column="role" sort={userSortWithReset} className="ml-3" />
                   </th>
-                  <th className="tf-th-cell text-left tf-th hidden lg:table-cell">
-                    Access (from role)
-                  </th>
-                  <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(userSort, 'status')}>
+                  <th className="tf-th-cell text-center tf-th" aria-sort={ariaSort(userSort, 'status')}>
                     <SortableHeader label="Status" column="status" sort={userSortWithReset} />
-                  </th>
-                  <th className="tf-th-cell text-left tf-th hidden xl:table-cell" aria-sort={ariaSort(userSort, 'created')}>
-                    <SortableHeader label="Created / Last Login" column="created" sort={userSortWithReset} />
                   </th>
                   <th className="tf-th-cell text-center tf-th tf-sticky-col">
                     Actions
@@ -1889,9 +1920,31 @@ export default function UserManagement() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
-                {paginatedUsers.map((user) => (
-                  <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
-                    <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 hidden 2xl:table-cell ${user.is_active ? '' : 'opacity-60'}`}>
+                {paginatedUsers.map((user) => {
+                  const open = expandedUserId === user.id;
+                  return (
+                  <React.Fragment key={user.id}>
+                  <tr
+                    onClick={(e) => { if (!isRowControl(e.target)) toggleUserDetails(user.id); }}
+                    // Same tints globals.css repaints on the pinned Actions cell
+                    // (hover: #fafbfc; open = selected: brand 8%, 12% on hover),
+                    // so the whole row reads as one colour.
+                    data-row-selected={open || undefined}
+                    className={`cursor-pointer transition-colors ${open ? 'bg-brand-blue/[0.08] hover:bg-brand-blue/[0.12]' : 'hover:bg-[#fafbfc] dark:hover:bg-brand-blue/5'}`}
+                  >
+                    <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
+                      <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleUserDetails(user.id)}
+                        aria-expanded={open}
+                        aria-controls={`user-details-${user.id}`}
+                        aria-label={open ? 'Hide details' : 'Show details'}
+                        title={open ? 'Hide details' : 'Show access, created and last login'}
+                        className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/10 hover:text-brand-blue"
+                      >
+                        <ChevronRight className={`h-4 w-4 transition-transform ${open ? 'rotate-90 text-brand-blue' : ''}`} />
+                      </button>
                       {user.user_display_id ? (
                         <button
                           type="button"
@@ -1904,12 +1957,13 @@ export default function UserManagement() {
                       ) : (
                         <span className="tf-hint">—</span>
                       )}
+                      </div>
                     </td>
                     <td className="tf-td">
                       {/* Inactive users read faded (identity only — toggle/actions stay full strength). */}
                       <div className={`flex items-center gap-2 sm:gap-3 ${user.is_active ? '' : 'opacity-60'}`}>
                         <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="md" />
-                        <div className="min-w-0 max-w-[180px] lg:max-w-[220px] 2xl:max-w-[260px]">
+                        <div className="min-w-0 max-w-[220px] xl:max-w-[320px] 2xl:max-w-[400px]">
                           <div className="flex min-w-0 items-center gap-1.5">
                             <span className="truncate tf-row-title" title={user.name || user.email || undefined}>{user.name || user.email || 'Unknown'}</span>
                             {renderYouTag(user)}
@@ -1925,49 +1979,37 @@ export default function UserManagement() {
                               <span className="truncate">{user.email}</span>
                             </button>
                           )}
-                          {/* User ID / dates columns are hidden on narrower screens — show them here. */}
-                          {user.user_display_id && (
-                            <button
-                              type="button"
-                              onClick={() => copyText(user.user_display_id!, 'User ID')}
-                              title="Copy User ID"
-                              className="2xl:hidden mt-1 inline-block px-1.5 py-0.5 text-2xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/10"
-                            >
-                              {user.user_display_id}
-                            </button>
-                          )}
-                          <div className="mt-1 xl:hidden">{renderUserDates(user)}</div>
                         </div>
                       </div>
                     </td>
                     <td className={`px-3 xl:px-4 2xl:px-5 py-2.5 lg:py-3 ${user.is_active ? '' : 'opacity-60'}`}>
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`inline-block max-w-[120px] lg:max-w-[160px] truncate align-middle px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.675rem] font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
-                        {getRoleLabel(user.role, availableRoles)}
-                      </span>
-                    </td>
-                    <td className="tf-td tf-wrap hidden lg:table-cell">
-                      {/* What the user's role can do — read only; the eye action shows it all. */}
-                      <div className={`max-w-[220px] xl:max-w-[260px] 2xl:max-w-sm ${user.is_active ? '' : 'opacity-60'}`}>
-                        {renderUserAccess(user, 2)}
-                      </div>
+                      {renderRoleBadge(user, 'max-w-[140px] lg:max-w-[180px] px-2 sm:px-2.5 py-0.5 sm:py-1 text-[0.675rem]')}
                     </td>
                     <td className="tf-td">
                       {renderUserStatus(user, true)}
-                    </td>
-                    <td className="tf-td hidden xl:table-cell">
-                      {renderUserDates(user, false)}
                     </td>
                     <td className="tf-td tf-sticky-col">
                       {renderUserActions(user)}
                     </td>
                   </tr>
-                ))}
+                  {open && (
+                    <tr id={`user-details-${user.id}`} className="bg-slate-50/70 dark:bg-slate-800/40">
+                      <td colSpan={5} className={`py-4 pl-10 pr-6 xl:pl-14 ${user.is_active ? '' : 'opacity-80'}`}>
+                        <div className="border-l-2 border-brand-blue/25 pl-5">
+                          {renderUserDetails(user)}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
+                  );
+                })}
                 {/* Empty result: the message fills the shell's reserved height
                     (TABLE_EMPTY_PANEL_CLASS) instead of sitting below a blank
-                    400px box. colSpan covers the widest (2xl) column set. */}
+                    400px box. colSpan covers every column. */}
                 {filteredUsers.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="p-0">
+                    <td colSpan={5} className="p-0">
                       <div className={TABLE_EMPTY_PANEL_CLASS}>
                         <EmptyState
                           icon={UserCog}
@@ -2018,9 +2060,7 @@ export default function UserManagement() {
                   badges={
                     <>
                       {renderYouTag(user)}
-                      <span title={getRoleLabel(user.role, availableRoles)} className={`min-w-0 truncate px-2 py-0.5 text-2xs font-semibold rounded-full ring-1 ring-inset ring-black/5 sm:px-2.5 sm:py-1 sm:text-xs ${getRoleBadgeColor(user.role, availableRoles)} ${fade}`}>
-                        {getRoleLabel(user.role, availableRoles)}
-                      </span>
+                      {renderRoleBadge(user, `min-w-0 px-2 py-0.5 text-2xs sm:px-2.5 sm:py-1 sm:text-xs ${fade}`)}
                     </>
                   }
                   meta={[
@@ -2046,9 +2086,22 @@ export default function UserManagement() {
                     </>
                   }
                 >
-                  {/* Access from the role (read only), then dates (icons, no labels) */}
-                  <div className={`mt-2 ${fade}`}>{renderUserAccess(user, 2)}</div>
-                  <div className={`mt-2 ${fade}`}>{renderUserDates(user, false)}</div>
+                  {/* Access, created and last login open on demand, same as the table row. */}
+                  <button
+                    type="button"
+                    onClick={() => toggleUserDetails(user.id)}
+                    aria-expanded={expandedUserId === user.id}
+                    aria-controls={`user-card-details-${user.id}`}
+                    className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-[13px] font-medium text-brand-blue hover:underline dark:text-blue-300"
+                  >
+                    <ChevronRight className={`h-4 w-4 transition-transform ${expandedUserId === user.id ? 'rotate-90' : ''}`} />
+                    {expandedUserId === user.id ? 'Hide details' : 'Show details'}
+                  </button>
+                  {expandedUserId === user.id && (
+                    <div id={`user-card-details-${user.id}`} className={`mt-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800/50 ${fade}`}>
+                      {renderUserDetails(user)}
+                    </div>
+                  )}
                 </MobileRecordCard>
               );
             })}
@@ -2364,11 +2417,6 @@ export default function UserManagement() {
         </AppModal>
       )}
 
-      {/* RBAC07: Dependency Matrix Modal */}
-      <DependencyMatrix
-        isOpen={isDependencyMatrixOpen}
-        onClose={() => setIsDependencyMatrixOpen(false)}
-      />
 
       {/* Add Seats Modal - opens when user limit is exhausted */}
       <AddSeatsModal

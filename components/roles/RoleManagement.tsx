@@ -11,7 +11,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
-import { accessCounts, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
+import { accessCounts, copyBlockedReason, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
 import type { AuditLogEntry, RoleListItem } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -475,7 +475,7 @@ export default function RoleManagement() {
                           <CardAction
                             label={`Duplicate ${role.name}`}
                             icon={<Copy />}
-                            disabledReason={duplicateReason()}
+                            disabledReason={duplicateReason() || copyBlockedReason(role)}
                             onClick={() => setEditor({ mode: 'dup', role })}
                           />
                           <CardAction
@@ -513,7 +513,6 @@ export default function RoleManagement() {
                         <span className="truncate">{n ? plural(n, 'user') : 'No users yet'}</span>
                         <span className="ml-auto flex shrink-0 gap-3">
                           <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{counts.full} {LEVEL_NAMES.full}</span>
-                          <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />{counts.view} {LEVEL_NAMES.view}</span>
                         </span>
                       </div>
                     </article>
@@ -627,6 +626,7 @@ export default function RoleManagement() {
           setEditor(null);
           loadData();
         }}
+        onPeopleChanged={() => loadData()}
       />
 
       <AppModal

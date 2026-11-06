@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2 } from 'lucide-react';
 import type { InviteStatusKind } from '@/components/ui/invite-status-chip';
 import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
@@ -74,7 +74,7 @@ interface AIInterviewTrackInvitesModalProps {
   /** Opens a completed candidate's result. When the host can render the result
    *  inline (Job Details does), pass this; the table only offers View Details
    *  on completed rows when it is present. */
-  onViewResult?: (inv: any) => void;
+  onViewResult?: (inv: any, rows: any[]) => void;
   /** Renders as a plain in-page panel instead of a fixed, backdropped dialog —
    *  the AI Interview Details page's Track tab, which is this same tracker
    *  living at a destination rather than a popup over one. Drops the backdrop,
@@ -120,6 +120,11 @@ interface AIInterviewTrackInvitesModalProps {
    *  states, a red Revoked card and swipeable cards on phones. Default: on in
    *  the popup, off embedded. */
   guided?: boolean;
+  /** Track on a whole JOB: every interview of it (the AI Interviews page's job
+   *  row), each with its job and interview version. The rows of all of them
+   *  are merged newest first, each saying its own versions, and the cards add
+   *  up across them. `configId` is then any one of them. */
+  scope?: { configId: string; jobVersion: number; interviewVersion: number }[];
 }
 
 const PAGE_SIZE = 10;
@@ -171,7 +176,12 @@ export default function AIInterviewTrackInvitesModal({
   pageSize = embedded ? PAGE_SIZE : POPUP_PAGE_SIZE,
   paginationBelowTable = !embedded,
   guided = !embedded,
+  scope,
 }: AIInterviewTrackInvitesModalProps) {
+  /* Keyed on its contents: the host builds the array on every render. */
+  const scopeKey = (scope ?? []).map((entry) => `${entry.configId}:${entry.jobVersion}:${entry.interviewVersion}`).join('|');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const jobScope = useMemo(() => (scope && scope.length > 0 ? scope : null), [scopeKey]);
   const [isLoading, setIsLoading] = useState(true);
 
   const [lookedUpJdDisabled, setLookedUpJdDisabled] = useState(false);
@@ -197,7 +207,7 @@ export default function AIInterviewTrackInvitesModal({
      interview version is this config's place among its job version's
      configs, which only the full list can say. */
   const [lookedUpVersions, setLookedUpVersions] = useState<{ job: number; interview: number } | null>(null);
-  const needsVersionLookup = (!hideVersionDetails || hideJobVersionFilter) && (jobVersionProp == null || interviewVersionProp == null);
+  const needsVersionLookup = !jobScope && (!hideVersionDetails || hideJobVersionFilter) && (jobVersionProp == null || interviewVersionProp == null);
   useEffect(() => {
     if (!isOpen || !needsVersionLookup) return;
     let cancelled = false;
@@ -213,8 +223,9 @@ export default function AIInterviewTrackInvitesModal({
       .catch(() => { /* The columns simply stay hidden. */ });
     return () => { cancelled = true; };
   }, [isOpen, needsVersionLookup, configId]);
-  const jobVersion = hideVersionDetails ? undefined : (jobVersionProp ?? lookedUpVersions?.job);
-  const interviewVersion = hideVersionDetails ? undefined : (interviewVersionProp ?? lookedUpVersions?.interview);
+  // A whole job: each row says its own versions instead.
+  const jobVersion = hideVersionDetails || jobScope ? undefined : (jobVersionProp ?? lookedUpVersions?.job);
+  const interviewVersion = hideVersionDetails || jobScope ? undefined : (interviewVersionProp ?? lookedUpVersions?.interview);
   // The header names the version when the table has no version columns to.
   const headerJobVersion = jobVersionProp ?? lookedUpVersions?.job;
   const headerInterviewVersion = interviewVersionProp ?? lookedUpVersions?.interview;
@@ -365,6 +376,58 @@ export default function AIInterviewTrackInvitesModal({
     const isStale = () => seq !== loadSeqRef.current;
     if (!silent) setIsLoading(true);
     try {
+      /* A whole job: each interview's matching rows (narrowed to the chosen job
+         / interview version), stamped with their versions, merged newest-sent
+         first, then filtered and paged here. The cards add up every interview
+         in ONE request (GET /ai-interview/invitation-overview). */
+      if (jobScope) {
+        const targets = jobScope.filter((entry) =>
+          (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter)
+          && (!versionFilter || String(entry.interviewVersion) === versionFilter));
+        const [lists, counts] = await Promise.all([
+          Promise.all(targets.map((entry) =>
+            aiInterviewService.getConfigInvitations(entry.configId, {
+              search: filters.search.trim() || undefined,
+              status: filters.status !== 'all' ? filters.status : undefined,
+              invite_date_from: filters.dateFrom || undefined,
+              invite_date_to: filters.dateTo || undefined,
+              page: 1,
+              page_size: 1000,
+            }).then((res) => (res.items || []).map((inv: any) => ({
+              ...inv,
+              _config_id: entry.configId,
+              _jd_version: entry.jobVersion,
+              _interview_version: entry.interviewVersion,
+            }))))),
+          aiInterviewService.getInvitationOverview(jobScope.map((entry) => entry.configId)),
+        ]);
+        if (isStale()) return;
+        const sentAt = (inv: any) => new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+        const matching = lists.flat()
+          .filter((inv: any) =>
+            (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter))
+          .sort((a: any, b: any) => sentAt(b) - sentAt(a));
+        const pages = Math.max(1, Math.ceil(matching.length / pageSize));
+        const safePage = Math.min(page, pages);
+        setInvitations(matching.slice((safePage - 1) * pageSize, safePage * pageSize));
+        setFilteredTotal(matching.length);
+        setTotalPages(pages);
+        if (safePage !== page) setPage(safePage);
+        const rows = jobScope.map((entry) => counts[entry.configId]).filter(Boolean);
+        const sum = (pick: (o: (typeof rows)[number]) => number | undefined) => rows.reduce((acc, o) => acc + (pick(o) || 0), 0);
+        setOverview({
+          total: sum((o) => o.total),
+          invited: sum((o) => o.invited),
+          completed: sum((o) => o.completed),
+          inProgress: sum((o) => o.in_progress),
+          terminated: sum((o) => o.terminated),
+          cancelled: sum((o) => o.cancelled),
+          revoked: sum((o) => o.revoked),
+          expired: sum((o) => o.expired),
+        });
+        setLoadedAt(Date.now());
+        return;
+      }
       /* Four page_size-1-or-N calls in parallel: the filtered page itself, the
          unfiltered overview, and the invited and revoked buckets. The list
          endpoint reports completed/in_progress/terminated/cancelled but not
@@ -429,7 +492,7 @@ export default function AIInterviewTrackInvitesModal({
       // A stale run leaves the spinner to the run that replaced it.
       if (!isStale()) setIsLoading(false);
     }
-  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
+  }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter]);
 
   /* Header Refresh — re-reads in place: the rows stay put under a veil and the
      dialog's height is pinned until the new data lands, so nothing jumps. */
@@ -531,9 +594,14 @@ export default function AIInterviewTrackInvitesModal({
                 <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
+                  {jobScope && (
+                    <span className="text-gray-400 dark:text-slate-600 whitespace-nowrap">
+                      - all job versions ({jobScope.length} interview{jobScope.length === 1 ? '' : 's'})
+                    </span>
+                  )}
                   {/* "Job title - V1   Interview Version - V1", as the AI
                       Interviews tracker heads a single version. */}
-                  {hideJobVersionFilter && headerJobVersion != null && headerJobVersion > 0 && (
+                  {!jobScope && hideJobVersionFilter && headerJobVersion != null && headerJobVersion > 0 && (
                     <span className="-ml-0.5 flex items-center gap-3 flex-shrink-0 whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5">
                         -
@@ -567,17 +635,7 @@ export default function AIInterviewTrackInvitesModal({
                 {isRefreshing ? 'Refreshing...' : 'Refresh'}
               </span>
             </Button>
-            {!embedded && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={onClose}
-               
-                aria-label="Close"
-              >
-                <X className="w-4 h-4 sm:w-5 sm:h-5" />
-              </Button>
-            )}
+            {/* No ✕: the footer's Cancel is the one close control. */}
           </div>
         </div>
 
@@ -635,13 +693,17 @@ export default function AIInterviewTrackInvitesModal({
           extraSelects={[
             ...(hideVersionDetails ? [] : [...(hideJobVersionFilter ? [] : [{
               key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: jobVersionFilter,
-              options: jobVersion != null ? [{ value: String(jobVersion), label: `Job V${jobVersion}` }] : [],
-              onChange: setJobVersionFilter,
+              options: jobScope
+                ? [...new Set(jobScope.map((entry) => entry.jobVersion))].sort((a, b) => a - b).map((v) => ({ value: String(v), label: `Job V${v}` }))
+                : jobVersion != null ? [{ value: String(jobVersion), label: `Job V${jobVersion}` }] : [],
+              onChange: (value: string) => { setJobVersionFilter(value); setPage(1); },
             }]),
             {
               key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: versionFilter,
-              options: interviewVersion != null ? [{ value: String(interviewVersion), label: `Interview V${interviewVersion}` }] : [],
-              onChange: setVersionFilter,
+              options: jobScope
+                ? [...new Set(jobScope.map((entry) => entry.interviewVersion))].sort((a, b) => a - b).map((v) => ({ value: String(v), label: `Interview V${v}` }))
+                : interviewVersion != null ? [{ value: String(interviewVersion), label: `Interview V${interviewVersion}` }] : [],
+              onChange: (value: string) => { setVersionFilter(value); setPage(1); },
             }]),
             {
               key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: sourceFilter,
@@ -746,6 +808,7 @@ export default function AIInterviewTrackInvitesModal({
             ) : undefined) : undefined}
             jobVersion={jobVersion}
             interviewVersion={interviewVersion}
+            showRowVersions={!!jobScope}
             onResend={(inv) => setResendTarget(inv)}
             resendingId={resendingId}
             onEdit={(inv) => {
@@ -754,7 +817,8 @@ export default function AIInterviewTrackInvitesModal({
             }}
             onRevoke={(inv) => setRevokeTarget(inv)}
             revokingId={revokingId}
-            onViewDetails={onViewResult}
+            /* The rows on screen too, for the result page's Previous / Next. */
+            onViewDetails={onViewResult ? (inv) => onViewResult(inv, invitations) : undefined}
             selectedIds={(jdDisabled || configArchived) ? undefined : selectedIds}
             onToggleSelect={(jdDisabled || configArchived) ? undefined : toggleSelectOne}
             isSelectable={isBulkActionable}

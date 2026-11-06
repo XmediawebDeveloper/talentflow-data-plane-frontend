@@ -249,11 +249,13 @@ export default function ResumeViewPage() {
   const params = useParams();
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const { isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  const { isTenantAdmin, hasPermission, hasPermissionCode, user } = useAuth();
   const { isPlanLocked } = usePlanLock();
   const resumeId = params.id as string;
 
   const [resume, setResume] = useState<Resume | null>(null);
+  // Who uploaded it (user id): decides My Resumes vs Shared Database rules when opened from AI Talent Match.
+  const [uploaderId, setUploaderId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -436,13 +438,20 @@ export default function ResumeViewPage() {
   // opened from Internal Database must be gated by internal_db:* codes, not
   // my_resumes:* — otherwise disabling Internal Database's own Delete/Share
   // has no effect as long as My Resumes' Delete/Share stays enabled.
+  // Opened from AI Talent Match (user decision 2026-11-06): Score / Invite use
+  // AI Talent Match's own permissions; Share / Delete are not AI Talent Match
+  // actions, so they follow My Resumes for the user's own upload and the
+  // Shared Database for anyone else's (without Shared Database: not allowed).
+  const fromAiMatch = viewSource === 'ai-talent-match';
+  const sharedPool = viewSource === 'resume-database'
+    || (fromAiMatch && !!uploaderId && uploaderId !== String(user?.id ?? ''));
   const canShareResume = !isTenantUserEmailResume && (isTenantAdmin || (
-    viewSource === 'resume-database'
+    sharedPool
       ? hasPermissionCode('internal_db:share')
       : hasPermissionCode('my_resumes:share')
   ));
   const canDeleteResume = !isTenantUserEmailResume && (isTenantAdmin || (
-    viewSource === 'resume-database'
+    sharedPool
       ? hasPermissionCode('internal_db:delete')
       : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
   ));
@@ -485,7 +494,7 @@ export default function ResumeViewPage() {
     !contextJobLock &&
     (isTenantAdmin ||
     (hasPermission('canRunScoring') &&
-      hasPermissionCode(viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score')));
+      hasPermissionCode(fromAiMatch ? 'ai_match:score' : viewSource === 'resume-database' ? 'internal_db:score' : 'my_resumes:score')));
   const applyPlanLocked = isPlanLocked('resume_scoring');
   const hasAITalentMatchSourcePermission =
     viewSource === 'resume-database'
@@ -508,7 +517,7 @@ export default function ResumeViewPage() {
     !contextJobLock &&
     (isTenantAdmin || (
       hasPermission('canCreateAssessments') && hasPermissionCode(
-        viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
+        fromAiMatch ? 'ai_match:invite_assessment' : viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
       )
     ));
   // "Invite to AI Interview" is its own permission per resume source (My
@@ -523,7 +532,9 @@ export default function ResumeViewPage() {
         ? hasPermissionCode('internal_db:invite_ai_interview')
         : viewSource === 'my-resumes'
           ? hasPermissionCode('my_resumes:invite_ai_interview')
-          : true)));
+          : fromAiMatch
+            ? hasPermissionCode('ai_match:invite_ai_interview')
+            : true)));
   const assessmentPlanLocked = isPlanLocked('assessment');
   const aiInterviewPlanLocked = isPlanLocked('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
@@ -767,6 +778,7 @@ export default function ResumeViewPage() {
 
       const converted = convertApiResume(r, versionsWithFullData);
       setResume(converted);
+      setUploaderId(r.uploaded_by ? String(r.uploaded_by) : null);
     } catch (err: any) {
       console.error('Failed to fetch resume:', err);
       setError(err?.message || 'Failed to load resume');

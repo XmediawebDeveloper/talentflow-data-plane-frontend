@@ -7,7 +7,7 @@ import { useBreadcrumbOffset } from '@/components/ai-interview/AIInterviewStepIn
 
 /**
  * Persistent frame for the organization tab groups:
- *   User Management — Users, Usage History, Roles & Permissions
+ *   User Management — Users, Roles & Permissions, Usage History
  *   Teams           — Teams, Chat (opened from the dashboard's Teams tile)
  *
  * The page card, breadcrumb, tab bar and the grey tab panel live HERE, so they

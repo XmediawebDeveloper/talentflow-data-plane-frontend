@@ -145,14 +145,13 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:invite_assessment', label: 'Invite to Assessment' },
       { code: 'ai_match:invite_ai_interview', label: 'Invite to AI Interview' },
     ],
-    // Rule: Run AI Match requires both Job Description and Shared Database
-    // access (app/services/permission_dependencies.py: ai_match:run ->
-    // internal_db:read, jd:read) — matching a candidate against a JD needs
-    // both sides of the match. Previously undeclared here, so disabling Job
-    // Description or Shared Database gave no warning that it breaks AI
-    // Talent Match too.
+    // Rule: Run AI Match requires Job Description access only
+    // (app/services/permission_dependencies.py). User decision 2026-11-06: it
+    // no longer needs the Shared Database — a match always searches it, but
+    // without Shared Database access the user only sees the resumes a match
+    // found, inside AI Talent Match (backend ai_match_resume_access.py).
     dependencies: {
-      'ai_match:run': ['internal_db:read', 'jd:read'],
+      'ai_match:run': ['jd:read'],
       // 2026-10-20: the whole module needs JD access (see scoring:read).
       'ai_match:read': ['jd:read'],
     },
@@ -355,10 +354,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     description: 'Dashboard and analytics permissions',
     isMenuToggle: true,
     viewCode: 'analytics:read',
-    actions: [
-      { code: 'analytics:export', label: 'Export' },
-      { code: 'analytics:custom_reports', label: 'Custom Reports' },
-    ],
+    // 'analytics:export' / 'analytics:custom_reports' are hidden from the role
+    // screens (user decision 2026-11-06): nothing in the app uses them — the only
+    // Export button (components/Analytics.tsx, unreachable /reports page) does
+    // nothing and there are no custom reports. Re-add them here once built.
+    actions: [],
   },
   {
     id: 'subscription_billing',
@@ -522,7 +522,11 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
  * User popup shows them as "(always on)". Role popups include them so a role's
  * count matches what its users actually get (Standard User = 2, not 0).
  */
-export const ALWAYS_ON_PERMISSION_CODES = ['analytics:read', 'support:read'] as const;
+export const ALWAYS_ON_PERMISSION_CODES = [
+  'analytics:read', 'support:read', 'my_resumes:read',
+  // Own security settings (password, 2FA, sessions) — for everyone, 2026-11-06.
+  'security_settings:read', 'support:security_settings',
+] as const;
 
 export interface PermissionDisplayItem {
   code: string;

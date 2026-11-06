@@ -303,29 +303,6 @@ export function BulkInviteProgressProvider({ children }: { children: React.React
     return () => clearInterval(t);
   }, [identity, pullMine]);
 
-  /* A bell notification's "View" lands on ?bulk_invite=<id>: open that
-     send's results wherever the user is, then tidy the address bar. */
-  useEffect(() => {
-    if (!identity || typeof window === 'undefined') return;
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get('bulk_invite');
-    if (!id) return;
-    params.delete('bulk_invite');
-    const qs = params.toString();
-    window.history.replaceState(window.history.state, '', `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash}`);
-    let cancelled = false;
-    void (async () => {
-      try {
-        const job = await bulkInviteService.get(id);
-        if (cancelled) return;
-        upsert(job);
-        restore(id);
-        setOpenResults({ id, tab: job.failed > 0 ? 'failed' : 'all' });
-      } catch { /* gone, or another account's */ }
-    })();
-    return () => { cancelled = true; };
-  }, [identity, pathname, upsert, restore]);
-
   const activeJobs = useMemo(() => jobs.filter(isBulkInviteActive), [jobs]);
 
   /* One poll loop for every active run, in ONE tab — except a run whose
