@@ -3706,3 +3706,45 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* 28px outlined icon button (eye / edit / ⋮), as on the job-openings card. */
   .tf-icon-btn-outline { @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:border-brand-blue/30 hover:text-brand-blue dark:bg-[var(--surface)] dark:border-[var(--border)] dark:text-[var(--text-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5; }
 }
+
+/* ── Mobile compact + pill tabs (≤767px) ─────────────────────────────
+   1rem → 14px scales every rem-based Tailwind size (text, spacing, icons)
+   by ~12.5%. Inputs stay 16px on iOS so focusing doesn't zoom the page.
+   Tabs: every [role=tab] in the app becomes a pill with eased colour/shadow. */
+@media (max-width: 767px) {
+  html { font-size: 14px; }
+  @supports (-webkit-touch-callout: none) {
+    input, select, textarea { font-size: 16px; }
+  }
+
+  [role="tablist"] {
+    display: flex; gap: 4px; padding: 4px; height: auto; max-width: 100%;
+    border: 0; border-radius: 9999px; box-shadow: none;
+    background: color-mix(in srgb, var(--brand-blue) 7%, transparent);
+    overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  [role="tablist"]::-webkit-scrollbar { display: none; }
+
+  [role="tab"] {
+    flex: 0 0 auto; height: auto; margin: 0; padding: 6px 12px;
+    border: 0; border-radius: 9999px; box-shadow: none;
+    background: transparent; font-size: 12px; line-height: 1.25; white-space: nowrap;
+    scroll-snap-align: start;
+    transition: background-color .28s cubic-bezier(.4,0,.2,1), color .28s cubic-bezier(.4,0,.2,1),
+                box-shadow .28s cubic-bezier(.4,0,.2,1), transform .15s ease;
+  }
+  [role="tab"]:active { transform: scale(.96); }
+  /* hide underline indicators used by the custom tab bars */
+  [role="tab"]::after, [role="tab"] > [class*="absolute"][class*="bottom-0"] { display: none; }
+
+  [role="tab"][aria-selected="true"], [role="tab"][data-state="active"] {
+    background: var(--brand-blue); color: #fff;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-blue) 35%, transparent);
+  }
+  [role="tab"][aria-selected="true"] :is(span, svg):not([class*="bg-"]),
+  [role="tab"][data-state="active"] :is(span, svg):not([class*="bg-"]) { color: inherit; }
+}
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  [role="tab"] { transition: none; }
+}

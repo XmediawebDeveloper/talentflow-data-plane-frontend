@@ -58,9 +58,17 @@ function BinaAvatar() {
     <div ref={root} className="flex items-center gap-4">
       <span
         aria-hidden="true"
-        className={`${DISPLAY} relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,var(--mkt-accent-solid),var(--mkt-cyan))] text-2xl font-extrabold text-white shadow-[0_18px_40px_-16px_rgba(7,156,196,0.8)] sm:h-20 sm:w-20 sm:text-3xl`}
+        className="relative grid h-16 w-16 shrink-0 place-items-center rounded-full bg-[linear-gradient(135deg,var(--mkt-accent-solid),var(--mkt-cyan))] shadow-[0_18px_40px_-16px_rgba(7,156,196,0.8)] sm:h-20 sm:w-20"
       >
-        B
+        {/* Bina's 2D avatar (same art as the in-app interviewer), cropped to her face. */}
+        <span className="absolute inset-[3px] overflow-hidden rounded-full bg-white">
+          <img
+            src="/linda-avatar.webp"
+            alt=""
+            draggable={false}
+            className="h-full w-full scale-[1.7] object-cover object-[50%_12%] [transform-origin:47%_12%]"
+          />
+        </span>
         <span className="absolute -inset-1.5 rounded-full border border-white/15" />
       </span>
       <div className="min-w-0">

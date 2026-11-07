@@ -2134,7 +2134,9 @@ export default function AssessmentDetailsView({
                   this version is still editable, so it's edited, not duplicated. */}
               {assessment.status === 'Active' && (() => {
                 const notInvited = (assessment.invitations_count ?? 0) === 0;
-                const duplicateDisabled = !canCreateAssessments || notInvited;
+                const jdStatus = jobVersions.find((v) => v.id === assessment?.jd_id)?.status;
+                const jdLockMessage = assessmentJobLockMessage(jdStatus);
+                const duplicateDisabled = !canCreateAssessments || notInvited || !!jdLockMessage;
                 return (
                 <Button
                   type="button"
@@ -2147,6 +2149,8 @@ export default function AssessmentDetailsView({
                   title={
                     !canCreateAssessments
                       ? 'You do not have permission to duplicate assessments'
+                      : jdLockMessage
+                      ? jdLockMessage
                       : notInvited
                       ? 'No candidates invited yet — edit this version instead.'
                       : 'Duplicate as a new version'

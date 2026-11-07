@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Ban, Send, FileText, Undo2 } from 'lucide-react';
+import { Users, Mail, Play, Check, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Ban, Send, FileText, Undo2 } from 'lucide-react';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -91,6 +91,11 @@ interface TrackInvitesModalProps {
    *  button, Refresh with "Updated … ago", a clearer Select All, helpful
    *  empty states, a red Revoked card and swipeable cards on phones. Default: on. */
   guided?: boolean;
+  /** The assessments to track, when the host has already resolved them — the
+   *  Assessments page's Track on one assessment, or on a whole job across all
+   *  its job versions (each with `jd_version` set to the version it belongs
+   *  to). Left out, the popup reads every assessment of `jdId` itself. */
+  assessments?: any[];
 }
 
 
@@ -146,7 +151,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true, assessments: scopedAssessments }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -204,12 +209,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   const loadInvitations = async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      // Fetch all assessments for this JD
-      const assessmentsResponse = await api.get('/assessments', {
+      // The host's assessments, or every assessment for this JD
+      const assessmentItems: any[] = scopedAssessments ?? (await api.get('/assessments', {
         params: { jd_id: jdId, page_size: 100 }
-      });
+      })).data?.items ?? [];
 
-      if (!assessmentsResponse.data?.items || assessmentsResponse.data.items.length === 0) {
+      if (assessmentItems.length === 0) {
         setInvitations([]);
         setStats({ total: 0, invited: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0, revoked: 0 });
         setIsLoading(false);
@@ -218,11 +223,19 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
 
       // Fetch invitations for all assessments
       const allInvitations: any[] = [];
-      for (const assessment of assessmentsResponse.data.items) {
+      for (const assessment of assessmentItems) {
         try {
-          const invitationsResponse = await api.get(`/assessments/${assessment.id}/invitations`, {
-            params: { page_size: 100 }
-          });
+          /* Every page, not just the first 100: a big send would otherwise
+             drop candidates from the list and the cards. */
+          const PAGE = 200;
+          const items: any[] = [];
+          for (let p = 1; p <= 50; p++) {
+            const res = await api.get(`/assessments/${assessment.id}/invitations`, { params: { page: p, page_size: PAGE } });
+            const pageItems: any[] = res.data?.items ?? [];
+            items.push(...pageItems);
+            if (pageItems.length < PAGE || items.length >= (res.data?.total ?? 0)) break;
+          }
+          const invitationsResponse = { data: { items } };
           if (invitationsResponse.data?.items) {
             // Carry the source assessment's enabled-round flags onto each
             // invitation row so the table can decide per-row whether to
@@ -608,9 +621,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 </Button>
               </>
             )}
-            <Button variant="secondary" size="sm" onClick={onClose} aria-label="Close">
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Button>
+            {/* No ✕: the footer's Cancel (and Esc's absence of a second way
+                out) is the one close control. */}
           </div>
         </div>
 

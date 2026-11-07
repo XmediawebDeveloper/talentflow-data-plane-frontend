@@ -473,7 +473,7 @@ export const userService = {
       // Return default roles as fallback
       return {
         roles: [
-          { id: null, code: 'tenant_admin', name: 'Admin', description: 'Full access', is_system: true, is_default: false },
+          { id: null, code: 'tenant_admin', name: 'Admin', description: 'Access to everything', is_system: true, is_default: false },
           { id: null, code: 'recruiter', name: 'Recruiter', description: 'Standard access', is_system: true, is_default: true },
           { id: null, code: 'viewer', name: 'Viewer', description: 'Read-only access', is_system: true, is_default: false },
         ],

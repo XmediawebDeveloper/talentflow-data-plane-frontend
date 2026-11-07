@@ -808,6 +808,19 @@ api.interceptors.response.use(
       }
     }
 
+    // Inactivity timeout: the backend keeps 401ing this session until the user
+    // logs in again, and a token refresh does not help (/auth/refresh is exempt
+    // from the check, so it succeeds and the retry 401s again). Show the modal
+    // instead of refreshing - otherwise nothing ever raises it and the app sits
+    // on its cached user with every request failing.
+    if (error.response?.status === 401) {
+      const detail = (error.response.data as { detail?: unknown } | undefined)?.detail;
+      if (detail === 'Session expired due to inactivity' || originalRequest._retry) {
+        showSessionExpired();
+        return Promise.reject(error);
+      }
+    }
+
     // If 401 and not already retrying, try to refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
       // Skip token refresh/logout for auth endpoints (login, signup, forgot-password, etc.)

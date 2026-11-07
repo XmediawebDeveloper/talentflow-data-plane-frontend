@@ -45,6 +45,7 @@ import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 const AIInterviewCandidateResults = dynamic(() => import('@/components/ai-interview/AIInterviewCandidateResults'), { ssr: false, loading: () => null });
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { downloadSessionReports, canTryReport } from '@/components/ai-interview/evaluation-dashboard/downloadSessionReport';
@@ -1208,7 +1209,6 @@ export default function AIInterview() {
      popup (viewInvitationsConfig) and this tab can be the thing on screen
      when one of those actions completes, and each refreshes its own view. */
   const refreshAfterInviteAction = useCallback(async (configId?: string) => {
-    if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
     if (activeTab === 'invitation-status') await loadAllInviteStatuses();
     // The interview cards/tables carry invite counts too — refresh them with it.
     invalidateInviteCounts();
@@ -1425,14 +1425,6 @@ export default function AIInterview() {
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
 
-  useEffect(() => {
-    if (!viewInvitationsConfig) return;
-    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
-  useTrackerPoll(!!viewInvitationsConfig, () => viewInvitationsConfig && Promise.all([
-    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true),
-    loadInvitationOverview(viewInvitationsConfig.id),
-  ]));
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1458,10 +1450,6 @@ export default function AIInterview() {
     });
   }, [inviteStatusRows]);
 
-  useEffect(() => {
-    if (!viewInvitationsConfig) return;
-    loadInvitationOverview(viewInvitationsConfig.id);
-  }, [viewInvitationsConfig, trackerJobScope, loadInvitationOverview]);
 
   /* Dismiss the 3-dot menu — the card's own in-flow menu (`menuRef`) and the
      version panel's portalled compact menu (`versionMenuRef`) share one open id,
@@ -5193,422 +5181,45 @@ export default function AIInterview() {
         </div>
       )}
 
-      {/* Invite Status Tracking — same dialog the Assessments page uses, down to
-          the clickable stat row, the table shell and the footer pagination. The
-          list itself is <AIInterviewInviteTable>, shared with the Job Details
-          tracker so both entry points show identical columns and action rules. */}
+      {/* Invite Status Tracking — the shared tracker popup (the one Job Details
+          opens): one interview, or every interview of a job from its job row. */}
       {viewInvitationsConfig && (() => {
-        /* Any row a bulk Revoke OR a bulk Resend can act on gets a checkbox —
-           same rule as the Assessments tracker — regardless of which stat
-           card filter is currently active. "Select All" only ever targets
-           the CURRENT page — the list is server-paginated. Which bulk BUTTON
-           appears depends on the ticked selection being uniformly one
-           status-class or the other (see allTrackerRevocable /
-           allTrackerResendable below); a mixed Invited+Expired selection
-           shows neither — an action valid for one status must never be
-           applied to the other. A disabled or archived job's tracker is
-           view-only, so it has no bulk mode at all. */
-        const trackerJdLockReason = jdActionLockReason(viewInvitationsConfig.jd_status);
-        const trackerJdLocked = !!trackerJdLockReason;
-        // The interview CONFIG itself archived (its own status) — independent
-        // of trackerJdLocked, which only looks at the job. Same lock, so Copy
-        // Link / Revoke / Edit / Resend stay visible but disabled.
-        const trackerConfigArchived = isInterviewConfigArchived(viewInvitationsConfig.status);
-        const trackerActionsLocked = trackerJdLocked || trackerConfigArchived;
-        const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
-        const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
-        const selectableIds = trackerActionsLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
-        const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id));
-        const allTrackerRevocable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isRevocableInvite);
-        const allTrackerResendable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isTrackerResendable);
-        const allSelectableOnPageSelected =
-          selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
-        const toggleSelectAll = () =>
-          setSelectedInviteIds(() => (allSelectableOnPageSelected ? new Set<string>() : new Set(selectableIds)));
-        const toggleSelectOne = (id: string) =>
-          setSelectedInviteIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-          });
-
-        /* Two different loading states, because they have to look different.
-           With no rows yet (first open, or a filter that emptied the list) the
-           spinner is the whole body, which is right - there is nothing for it
-           to sit over. With rows already on screen and a re-read in flight
-           (Refresh, a page turn, a filter change) the rows stay put and the
-           spinner rides over them: swapping a full list for a `py-12` spinner
-           collapsed the body to a fraction of its height, and the
-           content-driven, vertically-centred dialog jumped with it. */
-        const invitesInitialLoading = loadingInvitations && invitations.length === 0;
-        const invitesRefreshVeil = loadingInvitations && invitations.length > 0;
-
-        const filtersActive = hasActiveInviteFilters(inviteFilters);
-        const startIndex = invitationTotal === 0 ? 0 : (invitationPage - 1) * INVITATION_PAGE_SIZE + 1;
-        const endIndex = Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal);
-        const invitationResultsLabel = filtersActive
-          ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
-          : `Showing ${startIndex} to ${endIndex} of ${invitationTotal} invites`;
-
-        const completionRate = invitationOverview && invitationOverview.total > 0
-          ? Math.round((invitationOverview.completed / invitationOverview.total) * 100)
-          : 0;
-        // Until the counts land each card shows a dash, not a false 0.
-        const overviewValue = (pick: (o: NonNullable<typeof invitationOverview>) => number) =>
-          (invitationOverview ? pick(invitationOverview) : '—');
-
-        const pageBtn =
-          'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
-          'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
-          'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
-
+        const config = viewInvitationsConfig;
+        const jdLockReason = jdActionLockReason(config.jd_status);
+        const configArchived = isInterviewConfigArchived(config.status);
+        const inviteBlockedReason = !canInviteAIInterviews ? 'You do not have permission to invite candidates'
+          : jdLockReason ?? (configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : '');
+        const allConfigs = [...configs, ...archivedConfigs];
         return (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
-            {/* Height is content-driven with a viewport cap, not a fixed dvh: a
-                three-invite list on a large monitor used to stretch the dialog the
-                full screen with empty space under the rows. The list absorbs the
-                overflow once the cap engages, so a long list still scrolls inside
-                the dialog on a 320px phone. */}
-            <div
-              /* Width is fixed by the breakpoint ladder and no state touches
-                 it; height is what moved, so only height is pinned, and only
-                 while a refresh is in flight. */
-              {...invitesHeightLock.dialogProps}
-              className={TRACKER_DIALOG_PANEL_CLASS}>
-              {/* Header */}
-              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="tf-section-title truncate tracking-tight">
-                        <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
-                        <span className="sm:hidden">Invite Status</span>
-                      </h2>
-                      {/* JD ID, then the job title. */}
-                      <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
-                        {viewInvitationsConfig.jd_short_id && (
-                          <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
-                        )}
-                        <span className="truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</span>
-                        {/* Opened from a version row, the table has no version
-                            columns — the header names the version instead. */}
-                        {!trackerShowVersions && (
-                          <span className="-ml-0.5 flex items-center gap-3 flex-shrink-0 whitespace-nowrap">
-                            {/* The job version reads as part of the title: "App development - V1". */}
-                            <span className="inline-flex items-center gap-1.5">
-                              -
-                              <VersionPill kind="job" version={viewInvitationsConfig.jd_version ?? 1} />
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              Interview Version -
-                              <VersionPill
-                                kind="interview"
-                                version={interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs])}
-                              />
-                            </span>
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  {/* Refetches the live statuses in place — the popup stays
-                      open, the icon spins while the request runs, and the
-                      handler's guard drops repeat clicks until it settles. */}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRefreshInvitations}
-                    disabled={isRefreshingInvites || loadingInvitations}
-                    title="Fetch the latest invite statuses"
-                    aria-label="Refresh"
-                    icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshingInvites ? 'animate-spin' : ''}`} />}
-                  >
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
-                      {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
-                    </span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Stat row doubles as the status filter. Counts come from
-                  loadInvitationOverview, which queries unfiltered — selecting a
-                  bucket narrows the table without collapsing the other cards. */}
-              <InviteStatCards
-                /* The Job Openings module's Track Invites stat grid (`.tf-tracker-stats`). */
-                gridClassName="tf-tracker-stats"
-                activeStatus={inviteFilters.status}
-                onSelect={(status) => {
-                  setInviteFilters({ ...inviteFilters, status });
-                  setInvitationPage(1);
-                }}
-                cards={[
-                  { key: 'all', label: 'Total', Icon: Users, value: overviewValue((o) => o.total), ...INVITE_CARD_TONES.slate },
-                  { key: 'invited', label: 'Invited', Icon: Mail, value: overviewValue((o) => o.invited), ...INVITE_CARD_TONES.blue },
-                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: overviewValue((o) => o.inProgress), ...INVITE_CARD_TONES.orange },
-                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overviewValue((o) => o.completed), ...INVITE_CARD_TONES.green },
-                  { key: 'expired', label: 'Expired', Icon: Clock, value: overviewValue((o) => o.expired), ...INVITE_CARD_TONES.orange },
-                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: overviewValue((o) => o.terminated), ...INVITE_CARD_TONES.red },
-                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: overviewValue((o) => o.revoked), ...INVITE_CARD_TONES.indigo },
-                ]}
-              />
-
-              <InviteFilterBar
-                filters={inviteFilters}
-                onChange={(nextFilters) => {
-                  setInviteFilters(nextFilters);
-                  setInvitationPage(1);
-                }}
-                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
-                searchPlaceholder="Search by candidate name or email..."
-                extraSelects={[
-                  /* Same Source / Result pair as every other Track popup, so the bar
-                     keeps their one-row layout. Versions read per row in the table. */
-                  {
-                    key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: trackerSourceFilter,
-                    options: INVITE_SOURCE_FILTER_OPTIONS,
-                    onChange: (value) => { setTrackerSourceFilter(value); setInvitationPage(1); },
-                  },
-                  {
-                    key: 'result', ariaLabel: 'Result', anyLabel: 'All Results', value: trackerResultFilter,
-                    options: RESULT_FILTER_OPTIONS,
-                    onChange: (value) => { setTrackerResultFilter(value); setInvitationPage(1); },
-                  },
-                ]}
-                onClearExtras={() => { setTrackerJobVersionFilter(''); setTrackerVersionFilter(''); setTrackerSourceFilter(''); setTrackerResultFilter(''); }}
-              />
-
-              {/* Bulk selection bar, and — on the same row, straight across
-                  from Select All — the completion-rate badge that used to be
-                  its own card in the stat row above. Gated on the FIRST load,
-                  not on every load: this bar disappearing and reappearing
-                  during a Refresh was one more height change in the stack of
-                  them, and its contents come from `invitations`, which a
-                  refresh keeps. */}
-              {!invitesInitialLoading && (
-                <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-                  {selectableIds.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={toggleSelectAll}
-                      className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
-                    >
-                      <span
-                        role="checkbox"
-                        aria-checked={allSelectableOnPageSelected}
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                          allSelectableOnPageSelected
-                            ? 'bg-brand-blue border-brand-blue'
-                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                        }`}
-                      >
-                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
-                      </span>
-                      Select All ({selectableIds.length})
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    {/* Uniform selection's bulk action — never both at once. */}
-                    {allTrackerRevocable && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setBulkRevokeConfirmOpen(true)}
-                        disabled={isBulkRevoking}
-                        title="Revoke the selected candidates' interview links"
-                        icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-                      >
-                        {isBulkRevoking ? 'Revoking…' : `Revoke (${trackerSelectedRows.length})`}
-                      </Button>
-                    )}
-                    {allTrackerResendable && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setTrackerBulkResendOpen(true)}
-                        disabled={isTrackerBulkResending}
-                        title="Resend a fresh link to the selected expired invitations"
-                        icon={isTrackerBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                      >
-                        {isTrackerBulkResending ? 'Sending…' : `Resend (${trackerSelectedRows.length})`}
-                      </Button>
-                    )}
-                  </div>
-                  <ConfirmationDialog
-                    isOpen={trackerBulkResendOpen}
-                    onClose={() => { if (!isTrackerBulkResending) setTrackerBulkResendOpen(false); }}
-                    onConfirm={async () => {
-                      const targets = trackerSelectedRows.filter(isTrackerResendable);
-                      if (targets.length === 0) { setTrackerBulkResendOpen(false); return; }
-                      setIsTrackerBulkResending(true);
-                      try {
-                        await resendInvitesInBulk(targets);
-                        setSelectedInviteIds(new Set());
-                        await refreshInvitationsView(viewInvitationsConfig.id);
-                      } finally {
-                        setIsTrackerBulkResending(false);
-                        setTrackerBulkResendOpen(false);
-                      }
-                    }}
-                    title="Resend invitations to selected candidates?"
-                    description={`A fresh interview link will be emailed to ${trackerSelectedRows.length} selected candidate${trackerSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-                    confirmText={isTrackerBulkResending ? 'Sending…' : `Yes, resend to ${trackerSelectedRows.length}`}
-                    cancelText="Cancel"
-                    variant="info"
-                  />
-                </div>
-              )}
-
-              {/* Candidate list. overflow-hidden, not overflow-auto: the table
-                  shell (or the mobile card stack) inside is the single vertical
-                  scroller. Two nested scrollers meant this one won, scrolling the
-                  sticky header and pinned Actions column away with the rows. */}
-              {/* `relative` so the refresh veil below covers exactly this body
-                  without joining its flow - an overlay adds no height, which is
-                  the whole point of it. */}
-              <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
-                <AIInterviewInviteTable
-                  invitations={invitations}
-                  jdDisabled={trackerJdLocked}
-                  configArchived={trackerConfigArchived}
-                  /* Only the FIRST load may swap the rows for a spinner, when
-                     there are no rows to swap. Re-reading rows that are already
-                     on screen leaves them exactly where they are - the table
-                     collapsing to a `py-12` spinner and back is what made this
-                     dialog jump on Refresh. */
-                  isLoading={invitesInitialLoading}
-                  hasActiveFilters={filtersActive}
-                  emptyHint={'Use the "Send via Email" button to invite candidates'}
-                  jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
-                  interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
-                  showRowVersions={!!trackerJobScope}
-                  selectedIds={trackerActionsLocked ? undefined : selectedInviteIds}
-                  onToggleSelect={trackerActionsLocked ? undefined : toggleSelectOne}
-                  isSelectable={isTrackerBulkActionable}
-                  /* A disabled OR archived job keeps these callbacks wired —
-                     same as an archived CONFIG — so the table greys the
-                     actions out via `jdDisabled`/`configArchived` above
-                     instead of dropping them from the menu entirely (that
-                     used to make Copy Link the only surviving item, since
-                     it isn't gated by these callbacks). */
-                  onResend={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
-                  onEdit={(inv) => {
-                    if (blockIfInviteJdDisabled(inv)) return;
-                    setEditInviteForm({
-                      candidate_name: inv.candidate_name || '',
-                      candidate_email: inv.candidate_email || '',
-                    });
-                    setEditInviteTarget(inv);
-                  }}
-                  onRevoke={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
-                  onViewDetails={(inv) => openCandidateResultRoute(inv, invitations)}
-                  resendingId={resendingEmailFor}
-                  revokingId={revokingInviteFor}
-                />
-
-                {/* Re-reading rows that are already on screen. The list keeps
-                    its exact size and place; this only tints it and says why,
-                    and it takes the clicks so nobody acts on a row that is
-                    about to be replaced. */}
-                {invitesRefreshVeil && (
-                  <div
-                    className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
-                    aria-live="polite"
-                  >
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 tf-body-secondary shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
-                      <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
-                      Refreshing invite statuses...
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer. Stacks on phones: the count line plus four page buttons,
-                  Invite More and Close overflowed a 320px row. First/Last drop out
-                  below sm — Prev/Next and the indicator are enough there. */}
-              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
-                  {invitationResultsLabel}
-                </p>
-                <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
-                  {invitationTotalPages > 1 && (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <span className="tf-body-secondary whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={invitationTotalPages}
-                          value={goToInvitationPage}
-                          onChange={(e) => setGoToInvitationPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitGoToInvitationPage();
-                            }
-                          }}
-                          onBlur={commitGoToInvitationPage}
-                          aria-label="Go to page"
-                          className="tf-input w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-center"
-                        />
-                      </div>
-                      <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
-                        Prev
-                      </button>
-                      <span className="px-1 sm:px-2 tf-body-secondary whitespace-nowrap">
-                        Page {invitationPage} of {invitationTotalPages}
-                      </span>
-                      <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
-                        Next
-                      </button>
-                    </>
-                  )}
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={trackerActionsLocked}
-                    title={
-                      !canInviteAIInterviews
-                        ? 'You do not have permission to invite candidates'
-                        : trackerJdLockReason ?? (trackerConfigArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : undefined)
-                    }
-                    onClick={() => {
-                      if (!canInviteAIInterviews) return;
-                      if (blockIfJdDisabled(viewInvitationsConfig)) return;
-                      if (trackerConfigArchived) {
-                        toast.error(INTERVIEW_ARCHIVED_ACTION_MESSAGE);
-                        return;
-                      }
-                      // The popup reopens this tracker when it closes.
-                      const cfg = viewInvitationsConfig;
-                      setViewInvitationsConfig(null);
-                      openInterviewInvite(cfg, true);
-                    }}
-                    aria-disabled={!canInviteAIInterviews}
-                    className={`${(!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                    icon={<Send className="w-3.5 h-3.5" />}
-                  >
-                    Invite More
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AIInterviewTrackInvitesModal
+            isOpen
+            onClose={() => setViewInvitationsConfig(null)}
+            configId={config.id}
+            jdTitle={config.jd_title || config.position || ''}
+            jdShortId={config.jd_short_id}
+            /* From a version row the header names the version and the table
+               has no version columns; from a job row the columns are there. */
+            jobVersion={config.jd_version ?? 1}
+            interviewVersion={interviewVersionOrdinal(config, allConfigs)}
+            hideVersionDetails={!trackerShowVersions}
+            hideJobVersionFilter={!trackerShowVersions}
+            scope={trackerJobScope?.map((entry) => ({
+              configId: entry.config.id,
+              jobVersion: entry.jobVersion,
+              interviewVersion: entry.interviewVersion,
+            }))}
+            jdDisabled={!!jdLockReason}
+            configArchived={configArchived}
+            refreshSignal={refreshSignal}
+            onViewResult={(inv, rows) => openCandidateResultRoute(inv, rows)}
+            onChanged={() => refreshAfterInviteAction()}
+            onInviteMore={inviteBlockedReason ? undefined : () => {
+              // The tracker reopens when the invite popup closes.
+              setViewInvitationsConfig(null);
+              openInterviewInvite(config, true);
+            }}
+            inviteMoreDeniedReason={inviteBlockedReason || undefined}
+          />
         );
       })()}
 

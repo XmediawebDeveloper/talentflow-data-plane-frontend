@@ -44,7 +44,7 @@ const DOT_CLASS: Record<LevelTone, string> = {
   none: 'bg-gray-300 dark:bg-slate-600',
 };
 
-/** Level dot: Full = solid, View = ring, has exceptions = amber, No access = grey. */
+/** Level dot: Full = solid, some turned off = amber, No access = grey. */
 export const AccessDot = ({ tone, className = 'h-2 w-2' }: { tone: LevelTone; className?: string }) => (
   <span className={`inline-block shrink-0 rounded-full ${DOT_CLASS[tone]} ${className}`} aria-hidden />
 );
@@ -99,22 +99,26 @@ export const AccessLevelKey = ({
   counts,
   className = '',
 }: {
-  counts?: { full: number; view: number; none: number };
+  counts?: { full: number; view?: number; none: number };
   className?: string;
-}) => (
-  <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 sm:grid-cols-3 sm:gap-4 ${className}`}>
-    {([
-      ['full', 'Can see it and do everything in it'],
-      ['view', 'Can see it, but not change anything'],
-      ['none', "Can't see this area"],
-    ] as const).map(([level, text]) => (
+}) => {
+  // "View only" is listed only when the role has view-only areas (Viewer copies).
+  const rows = ([
+    ['full', 'Can see it and do everything in it'],
+    ['view', 'Can see it, but not change anything'],
+    ['none', "Can't see this area"],
+  ] as const).filter(([level]) => level !== 'view' || (counts?.view ?? 0) > 0);
+  return (
+  <dl className={`grid gap-1.5 rounded-xl bg-gray-50 px-3.5 py-2.5 text-[13px] dark:bg-slate-800/50 ${rows.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} sm:gap-4 ${className}`}>
+    {rows.map(([level, text]) => (
       <div key={level}>
         <dt className="flex items-baseline gap-1.5 font-semibold text-gray-900 dark:text-slate-100">
-          {counts && <span className="text-lg font-bold leading-none">{counts[level]}</span>}
+          {counts && <span className="text-lg font-bold leading-none">{counts[level] ?? 0}</span>}
           {LEVEL_NAMES[level]}
         </dt>
         <dd className="text-gray-500 dark:text-slate-400">{text}</dd>
       </div>
     ))}
   </dl>
-);
+  );
+};

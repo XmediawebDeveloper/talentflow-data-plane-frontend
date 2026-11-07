@@ -10,6 +10,7 @@ import { isResultRestoreArrival } from '@/lib/utils/resultReturnContext';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import { checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import { Button } from '@/components/ui/button';
 import { UserPlus } from 'lucide-react';
 
@@ -58,6 +59,10 @@ export default function AssessmentResultsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+  // Whether the job version this assessment belongs to is Archived/Disabled,
+  // and why — greys the Invite button the same way Job Details' own Results
+  // tab does, instead of leaving it clickable until the server's 409.
+  const [jobLockMessage, setJobLockMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
@@ -74,6 +79,7 @@ export default function AssessmentResultsPage() {
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
           setJdVersion(response.jd_version ?? null);
+          setJobLockMessage(await checkAssessmentJobLock(response.jd_id));
         } else {
           setError('Assessment not found');
         }
@@ -133,7 +139,8 @@ export default function AssessmentResultsPage() {
   const { open: openInvite } = useInviteDialog();
   const canInvite = isTenantAdmin || hasPermissionCode('assessments:invite');
   const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
-    : !jdId ? 'This assessment is not linked to a job' : null;
+    : !jdId ? 'This assessment is not linked to a job'
+    : jobLockMessage ? jobLockMessage : null;
   const inviteAction = (
     <Button
       variant="primary"

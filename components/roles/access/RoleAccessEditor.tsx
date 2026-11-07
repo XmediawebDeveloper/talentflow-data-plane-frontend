@@ -1,12 +1,10 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Check, Info, Lock, Search, SlidersHorizontal, ToggleRight, Undo2 } from 'lucide-react';
-import PermissionTilesEditor from '@/components/roles/PermissionTilesEditor';
-import { getMainPermission, getPermissionLabel, getPermissionParts } from '@/lib/constants/permissionCategories';
+import { Check, Info, Undo2 } from 'lucide-react';
+import { getMainPermission, getPermissionParts } from '@/lib/constants/permissionCategories';
 import {
-  ACCESS_MODULES,
-  ALWAYS_ON,
+  SHOWN_MODULES,
   MODULE_BY_ID,
   MODULE_GROUPS,
   accessCounts,
@@ -14,6 +12,7 @@ import {
   describeModule,
   isHostOn,
   isUpgrade,
+  PICKABLE_LEVELS,
   LEVEL_NAMES,
   moduleName,
   missingFullNeeds,
@@ -26,16 +25,14 @@ import {
   type AccessModule,
 } from '@/lib/permissions/moduleLevels';
 import { AccessLevelKey, ModuleIcon } from './AccessDots';
-import { useAdvancedToggles } from './useAdvancedToggles';
 
-type Mode = 'quick' | 'advanced';
 interface Notice { kind: 'up' | 'down' | 'neutral'; text: React.ReactNode; snapshot?: Set<string> }
 
 const listText = (items: React.ReactNode[]) =>
   items.flatMap((item, i) => (i === 0 ? [item] : [i === items.length - 1 ? ' and ' : ', ', item]));
 const LEVEL_LABEL = LEVEL_NAMES;
 
-/** Checkbox chip used by "Available on", "Except", "Also allowed" and the Advanced strip. */
+/** Checkbox chip used by the "Turned off" list. */
 function Chip({ state, label, note, title, onClick }: {
   state: 'on' | 'off' | 'na' | 'home';
   label: string;
@@ -74,15 +71,13 @@ export interface RoleAccessEditorProps {
 }
 
 /**
- * "What this role can do": Quick Setup (a level per module) | Advanced (every
- * permission). Both edit the same set of codes. Only used in Create / Edit /
- * Duplicate Role — user screens only SHOW access (RoleAccessSummary).
+ * "What this role can do": one Access / No access choice per area. The
+ * per-permission Advanced view was removed from the UI (user decision
+ * 2026-11-06). Only used in Create / Edit / Duplicate Role — user screens only
+ * SHOW access (RoleAccessSummary).
  */
 export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorProps) {
-  const [mode, setMode] = useState<Mode>('quick');
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [filter, setFilter] = useState('');
-  const advanced = useAdvancedToggles(codes, (next) => { setNotice(null); onChange(next); });
 
   const change = (next: Set<string>, n: Notice | null) => { onChange(next); setNotice(n); };
 
@@ -110,31 +105,12 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     });
   };
 
-  const screenChip = (code: string, host: string, onClick: () => void) => {
-    const hostLabel = moduleName(host);
-    const label = shortLabel(code);
-    if (!isHostOn(codes, host)) {
-      return <Chip key={code} state="na" label={hostLabel} note="(not available)" title={`This role can't open ${hostLabel}. Give it access to ${hostLabel} and ${label} shows there too.`} />;
-    }
-    const on = codes.has(code);
-    return (
-      <Chip
-        key={code}
-        state={on ? 'on' : 'off'}
-        label={hostLabel}
-        note={on ? undefined : 'off'}
-        title={on ? `Untick to hide ${label} on the ${hostLabel} page` : `${label} is hidden on the ${hostLabel} page. Tick to show it again.`}
-        onClick={onClick}
-      />
-    );
-  };
-
   const moduleRow = (m: AccessModule) => {
     const d = describeModule(codes, m);
     const level = d.base;
     const adjusted = d.distance > 0;
-    // Everything turned off, including a button hidden on another page
-    // ("Score Resume on Job Descriptions"); ticking it turns it back on.
+    // Anything turned off in an older role (incl. a button hidden on another
+    // page, "Score Resume on Job Descriptions"); ticking it turns it back on.
     const ownMissing = d.missing.filter((c) => {
       const entry = m.entries.find((e) => e.code === c);
       return !entry || isHostOn(codes, entry.host);
@@ -143,23 +119,20 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
       const entry = m.entries.find((e) => e.code === c);
       return entry ? `${shortLabel(c)} on ${moduleName(entry.host)}` : shortLabel(c);
     };
-    const needs = level === 'none' ? moduleNeeds(m) : [];
+    // What choosing Access here also switches on.
+    const alsoGives = level === 'none'
+      ? Array.from(new Set([...moduleNeeds(m).map((n) => n.name), ...(NEEDS_FULL[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name ?? id)]))
+      : [];
     let can: React.ReactNode;
-    if (!adjusted) can = m.about;
+    if (level === 'view') {
+      can = <span className="font-medium text-gray-700 dark:text-slate-300">{LEVEL_NAMES.view} · choose {LEVEL_NAMES.full} or {LEVEL_NAMES.none}, or leave it as it is</span>;
+    } else if (!adjusted) can = m.about;
     else if (level === 'full') {
       can = (
         <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.full}, {d.missing.length + d.extra.length} turned off</span>
+          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.full}, {d.missing.length} turned off</span>
           {' · '}
-          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Back to {LEVEL_NAMES.full}</button>
-        </>
-      );
-    } else {
-      can = (
-        <>
-          <span className="font-medium text-amber-700 dark:text-amber-400">{LEVEL_NAMES.view}, plus {d.extra.length} more</span>
-          {' · '}
-          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'view')}>Back to {LEVEL_NAMES.view}</button>
+          <button type="button" className="font-semibold text-brand-blue hover:underline" onClick={() => setLevel(m, 'full')}>Turn everything back on</button>
         </>
       );
     }
@@ -173,7 +146,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
           role="radio"
           aria-checked={on}
           aria-disabled={disabled || undefined}
-          title={disabled ? 'Everyone always has this' : on && adjusted ? 'Click to go back to the standard level' : undefined}
+          title={disabled ? 'Everyone always has this' : on && adjusted ? 'Click to turn everything back on' : undefined}
           onClick={disabled ? undefined : () => setLevel(m, v)}
           className={`relative whitespace-nowrap rounded-[7px] px-3 py-1.5 text-[12.5px] font-semibold transition-colors max-[720px]:flex-1 ${
             on ? `bg-white shadow-sm dark:bg-slate-900 ${v === 'full' ? 'text-brand-blue' : 'text-gray-900 dark:text-slate-100'}` : 'text-gray-500 hover:text-gray-900 dark:text-slate-400 dark:hover:text-slate-100'
@@ -185,6 +158,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
       );
     };
     const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : level === 'view' ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
+    const needs = missingFullNeeds(codes, m).map((o) => o.name).join(' and ');
     return (
       <div key={m.id} className="border-b border-gray-100 px-4 py-3.5 last:border-b-0 dark:border-slate-800">
         <div className="flex items-center gap-3 max-[720px]:flex-wrap">
@@ -194,15 +168,18 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
               {m.name}
               {adjusted && (
                 <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                  {level === 'full' ? `${d.missing.length + d.extra.length} turned off` : `+${d.extra.length} more`}
+                  {d.missing.length} turned off
                 </span>
+              )}
+              {level === 'view' && (
+                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-slate-800 dark:text-slate-300">{LEVEL_NAMES.view}</span>
               )}
               {m.always && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">Always on</span>}
             </div>
             <div className="text-[13px] text-gray-500 dark:text-slate-400">{can}</div>
           </div>
           <div role="radiogroup" aria-label={`${m.name} access`} className="flex shrink-0 gap-0.5 rounded-[9px] bg-gray-100 p-[3px] dark:bg-slate-800 max-[720px]:ml-[46px] max-[720px]:w-[calc(100%-46px)]">
-            {(['none', 'view', 'full'] as AccessLevel[]).map(levelButton)}
+            {PICKABLE_LEVELS.map(levelButton)}
           </div>
         </div>
         {ownMissing.length > 0 && (
@@ -213,51 +190,23 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             </div>
           </div>
         )}
-        {d.extra.length > 0 && (
-          <div className="ml-[46px] mt-2.5 flex items-start gap-2.5 max-[720px]:flex-col max-[720px]:gap-1">
-            <span className="min-w-[86px] pt-px text-[12.5px] text-gray-500 dark:text-slate-400">Extra access</span>
-            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-              {d.extra.map((c) => <Chip key={c} state="on" label={getPermissionLabel(c)} title="Untick to take it away" onClick={() => toggleOne(c)} />)}
-            </div>
-          </div>
-        )}
-        {missingFullNeeds(codes, m).length > 0 && (
+        {needs && (
           <div className="ml-[46px] mt-2 text-[12.5px] font-medium text-amber-700 dark:text-amber-400">
-            {missingFullNeeds(codes, m).map((o) => o.name).join(' and ')} isn't {LEVEL_NAMES.full}, so there may be no resumes to work with.{' '}
+            {needs} doesn&apos;t have {LEVEL_NAMES.full}, so there may be no resumes to work with.{' '}
             <button
               type="button"
               className="font-semibold text-brand-blue hover:underline"
               onClick={() => missingFullNeeds(codes, m).forEach((o) => setLevel(o, 'full'))}
             >
-              Give {missingFullNeeds(codes, m).map((o) => o.name).join(' and ')} {LEVEL_NAMES.full}
+              Give {needs} {LEVEL_NAMES.full}
             </button>
           </div>
         )}
-        {level !== 'full' && (NEEDS_FULL[m.id] ?? []).length > 0 && (
+        {level === 'none' && alsoGives.length > 0 && (
           <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            {LEVEL_NAMES.full} here also gives {(NEEDS_FULL[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).join(' and ')} {LEVEL_NAMES.full}, so they can upload resumes to work with.
+            Choosing {LEVEL_NAMES.full} here also gives {LEVEL_NAMES.full} to {alsoGives.join(' and ')}.
           </div>
         )}
-        {needs.length > 0 && (
-          <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
-            Works only with {needs.map((n) => n.name).join(needs.length === 2 ? ' and ' : ', ')}. We turn {needs.length === 1 ? 'it' : 'them'} on for you when you choose {LEVEL_NAMES.view} or {LEVEL_NAMES.full}.
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Advanced: "<action> on other screens · n of m" strip in each main section.
-  const sectionStrip = (category: { id: string }) => {
-    const m = MODULE_BY_ID[category.id];
-    if (!m || !m.entries.length) return null;
-    const on = m.entries.filter((e) => codes.has(e.code)).length;
-    return (
-      <div className="mx-4 mb-4 flex flex-wrap items-center gap-2.5 rounded-xl bg-gray-50 px-3 py-2.5 text-[12.5px] dark:bg-slate-800/50">
-        <span className="font-semibold text-gray-900 dark:text-slate-100">{shortLabel(m.entries[0].code)} on other pages · {on} of {m.entries.length}</span>
-        <div className="flex flex-wrap gap-x-4 gap-y-1.5">
-          {m.entries.map((e) => screenChip(e.code, e.host, () => advanced.onToggleCode(e.code)))}
-        </div>
       </div>
     );
   };
@@ -268,33 +217,10 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
 
   return (
     <div>
-      {advanced.dialog}
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-4 dark:border-slate-800">
+      <div className="mt-1 border-t border-gray-100 pt-4 dark:border-slate-800">
         <div className="text-[15px] font-semibold text-gray-900 dark:text-slate-100">What this role can do</div>
-        <div role="tablist" aria-label="Editor view" className="inline-flex gap-0.5 rounded-[10px] bg-gray-100 p-[3px] dark:bg-slate-800 max-[560px]:w-full">
-          {([['quick', 'Quick Setup', ToggleRight], ['advanced', 'Advanced', SlidersHorizontal]] as const).map(([v, label, Icon]) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={mode === v}
-              onClick={() => { setMode(v); setNotice(null); }}
-              className={`flex items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-semibold max-[560px]:flex-1 ${
-                mode === v ? 'bg-white text-gray-900 shadow-sm dark:bg-slate-900 dark:text-slate-100 [&>svg]:text-brand-blue' : 'text-gray-500 dark:text-slate-400'
-              }`}
-            >
-              <Icon className="h-4 w-4" />{label}
-            </button>
-          ))}
-        </div>
       </div>
-      {mode === 'quick' ? (
-        <AccessLevelKey counts={accessCounts(codes)} className="mb-3.5 mt-2" />
-      ) : (
-        <p className="mb-3.5 mt-2 text-[13px] text-gray-500 dark:text-slate-400">
-          Turn single permissions on or off. Anything you turn off also shows in Quick Setup.
-        </p>
-      )}
+      <AccessLevelKey counts={accessCounts(codes)} className="mb-3.5 mt-2" />
       {notice && (
         <div className={`mb-3.5 flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[13px] text-gray-900 dark:text-slate-100 ${noticeTone}`}>
           {notice.kind === 'down' ? <Info className="mt-0.5 h-4 w-4 shrink-0" /> : <Check className="mt-0.5 h-4 w-4 shrink-0" />}
@@ -310,39 +236,14 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
           )}
         </div>
       )}
-      {mode === 'quick' ? (
-        MODULE_GROUPS.map((group) => (
-          <div key={group} className="mb-4">
-            <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
-            <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-              {ACCESS_MODULES.filter((m) => m.group === group).map(moduleRow)}
-            </div>
+      {MODULE_GROUPS.map((group) => (
+        <div key={group} className="mb-4">
+          <div className="mb-1.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
+          <div className="rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+            {SHOWN_MODULES.filter((m) => m.group === group).map(moduleRow)}
           </div>
-        ))
-      ) : (
-        <>
-          <div className="mb-3.5 flex flex-wrap items-center gap-3.5">
-            <label className="flex h-[38px] min-w-[200px] max-w-[340px] flex-1 items-center gap-2 rounded-[9px] border border-gray-300 bg-white px-3 text-gray-400 focus-within:border-brand-blue focus-within:ring-4 focus-within:ring-brand-blue/10 dark:border-slate-600 dark:bg-slate-900">
-              <Search className="h-4 w-4" />
-              <input
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Find a permission, e.g. Score Resume"
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-gray-900 outline-none dark:text-slate-100"
-              />
-            </label>
-            <span className="inline-flex items-center gap-1.5 text-xs text-gray-500 dark:text-slate-400"><Lock className="h-3 w-3" /> needs another permission turned on first</span>
-          </div>
-          <PermissionTilesEditor
-            selected={codes}
-            onToggleCode={advanced.onToggleCode}
-            onToggleGroup={advanced.onToggleGroup}
-            alwaysOn={ALWAYS_ON}
-            renderSectionExtra={sectionStrip}
-            filter={filter}
-          />
-        </>
-      )}
+        </div>
+      ))}
     </div>
   );
 }
