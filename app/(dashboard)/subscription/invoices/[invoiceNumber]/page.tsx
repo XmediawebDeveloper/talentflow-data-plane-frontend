@@ -108,9 +108,9 @@ export default function InvoicePage() {
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-white xl:bg-slate-50 dark:bg-slate-900 xl:dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="my-4 w-full rounded-2xl bg-white p-4 shadow-2xl dark:bg-slate-900 md:my-5 md:p-8">
+        <div className="my-0 xl:my-5 w-full rounded-none xl:rounded-2xl bg-white p-4 shadow-none xl:shadow-2xl dark:bg-slate-900 md:p-8">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[

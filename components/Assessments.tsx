@@ -5446,7 +5446,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     being squeezed away. */}
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                   <h3
-                    className="order-1 basis-full sm:order-2 sm:basis-0 sm:flex-1 sm:min-w-[8rem] tf-row-name truncate"
+                    className="order-1 basis-full sm:order-2 sm:basis-0 sm:flex-1 sm:min-w-[8rem] tf-row-name break-words lg:truncate"
                     title={jobTitle}
                   >
                     {jobTitle}

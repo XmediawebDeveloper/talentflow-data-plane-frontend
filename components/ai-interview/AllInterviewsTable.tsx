@@ -1338,7 +1338,9 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     selectionActive={selectedIds.size > 0}
                   />
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">{cellContent(row, 'jobName')}</div>
+                    {/* Phones / tablets: the name in full (wraps), as the Job Openings card; the table
+                        cell's fixed width and "…" from lg. */}
+                    <div className="min-w-0 flex-1 max-lg:[&>div]:!w-auto max-lg:[&>div]:flex-wrap max-lg:[&_.truncate]:!whitespace-normal max-lg:[&_.truncate]:break-words">{cellContent(row, 'jobName')}</div>
                     <div className="shrink-0 -mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
                       {actionsCell(row)}
                     </div>
