@@ -40,36 +40,6 @@ function readIsOrgLogin() {
 }
 
 /**
- * Nav label whose letters roll up one after another on hover, revealing an
- * accent-coloured copy underneath. Screen readers get the plain label once.
- */
-function RollText({ text }: { text: string }) {
-  return (
-    <span className="relative inline-block">
-      <span className="sr-only">{text}</span>
-      <span aria-hidden="true" className="inline-flex overflow-hidden leading-5">
-        {Array.from(text).map((char, i) => {
-          const glyph = char === " " ? " " : char;
-          const delay = { transitionDelay: `${i * 22}ms` };
-          const roll =
-            "block transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/nav:-translate-y-full motion-reduce:transition-none";
-          return (
-            <span key={i} className="relative inline-block">
-              <span className={roll} style={delay}>
-                {glyph}
-              </span>
-              <span className={`${roll} absolute left-0 top-full text-mkt-accent`} style={delay}>
-                {glyph}
-              </span>
-            </span>
-          );
-        })}
-      </span>
-    </span>
-  );
-}
-
-/**
  * Header for the redesigned landing and pricing pages. Same links, auth and
  * org-login rules as the classic header; new chrome: translucent until the
  * page scrolls, a sliding marker under the current section, and a full-width
@@ -172,16 +142,18 @@ export function SiteHeader() {
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     gsap.killTweensOf(marker);
     if (!target) {
-      gsap.to(marker, { autoAlpha: 0, scale: 0.92, duration: reduce ? 0 : 0.25, ease: "power2.out" });
+      gsap.to(marker, { autoAlpha: 0, duration: reduce ? 0 : 0.2, ease: "power2.out" });
       return;
     }
     const wasHidden = gsap.getProperty(marker, "autoAlpha") === 0;
     const to = { x: target.offsetLeft, width: target.offsetWidth };
     if (wasHidden || reduce) {
-      gsap.set(marker, { ...to, scale: reduce ? 1 : 0.85 });
-      gsap.to(marker, { autoAlpha: 1, scale: 1, duration: reduce ? 0 : 0.35, ease: "back.out(2)" });
+      // Fade in where it is; no slide in from wherever it was last.
+      gsap.set(marker, to);
+      gsap.to(marker, { autoAlpha: 1, duration: reduce ? 0 : 0.2, ease: "power2.out" });
     } else {
-      gsap.to(marker, { ...to, autoAlpha: 1, scale: 1, duration: 0.5, ease: "elastic.out(1, 0.75)" });
+      // Glide between items.
+      gsap.to(marker, { ...to, autoAlpha: 1, duration: 0.35, ease: "power3.out" });
     }
   };
 
@@ -266,16 +238,11 @@ export function SiteHeader() {
                 onMouseEnter={(e) => moveMarker(e.currentTarget)}
                 onFocus={(e) => moveMarker(e.currentTarget)}
                 onBlur={() => moveMarker(activeLink())}
-                className={`group/nav relative rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
+                className={`relative rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
                   active ? "text-mkt-ink" : "text-slate-500 hover:text-mkt-ink dark:text-slate-400"
                 }`}
               >
-                <RollText text={item.label} />
-                {/* Accent dot that pops in under the label on hover. */}
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute bottom-0.5 left-1/2 h-1 w-1 -translate-x-1/2 scale-0 rounded-full bg-mkt-accent opacity-0 transition-[scale,opacity] duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] group-hover/nav:scale-100 group-hover/nav:opacity-100 motion-reduce:transition-none"
-                />
+                {item.label}
               </Link>
             );
           })}
