@@ -77,6 +77,15 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice, s
     if (beforeFullscreen) {
       const ok = await beforeFullscreen();
       if (!ok) { setIsEnteringFullscreen(false); return; }
+      // The share picker just closed. Edge/Chrome refuse fullscreen ("TypeError:
+      // not granted") until the window has focus back — wait for it briefly.
+      if (!document.hasFocus()) {
+        await new Promise<void>((resolve) => {
+          const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
+          const t = setTimeout(done, 1000);
+          window.addEventListener('focus', done);
+        });
+      }
     }
     try {
       await requestFullscreen();
