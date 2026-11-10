@@ -1570,8 +1570,15 @@ Best regards`);
                     button, stacked — the primary last — instead of mixed widths.
                     From sm: the primary keeps its place at the right end of the row;
                     the secondary buttons wrap among themselves first. */}
-                <div className="mt-5 pt-5 border-t border-brand-blue/10 flex flex-col sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 sm:[&>button]:shrink-0">
-                  <div className="flex flex-wrap items-center gap-2 sm:flex-1 sm:min-w-0 sm:max-lg:[&>button]:!px-3 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11">
+                {/* Opened from an AI Talent Match result, only Invite + Score Resume show:
+                    on phones those two share ONE line (half each) instead of stacking. */}
+                {/* Otherwise (Invite, AI Talent Match, Delete + the primary) phones show
+                    them as a 2-column grid: Invite | AI Talent Match, then
+                    Delete | Score Resume. The secondary group turns into
+                    `contents` so its buttons join the outer grid. */}
+                {(() => { const inviteScoreRow = !RESUME_EMAIL_SHARE_ENABLED && !fromJobAIMatch && viewSource === 'ai-talent-match'; const pairRows = !RESUME_EMAIL_SHARE_ENABLED && !fromJobAIMatch && viewSource !== 'ai-talent-match'; return (
+                <div className={`mt-5 pt-5 border-t border-brand-blue/10 flex sm:flex-row sm:flex-nowrap sm:items-center sm:justify-between gap-3 max-sm:gap-2 max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 sm:[&>button]:shrink-0 ${inviteScoreRow ? 'flex-row items-stretch max-sm:[&>button]:min-w-0 max-sm:[&>button]:flex-1 max-sm:[&>button]:whitespace-nowrap' : pairRows ? 'flex-col max-sm:grid max-sm:grid-cols-2 max-sm:[&>button]:w-full max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:!px-2' : 'flex-col max-sm:[&>button]:w-full'}`}>
+                  <div className={`flex flex-wrap items-center gap-2 sm:flex-1 sm:min-w-0 sm:max-lg:[&>button]:!px-3 max-sm:flex-col max-sm:items-stretch max-sm:[&>button]:w-full max-sm:[&>button]:justify-center max-sm:[&>button]:min-h-11 max-sm:[&>div>button]:w-full max-sm:[&>div>button]:justify-center max-sm:[&>div>button]:min-h-11 ${inviteScoreRow ? 'max-sm:min-w-0 max-sm:flex-1' : ''} ${pairRows ? 'max-sm:contents max-sm:[&>button]:min-w-0 max-sm:[&>button]:whitespace-nowrap max-sm:[&>button]:!px-2 max-sm:[&>div>button]:whitespace-nowrap max-sm:[&>div>button]:!px-2 max-sm:[&>div]:min-w-0' : ''}`}>
                     {RESUME_EMAIL_SHARE_ENABLED && (
                       <button
                         onClick={() => { if (!canShareResume) return; handleShare(); }}
@@ -1771,6 +1778,7 @@ Best regards`);
                     </button>
                   )}
                 </div>
+                ); })()}
 
               </div>
             );

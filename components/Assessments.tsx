@@ -8948,9 +8948,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       onToggle={() => toggleSelectInvite(inv.id)}
                                       label={inv.candidate_name || inv.candidate_email || 'candidate'}
                                       selectionActive={selectedInviteRows.length > 0}
+                                      inline
                                     />
                                   )}
-                                  <div className="flex items-start justify-between gap-2">
+                                  {/* Select seal and name on one line when the seal is shown; pl-7 clears it. */}
+                                  <div className={`flex items-start justify-between gap-2 ${showInviteSelection && !inviteJobLock(inv) ? 'pl-7' : ''}`}>
                                     <div className="flex items-center gap-3 min-w-0">
                                       <div className="min-w-0">
                                         <p className="tf-row-name truncate" title={capitalizedCase(inv.candidate_name)}>{capitalizedCase(inv.candidate_name) || '-'}</p>

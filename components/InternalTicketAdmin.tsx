@@ -7,7 +7,7 @@ import {
   Inbox, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
   Search, ArrowLeft, Filter, CheckCircle2, Circle, Clock3, XCircle,
   User, Calendar, Loader2, HelpCircle, KeyRound, Bug, MessageCircleQuestion, MoreHorizontal,
-  UserCheck, Users, BarChart3, RefreshCw, Sparkles
+  UserCheck, Users, BarChart3, RefreshCw, Sparkles, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { internalTicketService, InternalTicket, InternalTicketAdminStats, InternalTicketCategory, InternalTicketPriority, InternalTicketStatus } from '@/lib/services';
@@ -729,6 +729,8 @@ export default function InternalTicketAdmin() {
                     return (
                       <MobileRecordCard
                         key={ticket.id}
+                        /* 👁 View at the right end of the name line, as on the Support Tickets cards. */
+                        className="tf-jdv-actions-inline"
                         idBadge={<span className="tf-meta">{ticket.ticket_number}</span>}
                         badges={
                           <>
@@ -755,16 +757,19 @@ export default function InternalTicketAdmin() {
                           { label: 'Assigned', value: ticket.assigned_to?.name },
                           { label: 'Updated', value: formatISTDate(ticket.updated_at) },
                         ]}
-                        footer={
+                        actions={
                           <button
+                            type="button"
                             onClick={() => {
                               setSelectedTicket(ticket);
                               fetchTicketDetail(ticket.id);
                               setView('detail');
                             }}
-                            className="text-sm text-gray-700 hover:text-gray-900"
+                            title="View"
+                            aria-label={`View ticket ${ticket.ticket_number}`}
+                            className="tf-icon-btn-outline"
                           >
-                            View
+                            <Eye />
                           </button>
                         }
                       />

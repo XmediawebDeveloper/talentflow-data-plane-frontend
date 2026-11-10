@@ -3664,7 +3664,9 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     @apply !h-7 !w-7 !min-w-0 !p-0 !rounded-md !border !border-gray-200 !bg-gray-50 !text-gray-700 !shadow-none hover:!bg-gray-100 hover:!text-brand-blue dark:!bg-[var(--surface)] dark:!border-[var(--border)] dark:!text-[var(--text-secondary)];
   }
   .tf-record-actions :is(button, a, [role="button"]):has(> svg:only-child) > svg { @apply !h-3.5 !w-3.5; }
-  .tf-record-actions :is(button, a, [role="button"]):not(:has(> svg:only-child)) {
+  /* On/off switches (role="switch", e.g. the user Active toggle) keep their own pill + knob:
+     the text-button sizing below would square them off and push the knob out of the track. */
+  .tf-record-actions :is(button, a, [role="button"]):not(:has(> svg:only-child)):not([role="switch"]) {
     @apply !h-7 !min-h-0 !py-0 !px-2.5 !rounded-md !text-xs !gap-1.5 [&>svg]:!h-3.5 [&>svg]:!w-3.5;
   }
   /* ── Job Openings module: MobileRecordCard `jd` variant (MobileRecordCardVariantProvider) ──
@@ -3678,8 +3680,33 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* A card whose checkbox sits on the name line keeps it beside the name. */
   /* Checkbox + name on one full line (the name wraps beside the checkbox). */
   .tf-jd-card-head > .tf-jd-card-name > .tf-jdv-name-line { grid-column: 1 / -1; justify-self: stretch; margin-right: 0; display: flex; align-items: flex-start; gap: 0.5rem; min-width: 0; }
-  .tf-jdv-name-line > .tf-jdv-select { margin-top: 0.2em; }
+  /* The checkbox box is exactly one title line tall (same font-size + leading as the title,
+     height 1lh) so the checkbox centres on the name's first line; a long name still wraps below. */
+  .tf-jdv-name-line > .tf-jdv-select { @apply text-base sm:text-lg leading-snug; height: 1lh; margin-top: 0; }
+  /* A checkbox built for a table row may carry its own top margin (e.g. `mt-1.5`); in the card it would
+     push the box below the name, so the card drops it. */
+  .tf-jdv-select > * { margin-top: 0 !important; margin-bottom: 0 !important; }
+  /* Name with an avatar: checkbox · avatar · name centred on one line (the avatar is
+     taller than the text, so the top-aligned checkbox sat above it). */
+  .tf-jd-card-head > .tf-jd-card-name > .tf-jdv-name-line:has(.tf-name-avatar) { align-items: center; }
   .tf-jdv-name-line > :is(.tf-jdv-title, .tf-jdv-title-wrap, .tf-jd-card-title) { flex: 1 1 0%; min-width: 0; }
+  /* Opt-in (`tf-jdv-actions-inline` on the card): a lone icon action (e.g. the 👁 View on a
+     support ticket) sits at the right end of the name line instead of on a line of its
+     own under the name — that line exists for "version chip · Edit · View · ⋮" and looks
+     empty with one icon. The name keeps the rest of the width and still wraps. */
+  .tf-jdv-actions-inline .tf-jd-card-head { grid-template-columns: minmax(0, 1fr) auto; column-gap: 0.75rem; }
+  .tf-jdv-actions-inline .tf-jd-card-head > .tf-jd-card-name > .tf-jdv-name-line { grid-column: 1; }
+  .tf-jdv-actions-inline .tf-jd-card-head > .tf-jdv-actions { grid-column: 2; grid-row: 1; }
+  /* Stat tiles two per row on phones (every StatsCardGrid carries `tf-stats-2up`). At half
+     width the icon sits above the label / value instead of beside them, and the click-arrow
+     keeps the top-right corner, so the text gets the whole tile width. An odd last tile
+     spans the full row rather than sitting alone in half of it. */
+  @media (width < theme(--breakpoint-sm)) {
+    .tf-stats-2up { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .tf-stats-2up > :is(button, div) { padding-right: 0.875rem !important; }
+    .tf-stats-2up > :is(button, div) > .relative.items-start > div { flex-direction: column !important; }
+    .tf-stats-2up > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  }
   .tf-jdv-title-wrap  { @apply min-w-0 break-words text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
   .tf-jdv-meta-item   { @apply inline-flex min-w-0 max-w-full items-center gap-1.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg:not([class*='text-'])]:text-gray-400; }
   .tf-jdv-fields      { @apply mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs; }

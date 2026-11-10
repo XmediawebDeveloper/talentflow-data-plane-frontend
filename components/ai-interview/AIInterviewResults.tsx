@@ -2238,7 +2238,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="tf-panel p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="tf-body-secondary">
+              <span className="tf-body-secondary max-sm:text-center">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates

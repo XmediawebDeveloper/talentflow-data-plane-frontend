@@ -1442,13 +1442,19 @@ export default function AuditTrailPage() {
                         </MobileStatChip>
                       ) : undefined
                     }
+                    /* Phones / tablets: the 👁 View sits at the right end of the name line
+                       (as on the Support Tickets cards) instead of a "View" button alone on
+                       its own bottom row. Same handler; "View" stays as tooltip + label. */
+                    className="tf-jdv-actions-inline"
                     actions={
                       <button
+                        type="button"
                         onClick={() => setSelectedLog(log)}
-                        className="flex items-center gap-1 px-2 py-1 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md text-2xs font-medium flex-shrink-0"
+                        title="View"
+                        aria-label="View"
+                        className="tf-icon-btn-outline"
                       >
-                        <Eye className="w-3 h-3" />
-                        View
+                        <Eye />
                       </button>
                     }
                   />
@@ -1607,7 +1613,7 @@ export default function AuditTrailPage() {
           {/* Pagination */}
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center max-sm:items-center max-sm:text-center gap-1 sm:gap-4">
                 <p className="tf-body-secondary">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
@@ -1622,7 +1628,7 @@ export default function AuditTrailPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 self-end max-sm:self-center sm:self-auto">
                 <div className="flex items-center gap-1.5">
                   <span className="hidden sm:inline tf-body-muted whitespace-nowrap">Go to</span>
                   <input

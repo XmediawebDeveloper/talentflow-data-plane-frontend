@@ -1336,8 +1336,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     onToggle={() => toggleSelected(row.id)}
                     label={row.jobName}
                     selectionActive={selectedIds.size > 0}
+                    inline
                   />
-                  <div className="flex items-start justify-between gap-2">
+                  {/* Select seal and name on one line: the seal sits level with this row, pl-7 clears it. */}
+                  <div className="flex items-start justify-between gap-2 pl-7">
                     {/* Phones / tablets: the name in full (wraps), as the Job Openings card; the table
                         cell's fixed width and "…" from lg. */}
                     <div className="min-w-0 flex-1 max-lg:[&>div]:!w-auto max-lg:[&>div]:flex-wrap max-lg:[&_.truncate]:!whitespace-normal max-lg:[&_.truncate]:break-words">{cellContent(row, 'jobName')}</div>
@@ -1618,9 +1620,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                 </button>
               }
               idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
-              badges={cellContent(row, 'status')}
+              /* The job's Disabled / Archived tag sits beside the status on the top
+                 row; in titleAddon it pulled the ⋮ menu up under the name. */
+              badges={<>{cellContent(row, 'status')}{lockBadge && <AIInterviewJobStatusBadge kind={lockBadge} />}</>}
               title={<span title={row.jobName}>{row.jobName}</span>}
-              titleAddon={lockBadge ? <AIInterviewJobStatusBadge kind={lockBadge} /> : undefined}
               actions={actionsCell(row)}
               fields={[
                 { label: 'Job Version', value: cellContent(row, 'jobVersion') },
