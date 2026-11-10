@@ -369,8 +369,8 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between">
-          <p className="tf-body-muted">
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between max-sm:flex-col max-sm:justify-center max-sm:gap-2">
+          <p className="tf-body-muted max-sm:text-center">
             Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
           </p>
           <div className="flex items-center gap-2 sm:gap-3">

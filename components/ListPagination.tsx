@@ -161,10 +161,10 @@ export default function ListPagination({
   return (
     <div className={shellClass}>
       <div className={`flex ${minimalOnMobile ? 'flex-row items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'} ${compact ? 'gap-2' : 'gap-3'}`}>
-        {/* Compact (popups) on phones: the bar stacks into two rows, and the
-            lower one (Go to / ‹ page ›) is centred — so the upper one (Show /
-            Showing) is centred too, instead of hanging off the left edge. */}
-        <div className={`flex flex-wrap items-center ${groupGapClass} ${compact && !minimalOnMobile ? 'max-sm:justify-center max-sm:text-center' : ''}`}>
+        {/* On phones the bar stacks into rows, and the lower one (Go to /
+            ‹ page ›) is centred — so the upper ones (Show / Showing) are centred
+            too, instead of hanging off the left edge. */}
+        <div className={`flex flex-wrap items-center ${groupGapClass} ${!minimalOnMobile ? 'max-sm:justify-center max-sm:text-center' : ''}`}>
           <div className={`${minimalOnMobile ? 'hidden sm:flex' : 'flex'} items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
             <span className={`${labelClass} text-gray-600`}>Show:</span>
             <FilterSelect

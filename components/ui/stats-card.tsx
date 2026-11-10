@@ -250,5 +250,6 @@ export function StatsCardGrid({
           // never leaves a single orphan on a tablet.
           ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
           : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4';
-  return <div className={cn('grid gap-2.5 sm:gap-3 mb-5', colClass, className)}>{children}</div>;
+  // `tf-stats-2up` (globals.css): phones show the tiles two per row, icon above the text.
+  return <div className={cn('tf-stats-2up grid gap-2.5 sm:gap-3 mb-5', colClass, className)}>{children}</div>;
 }
