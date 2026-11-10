@@ -404,13 +404,22 @@ export default function ServerCandidatePicker({
   const canUpdateMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:update');
   const canDeleteMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
-    'talent-match': true,
+    // AI Talent Match's own Invite permission for this kind, which the server
+    // also enforces for talent-match candidates (2026-11-10).
+    'talent-match': !!(isTenantAdmin || hasPermissionCode(kind === 'interview' ? 'ai_match:invite_ai_interview' : 'ai_match:invite_assessment')),
     'score-resume': true,
     // Tenant admin sees everything — same rule as usePermissions' menu
     // visibility — so it never depends on the per-flag values being loaded.
     'my-resumes': !!(isTenantAdmin || perms?.canUploadResumes || perms?.canViewResumes || perms?.canUpdateResumes || perms?.canDeleteResumes),
     'internal-db': !!(isTenantAdmin || perms?.canAccessInternalDB || perms?.canViewInternalDB),
   };
+  // Opened on (or left on) a tab this user can't use: move to the first one they can.
+  useEffect(() => {
+    if (!permissionsVerified || tabAccess[source]) return;
+    const next = (['talent-match', 'score-resume', 'my-resumes', 'internal-db'] as InviteCandidateSourceTab[]).find((t) => tabAccess[t]);
+    if (next && next !== source) setSource(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [permissionsVerified, source, tabAccess['talent-match'], tabAccess['my-resumes'], tabAccess['internal-db']]);
   /* My Resumes' folders, read once the tab is first opened. */
   const [folders, setFolders] = useState<Folder[] | null>(null);
   const flatFolders = useMemo(() => flattenTree(folders ?? []), [folders]);

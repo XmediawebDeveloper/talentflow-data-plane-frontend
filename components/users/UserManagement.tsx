@@ -1627,7 +1627,7 @@ export default function UserManagement() {
         </div>
         <div className="min-w-0 rounded-2xl border border-gray-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40 sm:p-5">
           {role ? (
-            <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} />
+            <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} auto={role.auto_enabled_areas} />
           ) : (
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-center">
               <Shield className="h-6 w-6 text-gray-300 dark:text-slate-600" />
@@ -2479,7 +2479,7 @@ export default function UserManagement() {
               </div>
             </div>
             {role ? (
-              <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} />
+              <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} auto={role.auto_enabled_areas} />
             ) : (
               <p className="text-sm text-gray-500 dark:text-slate-400">
                 {isOwner

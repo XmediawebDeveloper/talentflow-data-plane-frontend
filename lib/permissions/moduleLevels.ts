@@ -322,6 +322,85 @@ export const applyQuickSetup = (
   return { codes: next, changed };
 };
 
+// ---------------------------------------------------------------------------
+// "Auto" areas: switched on because another area needs them (client rule,
+// 2026-11-10). They are marked, and turn off again once nothing that needed
+// them is on. Areas the admin set themselves are never turned off this way.
+// ---------------------------------------------------------------------------
+
+/** area id -> the area ids that needed it switched on. */
+export type AutoMap = Record<string, string[]>;
+
+/** Areas `m` needs on (its dependencies plus NEEDS_FULL). */
+const needIds = (m: AccessModule): Set<string> =>
+  new Set([...moduleNeeds(m).map((o) => o.id), ...(NEEDS_FULL[m.id] ?? [])]);
+
+/** Keep only marks for areas that are on, each listing only areas that are on. */
+export const pruneAutoMap = (codes: Set<string>, auto: AutoMap | undefined | null): AutoMap => {
+  const out: AutoMap = {};
+  for (const [id, by] of Object.entries(auto ?? {})) {
+    const area = MODULE_BY_ID[id];
+    if (!area || levelOf(codes, area) === 'none') continue;
+    const live = (by ?? []).filter((b) => MODULE_BY_ID[b] && levelOf(codes, MODULE_BY_ID[b]) !== 'none');
+    if (live.length) out[id] = Array.from(new Set(live));
+  }
+  return out;
+};
+
+/**
+ * applyQuickSetup plus the "Auto" marks:
+ *  - Access on `m`: areas it switched on are marked Auto (needed by `m`); Auto
+ *    areas it also needs get `m` added to their list.
+ *  - Choosing a level for `m` yourself makes `m` your own (its Auto mark goes).
+ *  - Afterwards, an Auto area that nothing switched on still needs is turned
+ *    off (`autoOff`), e.g. Resume Scoring off -> the Resume Upload it switched
+ *    on goes off too, while a Resume Upload the admin set stays.
+ */
+export const applyWithAuto = (
+  codes: Set<string>,
+  auto: AutoMap | undefined | null,
+  m: AccessModule,
+  level: AccessLevel,
+): { codes: Set<string>; changed: LevelChange[]; auto: AutoMap; autoOff: AccessModule[] } => {
+  const before = Object.fromEntries(ACCESS_MODULES.map((o) => [o.id, describeModule(codes, o).base]));
+  const first = applyQuickSetup(codes, m, level);
+  let next = first.codes;
+  const map: AutoMap = {};
+  for (const [id, by] of Object.entries(auto ?? {})) map[id] = [...(by ?? [])];
+  delete map[m.id];
+  if (level !== 'none') {
+    for (const c of first.changed) {
+      if (c.from === 'none' && c.to !== 'none') map[c.module.id] = Array.from(new Set([...(map[c.module.id] ?? []), m.id]));
+    }
+    needIds(m).forEach((id) => { if (map[id] && !map[id].includes(m.id)) map[id].push(m.id); });
+  }
+  const autoOff: AccessModule[] = [];
+  let pruned = pruneAutoMap(next, map);
+  // Marks whose list emptied (what needed them went off) are in `map` but not `pruned`.
+  for (let pass = 0; pass < 6; pass++) {
+    let changedPass = false;
+    for (const id of Object.keys(map)) {
+      if (pruned[id]) continue;
+      const area = MODULE_BY_ID[id];
+      if (!area || levelOf(next, area) === 'none') { delete map[id]; continue; }
+      // Still needed by an area that is on (e.g. set before marks existed): keep it, re-attributed.
+      const still = SHOWN_MODULES.filter((o) => o.id !== id && levelOf(next, o) !== 'none' && needIds(o).has(id)).map((o) => o.id);
+      if (still.length) { map[id] = still; continue; }
+      next = applyQuickSetup(next, area, 'none').codes;
+      autoOff.push(area);
+      delete map[id];
+      changedPass = true;
+    }
+    pruned = pruneAutoMap(next, map);
+    if (!changedPass) break;
+  }
+  const changed = ACCESS_MODULES
+    .filter((o) => o.id !== m.id && !o.always)
+    .map((o) => ({ module: o, from: before[o.id] as AccessLevel, to: levelOf(next, o) }))
+    .filter((c) => c.from !== c.to && !autoOff.some((a) => a.id === c.module.id));
+  return { codes: next, changed, auto: pruned, autoOff };
+};
+
 /** Label of a code inside its module (e.g. "Export"), or with its section when it lives elsewhere. */
 export const shortLabel = (code: string): string => getPermissionParts(code).label;
 
