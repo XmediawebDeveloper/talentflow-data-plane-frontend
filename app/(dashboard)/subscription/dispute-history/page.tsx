@@ -106,7 +106,9 @@ const matchesDisputeStatus = (d: DisputeInvoice, filter: string) => {
 const EXPORT_HEADERS = ['Dispute #', 'Date', 'Deadline', 'Original Invoice', 'Reason', 'Customer Claim', 'Amount', 'Status', 'Bank Reference'];
 
 export default function DisputeHistoryPage() {
-  const { user, tenant } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  // Downloading a record is an export (2026-11-10): Billing Access (usage:export).
+  const canExportBilling = isTenantAdmin || hasPermissionCode('usage:export');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -806,7 +808,8 @@ export default function DisputeHistoryPage() {
                 <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:gap-3">
                   <button
                     onClick={() => handleDownloadDispute(selectedDispute)}
-                    disabled={downloadingId === selectedDispute.id}
+                    disabled={downloadingId === selectedDispute.id || !canExportBilling}
+                    title={canExportBilling ? undefined : "Your role can't download billing records"}
                     className="tf-btn tf-btn-primary flex flex-1 rounded-xl bg-brand-blue px-4 py-2.5 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70 whitespace-normal hover:bg-brand-blue"
                   >
                     {downloadingId === selectedDispute.id ? (

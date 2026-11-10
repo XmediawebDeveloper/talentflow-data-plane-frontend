@@ -75,12 +75,13 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   });
   const [showExportModal, setShowExportModal] = useState(false);
 
-  const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
+  const { isTenantAdmin: authIsTenantAdmin, user, hasPermissionCode } = useAuth();
   // Must match the backend's actual gate (current_user.is_tenant_admin) for the
   // team-members-usage endpoint — a raw role-string comparison drifts from the
   // backend (e.g. 'admin' is no longer an automatic tenant_admin bypass there).
   const isTenantAdmin = authIsTenantAdmin;
-  const canExport = authIsTenantAdmin || !!user?.permissions?.canExport;
+  // Teams' own Export code, as TeamUsageAnalytics / TeamAnalyticsDashboard (2026-11-10).
+  const canExport = authIsTenantAdmin || hasPermissionCode('teams:export');
 
   useEffect(() => {
     if (isTenantAdmin) {

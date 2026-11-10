@@ -100,11 +100,49 @@ const iconForLabel = (label: string, cls = 'w-4 h-4') => {
   return <AlertTriangle className={cls} />;
 };
 // Severity is shown as words, not colours — only "Serious" is red.
-const severityForConfidence = (confidence: string) => {
+// Confidence says how sure the AI is, not how risky the item is — so low-risk
+// items (e.g. a visible mouse cursor) are capped at "Minor" regardless.
+const isLowRiskLabel = (label: string) => /\b(mouse\s*)?cursor\b|pointer arrow/i.test(label);
+const severityForConfidence = (confidence: string, label = '') => {
+  if (isLowRiskLabel(label)) return { label: 'Minor', hint: 'A visible cursor only shows the screen was live — usually nothing to worry about.', cls: 'text-gray-500' };
   if (confidence === 'high') return { label: 'Serious', hint: 'The AI is confident this happened.', cls: 'text-destructive' };
   if (confidence === 'medium') return { label: 'Worth a look', hint: 'The AI thinks this may have happened — please check the video.', cls: 'text-gray-700' };
   return { label: 'Minor', hint: 'Low confidence — usually nothing to worry about.', cls: 'text-gray-500' };
 };
+// Plain-English name for a #RRGGBB colour. Challenge colours are random RGB
+// values (plus one white slot), so this buckets by hue + lightness instead of
+// looking up a fixed list.
+const colourName = (hex: string | null | undefined): string => {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex || '');
+  if (!m) return 'Unknown';
+  const [r, g, b] = [m[1], m[2], m[3]].map(x => parseInt(x, 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b);
+  const l = (max + min) / 2;
+  const s = max === min ? 0 : (max - min) / (1 - Math.abs(2 * l - 1));
+  if (l >= 0.93) return 'White';
+  if (l <= 0.1) return 'Black';
+  if (s < 0.15) return l > 0.7 ? 'Light grey' : l < 0.35 ? 'Dark grey' : 'Grey';
+  let h = 0;
+  if (max === r) h = ((g - b) / (max - min)) % 6;
+  else if (max === g) h = (b - r) / (max - min) + 2;
+  else h = (r - g) / (max - min) + 4;
+  h = (h * 60 + 360) % 360;
+  const hue = h < 15 ? 'red' : h < 40 ? 'orange' : h < 65 ? 'yellow' : h < 160 ? 'green'
+    : h < 190 ? 'teal' : h < 250 ? 'blue' : h < 290 ? 'purple' : h < 335 ? 'pink' : 'red';
+  if (hue === 'orange' && l < 0.4) return 'Brown';
+  const shade = l > 0.7 ? 'Light ' : l < 0.3 ? 'Dark ' : '';
+  return shade ? shade + hue : hue.charAt(0).toUpperCase() + hue.slice(1);
+};
+// The AI summary uses internal terms ("pan phase", "display phase", quoted
+// ID). Swap them for words a recruiter understands.
+const plainSummary = (s: string) => s
+  .replace(/\b(during|in) the pan(ning)? phase\b/gi, 'while the candidate was showing the room')
+  .replace(/\b(during|in) the display phase\b/gi, 'while the phone was pointed at the laptop screen')
+  .replace(/\bpan(ning)? phase\b/gi, 'room scan')
+  .replace(/\bdisplay phase\b/gi, 'screen check')
+  .replace(/\bexpected ID\b/gi, 'one-time code')
+  .replace(/\bchallenge (ID|code)\b/gi, 'one-time code')
+  .replace(/(^|[.!?]\s+)([a-z])/g, (_, p, c) => p + c.toUpperCase());
 const fmtSec = (s: number) => `${Math.max(0, s).toFixed(s % 1 === 0 ? 0 : 1)}s`;
 // m:ss.s — tenths matter in a 10-second clip.
 const fmtClock = (s: number) => {
@@ -114,16 +152,21 @@ const fmtClock = (s: number) => {
   return `${m}:${sec < 10 ? '0' : ''}${sec.toFixed(1)}`;
 };
 
-function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na'; title: string; hint: string }) {
+// 'info' = shown for reference only; never counts as a problem.
+function CheckLine({ state, title, hint }: { state: 'pass' | 'fail' | 'na' | 'info'; title: string; hint: string }) {
   return (
     <li className="flex items-center gap-2.5 py-2" title={hint}>
       <span className={`grid place-items-center w-5 h-5 rounded-full shrink-0 ${
         state === 'pass' ? 'bg-success-subtle text-success' : state === 'fail' ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-400'
       }`}>
-        {state === 'pass' ? <Check className="w-3 h-3" strokeWidth={3} /> : state === 'fail' ? <X className="w-3 h-3" strokeWidth={3} /> : <span className="w-1.5 h-0.5 bg-current rounded" />}
+        {state === 'pass' ? <Check className="w-3 h-3" strokeWidth={3} />
+          : state === 'fail' ? <X className="w-3 h-3" strokeWidth={3} />
+          : state === 'info' ? <Info className="w-3 h-3" />
+          : <span className="w-1.5 h-0.5 bg-current rounded" />}
       </span>
       <span className={`text-sm ${state === 'fail' ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>{title}</span>
       {state === 'na' && <span className="ml-auto text-2xs text-gray-400">Not checked</span>}
+      {state === 'info' && <span className="ml-auto text-2xs text-gray-400 whitespace-nowrap">Not a violation</span>}
     </li>
   );
 }
@@ -213,7 +256,7 @@ export default function EnvVerificationStudio({
         ?? (isVoice
           ? `Someone was heard talking${seekSeconds != null ? ` around ${seekSeconds.toFixed(1)}s` : ''}${phaseDescription ? `, ${phaseDescription}` : ''}.`
           : `Seen${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`);
-      const severity = severityForConfidence(confidence);
+      const severity = severityForConfidence(confidence, label);
       // Stored frames (2fps) that fall inside this item's time range.
       let matchedFrames: EnvFrameLike[] = [];
       if (frames && frames.length > 0 && range) {
@@ -244,6 +287,18 @@ export default function EnvVerificationStudio({
   const rgb = v.rgb_sequence_results || [];
   const rgbPass = rgb.length > 0 ? rgb.every(r => r.match) : null;
   const rgbMatched = rgb.filter(r => r.match).length;
+  // The RGB check samples the middle of each second ((second-1)+0.5s); show
+  // the stored 2fps frame nearest that moment so the recruiter sees exactly
+  // what the camera saw for that colour.
+  const frameForSecond = (second: number): EnvFrameLike | null => {
+    if (!frames || frames.length === 0) return null;
+    const t = second - 0.5;
+    let best: EnvFrameLike | null = null;
+    for (const f of frames) {
+      if (!best || Math.abs(f.index * FRAME_STEP - t) < Math.abs(best.index * FRAME_STEP - t)) best = f;
+    }
+    return best && Math.abs(best.index * FRAME_STEP - t) <= 0.5 ? best : null;
+  };
   const timedRows = rows.filter(r => r.range && r.seekSeconds != null);
   // Next flagged moment after the playhead (wraps to the first).
   const nextIssue = () => {
@@ -256,9 +311,10 @@ export default function EnvVerificationStudio({
   const analysing = v.analysis_status === 'pending' || v.analysis_status === 'running';
   const analysed = v.analysis_status === 'done';
   const liveCheck = v.color_match ?? rgbPass;
-  // A failed code / live-recording check needs review on its own, even if the
-  // AI found nothing — keeps the card status in line with the red tab badge.
-  const checksFailed = v.id_match === false || liveCheck === false;
+  // A failed verification code needs review on its own, even if the AI found
+  // nothing. Colour mismatch deliberately does NOT — phone cameras shift
+  // colours, and the backend excludes colour from result_severity too.
+  const checksFailed = v.id_match === false;
   const flagged = (analysed && v.result_severity === 'flagged') || (v.video_uploaded && checksFailed);
 
   // What happened on the phone when no video arrived. pending/opened rows only
@@ -292,8 +348,8 @@ export default function EnvVerificationStudio({
     : 'Pending';
   const title = !v.video_uploaded ? notUploadedMessage
     : flagged ? (rows.length > 0 ? `${rows.length} ${rows.length === 1 ? 'thing needs' : 'things need'} your review`
-        : v.id_match === false ? 'The verification code did not match — please review'
-        : 'The video may not have been recorded live — please review')
+        : v.id_match === false ? 'The verification code could not be read — please review'
+        : 'Please watch the video to confirm')
     : analysing ? 'Checking the video…'
     : v.analysis_status === 'error' ? 'We could not check this video — please watch it yourself'
     : analysed ? 'No problems found'
@@ -330,13 +386,18 @@ export default function EnvVerificationStudio({
               </span>
               <span
                 className="text-gray-400 cursor-help"
-                title="The candidate scanned a QR code with their phone and recorded a short video: first pointing at their laptop screen, then slowly showing the room. Our AI checks it for other people, devices and voices."
+                title={'How this check works:\n'
+                  + '1. The candidate scans a QR code and records a 10-second video with their phone.\n'
+                  + '2. First 5 seconds: the phone points at the laptop. The laptop shows only a plain colour and a one-time code, so any other app, AI tool or popup is easy to spot.\n'
+                  + '3. Last 5 seconds: the candidate shows the room, to check for other people, phones or screens.\n'
+                  + '4. The phone microphone also listens for talking.\n\n'
+                  + '"Needs review" means the AI saw something worth checking — watch the video to confirm. A colour mismatch alone is not a violation.'}
               >
                 <Info className="w-3.5 h-3.5" />
               </span>
             </div>
             <h3 className="mt-1.5 text-lg font-bold text-gray-900 leading-snug">{title}</h3>
-            {v.ai_summary && <p className="mt-1 text-sm text-gray-600 leading-relaxed">{v.ai_summary}</p>}
+            {v.ai_summary && <p className="mt-1 text-sm text-gray-600 leading-relaxed">{plainSummary(v.ai_summary)}</p>}
             <div className="mt-2 flex items-center flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
               <span>Shown <span className="font-mono">{v.triggered_at ? formatTs(v.triggered_at) : '—'}</span></span>
               <span className="inline-flex items-center gap-1">
@@ -516,9 +577,9 @@ export default function EnvVerificationStudio({
                 hint="The code shown on the laptop screen matched this session."
               />
               <CheckLine
-                state={liveCheck === null ? 'na' : liveCheck ? 'pass' : 'fail'}
-                title={rgb.length > 0 ? `Recorded live (${rgbMatched}/${rgb.length} colours seen)` : 'Recorded live'}
-                hint="The colours flashed on the laptop screen showed up in the video."
+                state={liveCheck === null ? 'na' : liveCheck ? 'pass' : 'info'}
+                title={rgb.length > 0 ? `Screen colours seen (${rgbMatched}/${rgb.length})` : 'Screen colours seen'}
+                hint="The plain colours on the laptop screen showed up in the video. For reference only — phone cameras can change colours, so a mismatch is not a violation."
               />
               <CheckLine
                 state={!analysed ? 'na' : visualIssues === 0 ? 'pass' : 'fail'}
@@ -674,17 +735,62 @@ export default function EnvVerificationStudio({
                   <p className="text-xs font-semibold text-gray-700 mb-1.5">
                     Colour check, second by second · {rgbMatched}/{rgb.length} matched
                   </p>
-                  <div className="flex flex-wrap gap-2">
-                    {rgb.map((r) => (
-                      <span
-                        key={r.second}
-                        title={r.detected_rgb ? `Expected ${r.expected_rgb}, detected ${r.detected_rgb} (distance ${r.distance ?? '—'})` : `Expected ${r.expected_rgb} — no frame detected`}
-                        className="inline-flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-md ring-1 ring-gray-200 text-xs text-gray-700"
-                      >
-                        <span className="w-3.5 h-3.5 rounded-sm ring-1 ring-black/10" style={{ backgroundColor: r.expected_rgb }} />
-                        Sec {r.second}: <span className={r.match ? 'text-gray-700' : 'font-semibold text-destructive'}>{r.match ? 'match' : 'mismatch'}</span>
-                      </span>
-                    ))}
+                  <div className="flex gap-2 mb-2.5 p-2.5 rounded-md bg-gray-50 ring-1 ring-gray-200 text-xs text-gray-600 leading-relaxed">
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0 text-gray-400" aria-hidden />
+                    <div className="space-y-1">
+                      <p>
+                        <span className="font-medium text-gray-700">Why plain colours?</span>{' '}
+                        A plain screen makes any other app, AI tool or popup easy to spot.
+                      </p>
+                      <p>
+                        <span className="font-medium text-gray-700">A colour mismatch is not a violation.</span>{' '}
+                        Phone cameras can change colours (white may look grey). Real issues are listed
+                        under &ldquo;Needs your review&rdquo;.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                    {rgb.map((r) => {
+                      const f = frameForSecond(r.second);
+                      const expectedName = colourName(r.expected_rgb);
+                      const tip = r.detected_rgb
+                        ? `Expected ${expectedName} (${r.expected_rgb}), camera saw ${colourName(r.detected_rgb)} (${r.detected_rgb}) · distance ${r.distance ?? '—'}`
+                        : `Expected ${expectedName} (${r.expected_rgb}) — no frame could be read for this second`;
+                      return (
+                        <div
+                          key={r.second}
+                          title={tip}
+                          className={`rounded-md overflow-hidden ring-1 text-xs ${r.match ? 'ring-gray-200' : 'ring-2 ring-destructive'}`}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => f?.url && openFrame(f)}
+                            disabled={!f?.url}
+                            aria-label={`Open frame for second ${r.second}`}
+                            className="block w-full aspect-video bg-gray-100 hover:opacity-90 disabled:cursor-default"
+                          >
+                            {f?.url ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={f.url} alt={`Camera frame at ${r.second - 0.5}s`} className="w-full h-full object-cover" loading="lazy" />
+                            ) : (
+                              <span className="flex w-full h-full items-center justify-center text-2xs text-gray-400">
+                                {framesLoading ? 'Loading…' : 'No frame'}
+                              </span>
+                            )}
+                          </button>
+                          <div className="px-2 py-1.5 space-y-0.5">
+                            <p className="text-gray-500">Sec {r.second}</p>
+                            <p className="flex items-center gap-1.5 text-gray-800 font-medium">
+                              <span className="w-3 h-3 shrink-0 rounded-sm ring-1 ring-black/10" style={{ backgroundColor: r.expected_rgb }} />
+                              <span className="truncate">{expectedName}</span>
+                            </p>
+                            <p className={r.match ? 'text-gray-600' : 'font-semibold text-destructive'}>
+                              {r.match ? '✓ match' : '✗ mismatch'}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

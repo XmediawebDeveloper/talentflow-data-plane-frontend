@@ -81,6 +81,10 @@ export default function Header(props: HeaderProps) {
 function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpenSettings, onMenuClick, isMobileMenuOpen, subscriptionExpired }: HeaderProps & { user: UserType }) {
   const router = useRouter();
   const { refreshUser, isTenantAdmin, hasPermission } = useAuth();
+  // Plan upgrade and add-on purchase need Subscription & Billing Access
+  // (Upgrade Plan) — same as the Current Plan page and the add-on API (2026-11-10).
+  const canBuyForPlan = isTenantAdmin || hasPermission('canUpgradePlan');
+  const BUY_BLOCKED_MESSAGE = "Your role can't upgrade the plan or buy add-ons. Ask the account owner or a Billing Manager.";
   const { theme: storedTheme, setTheme } = useTheme();
   // The saved theme only exists in the browser; until mount, render as Light so
   // the server and first client render agree (no hydration mismatch on the icon).
@@ -659,7 +663,6 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     recruiter: 'Recruiter',
     viewer: 'Viewer',
     billing_manager: 'Billing Manager',
-    standard_user: 'Member',
   };
 
   const prettyRole = (r?: string) =>
@@ -956,10 +959,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       variant="secondary"
                       size="sm"
                       onClick={() => {
+                        if (!canBuyForPlan) return;
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan');
                       }}
-                      className="w-full sm:w-auto flex-shrink-0"
+                      aria-disabled={!canBuyForPlan}
+                      title={canBuyForPlan ? undefined : BUY_BLOCKED_MESSAGE}
+                      className={`w-full sm:w-auto flex-shrink-0 ${!canBuyForPlan ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Upgrade plan
                       <ArrowUpRight className="w-3 h-3" />
@@ -1064,10 +1070,13 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
                       variant="primary"
                       size="sm"
                       onClick={() => {
+                        if (!canBuyForPlan) return;
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan?section=usage-quotas');
                       }}
-                      className="w-full sm:w-auto flex-shrink-0"
+                      aria-disabled={!canBuyForPlan}
+                      title={canBuyForPlan ? undefined : BUY_BLOCKED_MESSAGE}
+                      className={`w-full sm:w-auto flex-shrink-0 ${!canBuyForPlan ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Purchase Add-ons
                       <ShoppingCart className="w-3.5 h-3.5" />

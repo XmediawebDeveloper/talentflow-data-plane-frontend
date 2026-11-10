@@ -86,7 +86,6 @@ const isTokenExpired = (): boolean => {
 // RBAC Helper functions
 const isViewerRole = (role: UserRole): boolean => role === 'viewer';
 const isBillingManagerRole = (role: UserRole): boolean => role === 'billing_manager';
-const isStandardUserRole = (role: UserRole): boolean => role === 'standard_user';
 const isTenantAdminRole = (role: UserRole): boolean => role === 'tenant_admin';
 const isRecruiterRole = (role: UserRole): boolean => role === 'recruiter';
 
@@ -105,7 +104,6 @@ interface AuthContextType {
   isRecruiter: boolean;
   isViewer: boolean;
   isBillingManager: boolean;
-  isStandardUser: boolean;
   isReadOnlyRole: boolean;
   hasFeature: (feature: keyof FeatureFlags) => boolean;
   hasPermission: (permission: keyof Permission) => boolean;
@@ -365,7 +363,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const isRecruiter = user ? isRecruiterRole(user.role) : false;
   const isViewer = user ? isViewerRole(user.role) : false;
   const isBillingManager = user ? isBillingManagerRole(user.role) : false;
-  const isStandardUser = user ? isStandardUserRole(user.role) : false;
 
   // RBAC05: Viewer is read-only
   const isReadOnlyRole = isViewer;
@@ -977,7 +974,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isRecruiter,
     isViewer,
     isBillingManager,
-    isStandardUser,
     isReadOnlyRole,
     hasFeature,
     hasPermission,
@@ -999,7 +995,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isRecruiter,
     isViewer,
     isBillingManager,
-    isStandardUser,
     isReadOnlyRole,
     hasFeature,
     hasPermission,

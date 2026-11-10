@@ -480,6 +480,8 @@ export interface RowAction {
   iconClassName?: string;
 }
 
+export const NO_INVITE_PERMISSION_MESSAGE = "You can view invitations, but your role can't resend, edit or revoke them";
+
 export function buildInvitationRowActions(inv: any, opts: {
   onResend?: (inv: any) => void;
   resendingId?: string | null;
@@ -501,7 +503,13 @@ export function buildInvitationRowActions(inv: any, opts: {
    *  lists that span several assessments/JDs. Mirrors AI Interview's
    *  `jdDisabled`. */
   jdDisabled?: boolean;
+  /** The role's Assessments "Invite" permission (2026-11-10). False →
+   *  Resend, Edit / Edit Email and Revoke stay visible but disabled, so a
+   *  view-only role (Viewer) can't resend expired links. */
+  canInvite?: boolean;
 }): RowAction[] {
+  const noInvite = opts.canInvite === false;
+  const noInviteProps = noInvite ? { disabled: true, title: NO_INVITE_PERMISSION_MESSAGE } : {};
   const actions: RowAction[] = [];
   const status = resolveInviteStatus(inv);
   const jdLocked = !!opts.jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
@@ -535,6 +543,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       disabled: opts.resendingId === inv.id || locked,
       iconClassName: 'text-menu-icon-share',
       ...(locked ? { title: lockedMessage } : {}),
+      ...noInviteProps,
     });
   }
   if (opts.onEditEmail && (status === 'failed' || status === 'bounced')) {
@@ -544,6 +553,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       Icon: Pencil,
       run: () => opts.onEditEmail!(inv),
       iconClassName: 'text-menu-icon-edit',
+      ...noInviteProps,
     });
   }
   if (opts.onEdit && canEditInvitation(inv)) {
@@ -555,6 +565,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       title: locked ? lockedMessage : 'Edit candidate details and send',
       iconClassName: 'text-menu-icon-edit',
       disabled: locked,
+      ...noInviteProps,
     });
   }
   if (opts.onRevoke && isRevocableInvitation(inv)) {
@@ -567,6 +578,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       busy: opts.revokingId === inv.id,
       title: locked ? lockedMessage : "Revoke this invitation — the candidate's link will stop working",
       destructive: true,
+      ...noInviteProps,
     });
   }
   return actions;

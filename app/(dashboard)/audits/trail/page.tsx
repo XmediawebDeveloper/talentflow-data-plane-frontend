@@ -109,6 +109,8 @@ interface AuditStats {
     user_email: string | null;
     action_count: number;
   }>;
+  // Distinct users with audit activity in the period.
+  active_users_count?: number;
 }
 
 const actionColors: Record<string, string> = {
@@ -316,6 +318,7 @@ export default function AuditTrailPage() {
   // Which stats card popup is open (Active Users / Action Types / Entity Types).
   const [statsPopup, setStatsPopup] = useState<'users' | 'actions' | 'entities' | null>(null);
   const statsPopupRef = useRef<HTMLDivElement>(null);
+  const knownUserNamesRef = useRef<Record<string, string>>({});
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -533,7 +536,15 @@ export default function AuditTrailPage() {
       : dateRange;
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/audits/stats?days=${statsDays}`, {
+      // Pass the active filters so each popup's counts are faceted by the
+      // OTHER filters (e.g. users counted for the selected action only) and
+      // match the record count you get after clicking an entry.
+      const statsParams = new URLSearchParams({ days: statsDays });
+      if (actionFilter) statsParams.append('action', actionFilter);
+      if (entityFilter) statsParams.append('entity_type', entityFilter);
+      if (userFilter) statsParams.append('user_id', userFilter);
+      if (errorOriginFilter) statsParams.append('error_origin', errorOriginFilter);
+      const response = await fetch(`${API_URL}/audits/stats?${statsParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -553,7 +564,7 @@ export default function AuditTrailPage() {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
-  }, [dateRange, customFrom, isCustomRange, customRangeReady]);
+  }, [dateRange, customFrom, isCustomRange, customRangeReady, actionFilter, entityFilter, userFilter, errorOriginFilter]);
 
   const fetchFilters = useCallback(async () => {
     try {
@@ -949,7 +960,7 @@ export default function AuditTrailPage() {
   };
 
   const filteredLogs = auditLogs.filter(log => {
-    // Error origin filter (applied client-side; the list endpoint ignores it)
+    // Error origin is applied server-side now; this is just a safety net.
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
 
     // Action / entity / user filters are applied server-side via fetchAuditLogs.
@@ -967,6 +978,10 @@ export default function AuditTrailPage() {
     );
   });
 
+  // Remember every user name we've seen: the faceted stats can drop the
+  // selected user from top_active_users (e.g. 0 actions of the chosen type).
+  stats?.top_active_users.forEach(u => { knownUserNamesRef.current[u.user_id] = u.user_name; });
+
   // One removable chip per active filter (the date range isn't one — it always has a value).
   const optionLabel = (list: Array<{ value: string; label: string }>, v: string) =>
     list.find(o => o.value === v)?.label ?? v.replace(/_/g, ' ');
@@ -976,7 +991,7 @@ export default function AuditTrailPage() {
     entityFilter && { key: 'entity', name: 'Entity', value: optionLabel(availableEntities, entityFilter), clear: () => { setEntityFilter(''); setPage(1); } },
     userFilter && {
       key: 'user', name: 'User',
-      value: stats?.top_active_users.find(u => u.user_id === userFilter)?.user_name || 'Selected user',
+      value: stats?.top_active_users.find(u => u.user_id === userFilter)?.user_name || knownUserNamesRef.current[userFilter] || 'Selected user',
       clear: () => { setUserFilter(''); setPage(1); },
     },
     errorOriginFilter && { key: 'origin', name: 'Origin', value: ORIGIN_FILTER_LABELS[errorOriginFilter] ?? errorOriginFilter, clear: () => { setErrorOriginFilter(''); setPage(1); } },
@@ -1080,7 +1095,7 @@ export default function AuditTrailPage() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="truncate tf-label max-sm:text-xs">Active Users</p>
-                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}

@@ -1,9 +1,10 @@
 'use client';
 
-import { formatExperienceRange } from '@/lib/utils/jobExperience';
+import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
-import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList } from 'lucide-react';
+import { SectionHeader, SummaryLocation } from '@/components/ai-interview/ConfigSummary';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
@@ -40,6 +41,8 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import {
   archivedAssessmentRepresentative,
   buildAssessmentJobList,
+  formatEmploymentType,
+  formatIndustryType,
   groupByLineage,
   isSelectableVersion,
   jobSearchMatcher,
@@ -3773,13 +3776,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       aria-disabled={blockedByOtherPick || !latestSelectableStatus}
                       className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
                         blockedByOtherPick || !latestSelectableStatus
-                          ? 'bg-gray-50 border-gray-200 opacity-60'
+                          ? `bg-gray-50 border-gray-200 ${blockedByOtherPick ? 'opacity-60' : ''}`
                           : lineageSelected
                             ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
                             : 'bg-white border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                       }`}
                     >
-                      <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
+                      {/* An archived / unpublished job fades only its radio
+                          and details, so the eye and expanded Version History
+                          stay normal. */}
+                      <div className={`flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4`}>
                         {/* A radio, because exactly one JD version is built
                             against. Wrapped in its own label rather than the
                             whole card: the card carries a versions toggle and
@@ -3791,7 +3797,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             sibling version that does not — and off while
                             another job holds the pick. */}
                         <label
-                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'} ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}
                           title={
                             blockedByOtherPick
                               ? otherPickReason
@@ -3815,7 +3821,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           <span className="sr-only">Select the latest version of {job.title}</span>
                         </label>
 
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}>
                           {/* Clicking the headline ticks the job, so the whole
                               block is a target without a <label> wrapping the
                               controls beside it. */}
@@ -4391,6 +4397,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     const configureJobId = editingAssessment?.jd_short_id || selectedJob?.job_id || '';
     const configureJobVersion = editingAssessment?.jd_version ?? selectedJob?.versionNumber;
     const configureJobRole = selectedJob?.title || editingAssessment?.jd_title || '';
+    /* The JD's own id — for the "View JD" dialog on the summary card below —
+       same fallback chain as the sidebar's own View JD (see the
+       "Auto-calculated from JD" card further down). */
+    const jdSummaryId = selectedJob?.id || preSelectedJobId || urlJdId;
+    /* Shared wording with the AI Interview Configure page's Job Details box:
+       the JD's own years with its level name — see formatJdExperience. */
+    const jobDetailsExperience = selectedJob
+      ? formatJdExperience(
+          {
+            jobLevel: selectedJob.experience_level,
+            experienceMin: selectedJob.experience_min,
+            experienceMax: selectedJob.experience_max,
+          },
+          { includeLevel: true }
+        )
+      : undefined;
 
     /**
      * The HR round's SECTION card, rendered INSIDE the HR round block.
@@ -4745,6 +4767,34 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 Set duration, section distribution, and topics for{' '}
                 <AssessmentJobBinding jobId={configureJobId} role={configureJobRole} version={configureJobVersion} />
               </p>
+            </div>
+          )}
+
+          {/* ── The JD this assessment is being configured against ───────────
+              Same row the JD picker drew in Step 1 (JobOpeningSummary), so the
+              recruiter recognises the record they chose instead of re-reading
+              a bare title — matches the JD summary card the AI Interview
+              Configure page shows above its own two-column layout. */}
+          {!embedded && selectedJob && (
+            <div className="mb-5 tf-card-soft px-4 py-3.5">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <JobOpeningSummary job={selectedJob} mergeInfoRows />
+                </div>
+                {jdSummaryId && (
+                  <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setJdFullViewFor({ id: jdSummaryId, title: selectedJob.title })}
+                      className="inline-flex items-center justify-center gap-1.5 text-sm text-brand-blue border border-brand-blue/40 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue transition-colors whitespace-nowrap"
+                      title="Read this job description"
+                    >
+                      <Eye className="w-4 h-4" />
+                      View JD
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -5159,6 +5209,63 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 1.5rem breathing room at the bottom. Nothing shows while the
                 content fits, which is the common case. */}
             <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto">
+              {/* Configuration Summary — Job Details. Same card the AI
+                  Interview Configure page's sidebar leads with: Role Title,
+                  Experience, Industry, Location, Employment Type and JD
+                  Version, read straight off the selected JD. */}
+              {selectedJob && (
+                <div className="tf-card-soft p-4">
+                  <div className="mb-4">
+                    <SectionHeader
+                      icon={ClipboardList}
+                      title="Configuration Summary"
+                      subtitle="What this assessment will look like once published."
+                    />
+                  </div>
+                  <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                      <span className="text-xs font-medium text-brand-blue">Job Details</span>
+                    </div>
+                    <div className="divide-y divide-gray-50">
+                      <div className="px-3 py-2 flex items-start justify-between gap-2">
+                        <span className="tf-meta flex-shrink-0">Role Title</span>
+                        <span className="tf-caption text-right break-words min-w-0">{selectedJob.title}</span>
+                      </div>
+                      {jobDetailsExperience && (
+                        <div className="px-3 py-2 flex items-start justify-between gap-2">
+                          <span className="tf-meta flex-shrink-0">Experience</span>
+                          <span className="tf-caption text-right">{jobDetailsExperience}</span>
+                        </div>
+                      )}
+                      {selectedJob.industry_type && (
+                        <div className="px-3 py-2 flex items-start justify-between gap-2">
+                          <span className="tf-meta flex-shrink-0">Industry</span>
+                          <span className="tf-caption text-right">{formatIndustryType(selectedJob.industry_type)}</span>
+                        </div>
+                      )}
+                      {selectedJob.location && (
+                        <div className="px-3 py-2 flex items-center justify-between gap-2">
+                          <span className="tf-meta flex-shrink-0">Location</span>
+                          <SummaryLocation value={selectedJob.location} locations={selectedJob.locations} />
+                        </div>
+                      )}
+                      {selectedJob.employmentType && (
+                        <div className="px-3 py-2 flex items-start justify-between gap-2">
+                          <span className="tf-meta flex-shrink-0">Employment Type</span>
+                          <span className="tf-caption text-right">{formatEmploymentType(selectedJob.employmentType)}</span>
+                        </div>
+                      )}
+                      {selectedJob.versionNumber != null && (
+                        <div className="px-3 py-2 flex items-start justify-between gap-2">
+                          <span className="tf-meta flex-shrink-0">JD Version</span>
+                          <span className="tf-caption text-right">v{selectedJob.versionNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/**
                * What the JD itself decided, on a card of its own ABOVE the
                * duration it feeds.

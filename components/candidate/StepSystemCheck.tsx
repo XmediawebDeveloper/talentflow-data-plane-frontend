@@ -2332,7 +2332,7 @@ export default function StepSystemCheck({
           </p>
         </div>
 
-        <div className="tf-card-soft overflow-hidden">
+        <div className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
           {/* Card body: Loading */}
           <div className="p-8 flex flex-col items-center justify-center min-h-[200px] space-y-4">
             <div className="bg-gray-100 rounded-full p-3">
@@ -2386,7 +2386,7 @@ export default function StepSystemCheck({
           </p>
         </div>
 
-        <div className="tf-card-soft">
+        <div className="rounded-2xl border border-gray-200 bg-white shadow-lg">
           <div className="p-5 sm:p-6 space-y-5">
             {blockedBrowserName && (
               <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-start gap-3">
@@ -2463,7 +2463,7 @@ export default function StepSystemCheck({
                       </span>
                     </div>
                     <p className="tf-body-muted">Supported Browsers</p>
-                    <div className="tf-grid-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                       {SUPPORTED_BROWSERS.map((b) => {
                         const isCurrent = deviceInfo.browser.name === b.name;
                         return (
@@ -2528,7 +2528,7 @@ export default function StepSystemCheck({
                   variant="primary"
                   size="lg"
                   onClick={() => setPhase('system_checks')}
-                  className="w-full sm:w-auto h-auto min-h-11 py-2 text-center"
+                  className="w-full sm:w-auto whitespace-normal h-auto min-h-11 py-2 text-center"
                 >
                   Continue to System Checks
                   <ArrowRight className="w-4 h-4" />
@@ -2587,7 +2587,7 @@ export default function StepSystemCheck({
         {/* One full-width card, top to bottom: voice verification (read
             aloud, record, tips) → camera & devices → once the voice sample is
             in, the environment checks fade in → Continue. */}
-        <section ref={systemChecksCardRef} className="tf-card-soft overflow-hidden">
+        <section ref={systemChecksCardRef} className="rounded-2xl overflow-hidden border border-gray-200 bg-white shadow-lg">
           <div className="p-5 sm:p-6 space-y-6">
             {/* ── 1. Voice Verification: read aloud → record → tips ── */}
             {onEnrollVoice && (
@@ -3095,7 +3095,7 @@ export default function StepSystemCheck({
                         onClick={() => { if (allSystemPassed && voiceGateOk && !isProceedLoading && !micDisconnectedPopup) handleProceed(); }}
                         disabled={!allSystemPassed || !voiceGateOk || isProceedLoading || micDisconnectedPopup}
                         title={micDisconnectedPopup ? 'Please reconnect your microphone to continue' : !voiceGateOk ? 'Record your voice sample first' : !allSystemPassed ? 'Fix the failed checks above (click Retry on each)' : undefined}
-                        className="w-full md:w-auto md:min-w-[240px] shrink-0 h-auto min-h-11 py-2 text-center"
+                        className="w-full md:w-auto md:min-w-[240px] shrink-0 whitespace-normal h-auto min-h-11 py-2 text-center"
                       >
                         {isProceedLoading ? (
                           <><Loader2 className="w-4 h-4 animate-spin" /> Finishing…</>

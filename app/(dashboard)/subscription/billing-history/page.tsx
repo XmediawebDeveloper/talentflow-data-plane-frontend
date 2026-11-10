@@ -60,7 +60,12 @@ const toISTDateKey = (iso: string) =>
   new Date(iso).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 
 export default function BillingHistoryPage() {
-  const { user, tenant } = useAuth();
+  const { user, tenant, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // Billing actions need Subscription & Billing Access (2026-11-10): retrying a
+  // paid add-on is a purchase (Upgrade Plan, as the server checks); the CSV is
+  // an export (usage:export). View-only roles (Viewer) see both greyed.
+  const canRetryPurchase = isTenantAdmin || hasPermission('canUpgradePlan');
+  const canExportBilling = isTenantAdmin || hasPermissionCode('usage:export');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<BillingInvoice[]>([]);
@@ -505,8 +510,8 @@ export default function BillingHistoryPage() {
                 <button
                   type="button"
                   onClick={handleExportInvoices}
-                  disabled={filteredInvoices.length === 0}
-                  title="Download the filtered invoices as CSV"
+                  disabled={filteredInvoices.length === 0 || !canExportBilling}
+                  title={canExportBilling ? 'Download the filtered invoices as CSV' : "Your role can't export billing records"}
                   className="tf-btn tf-btn-secondary border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 text-sm text-gray-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:bg-brand-blue/5 hover:text-brand-blue whitespace-normal justify-start"
                 >
                   <FileSpreadsheet className="h-4 w-4" />
@@ -858,7 +863,8 @@ export default function BillingHistoryPage() {
                         {txn.activation_status === 'failed' ? (
                           <button
                             onClick={() => handleRetryActivation(txn.id)}
-                            disabled={retryingId === txn.id}
+                            disabled={retryingId === txn.id || !canRetryPurchase}
+                            title={canRetryPurchase ? undefined : "Your role can't retry purchases. Ask the account owner or a Billing Manager."}
                             className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-orange px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-brand-orange/25 transition-all hover:-translate-y-0.5 hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             {retryingId === txn.id
@@ -919,7 +925,8 @@ export default function BillingHistoryPage() {
                     txn.activation_status === 'failed' ? (
                       <button
                         onClick={() => handleRetryActivation(txn.id)}
-                        disabled={retryingId === txn.id}
+                        disabled={retryingId === txn.id || !canRetryPurchase}
+                        title={canRetryPurchase ? undefined : "Your role can't retry purchases. Ask the account owner or a Billing Manager."}
                         className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-orange px-3 py-1.5 text-xs font-medium text-white shadow-sm shadow-brand-orange/25 transition-all hover:-translate-y-0.5 hover:shadow-md disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {retryingId === txn.id

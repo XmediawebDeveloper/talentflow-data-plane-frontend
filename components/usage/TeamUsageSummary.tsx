@@ -5,7 +5,7 @@
  *
  * Displays team usage summaries with role-based access:
  * - Owner: View all teams' usage + expandable member-level usage
- * - Standard User/Viewer: View only their team's usage
+ * - Viewer and other non-admin users: View only their team's usage
  * - Billing Manager: No access (shows message)
  */
 
@@ -85,7 +85,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         const data = await teamService.getAllTeamsUsage(selectedDays as unknown as string);
         setAllTeamsUsage(data);
       } else if (!isBillingManager) {
-        // Standard User/Viewer: Fetch my teams
+        // Viewer and other non-admin users: Fetch my teams
         // NOTE: selectedDays is a NUMBER of days (30/60/...), but this service takes
         // (fromDate?: string, toDate?: string) and puts it in `start_date`. So the
         // request currently sends start_date=30 rather than days=30, and the range

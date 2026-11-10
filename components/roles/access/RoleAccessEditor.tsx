@@ -8,7 +8,7 @@ import {
   MODULE_BY_ID,
   MODULE_GROUPS,
   accessCounts,
-  applyQuickSetup,
+  applyWithAuto,
   describeModule,
   isHostOn,
   isUpgrade,
@@ -23,6 +23,7 @@ import {
   turnOn,
   type AccessLevel,
   type AccessModule,
+  type AutoMap,
 } from '@/lib/permissions/moduleLevels';
 import { AccessLevelKey, ModuleIcon } from './AccessDots';
 
@@ -68,6 +69,9 @@ function Chip({ state, label, note, title, onClick }: {
 export interface RoleAccessEditorProps {
   codes: Set<string>;
   onChange: (next: Set<string>) => void;
+  /** Areas switched on automatically (shown as "Auto"), and their setter. */
+  auto?: AutoMap;
+  onAutoChange?: (next: AutoMap) => void;
 }
 
 /**
@@ -76,21 +80,35 @@ export interface RoleAccessEditorProps {
  * 2026-11-06). Only used in Create / Edit / Duplicate Role — user screens only
  * SHOW access (RoleAccessSummary).
  */
-export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorProps) {
+export default function RoleAccessEditor({ codes, onChange, auto = {}, onAutoChange }: RoleAccessEditorProps) {
   const [notice, setNotice] = useState<Notice | null>(null);
 
-  const change = (next: Set<string>, n: Notice | null) => { onChange(next); setNotice(n); };
+  // Undo restores the access and the Auto marks together.
+  const [undoAuto, setUndoAuto] = useState<AutoMap | null>(null);
+  const change = (next: Set<string>, n: Notice | null, nextAuto?: AutoMap) => {
+    if (n?.snapshot) setUndoAuto(auto);
+    onChange(next);
+    if (nextAuto) onAutoChange?.(nextAuto);
+    setNotice(n);
+  };
 
   const setLevel = (m: AccessModule, level: AccessLevel) => {
     if (m.always && level === 'none') return;
-    const { codes: next, changed } = applyQuickSetup(codes, m, level);
+    const { codes: next, changed, auto: nextAuto, autoOff } = applyWithAuto(codes, auto, m, level);
     const up = changed.filter(isUpgrade);
     const down = changed.filter((c) => !isUpgrade(c));
     const fmt = (arr: typeof changed) => listText(arr.map((c) => <b key={c.module.id}>{c.module.name} ({LEVEL_LABEL[c.to]})</b>));
     const parts: React.ReactNode[] = [];
     if (up.length) parts.push(<span key="up">We also turned on {fmt(up)}, because {m.name} needs {up.length === 1 ? 'it' : 'them'}. </span>);
-    if (down.length) parts.push(<span key="down">We also changed {fmt(down)}, because {down.length === 1 ? 'it needs' : 'they need'} {m.name}.</span>);
-    change(next, parts.length ? { kind: down.length ? 'down' : 'up', text: parts, snapshot: codes } : null);
+    if (down.length) parts.push(<span key="down">We also changed {fmt(down)}, because {down.length === 1 ? 'it needs' : 'they need'} {m.name}. </span>);
+    if (autoOff.length) {
+      parts.push(
+        <span key="auto">
+          We also turned off {listText(autoOff.map((o) => <b key={o.id}>{o.name}</b>))}: {autoOff.length === 1 ? 'it was' : 'they were'} only on because {m.name} needed {autoOff.length === 1 ? 'it' : 'them'}.
+        </span>,
+      );
+    }
+    change(next, parts.length ? { kind: down.length || autoOff.length ? 'down' : 'up', text: parts, snapshot: codes } : null, nextAuto);
   };
 
   const toggleOne = (code: string) => {
@@ -159,6 +177,8 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
     };
     const tile = level === 'full' ? 'bg-brand-blue/10 text-brand-blue' : level === 'view' ? 'bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300' : 'bg-gray-100 text-gray-400 dark:bg-slate-800 dark:text-slate-500';
     const needs = missingFullNeeds(codes, m).map((o) => o.name).join(' and ');
+    // Switched on automatically: the names of the areas that needed it.
+    const autoBy = (auto[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).filter((n): n is string => !!n);
     return (
       <div key={m.id} className="border-b border-gray-100 px-4 py-3.5 last:border-b-0 dark:border-slate-800">
         <div className="flex items-center gap-3 max-[720px]:flex-wrap">
@@ -173,6 +193,14 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
               )}
               {level === 'view' && (
                 <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-slate-800 dark:text-slate-300">{LEVEL_NAMES.view}</span>
+              )}
+              {autoBy.length > 0 && (
+                <span
+                  title={`Turned on automatically because ${autoBy.join(' and ')} ${autoBy.length === 1 ? 'needs' : 'need'} it`}
+                  className="rounded-full bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-inset ring-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:ring-sky-500/30"
+                >
+                  Auto
+                </span>
               )}
               {m.always && <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">Always on</span>}
             </div>
@@ -199,6 +227,22 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
               onClick={() => missingFullNeeds(codes, m).forEach((o) => setLevel(o, 'full'))}
             >
               Give {needs} {LEVEL_NAMES.full}
+            </button>
+          </div>
+        )}
+        {autoBy.length > 0 && level !== 'none' && (
+          <div className="ml-[46px] mt-2 text-[12.5px] text-gray-500 dark:text-slate-400">
+            Turned on automatically for {autoBy.join(' and ')}. It turns off again if {autoBy.length === 1 ? 'that is' : 'those are'} turned off.{' '}
+            <button
+              type="button"
+              className="font-semibold text-brand-blue hover:underline"
+              onClick={() => {
+                const next = { ...auto };
+                delete next[m.id];
+                onAutoChange?.(next);
+              }}
+            >
+              Keep it on anyway
             </button>
           </div>
         )}
@@ -229,7 +273,7 @@ export default function RoleAccessEditor({ codes, onChange }: RoleAccessEditorPr
             <button
               type="button"
               className="inline-flex items-center gap-1 font-semibold text-brand-blue hover:underline"
-              onClick={() => { onChange(notice.snapshot!); setNotice(null); }}
+              onClick={() => { onChange(notice.snapshot!); if (undoAuto) onAutoChange?.(undoAuto); setNotice(null); }}
             >
               <Undo2 className="h-3.5 w-3.5" /> Undo
             </button>

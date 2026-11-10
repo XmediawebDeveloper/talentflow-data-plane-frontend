@@ -6973,7 +6973,7 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="tf-td whitespace-nowrap">
                       <div className="flex items-center gap-2 tf-body-muted">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
+                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}, {formatISTTime(item.matchedAt.toISOString())}
                       </div>
                     </td>
                     <td className="tf-td">

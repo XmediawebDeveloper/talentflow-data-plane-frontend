@@ -18,6 +18,7 @@ import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
 import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
@@ -916,10 +917,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
   const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
   const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
-  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
+  // covers folder rename / move too (2026-11-10).
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
   const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  // Viewing isn't downloading (2026-11-10): own uploads need Resume Upload access.
+  const canDownloadMyResumes = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
   const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
   // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
@@ -4108,7 +4113,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
                 {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
-                  <> ({totalIncludingVersions - totalItems} versions)</>
+                  <span
+                    title={`${totalItems.toLocaleString()} resumes + ${(totalIncludingVersions - totalItems).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                  >
+                    {' '}(+{(totalIncludingVersions - totalItems).toLocaleString()} {totalIncludingVersions - totalItems === 1 ? 'version' : 'versions'})
+                  </span>
                 )}
               </span>
             </div>
@@ -4187,6 +4196,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
             onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
+            // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
+            onDownloadDisabled={!canDownloadMyResumes}
+            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4429,6 +4441,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
+                  canDownload={canDownloadMyResumes}
                   onDeleteDisabledReason="You do not have permission to delete resumes"
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -4999,6 +5012,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onUnarchiveDisabled={!canArchiveMyResumes}
                             onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                             canShare={canShareMyResumes}
+                            canDownload={canDownloadMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
                               folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)

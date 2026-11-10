@@ -220,6 +220,7 @@ import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import { mapJDToJob, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { toast } from 'sonner';
@@ -450,6 +451,13 @@ export default function ResumeViewPage() {
       ? hasPermissionCode('internal_db:share')
       : hasPermissionCode('my_resumes:share')
   ));
+  // Viewing isn't downloading (2026-11-10): same rule as the backend.
+  const canDownloadThisResume = canDownloadResume({
+    isTenantAdmin,
+    hasPermissionCode,
+    own: !!uploaderId && uploaderId === String(user?.id ?? ''),
+    fromAiMatch,
+  });
   const canDeleteResume = !isTenantUserEmailResume && (isTenantAdmin || (
     sharedPool
       ? hasPermissionCode('internal_db:delete')
@@ -2379,6 +2387,7 @@ Best regards`);
                               {/* Download button */}
                               <button
                                 onClick={async () => {
+                                  if (!canDownloadThisResume) return;
                                   try {
                                     const blob = await resumeService.download(version.id);
                                     const url = window.URL.createObjectURL(blob);
@@ -2397,8 +2406,9 @@ Best regards`);
                                   isLatest
                                     ? 'text-brand-blue hover:bg-brand-blue/10'
                                     : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                }`}
-                                title="Download this version"
+                                } ${!canDownloadThisResume ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                aria-disabled={!canDownloadThisResume}
+                                title={canDownloadThisResume ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                               >
                                 <Download className="w-4 h-4" />
                               </button>
@@ -2602,6 +2612,7 @@ Best regards`);
         return (
           <ResumeTextPreviewModal
             resumeId={versionPreviewUrl}
+            canDownload={canDownloadThisResume}
             title={versionPreviewLabel}
             subtitle={previewVersion?.fileName || previewVersion?.name || resume?.fileName}
             onClose={() => {
@@ -2983,6 +2994,7 @@ Best regards`);
       {isSharePreviewOpen && resume && (
         <ResumeTextPreviewModal
           resumeId={resumeId}
+          canDownload={canDownloadThisResume}
           title={resume.name}
           subtitle={(resume as any).fileName}
           onClose={() => setIsSharePreviewOpen(false)}

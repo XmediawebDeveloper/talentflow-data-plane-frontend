@@ -102,7 +102,7 @@ type ExportType = 'consumption' | 'summary';
 
 export default function TenantUnitPool({ compact = false, showHistory = true }: TenantUnitPoolProps) {
   // Role-based access control
-  const { user, isTenantAdmin, isBillingManager, isStandardUser, isRecruiter } = useAuth();
+  const { user, isTenantAdmin, isBillingManager, isRecruiter } = useAuth();
   const canExport = isTenantAdmin || isRecruiter;
 
   const [isLoading, setIsLoading] = useState(true);
@@ -148,16 +148,11 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
         ]);
         setPools(poolsData);
         setSummary(summaryData);
-      } else if (isStandardUser) {
-        // Standard User: No access to pool status or tenant-wide summary
-        // Will only show own consumption history
-        setPools(null);
-        setSummary(null);
       }
     } catch (error: any) {
       // Handle permission errors gracefully
       if (error?.response?.status === 403) {
-        // Permission denied - this is expected for standard users
+        // Permission denied - expected for users without usage access
         console.log('Role-based access restriction applied');
       } else {
         toast.error(friendlyErrorMessage(error, "Couldn't load unit pool data. Please try again."));
@@ -301,38 +296,6 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
     );
   }
 
-  // Standard User: Show restricted view (own consumption only)
-  if (isStandardUser) {
-    return (
-      <div className={`${compact ? 'p-4' : 'p-6'} bg-white rounded-lg border border-gray-200`}>
-        <div className="flex items-center gap-3 mb-4">
-          <User className="w-5 h-5 text-blue-600" />
-          <div>
-            <h3 className="font-medium text-gray-900">My Consumption</h3>
-            <p className="tf-body-muted">View your personal unit usage</p>
-          </div>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-blue-900 font-medium">Access Restricted</p>
-              <p className="text-sm text-blue-700 mt-1">
-                Standard users can view their own consumption history but cannot access tenant-wide unit pool details.
-              </p>
-              <Link
-                href="/organization/usage-history"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
-              >
-                View My Consumption History
-                <ExternalLink className="w-3 h-3" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (!pools) {
     return (

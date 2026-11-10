@@ -26,6 +26,7 @@ import { resumeService, archiveResumeToArchivedFolder } from '@/lib/services/res
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard } from '@/components/ui/mobile-record-card';
+import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -1047,10 +1048,10 @@ export default function ResumeTable({
                                 menu. The action still exists on the mobile
                                 card and in the bulk actions bar; it was
                                 dropped from the ⋮ list only. */}
-                            {canDownload && (
-                              <button
+                            <button
                                 onClick={async (e) => {
                                   e.stopPropagation();
+                                  if (!canDownload) return;
                                   closeActionMenu();
                                   try {
                                     toast.loading('Downloading resume...', { id: 'download' });
@@ -1070,12 +1071,13 @@ export default function ResumeTable({
                                     toast.error('Failed to download resume', { id: 'download' });
                                   }
                                 }}
-                                className={resumeActionMenuItemClass}
+                                aria-disabled={!canDownload}
+                                title={!canDownload ? DOWNLOAD_BLOCKED_MESSAGE : ''}
+                                className={!canDownload ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed opacity-60` : resumeActionMenuItemClass}
                               >
                                 <Download className="w-4 h-4 text-menu-icon-download" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Download Resume</span>
                               </button>
-                            )}
                             {/* Share Resume — hidden for now (RESUME_EMAIL_SHARE_ENABLED). */}
                             {RESUME_EMAIL_SHARE_ENABLED && (
                             <button

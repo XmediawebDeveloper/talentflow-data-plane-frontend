@@ -346,7 +346,8 @@ export default function AssessmentDetailsView({
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   /* Edit / Continue Editing: the view's own create gate plus the host's edit
      permission (`canEdit`). Locked = greyed with a tooltip, never hidden. */
-  const canEditAssessment = canCreateAssessments && canEdit;
+  // Editing is Assessments "Edit" (assessments:update), not "Create" (2026-11-10).
+  const canEditAssessment = (isTenantAdmin || hasPermissionCode('assessments:update')) && canEdit;
   /* The All Assessments table's Unarchive gate (`canDeleteAssessments`), so the
      action is offered here to exactly who it is offered to there. */
   const canUnarchiveAssessments = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
@@ -434,7 +435,7 @@ export default function AssessmentDetailsView({
      download a report from that page can download it from this tab — the tab
      renders that page's own component, and a permission that disagreed between
      the two would put the same button on one and not the other. */
-  const canDownloadResultPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canDownloadResultPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const canBatchDownloadResults = isTenantAdmin || hasPermissionCode('assessments:batch_download');
   /* 'info' is gone from this union: Assessment Info is a horizontal view
      inside Assessment Details now (`DetailsSubTab`), not a destination the
