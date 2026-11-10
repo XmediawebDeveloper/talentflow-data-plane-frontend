@@ -1029,7 +1029,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                     only shows while no search is narrowing it. */}
                 {totalResumes.toLocaleString()} Resumes
                 {!appliedSearchQuery && typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
-                  <> ({totalIncludingVersions - totalResumes} versions)</>
+                  <span
+                    title={`${totalResumes.toLocaleString()} resumes + ${(totalIncludingVersions - totalResumes).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                  >
+                    {' '}(+{(totalIncludingVersions - totalResumes).toLocaleString()} {totalIncludingVersions - totalResumes === 1 ? 'version' : 'versions'})
+                  </span>
                 )}
               </span>
             </div>
