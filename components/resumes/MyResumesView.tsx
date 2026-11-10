@@ -4111,7 +4111,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
                 {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
-                  <> ({totalIncludingVersions - totalItems} versions)</>
+                  <span
+                    title={`${totalItems.toLocaleString()} resumes + ${(totalIncludingVersions - totalItems).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                  >
+                    {' '}(+{(totalIncludingVersions - totalItems).toLocaleString()} {totalIncludingVersions - totalItems === 1 ? 'version' : 'versions'})
+                  </span>
                 )}
               </span>
             </div>

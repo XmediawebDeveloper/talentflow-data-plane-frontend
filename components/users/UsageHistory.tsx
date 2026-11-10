@@ -44,6 +44,7 @@ import {
   unitPoolService,
   UnitType,
   ConsumptionLogEntry,
+  UsersUsageResponse,
   AdjustmentLogEntry,
   AllPoolsResponse,
   ExistingUsageUser,
@@ -199,6 +200,8 @@ type TabId = 'feature' | 'user' | 'team' | 'refunds';
 type ExportFormat = 'csv' | 'excel';
 type ExistingUser = ExistingUsageUser;
 type UnitKey = 'RS' | 'AS' | 'AIU' | 'RU';
+/** Lower bound sent for "All Time" to endpoints that otherwise default to a recent window. */
+const ALL_TIME_START = '2000-01-01';
 const UNIT_KEYS: UnitKey[] = ['RS', 'AS', 'AIU', 'RU'];
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -702,16 +705,17 @@ function FeatureWiseTab({
 // ─── User-Wise Tab ─────────────────────────────────────────────────────────
 
 function UserWiseTab({
-  items,
-  existingUsers,
-  total,
+  data,
+  subscriptionUnits,
+  isBillingPeriod,
   page,
   onPageChange,
   isLoading,
 }: {
-  items: ConsumptionLogEntry[];
-  existingUsers: ExistingUser[];
-  total: number;
+  data: UsersUsageResponse | null;
+  subscriptionUnits: SubscriptionUnits | null;
+  /** True when the table covers exactly the current billing period (the cards' period). */
+  isBillingPeriod: boolean;
   page: number;
   onPageChange: (p: number) => void;
   isLoading: boolean;
@@ -725,7 +729,7 @@ function UserWiseTab({
   };
   const tableSort = { ...sort, toggleSort: handleSort };
 
-  // Aggregate by user
+  // Per-user totals come from the server (same attribution as Team-Wise).
   const userMap = new Map<string, {
     userId: string;
     userName: string;
@@ -737,51 +741,46 @@ function UserWiseTab({
     lastUsed: string;
     isExistingUser: boolean;
   }>();
-
-  existingUsers.forEach((existingUser) => {
-    userMap.set(existingUser.id, {
-      userId: existingUser.id,
-      userName: existingUser.name || 'Unknown',
-      userEmail: existingUser.email || '—',
-      byType: {},
-      total: 0,
-      successCount: 0,
-      failedCount: 0,
-      lastUsed: '',
-      isExistingUser: true,
+  (data?.users ?? []).forEach((row) => {
+    userMap.set(row.user_id, {
+      userId: row.user_id,
+      userName: row.user_name || row.user_email || 'Unknown',
+      userEmail: row.user_email || '—',
+      byType: row.by_type as Record<string, number>,
+      total: row.total,
+      successCount: row.success_count,
+      failedCount: row.failed_count,
+      lastUsed: row.last_active || '',
+      isExistingUser: row.is_existing_user,
     });
   });
 
-  items.forEach((entry) => {
-    const key = entry.user_id || entry.user_email || entry.id;
-    if (!userMap.has(key)) {
-      userMap.set(key, {
-        userId: entry.user_id || key,
-        userName: entry.user_name || 'Unknown',
-        userEmail: entry.user_email || '—',
-        byType: {},
-        total: 0,
-        successCount: 0,
-        failedCount: 0,
-        lastUsed: entry.created_at,
-        isExistingUser: false,
-      });
+  /* Reconciliation with the cards. The cards show Control Plane usage for the
+     current billing period. Resume Scoring / Assessment / AI Interview units
+     the Control Plane charged without any per-user record (e.g. AI Talent
+     Match runs from before it became free) are listed as one "not attributed"
+     row, so the column totals equal the cards. Resume Storage is left out: its
+     card is the number of resumes stored now, not uploads in a period. */
+  const RECONCILED_KEYS: UnitKey[] = ['RS', 'AS', 'AIU'];
+  const unattributed: Partial<Record<UnitKey, number>> = {};
+  RECONCILED_KEYS.forEach((k) => {
+    const server = data?.unattributed?.[k] ?? 0;
+    let gap = 0;
+    if (isBillingPeriod && subscriptionUnits) {
+      const used = (subscriptionUnits as unknown as Record<string, { used?: number } | undefined>)[k]?.used;
+      if (typeof used === 'number') gap = used - (data?.totals?.[k] ?? 0);
     }
-    const u = userMap.get(key)!;
-    if ((u.userName === 'Unknown' || !u.userName) && entry.user_name) {
-      u.userName = entry.user_name;
-    }
-    if ((u.userEmail === '—' || !u.userEmail) && entry.user_email) {
-      u.userEmail = entry.user_email;
-    }
-    u.byType[entry.unit_type] = (u.byType[entry.unit_type] || 0) + entry.units_consumed;
-    if (entry.unit_type !== 'max_seats') {
-      u.total += entry.units_consumed;
-    }
-    if (entry.status === 'SUCCESS') u.successCount++;
-    else if (entry.status === 'FAILED' || entry.status === 'INSUFFICIENT_UNITS') u.failedCount++;
-    if (!u.lastUsed || entry.created_at > u.lastUsed) u.lastUsed = entry.created_at;
+    const v = server + (gap > 0 ? gap : 0);
+    if (v > 0) unattributed[k] = v;
   });
+  if (data?.unattributed?.RU) unattributed.RU = data.unattributed.RU;
+  const hasUnattributed = Object.keys(unattributed).length > 0;
+  const columnTotals: Partial<Record<UnitKey, number>> = {};
+  UNIT_KEYS.forEach((k) => {
+    const sumUsers = (data?.users ?? []).reduce((acc, r) => acc + (r.by_type[k] ?? 0), 0);
+    columnTotals[k] = sumUsers + (unattributed[k] ?? 0);
+  });
+  const grandTotal = UNIT_KEYS.reduce((acc, k) => acc + (columnTotals[k] ?? 0), 0);
 
   const defaultOrderedUsers = Array.from(userMap.values()).sort((a, b) => {
     if (a.isExistingUser !== b.isExistingUser) {
@@ -856,6 +855,13 @@ function UserWiseTab({
             }
           />
         ))}
+        {hasUnattributed && (
+          <MobileRecordCard
+            title={<span className="min-w-0 truncate">Not attributed to a user</span>}
+            meta={[{ icon: <Layers className="h-3.5 w-3.5" />, label: 'Charged with no per-user record' }]}
+            footer={<UnitChips values={unattributed as Record<string, number>} />}
+          />
+        )}
       </MobileRecordList>
 
       {/* Clear-sort bar — only while a column is sorted (desktop table). */}
@@ -936,9 +942,52 @@ function UserWiseTab({
                 <td className="tf-td tf-meta">{u.lastUsed ? formatIST(u.lastUsed) : '—'}</td>
               </tr>
             ))}
+            {hasUnattributed && page === Math.max(1, totalPages) && (
+              <tr className="bg-gray-50/60">
+                <td className="tf-td tf-caption">—</td>
+                <td className="tf-td">
+                  <p className="tf-label">Not attributed to a user</p>
+                  <p className="tf-hint">Charged with no per-user record (e.g. AI Talent Match runs before it became free)</p>
+                </td>
+                {CONSUMPTION_COLUMNS.map((column) => (
+                  <td key={column.key} className="tf-td text-right text-gray-700 font-medium">
+                    {unattributed[column.key as UnitKey]?.toLocaleString() || '—'}
+                  </td>
+                ))}
+                <td className="tf-td text-right">
+                  <span className="font-bold text-gray-700">
+                    {UNIT_KEYS.reduce((acc, k) => acc + (unattributed[k] ?? 0), 0).toLocaleString()}
+                  </span>
+                </td>
+                <td className="tf-td" />
+                <td className="tf-td" />
+              </tr>
+            )}
           </tbody>
+          <tfoot>
+            <tr className="border-t-2 border-gray-200 bg-white">
+              <td className="tf-td" />
+              <td className="tf-td">
+                <p className="tf-label">Total</p>
+                {isBillingPeriod && <p className="tf-hint">Current billing period — matches the cards above</p>}
+              </td>
+              {CONSUMPTION_COLUMNS.map((column) => (
+                <td key={column.key} className="tf-td text-right font-semibold text-gray-900">
+                  {(columnTotals[column.key as UnitKey] ?? 0).toLocaleString()}
+                </td>
+              ))}
+              <td className="tf-td text-right">
+                <span className="font-bold text-brand-blue">{grandTotal.toLocaleString()}</span>
+              </td>
+              <td className="tf-td" />
+              <td className="tf-td" />
+            </tr>
+          </tfoot>
         </table>
       </div>
+      <p className="tf-hint px-4 py-2">
+        Resume Storage here is net uploads in the selected period (uploads minus returned units). The Resume Storage card shows resumes stored right now.
+      </p>
       {totalPages > 1 && (
         <Pagination page={page} totalPages={totalPages} total={users.length} pageSize={PAGE_SIZE} onPageChange={onPageChange} />
       )}
@@ -1559,7 +1608,8 @@ export default function UsageHistory() {
   // Filters
   const [startDateInput, setStartDateInput] = useState<string>('');
   const [endDateInput, setEndDateInput] = useState<string>('');
-  const [quickPeriod, setQuickPeriod] = useState<string>('');
+  // Default = the cards' period, so the table adds up to the cards on arrival.
+  const [quickPeriod, setQuickPeriod] = useState<string>('billing');
   const [filterUnitType, setFilterUnitType] = useState<UnitType | 'all'>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [searchUser, setSearchUser] = useState('');
@@ -1579,6 +1629,10 @@ export default function UsageHistory() {
   const [adjustmentItems, setAdjustmentItems] = useState<AdjustmentLogEntry[]>([]);
   const [adjustmentTotal, setAdjustmentTotal] = useState(0);
   const [existingUsers, setExistingUsers] = useState<ExistingUser[]>([]);
+  const [usersUsage, setUsersUsage] = useState<UsersUsageResponse | null>(null);
+  const [isLoadingUsers, setIsLoadingUsers] = useState(false);
+  const [billingPeriod, setBillingPeriod] = useState<{ start: string; end: string | null } | null>(null);
+  const usersSeqRef = useRef(0);
   const [subscriptionUnits, setSubscriptionUnits] = useState<SubscriptionUnits | null>(null);
   const [userLimits, setUserLimits] = useState<UserLimitsResponse | null>(null);
 
@@ -1616,6 +1670,11 @@ export default function UsageHistory() {
       dateEnd: end ?? new Date(defaultEndDate),
     };
   }, [defaultEndDate, defaultStartDate, endDateInput, startDateInput]);
+
+  // Team-Wise range. With no dates ("All Time") the team endpoints used to fall
+  // back to the last 30 days (team list) / this month (member breakdown).
+  const teamRangeStart = startDateInput || ALL_TIME_START;
+  const teamRangeEnd = endDateInput || defaultEndDate;
 
   // Persist scroll + view state so returning to Usage History lands the user
   // where they left off. Re-detect the scroll container when the active tab
@@ -1707,18 +1766,42 @@ export default function UsageHistory() {
     }
   }, [filterUnitType, filterStatus, dateStart, dateEnd]);
 
+  // ── Load per-user usage (User-Wise) ───────────────────────────────────────
+  // In billing mode the dates are display-only, so they don't trigger a reload.
+  const usersRangeKey = quickPeriod === 'billing' ? 'billing' : `${startDateInput}|${endDateInput}`;
+  const loadUsersUsage = useCallback(async () => {
+    const seq = ++usersSeqRef.current;
+    const isStale = () => seq !== usersSeqRef.current;
+    setIsLoadingUsers(true);
+    try {
+      const res = await unitPoolService.getUsersUsage(
+        quickPeriod === 'billing'
+          ? { period: 'billing' }
+          : { start_date: startDateInput || undefined, end_date: endDateInput || undefined },
+      );
+      if (isStale()) return;
+      setUsersUsage(res);
+      if (res.billing_period) setBillingPeriod(res.billing_period);
+    } catch (err) {
+      if (isStale()) return;
+      toast.error(friendlyErrorMessage(err, "Couldn't load user usage. Please try again."));
+    } finally {
+      if (!isStale()) setIsLoadingUsers(false);
+    }
+  }, [usersRangeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Load teams data ────────────────────────────────────────────────────────
   const loadTeams = useCallback(async () => {
     setIsLoadingTeams(true);
     try {
-      const res = await teamService.getAllTeamsUsage(startDateInput || undefined, endDateInput || undefined);
+      const res = await teamService.getAllTeamsUsage(teamRangeStart, teamRangeEnd);
       setTeamsData(res);
     } catch (err: any) {
       toast.error(friendlyErrorMessage(err, "Couldn't load team data. Please try again."));
     } finally {
       setIsLoadingTeams(false);
     }
-  }, [dateStart, dateEnd]);
+  }, [teamRangeStart, teamRangeEnd]);
 
   // ── Load adjustments ────────────────────────────────────────────────────────
   const [adjustmentsUnavailable, setAdjustmentsUnavailable] = useState(false);
@@ -1765,10 +1848,21 @@ export default function UsageHistory() {
   useEffect(() => {
     if (activeTab === 'feature') {
       loadConsumption(featurePage, 'feature');
-    } else if (activeTab === 'user') {
-      loadConsumption(userPage, 'user');
     }
-  }, [activeTab, loadConsumption, featurePage, userPage]);
+  }, [activeTab, loadConsumption, featurePage]);
+
+  useEffect(() => {
+    if (activeTab === 'user') loadUsersUsage();
+  }, [activeTab, loadUsersUsage]);
+
+  // "Current Billing Period" is the default; once its start is known, show it
+  // in the date fields (and use it for the Team-Wise view).
+  useEffect(() => {
+    if (quickPeriod === 'billing' && billingPeriod?.start && !startDateInput) {
+      setStartDateInput(billingPeriod.start.slice(0, 10));
+      setEndDateInput(defaultEndDate);
+    }
+  }, [quickPeriod, billingPeriod, startDateInput, defaultEndDate]);
 
   // Teams
   useEffect(() => {
@@ -1792,7 +1886,7 @@ export default function UsageHistory() {
       activeTab === 'feature'
         ? loadConsumption(featurePage, 'feature')
         : activeTab === 'user'
-          ? loadConsumption(userPage, 'user')
+          ? loadUsersUsage()
           : Promise.resolve(),
       activeTab === 'team' ? loadTeams() : Promise.resolve(),
       activeTab === 'refunds' ? loadAdjustments(refundsPage) : Promise.resolve(),
@@ -1895,6 +1989,11 @@ export default function UsageHistory() {
                     setEndDateInput('');
                     return;
                   }
+                  if (val === 'billing') {
+                    setStartDateInput(billingPeriod?.start ? billingPeriod.start.slice(0, 10) : '');
+                    setEndDateInput(billingPeriod?.start ? formatDateForInput(new Date()) : '');
+                    return;
+                  }
                   const now = new Date();
                   const end = formatDateForInput(now);
                   let start = '';
@@ -1911,6 +2010,7 @@ export default function UsageHistory() {
                   setEndDateInput(end);
                 }}
                 options={[
+                  { value: 'billing', label: 'Current Billing Period' },
                   { value: '', label: 'All Time' },
                   { value: 'last_week', label: 'Last Week' },
                   { value: 'last_month', label: 'Last Month' },
@@ -2013,12 +2113,12 @@ export default function UsageHistory() {
           )}
           {activeTab === 'user' && (
             <UserWiseTab
-              items={consumptionItems}
-              existingUsers={existingUsers}
-              total={consumptionTotal}
+              data={usersUsage}
+              subscriptionUnits={subscriptionUnits}
+              isBillingPeriod={quickPeriod === 'billing'}
               page={userPage}
               onPageChange={setUserPage}
-              isLoading={isLoadingConsumption}
+              isLoading={isLoadingUsers}
             />
           )}
           {activeTab === 'team' && (
@@ -2026,8 +2126,8 @@ export default function UsageHistory() {
               teamsData={teamsData}
               page={teamPage}
               onPageChange={setTeamPage}
-              startDate={formatDateForInput(dateStart)}
-              endDate={formatDateForInput(dateEnd)}
+              startDate={teamRangeStart}
+              endDate={teamRangeEnd}
               isLoading={isLoadingTeams}
             />
           )}

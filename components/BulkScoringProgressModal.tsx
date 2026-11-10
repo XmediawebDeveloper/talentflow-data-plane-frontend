@@ -8,6 +8,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
+import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
@@ -20,6 +21,30 @@ function formatDateTimeIST(date: Date | string | undefined): { date: string; tim
   }
   const str = typeof date === 'string' ? date : date.toISOString();
   return { date: formatISTDate(str) || '-', time: formatISTTime(str) };
+}
+
+/* JD id → its readable code ("JD-0042"), read once per job for rows whose
+   host did not carry `jobCode` (the app-wide popup's runs, which live in
+   context and localStorage, have only the JD id). Kept across opens of the
+   popup; a job whose read failed is left out so a later open tries again. */
+const jobCodeCache = new Map<string, string>();
+const jobCodeLoading = new Set<string>();
+/* Every open popup re-renders when codes land — including one opened while
+   the read it needs was already in flight. */
+const jobCodeListeners = new Set<() => void>();
+
+function loadJobCodes(ids: string[]) {
+  ids.forEach(id => jobCodeLoading.add(id));
+  void Promise.all(ids.map(async id => {
+    try {
+      const jd = await jdService.get(id);
+      if (jd.job_id) jobCodeCache.set(id, jd.job_id);
+    } catch {
+      /* no code — the cell shows a dash, a later open tries again */
+    } finally {
+      jobCodeLoading.delete(id);
+    }
+  })).then(() => jobCodeListeners.forEach(listener => listener()));
 }
 
 export interface ScoringProgressItem {
@@ -105,7 +130,7 @@ interface BulkScoringProgressModalProps {
 
 export default function BulkScoringProgressModal({
   onClose,
-  progressData = [],
+  progressData: rawProgressData = [],
   filterByJobId,
   showJobTitleColumn = true,
   showJobColumns = false,
@@ -119,6 +144,25 @@ export default function BulkScoringProgressModal({
   onOpenResume,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
+
+  /* Rows without a `jobCode` get their job's code from the JD itself, so the
+     Job ID column and header chip show "JD-0042" instead of the JD's uuid. */
+  const [, setJobCodesTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setJobCodesTick(n => n + 1);
+    jobCodeListeners.add(listener);
+    return () => { jobCodeListeners.delete(listener); };
+  }, []);
+  const missingCodeKey = [...new Set(rawProgressData.filter(item => !item.jobCode && item.jobId).map(item => item.jobId))]
+    .filter(id => !jobCodeCache.has(id) && !jobCodeLoading.has(id))
+    .join(',');
+  useEffect(() => {
+    if (missingCodeKey) loadJobCodes(missingCodeKey.split(','));
+  }, [missingCodeKey]);
+  const fillsCode = (item: ScoringProgressItem) => !item.jobCode && jobCodeCache.has(item.jobId);
+  const progressData = rawProgressData.some(fillsCode)
+    ? rawProgressData.map(item => (fillsCode(item) ? { ...item, jobCode: jobCodeCache.get(item.jobId) } : item))
+    : rawProgressData;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -954,7 +998,7 @@ export default function BulkScoringProgressModal({
                         {showJobIdTitleColumns && (
                           <>
                             <td className="tf-td whitespace-nowrap">
-                              <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
+                              <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || '—'}</span>
                             </td>
                             <td className="tf-td whitespace-nowrap">
                               <div className="tf-body" title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</div>
@@ -1109,7 +1153,7 @@ export default function BulkScoringProgressModal({
                             {/* One job: the header names it, so only the version. */}
                             {showJobIdTitleColumns && (
                               <>
-                                <span className="font-mono font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
+                                <span className="font-mono font-semibold text-brand-blue">{item.jobCode || '—'}</span>
                                 <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                               </>
                             )}

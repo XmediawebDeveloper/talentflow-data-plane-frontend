@@ -23,6 +23,7 @@ import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { assessmentService, isAssessmentArchived } from '@/lib/services/assessmentService';
+import { isJdDisabled } from '@/lib/utils/assessmentJobLock';
 import {
   resolveInviteStatus,
   isInviteExpired,
@@ -257,6 +258,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               assessment_technical_enabled: assessment.technical_enabled,
               assessment_coding_enabled: assessment.coding_enabled,
               assessment_status: assessment.status,
+              // The owning job version's own Disabled/Archived status — a
+              // whole-job tracker spans several job versions that can each
+              // disagree, so this per-row value (not the single `jdDisabled`
+              // prop, which only fits a one-JD view) is what actually locks
+              // Resend/Revoke/Edit via `buildInvitationRowActions`.
+              _jd_status: assessment._jd_status,
             })));
           }
         } catch (err) {
@@ -432,10 +439,14 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
      Invited+Expired selection shows neither. */
   const isBulkActionable = (inv: any): boolean => isRevocableInvitation(inv) || canResendInvite(inv);
   const inviteArchived = (inv: any): boolean => isAssessmentArchived(inv.assessment_status);
+  /* `jdDisabled` fits a one-JD view; a whole-job tracker spans several job
+     versions, so a row's own `_jd_status` (stamped per assessment above) is
+     checked too, the same fallback `buildInvitationRowActions` already uses. */
+  const inviteJdDisabled = (inv: any): boolean => jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const selectableIds = jdDisabled
-    ? []
-    : visibleInvitations.filter((inv: any) => isBulkActionable(inv) && !inviteArchived(inv)).map((inv: any) => inv.id);
+  const selectableIds = visibleInvitations
+    .filter((inv: any) => isBulkActionable(inv) && !inviteArchived(inv) && !inviteJdDisabled(inv))
+    .map((inv: any) => inv.id);
   const selectedRows = visibleInvitations.filter((inv: any) => selectedIds.has(inv.id));
   const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvitation);
   const allResendable = selectedRows.length > 0 && selectedRows.every(canResendInvite);
@@ -983,7 +994,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               handler today, but kept consistent with the
                               Assessments page popup's own checkbox cell. */}
                           <td className={`${cellY} pl-3 lg:pl-4 pr-0 align-middle tf-sticky-col-left`} onClick={(e) => e.stopPropagation()}>
-                            {isBulkActionable(invitation) && !inviteArchived(invitation) && !jdDisabled ? (
+                            {isBulkActionable(invitation) && !inviteArchived(invitation) && !inviteJdDisabled(invitation) ? (
                               <button
                                 type="button"
                                 role="checkbox"
