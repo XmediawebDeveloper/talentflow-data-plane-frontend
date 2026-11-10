@@ -29,7 +29,6 @@ export interface RoleAccess {
   isRecruiter: boolean;
   isViewer: boolean;
   isBillingManager: boolean;
-  isStandardUser: boolean;
   isReadOnly: boolean;
   permissionExpansionBlocked: boolean;
 }
@@ -90,7 +89,6 @@ export function usePermissions(): UsePermissionsReturn {
     isRecruiter,
     isViewer,
     isBillingManager,
-    isStandardUser,
     isReadOnlyRole: isReadOnly,
     hasFeature: authHasFeature,
     hasPermission: authHasPermission,
@@ -105,10 +103,9 @@ export function usePermissions(): UsePermissionsReturn {
     isRecruiter,
     isViewer,
     isBillingManager,
-    isStandardUser,
     isReadOnly,
     permissionExpansionBlocked: user ? isPermissionExpansionBlocked(user.role) : false,
-  }), [user, isTenantAdmin, isRecruiter, isViewer, isBillingManager, isStandardUser, isReadOnly]);
+  }), [user, isTenantAdmin, isRecruiter, isViewer, isBillingManager, isReadOnly]);
 
   // Feature access
   const hasFeature = useCallback((feature: FeatureFlagKey): boolean => {

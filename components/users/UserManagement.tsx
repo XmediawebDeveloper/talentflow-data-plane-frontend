@@ -86,7 +86,6 @@ const defaultRoleLabels: Record<string, string> = {
   recruiter: 'Recruiter',
   viewer: 'Viewer',
   billing_manager: 'Billing',
-  standard_user: 'User',
 };
 
 // Default badge colors for known roles - RBAC01-07
@@ -96,7 +95,6 @@ const defaultRoleBadgeColors: Record<string, string> = {
   recruiter: 'bg-brand-cyan/10 text-brand-cyan',
   viewer: 'bg-gray-100 text-gray-600',
   billing_manager: 'bg-success-subtle text-success',
-  standard_user: 'bg-gray-100 text-gray-600',
 };
 
 // Color palette for custom roles - each custom role gets a distinct color

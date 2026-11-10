@@ -59,8 +59,7 @@ export type UserRole =
   | 'tenant_admin'
   | 'recruiter'
   | 'viewer'
-  | 'billing_manager'   // RBAC03
-  | 'standard_user';    // RBAC04
+  | 'billing_manager'   // RBAC03;
 
 // RBAC06: Feature flags for user-level permissions
 export interface FeatureFlags {

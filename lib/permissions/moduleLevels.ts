@@ -32,10 +32,10 @@ import { planTurnOff, withRequired } from '@/lib/permissions/permissionRules';
  *  shows as "Full access · N turned off". */
 export type AccessLevel = 'none' | 'view' | 'full';
 
-/** Levels an admin can pick in the role editor. "View only" is NOT one of
+/** Levels an admin can pick in the role editor. "Partial" (view only) is NOT one of
  *  them: it only appears on an area that is exactly view-only (the system
  *  Viewer role). Such an area shows neither button selected; picking one
- *  changes it, leaving it keeps it View only. */
+ *  changes it, leaving it keeps it Partial. */
 export const PICKABLE_LEVELS: AccessLevel[] = ['none', 'full'];
 
 /** The Viewer role can't be copied (user decision 2026-11-06): custom roles
@@ -48,7 +48,7 @@ export const copyBlockedReason = (role: { code?: string | null; name?: string })
 
 /** The ONE name of each level, used on every screen (buttons, key, labels,
  *  totals, legend) so the wording never differs between places. */
-export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Access', view: 'View only', none: 'No access' };
+export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Access', view: 'Partial', none: 'No access' };
 export type ModuleGroup = 'Hiring' | 'Candidates' | 'Administration';
 
 export interface ModuleEntry {

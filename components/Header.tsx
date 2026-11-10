@@ -659,7 +659,6 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
     recruiter: 'Recruiter',
     viewer: 'Viewer',
     billing_manager: 'Billing Manager',
-    standard_user: 'Member',
   };
 
   const prettyRole = (r?: string) =>
