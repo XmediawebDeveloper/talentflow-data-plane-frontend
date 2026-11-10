@@ -11,7 +11,7 @@ import { REDESIGNED_ROUTES } from "./fonts";
 
 // Items with a `section` exist on the one-page landing route, so on "/" the
 // menu scrolls to them; an item without one would always navigate to its page.
-// Careers and Contact are reachable from the footer rather than this menu.
+// Contact is reachable from the footer rather than this menu.
 const navItems: Array<{ label: string; href: string; section?: string }> = [
   { label: "Home", href: "/", section: "home" },
   { label: "Features", href: "/features", section: "features" },

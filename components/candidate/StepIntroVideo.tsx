@@ -180,14 +180,14 @@ export default function StepIntroVideo({
               {/* 2×2 tiles (one column on phones): keeps the card short enough
                   to sit level with a 16:9 video beside it. The 1px gap over a
                   grey background draws the dividers in either layout. */}
-              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100 rounded-xl border border-gray-100 overflow-hidden">
+              <ul className="tf-grid-2 bg-gray-100 rounded-xl border border-gray-100 overflow-hidden">
                 {BEFORE_YOU_BEGIN.map(({ icon: RowIcon, title, text }) => (
                   <li key={title} className="bg-white flex items-start gap-2.5 px-3 py-3">
                     <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <RowIcon className="w-4 h-4 text-brand-blue" />
                     </span>
                     <span className="min-w-0 leading-snug">
-                      <span className="block tf-cell-name">{title}</span>
+                      <span className="block tf-row-title">{title}</span>
                       <span className="block tf-meta">{text}</span>
                     </span>
                   </li>
@@ -198,7 +198,7 @@ export default function StepIntroVideo({
             {/* Language Selection (only if more than 1 language) */}
             {availableLanguages.length > 1 && (
               <div className="space-y-2">
-                <p className="flex items-center gap-2 tf-cell-name">
+                <p className="flex items-center gap-2 tf-row-title">
                   <Globe className="w-4 h-4 text-brand-blue" />
                   Interview Language
                 </p>

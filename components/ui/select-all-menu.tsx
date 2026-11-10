@@ -1,19 +1,22 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowUpDown, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CheckSquare, ChevronDown, Square, X } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from './utils';
 
-/* Toolbar size (h-[38px]) — the same as More Filters / Export beside it. */
+/* Toolbar size (h-9) — the same as More Filters / Export beside it. */
 const TRIGGER_CLASS =
-  'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap border';
+  'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap border';
 
 /**
  * The Job Openings list's "Select All ▾" control: one button whose menu holds
@@ -61,7 +64,11 @@ export function SelectAllMenu({
       <DropdownMenuTrigger asChild>
         <button
           type="button"
+          /* tf-jobs-selectall + data-active: the Job Openings list's phone look
+             (globals.css, `.tf-jobs-toolbar`) wherever this sits in such a toolbar. */
+          data-active={active || undefined}
           className={cn(
+            'tf-jobs-selectall',
             TRIGGER_CLASS,
             active
               ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
@@ -141,7 +148,7 @@ export function SortByControl<T extends string>({
       {/* Styled to the AI Talent Match reference's tinted "Sort by" pill: no
           border, the label always shown, and a single ArrowUpDown that flips
           180° on descending. */}
-      <span className="text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">Sort by</span>
+      <span className="tf-body whitespace-nowrap">Sort by</span>
       {/* One size at every width: p-1 + h-7 = 36px, the toolbar's h-9 band,
           14px text like the search box and dropdowns beside it. It used to
           drop to 12px / 24px below sm, which read as a smaller, odd control
@@ -155,7 +162,7 @@ export function SortByControl<T extends string>({
             // Fixed width: a native select sizes to its longest option, so the
             // two views' option lists made the row (and search box) shift.
             // Narrower below 375px only, where the 9.5rem box clipped at 320.
-            className="appearance-none w-[7.5rem] min-[375px]:w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm text-gray-700 dark:text-slate-300 cursor-pointer"
+            className="appearance-none w-[7.5rem] 2xs:w-[9.5rem] truncate h-7 pl-2.5 pr-8 bg-transparent rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 tf-body cursor-pointer"
           >
             {options.map((o) => (
               <option key={o.value} value={o.value}>{o.label}</option>
@@ -176,5 +183,69 @@ export function SortByControl<T extends string>({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Phones only: the Job Openings list's "⇅ Sort ▾" menu button — the fields, then the
+ * order worded for the field (JobsListing.tsx). Inside a `.tf-jobs-toolbar` it replaces
+ * the inline SortByControl below `sm`; from `sm` it is hidden.
+ */
+export function PhoneSortMenu<T extends string>({
+  value,
+  order,
+  options,
+  orderLabels,
+  onChange,
+  onOrderChange,
+}: {
+  value: T;
+  options: { value: T; label: string }[];
+  onChange: (value: T) => void;
+  /** Omit the three below for a single list of sorts (e.g. Newest / Oldest / Active first). */
+  order?: 'asc' | 'desc';
+  /** The two orders, worded for the field (e.g. Newest / Oldest first). */
+  orderLabels?: (field: T) => { desc: string; asc: string };
+  onOrderChange?: (order: 'asc' | 'desc') => void;
+}) {
+  const labels = orderLabels && order ? orderLabels(value) : null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="tf-jobs-sortmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue data-[state=open]:border-brand-blue/40 data-[state=open]:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+          aria-label={`Sort: ${options.find((o) => o.value === value)?.label ?? ''}${labels && order ? `, ${labels[order]}` : ''}`}
+        >
+          <ArrowUpDown className="w-4 h-4 text-brand-blue" />
+          Sort
+          <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
+        <DropdownMenuLabel className="text-xs text-gray-500">Sort by</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={value} onValueChange={(v) => onChange(v as T)}>
+          {options.map((o) => (
+            <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        {labels && order && onOrderChange && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs text-gray-500">Order</DropdownMenuLabel>
+            <DropdownMenuRadioGroup value={order} onValueChange={(v) => onOrderChange(v as 'asc' | 'desc')}>
+              <DropdownMenuRadioItem value="desc">
+                <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
+                {labels.desc}
+              </DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="asc">
+                <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                {labels.asc}
+              </DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

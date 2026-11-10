@@ -7,7 +7,7 @@ export default function Loading() {
   return (
     <main className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 flex items-center gap-2">
             <Skeleton className="h-3 w-20" />
@@ -19,7 +19,7 @@ export default function Loading() {
 
           <div className="space-y-6">
             {/* Subscription Summary Card */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <div className="tf-card-soft overflow-hidden">
               <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                 <Skeleton className="h-4 w-40" />
               </div>
@@ -42,7 +42,7 @@ export default function Loading() {
             </div>
 
             {/* Quota Overview */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <div className="tf-card-soft overflow-hidden">
               <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center gap-2.5">
                   <Skeleton className="w-8 h-8 rounded-lg" />
@@ -53,9 +53,9 @@ export default function Loading() {
                 </div>
               </div>
               <div className="p-4 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className="tf-grid-4">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                    <div key={i} className="tf-card-soft flex flex-col p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
                         <Skeleton className="h-3.5 w-20 flex-1" />
@@ -78,7 +78,7 @@ export default function Loading() {
             </div>
 
             {/* Add-ons */}
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+            <div className="tf-card-soft overflow-hidden">
               <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center gap-2.5">
                   <Skeleton className="w-8 h-8 rounded-lg" />
@@ -86,9 +86,9 @@ export default function Loading() {
                 </div>
               </div>
               <div className="p-4 sm:p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                <div className="tf-grid-4">
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                    <div key={i} className="tf-card-soft flex flex-col p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
                         <Skeleton className="h-3.5 w-24 flex-1" />

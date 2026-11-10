@@ -8,7 +8,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
   return (
     <footer className="bg-[var(--raw-111827)] dark:bg-[var(--raw-020617)] text-white py-12 transition-colors duration-300 border-t border-[var(--raw-1f2937)] dark:border-[var(--raw-0f172a)]">
       <div className="container mx-auto max-w-[1440px] px-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+        <div className="tf-grid-4 mb-8">
           <div>
             <button
               onClick={() => onNavigate("home")}
@@ -20,7 +20,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               className="h-10 w-auto"
             />
             </button>
-            <p className="text-[var(--raw-9ca3af)] text-[14px] leading-relaxed">
+            <p className="text-[var(--raw-9ca3af)] text-sm leading-relaxed">
               AI-powered recruitment solutions for agencies, companies, and
               freelance recruiters.
             </p>
@@ -28,7 +28,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
 
           <div>
             <h4 className="text-white mb-4">Product</h4>
-            <ul className="space-y-2 text-[14px]">
+            <ul className="space-y-2 text-sm">
               <li>
                 <button
                   onClick={() => onNavigate("features")}
@@ -66,7 +66,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
 
           <div>
             <h4 className="text-white mb-4">Company</h4>
-            <ul className="space-y-2 text-[14px]">
+            <ul className="space-y-2 text-sm">
               <li>
                 <button
                   onClick={() => onNavigate("about")}
@@ -104,7 +104,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
 
           <div>
             <h4 className="text-white mb-4">Legal</h4>
-            <ul className="space-y-2 text-[14px]">
+            <ul className="space-y-2 text-sm">
               <li>
                 <button
                   onClick={() => onNavigate("privacy")}
@@ -142,25 +142,25 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
         </div>
 
         <div className="border-t border-[var(--raw-374151)] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-[var(--raw-9ca3af)] text-[14px]">
+          <p className="text-[var(--raw-9ca3af)] text-sm">
             &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a
               href="#"
-              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-sm"
             >
               LinkedIn
             </a>
             <a
               href="#"
-              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-sm"
             >
               Twitter
             </a>
             <a
               href="#"
-              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-sm"
             >
               Facebook
             </a>

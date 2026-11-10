@@ -246,7 +246,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
   ];
 
   return (
-    <main className="flex-1 p-8 overflow-y-auto bg-gray-50">
+    <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
       {/* Header */}
       <div className="mb-8">
         <button
@@ -257,15 +257,15 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
           Back to Applicants
         </button>
 
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-3 mb-3">
-              <h1 className="text-gray-900">{applicant.name}</h1>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex-1 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-3">
+              <h1 className="tf-page-title">{applicant.name}</h1>
               <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm border ${matchStatus.bg} ${matchStatus.color}`}>
                 <MatchIcon className="w-4 h-4" />
                 {matchStatus.label}
               </div>
-              <span className="px-3 py-1 bg-gray-100 text-gray-900 rounded-full text-xs flex items-center gap-1">
+              <span className="tf-badge bg-gray-100 text-gray-900 flex">
                 <Sparkles className="w-3 h-3" />
                 AI Analyzed
               </span>
@@ -275,7 +275,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
             </p>
             
             {/* Contact Info */}
-            <div className="flex items-center gap-6 tf-card-desc">
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2 tf-body-secondary">
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4 text-gray-400" />
                 <span>{applicant.email}</span>
@@ -291,7 +291,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
             </div>
           </div>
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-2 sm:gap-3">
             <Button variant="secondary" icon={<Download className="w-4 h-4" />}>
               Download Resume
             </Button>
@@ -303,17 +303,17 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
       </div>
 
       {/* Overall Score Card */}
-      <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-8 mb-8 text-white">
-        <div className="flex items-center justify-between">
+      <div className="bg-gradient-to-br from-gray-800 to-gray-800 rounded-xl shadow-lg p-4 sm:p-6 lg:p-8 mb-6 lg:mb-8 text-white">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-3">
               <Star className="w-8 h-8" />
-              <h2 className="text-white text-2xl">Overall Match Score</h2>
+              <h2 className="text-white text-lg sm:text-2xl">Overall Match Score</h2>
             </div>
             <p className="text-gray-100 mb-6">
               AI-powered analysis based on job requirements and candidate profile
             </p>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="tf-grid-stats">
               {scoringCategories.map((cat, idx) => {
                 const Icon = cat.icon;
                 return (
@@ -330,9 +330,9 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
             </div>
           </div>
           
-          <div className="text-center px-8 border-l border-white/20">
+          <div className="text-center lg:px-8 pt-6 lg:pt-0 border-t lg:border-t-0 lg:border-l border-white/20">
             <div className="mb-4">
-              <div className="text-7xl mb-2">{totalScore}</div>
+              <div className="text-5xl sm:text-7xl mb-2">{totalScore}</div>
               <div className="text-xl text-gray-100">out of {maxTotalScore}</div>
             </div>
             <div className="w-32 h-32 mx-auto relative">
@@ -367,35 +367,35 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
       </div>
 
       {/* Tabs */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
-        <div className="border-b border-gray-200 px-6">
-          <div className="flex gap-6">
+      <div className="tf-card-soft mb-6">
+        <div className="border-b border-gray-200 px-4 sm:px-6">
+          <div className="flex gap-4 sm:gap-6 overflow-x-auto scrollbar-hide">
             <button
               onClick={() => setActiveTab('overview')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`tf-tab-line ${
                 activeTab === 'overview'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'tf-tab-line-active'
+                  : ''
               }`}
             >
               Score Overview
             </button>
             <button
               onClick={() => setActiveTab('detailed')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`tf-tab-line ${
                 activeTab === 'detailed'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'tf-tab-line-active'
+                  : ''
               }`}
             >
               Detailed Analysis
             </button>
             <button
               onClick={() => setActiveTab('resume')}
-              className={`py-4 text-sm border-b-2 transition-colors ${
+              className={`tf-tab-line ${
                 activeTab === 'resume'
-                  ? 'border-gray-800 text-gray-800'
-                  : 'border-transparent text-gray-600 hover:text-gray-900'
+                  ? 'tf-tab-line-active'
+                  : ''
               }`}
             >
               Resume Content
@@ -404,7 +404,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
         </div>
 
         {/* Tab Content */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'overview' && (
             <div className="space-y-6">
               {/* Scoring Table */}
@@ -440,7 +440,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                           ></div>
                         </div>
 
-                        <div className="mt-3 tf-card-desc">
+                        <div className="mt-3 tf-body-secondary">
                           {category.details.length} criteria evaluated
                         </div>
                       </div>
@@ -450,7 +450,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               </div>
 
               {/* AI Recommendations */}
-              <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-6">
+              <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4 sm:p-6">
                 <div className="flex items-center gap-3 mb-4">
                   <Sparkles className="w-6 h-6 text-gray-800" />
                   <h3 className="text-gray-900">AI Recommendations</h3>
@@ -459,7 +459,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                   {recommendations.map((rec, idx) => {
                     const RecIcon = rec.icon;
                     return (
-                      <div key={idx} className="flex items-start gap-3 p-4 bg-white rounded-lg border border-gray-100">
+                      <div key={idx} className="tf-panel flex items-start gap-3 p-4">
                         <div className={`p-2 bg-${rec.color}-50 rounded-lg flex-shrink-0`}>
                           <RecIcon className={`w-5 h-5 text-${rec.color}-600`} />
                         </div>
@@ -474,7 +474,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                               {rec.priority} priority
                             </span>
                           </div>
-                          <p className="tf-card-desc">{rec.description}</p>
+                          <p className="tf-body-secondary">{rec.description}</p>
                         </div>
                       </div>
                     );
@@ -496,7 +496,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                           <Icon className={`w-6 h-6 text-${category.color}-600`} />
                           <div>
                             <h3 className="text-gray-900">{category.category}</h3>
-                            <p className="tf-card-desc">
+                            <p className="tf-body-secondary">
                               {category.details.length} criteria • {category.weight}% weight
                             </p>
                           </div>
@@ -515,7 +515,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                               {getStatusIcon(detail.status)}
                               <div className="flex-1">
                                 <div className="text-gray-900 mb-1">{detail.criterion}</div>
-                                <p className="tf-card-desc">{detail.explanation}</p>
+                                <p className="tf-body-secondary">{detail.explanation}</p>
                               </div>
                             </div>
                             <div className="text-right ml-4">
@@ -533,8 +533,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
               })}
 
               {/* Strengths & Areas for Improvement */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="border border-success-line rounded-lg p-6 bg-success-subtle">
+              <div className="tf-grid-2">
+                <div className="border border-success-line rounded-lg p-4 sm:p-6 bg-success-subtle">
                   <div className="flex items-center gap-2 mb-4">
                     <TrendingUp className="w-5 h-5 text-success" />
                     <h3 className="text-gray-900">Key Strengths</h3>
@@ -549,7 +549,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                   </ul>
                 </div>
 
-                <div className="border border-warning-line rounded-lg p-6 bg-warning-subtle">
+                <div className="border border-warning-line rounded-lg p-4 sm:p-6 bg-warning-subtle">
                   <div className="flex items-center gap-2 mb-4">
                     <TrendingDown className="w-5 h-5 text-warning" />
                     <h3 className="text-gray-900">Areas for Improvement</h3>
@@ -570,11 +570,11 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
           {activeTab === 'resume' && (
             <div className="space-y-6">
               {/* Resume Preview */}
-              <div className="bg-gray-50 rounded-lg p-8 border border-gray-200">
-                <div className="max-w-4xl mx-auto bg-white p-12 shadow-lg rounded-lg">
+              <div className="bg-gray-50 rounded-lg p-2 sm:p-6 lg:p-8 border border-gray-200">
+                <div className="max-w-4xl mx-auto bg-white p-4 sm:p-8 lg:p-12 shadow-lg rounded-lg">
                   <div className="text-center mb-8">
-                    <h2 className="text-3xl text-gray-900 mb-2">{applicant.name}</h2>
-                    <div className="flex items-center justify-center gap-4 text-gray-600">
+                    <h2 className="text-2xl sm:text-3xl text-gray-900 mb-2">{applicant.name}</h2>
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-gray-600">
                       <span>{applicant.email}</span>
                       <span>•</span>
                       <span>{applicant.phone}</span>
@@ -597,7 +597,7 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                     <h3 className="text-xl text-gray-900 mb-3 pb-2 border-b-2 border-gray-300">Skills</h3>
                     <div className="flex flex-wrap gap-2">
                       {applicant.skills.map((skill, idx) => (
-                        <span key={idx} className="px-3 py-1.5 bg-gray-100 text-gray-900 rounded-md text-sm">
+                        <span key={idx} className="px-3 py-1.5 bg-gray-100 tf-body rounded-md">
                           {skill}
                         </span>
                       ))}

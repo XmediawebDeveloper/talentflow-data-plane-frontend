@@ -153,25 +153,25 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
       </span>
       <div className="min-w-0 flex-1">
         <p
-          className={`truncate text-sm font-semibold ${
+          className={`tf-wrap text-sm font-semibold ${
             disabled ? 'text-slate-400 dark:text-slate-500' : `text-slate-900 dark:text-slate-50 ${tone.hoverText}`
           }`}
         >
           {item.label}
         </p>
         {disabled ? (
-          <p className="mt-0.5 line-clamp-1 text-xs font-medium text-slate-500 dark:text-slate-400">
+          <p className="tf-wrap mt-0.5 text-xs font-medium text-slate-500 dark:text-slate-400">
             {DISABLED_SHORT_REASON[item.disabledReason ?? 'permission']}
           </p>
         ) : (
-          subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+          subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
         )}
       </div>
       {disabled ? (
-        <Lock aria-hidden="true" className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500" />
+        <Lock aria-hidden="true" className="hidden h-4 w-4 shrink-0 text-slate-400 dark:text-slate-500 sm:block" />
       ) : (
         <ArrowUpRight
-          className={`h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
+          className={`hidden h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all sm:block group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
         />
       )}
     </>
@@ -183,12 +183,12 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
     return (
       <div
         aria-busy="true"
-        className="group relative flex cursor-default items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+        className="group relative flex h-full cursor-default items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         <span className="h-10 w-10 shrink-0 animate-pulse rounded-[14px] bg-slate-200 dark:bg-slate-700 sm:h-11 sm:w-11" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
-          {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
+          <p className="tf-wrap text-sm font-semibold text-slate-400 dark:text-slate-500">{item.label}</p>
+          {subtitle && <p className="tf-wrap mt-0.5 text-xs text-slate-400 dark:text-slate-600">{subtitle}</p>}
         </div>
       </div>
     );
@@ -204,7 +204,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
         aria-disabled="true"
         title={message}
         onClick={() => toast.info(message)}
-        className="group relative flex w-full cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+        className="group relative flex h-full w-full cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 text-left opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
       >
         {inner}
       </button>
@@ -214,7 +214,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   return (
     <Link
       href={href}
-      className={`group relative flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
+      className={`group relative flex h-full items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
     >
       {inner}
     </Link>
@@ -284,7 +284,7 @@ export default function DashboardQuickAccess() {
           <Rocket className="h-5 w-5 text-slate-900 dark:text-slate-50" />
           <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">Quick access</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-2xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
+        <span className="tf-badge gap-1.5 bg-white text-2xs text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />
           {totalItems} {totalItems === 1 ? 'tool' : 'tools'}
         </span>
@@ -304,10 +304,14 @@ export default function DashboardQuickAccess() {
 
       {/* Tiles — single continuous grid across all categories */}
       {totalItems > 0 && (
-      <div className="px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
+      <div className="@container px-3 pb-4 pt-0 sm:px-4 sm:pb-5 sm:pt-0 md:px-8 md:pb-6 md:pt-0">
         {/* Flattened first so the colour run counts tiles as they appear on
-            screen, not as they are grouped by section. */}
-        <ul className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+            screen, not as they are grouped by section.
+            Columns follow the card's own width (the sidebar takes a share of
+            the screen), 1 → 2 → 4: a tile never gets so narrow that a label
+            breaks mid-word ("User Manageme/nt") and lifts its icon out of line
+            with the row, and the usual 8 tiles always fill whole rows. */}
+        <ul className="grid grid-cols-1 gap-3 sm:gap-4 @lg:grid-cols-2 @5xl:grid-cols-4">
           {tiles.map((item, index) => (
             <li key={item.id}>
               <TileCard item={item} tone={toneForTool(item.id, index)} />

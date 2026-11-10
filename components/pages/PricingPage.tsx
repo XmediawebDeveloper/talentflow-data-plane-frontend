@@ -453,7 +453,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               <Sparkles style={{ width: 16, height: 16 }} />
               Simple Pricing
             </div>
-            <h1 style={titleStyle}>Choose the right plan for your team</h1>
+            <h1 className="tf-page-title" style={titleStyle}>Choose the right plan for your team</h1>
           </div>
           <div style={loadingStyle}>
             <Loader2 style={{ width: 48, height: 48, color: 'var(--raw-8b5cf6)', animation: 'spin 1s linear infinite' }} />
@@ -474,7 +474,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
             <Sparkles style={{ width: 16, height: 16 }} />
             Simple Pricing
           </div>
-          <h1 style={titleStyle}>Choose the right plan for your team</h1>
+          <h1 className="tf-page-title" style={titleStyle}>Choose the right plan for your team</h1>
           <p style={subtitleStyle}>
             Start with a {trialDays}-day free trial. No credit card required.
           </p>

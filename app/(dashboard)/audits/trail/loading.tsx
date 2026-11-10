@@ -6,9 +6,9 @@ import { Skeleton, TableSkeleton } from '@/components/ui/skeleton';
 // the real gradient hero doesn't reshuffle on hand-off.
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <Skeleton className="h-3 w-48 mb-4 md:mb-6" />
 
@@ -31,9 +31,9 @@ export default function Loading() {
           </section>
 
           {/* Stats cards */}
-          <div className="mb-4 sm:mb-6 lg:mb-8 grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
+          <div className="tf-grid-stats mb-4 sm:mb-6 lg:mb-8">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-4 sm:p-6">
+              <div key={i} className="tf-panel p-4 sm:p-6">
                 <div className="flex items-start justify-between">
                   <div className="space-y-2 min-w-0">
                     <Skeleton className="h-3.5 w-20" />
@@ -47,7 +47,7 @@ export default function Loading() {
           </div>
 
           {/* Combined card: filter bar + table body */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+          <div className="tf-panel overflow-hidden">
             {/* Record count row */}
             <div className="px-3 sm:px-4 md:px-5 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
               <Skeleton className="h-4 w-28" />

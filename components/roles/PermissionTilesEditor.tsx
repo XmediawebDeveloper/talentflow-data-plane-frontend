@@ -45,9 +45,15 @@ export interface PermissionTilesEditorProps {
   onToggleGroup: (codes: string[], label: string) => void;
   /** Baseline codes every account keeps — shown "(always on)", not clickable. */
   alwaysOn?: Set<string>;
+  /** Extra content under a section's tiles (role editor: "on other screens" strip). */
+  renderSectionExtra?: (category: CustomPermissionCategory) => React.ReactNode;
+  /** Only show tiles whose label or section matches (case-insensitive). */
+  filter?: string;
 }
 
-export default function PermissionTilesEditor({ selected, onToggleCode, onToggleGroup, alwaysOn }: PermissionTilesEditorProps) {
+export default function PermissionTilesEditor({ selected, onToggleCode, onToggleGroup, alwaysOn, renderSectionExtra, filter = '' }: PermissionTilesEditorProps) {
+  const q = filter.trim().toLowerCase();
+  const matches = (label: string, section: string) => !q || label.toLowerCase().includes(q) || section.toLowerCase().includes(q);
   const renderTile = (code: string, label: string) => {
     const isMandatory = !!alwaysOn?.has(code);
     const isOn = isMandatory || selected.has(code);
@@ -77,7 +83,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
           <span className="text-xs font-semibold uppercase">{letter}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="tf-cell-name max-sm:text-[13px] flex items-center gap-1.5">
+          <div className="tf-row-title flex items-center gap-1.5">
             {label}
             {isMandatory && <span className="text-xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>}
             {lockedMain && <Lock className="w-3.5 h-3.5 text-gray-400" />}
@@ -90,11 +96,19 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
   return (
     <div className="space-y-4">
       {CUSTOM_PERMISSION_CATEGORIES.map((category) => {
+        const topTiles: [string, string][] = [
+          ...(category.viewCode ? [[category.viewCode, `View ${category.name}`] as [string, string]] : []),
+          ...(category.actions?.map((a) => [a.code, a.label] as [string, string]) || []),
+        ].filter(([, label]) => matches(label, category.name));
+        const subs = (category.subCategories || []).filter((sub) =>
+          [...(sub.viewCode ? [`View ${sub.name}`] : []), ...sub.actions.map((a) => (a.label === 'View' ? `View ${sub.name}` : a.label))]
+            .some((label) => matches(label, `${category.name} ${sub.name}`)));
+        if (q && !topTiles.length && !subs.length) return null;
         const allCodes = codesOfCategory(category);
         const selectedCount = allCodes.filter((c) => selected.has(c)).length;
         const state = groupCheckState(isGroupFullyOn(allCodes, selected), selectedCount);
         return (
-          <div key={category.id} className="overflow-hidden rounded-2xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-900 shadow-sm">
+          <div key={category.id} className="tf-card-soft overflow-hidden">
             {/* Section header — the whole row toggles the section */}
             <div
               className="flex cursor-pointer select-none items-center justify-between gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-3 sm:px-5"
@@ -102,29 +116,25 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
             >
               <div className="flex items-center gap-3">
                 <GroupCheckbox state={state} label={category.name} />
-                <div>
-                  <h4 className="tf-card-title max-sm:text-sm">{category.name}</h4>
-                  <p className="tf-meta">
-                    {allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
+                <h4 className="tf-section-title max-sm:text-sm">{category.name}</h4>
                 {category.isMenuToggle && selectedCount > 0 && (
-                  <span className="text-xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
+                  <span className="tf-badge text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20">
                     Menu
                   </span>
                 )}
               </div>
-              <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+              <span className="tf-caption">{selectedCount} selected</span>
             </div>
 
-            {(category.viewCode || category.actions?.length) && (
-              <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
-                {category.viewCode && renderTile(category.viewCode, `View ${category.name}`)}
-                {category.actions?.map((a) => renderTile(a.code, a.label))}
+            {topTiles.length > 0 && (
+              <div className="tf-grid-3 p-4">
+                {topTiles.map(([code, label]) => renderTile(code, label))}
               </div>
             )}
 
-            {category.subCategories?.map((sub) => {
+            {!q && renderSectionExtra?.(category)}
+
+            {subs.map((sub) => {
               const subCodes = codesOfSub(sub);
               const subSelected = subCodes.filter((c) => selected.has(c)).length;
               return (
@@ -138,11 +148,11 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
                   >
                     <div className="flex items-center gap-2">
                       <GroupCheckbox size="sm" state={groupCheckState(isGroupFullyOn(subCodes, selected), subSelected)} label={sub.name} />
-                      <span className="text-xs font-semibold text-gray-800 dark:text-slate-200">{sub.name}</span>
+                      <span className="tf-caption">{sub.name}</span>
                     </div>
-                    <span className="text-xs font-medium text-gray-500 dark:text-slate-500">{subSelected} selected</span>
+                    <span className="tf-caption">{subSelected} selected</span>
                   </div>
-                  <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+                  <div className="tf-grid-3 p-4">
                     {sub.viewCode && renderTile(sub.viewCode, `View ${sub.name}`)}
                     {sub.actions.map((a) => renderTile(a.code, a.label === 'View' ? `View ${sub.name}` : a.label))}
                   </div>

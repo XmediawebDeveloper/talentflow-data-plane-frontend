@@ -358,7 +358,7 @@ function PracticeTour({
           <p className="text-sm font-bold text-gray-900">{step.title}</p>
           <span className="text-2xs font-medium text-gray-400">{stepIndex + 1} / {steps.length}</span>
         </div>
-        <p className="tf-card-desc leading-relaxed">{step.body}</p>
+        <p className="tf-body-secondary leading-relaxed">{step.body}</p>
         <div className="flex items-center justify-end gap-2 mt-3">
           <button type="button" onClick={onClose} className="min-h-10 px-3 py-2 rounded-lg text-xs font-medium text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors">
             Skip tour
@@ -2115,7 +2115,7 @@ export default function StepSamplePractice({
               </div>
               <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-1">Reconnecting…</h3>
               <p className="text-sm text-slate-600 dark:text-slate-300">You&apos;re offline. Practice continues as soon as your connection is back.</p>
-              <span className="mt-3 inline-block text-[10px] px-2 py-0.5 rounded-full font-semibold bg-slate-200 text-slate-700">Practice — not recorded</span>
+              <span className="tf-badge mt-3 inline-block text-2xs bg-slate-200 text-slate-700">Practice — not recorded</span>
             </div>
           </div>
         )}
@@ -2280,14 +2280,14 @@ export default function StepSamplePractice({
                 return (
                   <div className="absolute bottom-2 left-2 right-2 z-10 pointer-events-none grid grid-cols-2 gap-1.5">
                     {micLow && (
-                      <div className="col-span-2 rounded-md bg-amber-500/90 px-2 py-1 text-[10px] font-medium leading-tight text-white">
+                      <div className="col-span-2 rounded-md bg-amber-500/90 px-2 py-1 text-2xs font-medium leading-tight text-white">
                         Microphone input is low. Check headset mic or system input.
                       </div>
                     )}
                     <div className="min-w-0 rounded-md bg-black/70 border border-black/20 px-2 py-1.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <Mic className="w-3 h-3 text-emerald-300 shrink-0" />
-                        <span className="text-white/80 text-[10px] truncate">{practiceMicLabel || 'Microphone'}</span>
+                        <span className="text-white/80 text-2xs truncate">{practiceMicLabel || 'Microphone'}</span>
                       </div>
                       <div className="mt-1 h-1 rounded-full bg-white/15 overflow-hidden">
                         <div ref={levelBarRef} className="h-full rounded-full bg-white/30" style={{ width: '3%' }} />
@@ -2296,7 +2296,7 @@ export default function StepSamplePractice({
                     <div className="min-w-0 rounded-md bg-black/70 border border-black/20 px-2 py-1.5" title={rtt !== null && rtt >= 0 ? `Approx. ${Math.round(rtt)} ms round trip to the server` : undefined}>
                       <div className="flex items-center gap-1.5 min-w-0">
                         {level === 'offline' ? <WifiOff className={`w-3 h-3 shrink-0 ${tone.icon}`} /> : <Wifi className={`w-3 h-3 shrink-0 ${tone.icon}`} />}
-                        <span className="text-white/80 text-[10px] truncate">Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}</span>
+                        <span className="text-white/80 text-2xs truncate">Network · <span className="font-semibold text-white">{tone.label}</span>{pct !== null ? ` ${pct}%` : ''}</span>
                       </div>
                       <div className="mt-1 h-1 rounded-full bg-white/15 overflow-hidden">
                         <div className={`h-full rounded-full transition-all duration-500 ${tone.bar}`} style={{ width: `${level === 'offline' ? 4 : pct ?? 30}%` }} />
@@ -2352,7 +2352,7 @@ export default function StepSamplePractice({
                 <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-sky-50 flex items-center justify-center">
                   <Mic className="w-5 h-5 text-brand-blue" />
                 </div>
-                <p className="text-lg font-bold text-gray-900 mb-2">Are you done with your response?</p>
+                <p className="tf-section-title mb-2">Are you done with your response?</p>
                 <p className="text-sm text-slate-600 leading-snug mb-4">
                   If you are not done, please speak up to continue your response.
                   If you have completed your answer, click Submit to {practiceQ === 1 ? 'move to the next question' : 'finish the practice'}.
@@ -2453,7 +2453,7 @@ export default function StepSamplePractice({
                 stays up regardless (e.g. through a mid-answer Repeat). */}
             {!(practiceQ === 2 && hrExplainMore) && ((micReady && !aiSpeaking) || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
               <div ref={micReady ? controlBarRef : undefined} className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">
                     Your Response {isTranscribing && <span className="text-sky-600">· enhancing…</span>}
@@ -2548,7 +2548,7 @@ export default function StepSamplePractice({
             {/* Question 1's answer, kept once a voice answer to question 2 starts. */}
             {practiceQ === 2 && hrExplainMore && (
               <div className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
@@ -2578,7 +2578,7 @@ export default function StepSamplePractice({
             )}
             {practiceQ === 2 && hrAnswer && (
               <div className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
@@ -2589,9 +2589,9 @@ export default function StepSamplePractice({
             )}
             {practiceQ === 2 && hrButtonsReady && !hrAnswer && !hrExplainMore && !practiceDone && (
               <div className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold shadow-sm">You</div>
                 <div className="max-w-[260px] w-full">
-                  <div className="w-full rounded-2xl border border-gray-200 bg-white shadow-sm p-2.5">
+                  <div className="tf-card-soft w-full p-2.5">
                     <div className="flex flex-col gap-1.5">
                       <button
                         type="button"
@@ -2599,7 +2599,7 @@ export default function StepSamplePractice({
                         disabled={isTranscribing}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-sm font-semibold hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-[10px] font-bold shrink-0">A</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-emerald-500 text-white text-2xs font-bold shrink-0">A</span>
                         Yes
                       </button>
                       <button
@@ -2608,7 +2608,7 @@ export default function StepSamplePractice({
                         disabled={isTranscribing}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 text-sm font-semibold hover:bg-rose-100 hover:border-rose-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] font-bold shrink-0">B</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-rose-500 text-white text-2xs font-bold shrink-0">B</span>
                         No
                       </button>
                       <button
@@ -2636,11 +2636,11 @@ export default function StepSamplePractice({
                         title={!micReady ? 'Needs a microphone' : undefined}
                         className="w-full flex items-center gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-900 text-sm font-semibold hover:bg-blue-100 hover:border-blue-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-left"
                       >
-                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-[10px] font-bold shrink-0">C</span>
+                        <span className="flex items-center justify-center w-5 h-5 rounded-full bg-blue-600 text-white text-2xs font-bold shrink-0">C</span>
                         Need to Explain More
                       </button>
                     </div>
-                    <div className="mt-2 pt-2 border-t border-gray-200 text-center text-xs font-semibold text-gray-700">
+                    <div className="mt-2 pt-2 border-t border-gray-200 text-center tf-caption">
                       Select only one option
                     </div>
                   </div>
@@ -2654,7 +2654,7 @@ export default function StepSamplePractice({
                 at it. Without a mic, the typed-answer bar below is used instead. */}
             {practiceQ === 2 && hrExplainMore && ((micReady && !aiSpeaking) || isRecording || isTranscribing || (displayAnswer && displayAnswer.trim()) || (typedAnswer && typedAnswer.trim())) && (
               <div ref={micReady ? controlBarRef : undefined} className="flex gap-2 flex-row-reverse">
-                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-[9px] font-bold shadow-sm">You</div>
+                <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center flex-shrink-0 mt-0.5 text-white text-2xs font-bold shadow-sm">You</div>
                 <div className="max-w-[80%] min-w-0">
                   <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">
                     Your Response {isTranscribing && <span className="text-sky-600">· enhancing…</span>}
@@ -2748,7 +2748,7 @@ export default function StepSamplePractice({
             {/* Time's-up notice when the 2 minutes elapsed (not a manual Next). */}
             {timedUp && (
               <div className="flex justify-center py-1">
-                <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-3 py-1">
+                <span className="tf-badge gap-1.5 text-amber-700 bg-amber-50 border border-amber-200">
                   ⏱ Time&apos;s up — that&apos;s the 2 minutes. Moving on…
                 </span>
               </div>
@@ -2842,7 +2842,7 @@ export default function StepSamplePractice({
                   value={typedAnswer}
                   onChange={e => { if (!isRecording) { setTypedAnswer(e.target.value); setInputMode('typing'); } }}
                   placeholder="Type your answer here…"
-                  className="flex-1 min-h-[52px] bg-white border border-gray-200 rounded-lg p-2.5 text-sm text-gray-800 placeholder-gray-400 resize-none focus:outline-none focus:border-brand-blue/50"
+                  className="flex-1 min-h-[52px] bg-white border border-gray-200 rounded-lg p-2.5 tf-body placeholder-gray-400 resize-none focus:outline-none focus:border-brand-blue/50"
                   rows={2}
                 />
                 <button
@@ -2896,7 +2896,7 @@ export default function StepSamplePractice({
               type="button"
               onClick={onStartInterview}
               disabled={submitting}
-              className="flex-1 sm:flex-none justify-center inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-sm"
+              className="tf-btn tf-btn-primary flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-40 shadow-sm whitespace-normal"
             >
               {submitting ? (
                 <>
@@ -2923,8 +2923,8 @@ export default function StepSamplePractice({
             <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
               <CheckCircle className="w-7 h-7 text-success" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-1.5">Practice complete!</h3>
-            <p className="tf-card-desc leading-relaxed mb-5">
+            <h3 className="tf-section-title mb-1.5">Practice complete!</h3>
+            <p className="tf-body-secondary leading-relaxed mb-5">
               Nice — that&apos;s exactly how the real interview flows. When you&apos;re ready, start your interview. All the best!
             </p>
             <div className="flex flex-col gap-2">
@@ -2932,7 +2932,7 @@ export default function StepSamplePractice({
                 type="button"
                 onClick={onStartInterview}
                 disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-sm transition-all"
+                className="tf-btn tf-btn-primary px-6 py-3 rounded-xl text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 shadow-sm whitespace-normal"
               >
                 {submitting ? (
                   <><Loader2 className="w-4 h-4 animate-spin" /> Starting…</>

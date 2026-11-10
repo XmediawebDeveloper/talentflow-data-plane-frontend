@@ -23,7 +23,7 @@ export default function ResumeSelectionSummary({
   const names = (list: { name: string }[]) => list.map((p) => p.name).join(', ');
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta-strong">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta">
         <span className="font-medium text-gray-900 dark:text-slate-50">{total} selected</span>
         <span className="inline-flex items-center gap-1">
           <FolderOpen className="w-3.5 h-3.5 text-brand-orange" />

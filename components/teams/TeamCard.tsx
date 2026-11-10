@@ -35,7 +35,7 @@ export function TeamAvatar({ team, className }: { team: Pick<Team, 'id' | 'name'
       aria-hidden
       className={cn(
         // Same brand-blue tile as the PageHeader icon.
-        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-sm max-sm:text-[13px] font-semibold text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
+        'flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-sm font-semibold text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
         className,
       )}
     >
@@ -138,7 +138,7 @@ export function TeamUnitsSummary({
 }) {
   if (!units) {
     return (
-      <span className={cn('text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500', className)} title="Usage is shown for your teams only">
+      <span className={cn('tf-body-muted', className)} title="Usage is shown for your teams only">
         —
       </span>
     );
@@ -146,7 +146,7 @@ export function TeamUnitsSummary({
   const breakdown = UNIT_KEYS.map((k) => `${UNIT_LABELS[k]}: ${formatTeamUnits(units[k])}`).join(' · ');
   const body = (
     <>
-      <span className="tf-cell-name max-sm:text-[13px] tabular-nums">
+      <span className="tf-row-title tabular-nums">
         {formatTeamUnits(units.total)}
         <span className="ml-1 text-xs font-normal text-gray-500 dark:text-slate-400">units</span>
       </span>
@@ -209,7 +209,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       <div className="flex items-start gap-3">
         <TeamAvatar team={team} />
         <div className="min-w-0 flex-1">
-          <h3 className="truncate text-base max-sm:text-sm font-semibold tracking-tight text-gray-900 dark:text-slate-50">
+          <h3 className="truncate tf-section-title max-sm:text-sm tracking-tight">
             {/* Stretched button: the whole card opens the Team popup, while Add
                 members sits above it (z-10) and keeps its own click. */}
             <button
@@ -238,10 +238,10 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
       </div>
 
       {team.description && (
-        <p className="mt-3 line-clamp-2 tf-card-desc max-sm:text-[13px]">{team.description}</p>
+        <p className="mt-3 line-clamp-2 tf-body-secondary">{team.description}</p>
       )}
 
-      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-sm max-sm:text-[13px] text-gray-500 dark:text-slate-400">
+      <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 tf-body-muted">
         {metrics.map(({ icon: Icon, value, label }) => (
           <li key={label} className="inline-flex items-center gap-1.5">
             <Icon className="h-4 w-4 text-gray-400 dark:text-slate-500" />
@@ -271,7 +271,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
           <button
             type="button"
             onClick={() => onManageTeam(team.id)}
-            className="relative z-10 inline-flex items-center gap-1.5 rounded-md text-sm max-sm:text-[13px] font-medium text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
+            className="relative z-10 inline-flex items-center gap-1.5 rounded-md text-sm font-medium text-brand-blue hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40"
           >
             <UserPlus className="h-4 w-4" />
             Add members
@@ -280,7 +280,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
           <AttentionChip>No members yet</AttentionChip>
         )}
         {created && (
-          <span className="min-w-0 truncate text-right text-xs text-gray-400 dark:text-slate-500">
+          <span className="min-w-0 truncate text-right tf-hint">
             Created {created}
             {createdBy?.[team.id] && <> by <span className="text-gray-500 dark:text-slate-400">{createdBy[team.id]}</span></>}
           </span>
@@ -293,7 +293,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false,
 
 export function TeamCardSkeleton() {
   return (
-    <div className="flex flex-col rounded-xl border border-gray-200 bg-white p-5 shadow-sm shadow-brand-blue/5 dark:border-slate-700/60 dark:bg-slate-900">
+    <div className="tf-card-soft flex flex-col p-5">
       <div className="flex items-start gap-3">
         <Skeleton className="h-11 w-11 rounded-xl" />
         <div className="flex-1 space-y-2">

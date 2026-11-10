@@ -20,9 +20,9 @@ import FilterSelect from '@/components/ui/filter-select';
 // 2FA card, session-timeout card and active-sessions list.
 function SecuritySkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
@@ -39,7 +39,7 @@ function SecuritySkeleton() {
           </section>
 
           {/* Password card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-4">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -53,7 +53,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Two-Factor Authentication card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
@@ -67,7 +67,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Session Timeout card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="tf-panel p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center gap-3 mb-4">
               <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
               <div className="space-y-2">
@@ -79,7 +79,7 @@ function SecuritySkeleton() {
           </div>
 
           {/* Active Sessions card */}
-          <div className="rounded-2xl border border-gray-100 bg-white p-4 sm:p-6">
+          <div className="tf-panel p-4 sm:p-6">
             <Skeleton className="h-5 w-36 mb-4" />
             <div className="space-y-3">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -130,7 +130,7 @@ export default function SecurityPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Partial<UserSettings>>({
     two_factor_enabled: false,
-    session_timeout_minutes: 30,
+    session_timeout_minutes: 1440,
   });
 
   // Password change state
@@ -377,9 +377,9 @@ export default function SecurityPage() {
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Security Settings' }]} />
 
         {/* SaaS Hero Header */}
@@ -392,19 +392,19 @@ export default function SecurityPage() {
               <Lock className="h-6 w-6 text-white" />
             </div>
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="tf-badge mb-2 gap-1.5 bg-white/10 text-2xs text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                 <Sparkles className="h-3 w-3 text-brand-orange" />
                 Account protection
               </div>
-              <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Security Settings</h1>
+              <h1 className="tf-page-title">Security Settings</h1>
               <p className="mt-2 max-w-2xl text-sm text-white/80">Manage password, two-factor auth, sessions, and trust controls.</p>
             </div>
           </div>
         </section>
 
         {/* Password Section */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-4">Password</h2>
+        <div className="tf-card-soft p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <h2 className="tf-section-title mb-4">Password</h2>
           <div className="space-y-3 sm:space-y-4">
             <div>
               <label className="block tf-label mb-1">Current Password</label>
@@ -418,7 +418,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className="w-full px-3 py-2 pr-9 sm:pr-10 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-black text-sm"
+                  className="tf-input pr-9 sm:pr-10"
                 />
                 <button
                   type="button"
@@ -441,7 +441,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-3 py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
+                  className={`w-full px-3 h-9 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
                     passwordForm.newPassword
                       ? passwordStrength === 5
                         ? 'border-success'
@@ -472,7 +472,7 @@ export default function SecurityPage() {
                   data-form-type="other"
                   data-lpignore="true"
                   data-1p-ignore="true"
-                  className={`w-full px-3 py-2 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
+                  className={`w-full px-3 h-9 pr-9 sm:pr-10 border rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none transition-colors text-black text-sm ${
                     passwordForm.confirmPassword
                       ? passwordsMatch
                         ? 'border-success'
@@ -493,8 +493,8 @@ export default function SecurityPage() {
             {/* Password Requirements - Live Validation */}
             {(passwordForm.newPassword || passwordForm.confirmPassword) && (
               <div className="p-2.5 sm:p-3 md:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
-                <p className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2 sm:mb-3">Password Requirements:</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2">
+                <p className="tf-row-title mb-2 sm:mb-3">Password Requirements:</p>
+                <div className="tf-grid-2">
                   {[
                     { label: 'At least 8 characters', check: passwordChecks.length },
                     { label: 'One uppercase letter', check: passwordChecks.uppercase },
@@ -556,7 +556,7 @@ export default function SecurityPage() {
         </div>
 
         {/* Two-Factor Authentication */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div className="tf-card-soft p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 mb-4">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-10 h-10 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
@@ -567,7 +567,7 @@ export default function SecurityPage() {
                     Hover/focus opens it; a tap toggles it on touch screens. */}
                 <HoverCard open={twoFAInfoOpen} onOpenChange={setTwoFAInfoOpen} openDelay={100} closeDelay={150}>
                   <div className="flex items-center gap-1.5">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Two-Factor Authentication</h2>
+                    <h2 className="tf-section-title">Two-Factor Authentication</h2>
                     <HoverCardTrigger asChild>
                       <button
                         type="button"
@@ -582,9 +582,9 @@ export default function SecurityPage() {
                   <HoverCardContent
                     align="start"
                     collisionPadding={8}
-                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 tf-body-secondary"
                   >
-                    <h3 className="tf-subsection-title">How does two-factor authentication work?</h3>
+                    <h3 className="tf-row-title">How does two-factor authentication work?</h3>
                     <div>
                       <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
                       <p>
@@ -655,7 +655,7 @@ export default function SecurityPage() {
           {show2FASetup && (
             <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="font-medium text-sm text-gray-900 dark:text-slate-50">Setup Two-Factor Authentication</h3>
+                <h3 className="tf-row-name">Setup Two-Factor Authentication</h3>
                 <button
                   onClick={() => setShow2FASetup(false)}
                   className="p-1 hover:bg-gray-200 rounded"
@@ -666,7 +666,7 @@ export default function SecurityPage() {
 
               <div className="space-y-3 sm:space-y-4">
                 <div>
-                  <p className="tf-card-desc mb-2 sm:mb-3">
+                  <p className="tf-body-secondary mb-2 sm:mb-3">
                     1. Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
                   </p>
                   {twoFAQRCode ? (
@@ -679,14 +679,14 @@ export default function SecurityPage() {
                       />
                     </div>
                   ) : (
-                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border tf-card-desc">
+                    <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-lg border tf-body-secondary">
                       QR code unavailable. Enter the setup key below into your authenticator app instead.
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <p className="tf-card-desc mb-2">
+                  <p className="tf-body-secondary mb-2">
                     Or manually enter this secret key:
                   </p>
                   <code className="block p-2 sm:p-3 bg-gray-800 text-green-400 rounded-lg font-mono text-sm break-all">
@@ -695,7 +695,7 @@ export default function SecurityPage() {
                 </div>
 
                 <div>
-                  <p className="tf-card-desc mb-2">
+                  <p className="tf-body-secondary mb-2">
                     2. Enter the 6-digit code from your authenticator app:
                   </p>
                   <input
@@ -703,7 +703,7 @@ export default function SecurityPage() {
                     value={verificationCode}
                     onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
+                    className="w-full px-3 h-9 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -729,7 +729,7 @@ export default function SecurityPage() {
           {showDisable2FADialog && (
             <div className="mt-2 sm:mt-3 md:mt-4 p-4 sm:p-6 bg-destructive-subtle rounded-lg border border-destructive-line">
               <div className="flex items-center justify-between mb-3 sm:mb-4">
-                <h3 className="font-medium text-sm text-gray-900 dark:text-slate-50">Disable Two-Factor Authentication</h3>
+                <h3 className="tf-row-name">Disable Two-Factor Authentication</h3>
                 <button
                   onClick={() => {
                     setShowDisable2FADialog(false);
@@ -750,7 +750,7 @@ export default function SecurityPage() {
                 </div>
 
                 <div>
-                  <p className="tf-card-desc mb-2">
+                  <p className="tf-body-secondary mb-2">
                     Enter the 6-digit code from your authenticator app to confirm:
                   </p>
                   <input
@@ -758,7 +758,7 @@ export default function SecurityPage() {
                     value={disable2FACode}
                     onChange={(e) => setDisable2FACode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                     placeholder="000000"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-destructive-line focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
+                    className="w-full px-3 h-9 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-destructive-line focus:outline-none text-center text-lg sm:text-xl md:text-2xl tracking-widest text-black"
                     maxLength={6}
                   />
                 </div>
@@ -784,7 +784,7 @@ export default function SecurityPage() {
         </div>
 
         {/* Session Timeout */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+        <div className="tf-card-soft p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
           <div className="flex items-center gap-2 sm:gap-3 mb-4">
             <div className="w-10 h-10 bg-gray-100 dark:bg-slate-800 rounded-lg flex items-center justify-center flex-shrink-0">
               <Clock className="w-5 h-5 text-gray-800 dark:text-slate-100" />
@@ -795,7 +795,7 @@ export default function SecurityPage() {
                   and dependencies.py (server-side inactivity check). */}
               <HoverCard open={timeoutInfoOpen} onOpenChange={setTimeoutInfoOpen} openDelay={100} closeDelay={150}>
                 <div className="flex items-center gap-1.5">
-                  <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Session Timeout</h2>
+                  <h2 className="tf-section-title">Session Timeout</h2>
                   <HoverCardTrigger asChild>
                     <button
                       type="button"
@@ -810,9 +810,9 @@ export default function SecurityPage() {
                 <HoverCardContent
                   align="start"
                   collisionPadding={8}
-                  className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                  className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 tf-body-secondary"
                 >
-                  <h3 className="tf-subsection-title">How does session timeout work?</h3>
+                  <h3 className="tf-row-title">How does session timeout work?</h3>
                   <div>
                     <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it does</h4>
                     <p>
@@ -864,7 +864,7 @@ export default function SecurityPage() {
           </div>
           <div className="relative" title={!canManage ? 'You do not have permission to manage security settings' : undefined}>
             <FilterSelect
-              value={settings.session_timeout_minutes?.toString() || '30'}
+              value={settings.session_timeout_minutes?.toString() || '1440'}
               onChange={(v) => {
                 if (!canManage) return;
                 handleSessionTimeoutChange(v);
@@ -877,6 +877,7 @@ export default function SecurityPage() {
                 { value: '60', label: '1 hour' },
                 { value: '120', label: '2 hours' },
                 { value: '480', label: '8 hours' },
+                { value: '1440', label: '24 hours' },
               ]}
               className={`w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-black disabled:opacity-50 ${!canManage ? 'opacity-50 cursor-not-allowed disabled:cursor-not-allowed' : ''}`}
             />
@@ -890,7 +891,7 @@ export default function SecurityPage() {
 
         {/* SSO (Single Sign-On) */}
         <FeatureGate feature="sso" mode="section">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
+          <div className="tf-card-soft p-4 sm:p-6 mb-4 sm:mb-6 overflow-hidden">
             <div className="flex items-center gap-2 sm:gap-3 mb-4">
               <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                 <KeyRound className="w-5 h-5 text-blue-600" />
@@ -901,7 +902,7 @@ export default function SecurityPage() {
                     and set up with support, not from this page. Update the text if that changes. */}
                 <HoverCard open={ssoInfoOpen} onOpenChange={setSsoInfoOpen} openDelay={100} closeDelay={150}>
                   <div className="flex items-center gap-1.5">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Single Sign-On (SSO)</h2>
+                    <h2 className="tf-section-title">Single Sign-On (SSO)</h2>
                     <HoverCardTrigger asChild>
                       <button
                         type="button"
@@ -916,9 +917,9 @@ export default function SecurityPage() {
                   <HoverCardContent
                     align="start"
                     collisionPadding={8}
-                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                    className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 tf-body-secondary"
                   >
-                    <h3 className="tf-subsection-title">How does single sign-on work?</h3>
+                    <h3 className="tf-row-title">How does single sign-on work?</h3>
                     <div>
                       <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What it is</h4>
                       <p>
@@ -966,7 +967,7 @@ export default function SecurityPage() {
         </FeatureGate>
 
         {/* Active Sessions */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-4 sm:p-6 overflow-hidden">
+        <div className="tf-card-soft p-4 sm:p-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-4">
             {/* Same hover ⓘ as the cards above. Keep it truthful: DELETE /sessions/{id} only
                 marks the row invalid — JWTs aren't bound to a session, so a revoked device keeps
@@ -974,7 +975,7 @@ export default function SecurityPage() {
                 Update the "Revoking" text if revocation becomes immediate. */}
             <HoverCard open={sessionsInfoOpen} onOpenChange={setSessionsInfoOpen} openDelay={100} closeDelay={150}>
               <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
+                <h2 className="tf-section-title">Active Sessions</h2>
                 <HoverCardTrigger asChild>
                   <button
                     type="button"
@@ -989,9 +990,9 @@ export default function SecurityPage() {
               <HoverCardContent
                 align="start"
                 collisionPadding={8}
-                className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 text-sm text-gray-600 dark:text-slate-400"
+                className="w-[26rem] max-w-[calc(100vw-1rem)] max-h-[var(--radix-hover-card-content-available-height)] overflow-y-auto space-y-4 tf-body-secondary"
               >
-                <h3 className="tf-subsection-title">What are active sessions?</h3>
+                <h3 className="tf-row-title">What are active sessions?</h3>
                 <div>
                   <h4 className="font-semibold text-gray-900 dark:text-slate-50 mb-1">What you see here</h4>
                   <p>
@@ -1054,7 +1055,7 @@ export default function SecurityPage() {
                       <Shield className="w-5 h-5 text-gray-600 dark:text-slate-400" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate">{session.device_info || 'Unknown Device'}</p>
+                      <p className="tf-row-name truncate">{session.device_info || 'Unknown Device'}</p>
                       <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 md:gap-2 tf-body-muted">
                         <MapPin className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                         <span className="truncate max-w-[100px] sm:max-w-none">{session.location || 'Unknown Location'}</span>
@@ -1068,7 +1069,7 @@ export default function SecurityPage() {
                   </div>
                   <div className="flex-shrink-0 self-end sm:self-auto">
                     {session.is_current ? (
-                      <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-success-subtle text-success rounded-full text-xs font-medium whitespace-nowrap">
+                      <span className="tf-badge sm:px-2 md:px-3 bg-success-subtle text-success">
                         Current
                       </span>
                     ) : (
@@ -1106,7 +1107,7 @@ export default function SecurityPage() {
             {/* Modal */}
             <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md p-4 sm:p-6 animate-in fade-in zoom-in duration-200">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="tf-card-title">Revoke All Other Sessions</h3>
+                <h3 className="tf-section-title">Revoke All Other Sessions</h3>
                 <button
                   onClick={() => setShowRevokeAllDialog(false)}
                   className="p-1 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full transition-colors flex-shrink-0"

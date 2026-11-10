@@ -54,8 +54,8 @@ const ACTION_ICON: Record<VersionAction, { Icon: typeof Eye; tone: string }> = {
  * A version's title, as the version cards and the picked-version strip both
  * show it. An assessment names its job, then the version of each — "JD-245
  * Junior Software Test Engineer V2 - Assessment V1" — with the JD ID chip and
- * the job / assessment version pills in their usual colours. Anything else
- * (an AI interview, an assessment with no job) keeps its own name. Pieces are
+ * the job / assessment version pills in their usual colours; an AI interview
+ * reads the same with "- AI Interview". One with no job keeps its own name. Pieces are
  * returned bare, to sit in the caller's wrapping flex row. `compact` is the
  * strip's smaller type.
  */
@@ -67,14 +67,23 @@ export function VersionTitle({ version: v, spansJobVersions = false, compact = f
   const tone = `${compact ? 'text-sm font-medium' : 'text-sm sm:text-base font-semibold'} ${
     v.sendable ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 dark:text-slate-400'
   }`;
-  if (v.kind === 'assessment' && v.raw?.jd_title) {
+  /* An AI interview names its job the same way — "JD-245 Junior Software Test
+     Engineer V2 - AI Interview V1" — with its linked job's Disabled /
+     Archived / Draft badge after it (assessments carry theirs in the header). */
+  const job = v.kind === 'assessment'
+    ? (v.raw?.jd_title ? { code: v.raw.jd_short_id, title: v.raw.jd_title } : null)
+    : (v.config?.jd_title ? { code: v.config.jd_short_id, title: v.config.jd_title } : null);
+  const jdKind = v.kind === 'interview' ? jobStatusBadgeKind(v.config?.jd_status) : null;
+  const jdBadge = jdKind ? <JobStatusBadge kind={jdKind} title={jdActionLockReason(v.config?.jd_status) ?? undefined} /> : null;
+  if (job) {
     return (
       <>
-        {v.raw.jd_short_id && <JobIdBadge className="flex-shrink-0">{v.raw.jd_short_id}</JobIdBadge>}
-        <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.raw.jd_title}</span>
+        {job.code && <JobIdBadge className="flex-shrink-0">{job.code}</JobIdBadge>}
+        <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{job.title}</span>
         {v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} /> : null}
-        <span className={`whitespace-nowrap ${tone}`}>- Assessment</span>
+        <span className={`whitespace-nowrap ${tone}`}>- {KIND_LABEL[v.kind].singular}</span>
         <VersionPill kind="assessment" version={v.version} />
+        {jdBadge}
       </>
     );
   }
@@ -83,13 +92,7 @@ export function VersionTitle({ version: v, spansJobVersions = false, compact = f
       <span className={`min-w-0 [overflow-wrap:anywhere] ${tone}`}>{v.name}</span>
       {spansJobVersions && v.jobVersion ? <VersionPill kind="job" version={v.jobVersion} label="Job" /> : null}
       <VersionPill kind="assessment" version={v.version} />
-      {/* An AI interview's linked job version Disabled / Archived / Draft —
-          the AI Interview list's badge. (Assessments carry theirs in the
-          popup header.) */}
-      {(() => {
-        const jdKind = v.kind === 'interview' ? jobStatusBadgeKind(v.config?.jd_status) : null;
-        return jdKind ? <JobStatusBadge kind={jdKind} title={jdActionLockReason(v.config?.jd_status) ?? undefined} /> : null;
-      })()}
+      {jdBadge}
     </>
   );
 }
@@ -103,7 +106,7 @@ export function VersionUsage({ kind, used }: { kind: InviteKind; used: number })
   const atCap = used >= max;
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <span className="tf-meta-strong whitespace-nowrap tabular-nums">{used} of {max} used</span>
+      <span className="tf-meta whitespace-nowrap tabular-nums">{used} of {max} used</span>
       <div
         className="h-1.5 w-16 sm:w-24 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden"
         role="progressbar"
@@ -212,7 +215,7 @@ export default function VersionList({
       {versions.length === 0 ? (
         /* The version cards' own empty state. */
         <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-8 flex flex-col items-center gap-1.5 text-center px-4">
-          <div className="text-sm font-medium text-gray-700 dark:text-slate-300">
+          <div className="tf-label">
             {used === 0 ? `No ${label.singular.toLowerCase()} for this job yet` : `No live ${label.singular.toLowerCase()} for this job version`}
           </div>
           {used === 0 && (
@@ -288,7 +291,7 @@ export default function VersionList({
                         <span className="inline-flex items-center gap-1.5">
                           <Layers className="w-3.5 h-3.5" />
                           {v.rounds.map((r) => (
-                            <span key={r.short} title={r.label} className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                            <span key={r.short} title={r.label} className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                               {r.short}
                             </span>
                           ))}
@@ -334,7 +337,7 @@ export default function VersionList({
                         <span className="flex flex-col">
                           <span className={MENU_ITEM_SCALE_CLASS}>{item.label}</span>
                           {item.disabledReason && (
-                            <span className="text-2xs text-gray-500 dark:text-slate-400 whitespace-normal">{item.disabledReason}</span>
+                            <span className="tf-micro-hint whitespace-normal">{item.disabledReason}</span>
                           )}
                         </span>
                       </DropdownMenuItem>
@@ -355,7 +358,7 @@ export default function VersionList({
           type="button"
           onClick={() => setExpanded((e) => !e)}
           aria-expanded={expanded}
-          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-medium text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors"
+          className="tf-btn tf-btn-secondary gap-1.5 h-8 px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:border-brand-blue/30 hover:bg-brand-blue/5 transition-colors whitespace-normal justify-start"
         >
           {expanded ? (
             'Show less'

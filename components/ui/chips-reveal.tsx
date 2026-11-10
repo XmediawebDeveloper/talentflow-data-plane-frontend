@@ -214,7 +214,7 @@ export default function ChipsReveal({
           }}
         >
           <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold text-gray-900">
+            <p className="tf-caption">
               {label} ({items.length})
             </p>
             <button
@@ -231,7 +231,7 @@ export default function ChipsReveal({
               {items.map(item => (
                 <span
                   key={item}
-                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-2xs break-words"
+                  className="tf-badge bg-slate-50 tf-micro-hint ring-1 ring-gray-200 break-words"
                 >
                   {item}
                 </span>

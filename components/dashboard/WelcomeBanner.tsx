@@ -17,7 +17,6 @@ const roleLabels: Record<UserRole, string> = {
   recruiter: 'Recruiter',
   viewer: 'Viewer',
   billing_manager: 'Billing',
-  standard_user: 'User',
 };
 
 const roleBadgeColors: Record<UserRole, string> = {
@@ -25,7 +24,6 @@ const roleBadgeColors: Record<UserRole, string> = {
   recruiter: 'bg-brand-cyan text-white ring-1 ring-white/30',
   viewer: 'bg-white/85 text-gray-700 ring-1 ring-white/30',
   billing_manager: 'bg-brand-orange text-white ring-1 ring-white/30',
-  standard_user: 'bg-white/85 text-gray-800 ring-1 ring-white/30',
 };
 
 function getGreeting(hour: number): string {
@@ -143,7 +141,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             <NameAvatar name={user?.name} fallback={user?.email} size="xl" className="relative bg-white dark:bg-white dark:text-brand-blue" />
           </div>
           <div className="mt-3 sm:mt-0">
-            <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold tracking-tight capitalize">
+            <h1 className="tf-page-title capitalize">
               {greeting},{' '}
               <span className="inline-flex items-baseline" aria-label={firstName}>
                 <span className="text-white">{typedName}</span>

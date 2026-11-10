@@ -135,7 +135,7 @@ export function ScoringScreen() {
           </div>
         )}
 
-        <p className="text-xs text-gray-400 text-center mt-6">
+        <p className="tf-hint text-center mt-6">
           Do not refresh or close this page. Results will appear automatically.
         </p>
       </div>

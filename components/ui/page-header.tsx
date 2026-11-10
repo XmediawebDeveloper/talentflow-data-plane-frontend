@@ -39,11 +39,11 @@ export function PageHeader({
             </div>
           )}
           <div className="min-w-0">
-            <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1 tracking-tight truncate">
+            <h1 className="tf-page-title mb-1 truncate">
               {title}
             </h1>
             {description && (
-              <p className="text-sm text-gray-600 dark:text-slate-400">{description}</p>
+              <p className="tf-body-secondary">{description}</p>
             )}
           </div>
         </div>

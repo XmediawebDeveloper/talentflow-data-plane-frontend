@@ -1,4 +1,6 @@
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
+import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
+import { cachedList, listCacheKey, listReadOptions, type ListReadOptions } from '@/lib/utils/listCache';
 import { jdService, JDLineageVersion } from '@/lib/services/jdService';
 
 /**
@@ -109,25 +111,78 @@ const VERSION_MAP_BATCH = 200;
  * that size lost assessments — and with them their candidates — off the end of
  * the reply.
  */
-export async function listAllAssessments(params: { jd_id?: string; status?: string } = {}): Promise<AssessmentResponse[]> {
-  const collected: AssessmentResponse[] = [];
-  let page = 1;
+export async function listAllAssessments(
+  params: { jd_id?: string; status?: string } = {},
+  opts?: ListReadOptions,
+): Promise<AssessmentResponse[]> {
+  /* Through the shared list cache (lib/utils/listCache), keyed by the params:
+     identical reads in flight share one request; with `reuseRecent` a complete
+     one is reused briefly; `fresh` always asks the server. Every write clears it. A read that failed part-way is never
+     cached — its callers get the pages before the failure, as before. */
   try {
-    while (true) {
-      const response = await assessmentService.list({ ...params, page, page_size: ASSESSMENTS_PAGE_SIZE });
-      const items = response.items || [];
-      collected.push(...items);
-      const total = response.total ?? collected.length;
-      if (items.length < ASSESSMENTS_PAGE_SIZE || collected.length >= total) break;
-      page++;
-      /* A server that ignores `page` would otherwise loop forever. The cap is
-         far above any real tenant's assessment count. */
-      if (page > 50) break;
-    }
+    return await cachedList(
+      listCacheKey('assessments|all-pages', { ...params, page_size: ASSESSMENTS_PAGE_SIZE }),
+      async () => {
+        const collected: AssessmentResponse[] = [];
+        try {
+          /* Page 1, then the rest a few at a time, kept in page order. `into`
+             keeps the pages before a failed one, as the one-by-one loop did.
+             maxPages: a server that ignores `page` would otherwise loop
+             forever; the cap is far above any real tenant's assessment count. */
+          await fetchAllPages(
+            (page) => assessmentService.list({ ...params, page, page_size: ASSESSMENTS_PAGE_SIZE }),
+            { pageSize: ASSESSMENTS_PAGE_SIZE, maxPages: 50, into: collected },
+          );
+        } catch (error) {
+          throw new PartialAssessmentList(collected, error);
+        }
+        return collected;
+      },
+      listReadOptions(opts),
+    );
   } catch (error) {
-    console.log('[TalentFlow] Failed to list assessments for', params, error);
+    const partial = error instanceof PartialAssessmentList ? error : null;
+    console.log('[TalentFlow] Failed to list assessments for', params, partial ? partial.reason : error);
+    return partial ? structuredClone(partial.rows) : [];
   }
-  return collected;
+}
+
+/** A list read that failed part-way, carrying the pages read before the failure. */
+class PartialAssessmentList extends Error {
+  constructor(public rows: AssessmentResponse[], public reason: unknown) {
+    super('Assessment list failed part-way');
+  }
+}
+
+/**
+ * Every assessment matching `filters` (jd_id / status), read in pages of 100
+ * one after another to the end of the set — the loop the Assessments page and
+ * its All Assessments tables use, unchanged. Raw API rows, in page order (the
+ * callers dedupe and map them). Through the shared list cache, keyed by the
+ * filters (see `listAllAssessments` for the options).
+ */
+export async function listAssessmentsBatched(
+  filters: { jd_id?: string; status?: string },
+  opts?: ListReadOptions,
+): Promise<AssessmentResponse[]> {
+  const BATCH = 100;
+  return cachedList(
+    listCacheKey('assessments|batched', { ...filters, page_size: BATCH }),
+    async () => {
+      const collected: AssessmentResponse[] = [];
+      let apiPage = 1;
+      for (;;) {
+        const batch = await assessmentService.list({ ...filters, page: apiPage, page_size: BATCH });
+        const items = batch.items || [];
+        collected.push(...items);
+        const total = batch.total ?? collected.length;
+        if (items.length < BATCH || collected.length >= total) break;
+        apiPage += 1;
+      }
+      return collected;
+    },
+    listReadOptions(opts),
+  );
 }
 
 /** Newest assessment version first — the order every assessment table uses. */
@@ -162,7 +217,9 @@ export async function loadJobAssessmentHierarchy(jdId: string): Promise<JobAsses
   const jdIds = [...new Set([jdId, ...lineage.map((v) => v.id).filter(Boolean)])];
   const jdIdSet = new Set(jdIds);
 
-  const perVersion = await Promise.all(jdIds.map((versionId) => listAllAssessments({ jd_id: versionId })));
+  /* fresh: this structure feeds Create's version cap and the version history,
+     so it is always read from the server (and refreshes the shared cache). */
+  const perVersion = await Promise.all(jdIds.map((versionId) => listAllAssessments({ jd_id: versionId }, { fresh: true })));
 
   /* Deduped by ASSESSMENT id — the record's own unique key, never by job,
      version number or title. Two assessments against one job version are two

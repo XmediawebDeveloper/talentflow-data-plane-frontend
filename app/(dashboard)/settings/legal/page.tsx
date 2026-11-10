@@ -11,6 +11,7 @@ import type { DocumentType } from '@/lib/services/termsService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import type { TermsAcceptanceRecord, TermsAndConditions } from '@/lib/types/terms';
 import ListPagination from '@/components/ListPagination';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const TITLE_TO_DOCUMENT_TYPE: Record<string, DocumentType> = {
@@ -100,9 +101,9 @@ export default function LegalCompliancePage() {
   const DocIcon = viewingDocType ? DOCUMENT_TYPE_ICON[viewingDocType] : FileText;
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-4 sm:space-y-6">
+      <div className="tf-page-sheet space-y-4 sm:space-y-6">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Legal & Compliance' }]} />
 
       {/* SaaS Hero Header */}
@@ -115,24 +116,24 @@ export default function LegalCompliancePage() {
             <ScrollText className="h-6 w-6 text-white" />
           </div>
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+            <div className="tf-badge mb-2 gap-1.5 bg-white/10 text-2xs text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
               <Sparkles className="h-3 w-3 text-brand-orange" />
               Compliance trail
             </div>
-            <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Legal & Compliance</h1>
+            <h1 className="tf-page-title">Legal & Compliance</h1>
             <p className="mt-2 max-w-2xl text-sm text-white/80">Audit trail of all legal document acceptances for your organization.</p>
           </div>
         </div>
       </section>
 
       {/* Content */}
-      <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+      <div className="tf-card-soft overflow-hidden">
         <div className="flex items-center gap-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-5 py-4 sm:px-6">
           <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <FileText className="h-5 w-5 text-brand-blue" />
           </span>
           <div>
-            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50">Acceptance History</h2>
+            <h2 className="tf-section-title">Acceptance History</h2>
             <p className="tf-meta">Record of all legal document acceptances for your organization.</p>
           </div>
         </div>
@@ -175,48 +176,49 @@ export default function LegalCompliancePage() {
             <p className="text-sm">No acceptance records found</p>
           </div>
         ) : (
-          <div className="overflow-x-auto tf-table-shell">
+          <>
+          <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
             <table className="w-full">
               <thead>
                 <tr className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
-                  <th className="text-left tf-th px-6 py-3">Version</th>
-                  <th className="text-left tf-th px-6 py-3">Title</th>
-                  <th className="text-left tf-th px-6 py-3">Accepted By</th>
-                  <th className="text-left tf-th px-6 py-3">Accepted On</th>
-                  <th className="text-left tf-th px-6 py-3">Status</th>
-                  <th className="text-left tf-th px-6 py-3">Document</th>
+                  <th className="tf-th-cell text-left tf-th">Version</th>
+                  <th className="tf-th-cell text-left tf-th">Title</th>
+                  <th className="tf-th-cell text-left tf-th">Accepted By</th>
+                  <th className="tf-th-cell text-left tf-th">Accepted On</th>
+                  <th className="tf-th-cell text-left tf-th">Status</th>
+                  <th className="tf-th-cell text-left tf-th">Document</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {paginatedHistory.map((record) => (
                   <tr key={record.id} className="hover:bg-brand-cyan/[0.04] transition-colors">
-                    <td className="px-6 py-4 text-sm font-medium text-gray-900 dark:text-slate-50">
-                      <span className="inline-flex items-center rounded-full bg-brand-blue/[0.06] px-2 py-0.5 text-xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
+                    <td className="tf-td tf-row-name">
+                      <span className="tf-badge bg-brand-blue/[0.06] text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
                     </td>
-                    <td className="px-6 py-4 tf-td">{record.terms_title || '—'}</td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td tf-body">{record.terms_title || '—'}</td>
+                    <td className="tf-td">
                       <div>
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{record.accepted_by || record.accepted_by_name}</p>
+                        <p className="tf-row-name">{record.accepted_by || record.accepted_by_name}</p>
                         <p className="tf-meta">{record.accepted_by_email}</p>
                       </div>
                     </td>
-                    <td className="px-6 py-4 tf-card-desc">
+                    <td className="tf-td tf-body-secondary">
                       {formatIST(record.accepted_at)}
                     </td>
-                    <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
+                    <td className="tf-td">
+                      <span className="tf-badge bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
                         <CheckCircle className="w-3.5 h-3.5" />
                         Accepted
                       </span>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="tf-td">
                       {TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
                         <Button variant="secondary" size="sm" onClick={() => handleView(record)} className="text-xs">
                           <Eye className="w-3.5 h-3.5" />
                           View
                         </Button>
                       ) : (
-                        <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
+                        <span className="tf-hint">—</span>
                       )}
                     </td>
                   </tr>
@@ -224,6 +226,37 @@ export default function LegalCompliancePage() {
               </tbody>
             </table>
           </div>
+          <MobileRecordList className="p-3">
+            {paginatedHistory.map((record) => (
+              <MobileRecordCard
+                key={record.id}
+                /* 👁 View at the right end of the name line, as on the Support Tickets cards. */
+                className="tf-jdv-actions-inline"
+                badges={
+                  <>
+                    <span className="tf-badge bg-brand-blue/[0.06] text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
+                    <span className="tf-badge bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/15">
+                      <CheckCircle className="w-3.5 h-3.5" />
+                      Accepted
+                    </span>
+                  </>
+                }
+                title={record.terms_title || '—'}
+                actions={
+                  TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
+                    <button type="button" onClick={() => handleView(record)} title="View" aria-label={`View ${record.terms_title || 'document'}`} className="tf-icon-btn-outline">
+                      <Eye />
+                    </button>
+                  ) : undefined
+                }
+                fields={[
+                  { label: 'Accepted By', value: <>{record.accepted_by || record.accepted_by_name}{record.accepted_by_email && <span className="tf-meta"> ({record.accepted_by_email})</span>}</> },
+                  { label: 'Accepted On', value: formatIST(record.accepted_at) },
+                ]}
+              />
+            ))}
+          </MobileRecordList>
+          </>
         )}
       </div>
 
@@ -261,7 +294,7 @@ export default function LegalCompliancePage() {
                 size="sm"
                 onClick={closeModal}
                 aria-label="Close"
-                className="px-2"
+               
               >
                 <X className="w-4 h-4" />
               </Button>

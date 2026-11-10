@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, FileText, Download, Calendar, History, Eye, Loader2, Briefcase, CheckCircle2, Lightbulb } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
@@ -68,6 +70,9 @@ export default function ResumeVersionsModal({
   onApplyToJobDisabledReason,
   selectedVersionId,
 }: ResumeVersionsModalProps) {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10).
+  const canDownload = canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode });
   /* Choosing is offered whenever a handler exists and the whole dialog isn't
      already a picker. Falls back to the newest version, so "in use" is marked
      from the moment the list opens rather than only after a click. */
@@ -101,6 +106,7 @@ export default function ResumeVersionsModal({
   };
 
   const handleDownload = async (version: ResumeVersion) => {
+    if (!canDownload) return;
     try {
       const blob = candidate.resumeId
         ? await resumeService.downloadVersion(candidate.resumeId, version.id)
@@ -181,16 +187,16 @@ export default function ResumeVersionsModal({
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h2 className="tf-section-title">
+                <h2 className="tf-section-title sm:text-lg tracking-tight">
                   {selectionMode ? 'Select Resume Version' : 'Version History'}
                 </h2>
                 {!selectionMode && versions.length > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                  <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                     {versions.length} version{versions.length !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
-              <p className="tf-card-desc truncate">{candidate.name}</p>
+              <p className="tf-body-secondary truncate">{candidate.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -226,7 +232,7 @@ export default function ResumeVersionsModal({
               {Array.from({ length: 5 }).map((_, i) => (
                 <div
                   key={i}
-                  className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-900"
+                  className="tf-panel p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -286,7 +292,7 @@ export default function ResumeVersionsModal({
                           checked={compareChecked.includes(version.id)}
                           onChange={() => toggleCompareCheck(version.id)}
                           onClick={(e) => e.stopPropagation()}
-                          className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                          className="tf-checkbox focus:ring-brand-blue/40"
                           aria-label={`Select version ${version.version} to compare`}
                         />
                       )}
@@ -309,9 +315,9 @@ export default function ResumeVersionsModal({
                           )}
                         </div>
                         {version.file_name && (
-                          <p className="tf-card-desc truncate">{version.file_name}</p>
+                          <p className="tf-body-secondary truncate">{version.file_name}</p>
                         )}
-                        <div className="flex items-center gap-x-3 gap-y-1 tf-card-desc mt-1 flex-wrap">
+                        <div className="flex items-center gap-x-3 gap-y-1 tf-body-secondary mt-1 flex-wrap">
                           <span className="flex items-center gap-1 whitespace-nowrap">
                             <Calendar className="w-3.5 h-3.5" />
                             {formatISTDate(version.created_at)}
@@ -331,7 +337,7 @@ export default function ResumeVersionsModal({
                           e.stopPropagation();
                           onSelectVersion?.(version);
                         }}
-                        className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm font-medium"
+                        className="tf-btn tf-btn-primary w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors text-sm whitespace-normal gap-0"
                       >
                         Select
                       </button>
@@ -358,7 +364,7 @@ export default function ResumeVersionsModal({
                             View Changes
                           </button>
                         ) : (
-                          <span className="hidden sm:inline text-xs italic text-gray-400 dark:text-slate-500">First version</span>
+                          <span className="hidden sm:inline tf-hint italic">First version</span>
                         )}
                         <button
                           onClick={(e) => {
@@ -420,8 +426,9 @@ export default function ResumeVersionsModal({
                               e.stopPropagation();
                               handleDownload(version);
                             }}
-                            className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            aria-label="Download" title="Download"
+                            aria-disabled={!canDownload}
+                            className={`p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-label="Download" title={canDownload ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
                           >
                             <Download className="w-4 h-4" />
                           </button>
@@ -448,7 +455,7 @@ export default function ResumeVersionsModal({
         {/* Footer */}
         <div className="border-t border-gray-200 dark:border-slate-700 px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
-            <p className="tf-card-desc">
+            <p className="tf-body-secondary">
               {!selectionMode && versions.length > 1 && compareChecked.length > 0
                 ? `${compareChecked.length} of 2 selected to compare`
                 : `${versions.length} version${versions.length !== 1 ? 's' : ''}`}
@@ -460,7 +467,7 @@ export default function ResumeVersionsModal({
                 <button
                   onClick={compareSelected}
                   disabled={compareChecked.length !== 2 || loadingCompare}
-                  className="sm:hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
+                  className="tf-btn tf-btn-primary sm:hidden gap-1.5 px-4 py-2 text-sm bg-brand-blue disabled:bg-slate-200 disabled:text-gray-400 whitespace-normal shadow-none justify-start hover:bg-brand-blue"
                 >
                   {loadingCompare && <Loader2 className="w-4 h-4 animate-spin" />}
                   Compare

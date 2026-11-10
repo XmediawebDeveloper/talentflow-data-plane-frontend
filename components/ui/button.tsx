@@ -61,18 +61,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   asChild = false,
   ...props
 }, ref) => {
-  // `[&>svg]:shrink-0` keeps an icon at its intended size even when a caller
-  // pins a narrow width (e.g. icon-only `h-9 w-9`) — otherwise the flex child
-  // collapses and the icon disappears.
-  const baseClasses = 'cursor-pointer inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed select-none whitespace-nowrap [&>svg]:shrink-0';
+  // Base / size / default-tone variants are the global `tf-btn*` classes in
+  // app/globals.css (TALENTFLOW UI STANDARD), so a hand-written <button> can wear
+  // exactly the same look. They sit in @layer components: a utility passed in
+  // `className` always wins over them. `tf-btn` includes `[&>svg]:shrink-0`,
+  // which keeps an icon at its intended size when a caller pins a narrow width
+  // (e.g. icon-only `h-9 w-9`).
+  const baseClasses = 'tf-btn';
 
   const variantClasses: Record<ButtonTone, Record<CanonicalVariant, string>> = {
     default: {
       // Primary CTA = brand blue (the app's long-standing CTA color), sourced
       // from globals.css tokens. NOT --primary, which is the grey theme accent.
-      primary: 'bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md active:shadow-sm',
-      secondary: 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]',
-      destructive: 'bg-[var(--destructive)] text-white hover:opacity-90 shadow-sm hover:shadow-md',
+      primary: 'tf-btn-primary',
+      secondary: 'tf-btn-secondary',
+      destructive: 'tf-btn-destructive',
     },
     onColor: {
       primary: 'bg-white text-[var(--brand-blue)] hover:bg-white/90 shadow-sm hover:shadow-md active:shadow-sm focus-visible:ring-white',
@@ -82,9 +85,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   };
 
   const sizeClasses = {
-    sm: 'h-8 px-3 text-xs',
-    md: 'h-10 px-4 text-sm',
-    lg: 'h-11 px-6 text-base',
+    sm: 'tf-btn-sm', // 32px
+    md: 'tf-btn-md', // 40px
+    lg: 'tf-btn-lg', // 44px
   };
 
   const resolvedVariant = VARIANT_ALIAS[variant] ?? 'primary';

@@ -24,7 +24,7 @@ export default function StepLanguageSelect({
     <div className="w-full max-w-2xl mx-auto space-y-6">
       {/* Blue pill badge */}
       <div className="text-center space-y-3">
-        <span className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 text-xs font-semibold px-3 py-1 rounded-full">
+        <span className="tf-badge gap-1.5 bg-gray-100 text-gray-700">
           <Globe className="w-3.5 h-3.5" />
           Language Selection
         </span>
@@ -35,13 +35,13 @@ export default function StepLanguageSelect({
         </h2>
 
         {/* Subtitle */}
-        <p className="tf-card-desc">
+        <p className="tf-body-secondary">
           Choose your preferred language for the AI interview
         </p>
       </div>
 
       {/* Card with blue gradient header */}
-      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+      <div className="tf-card-soft overflow-hidden">
         <div className="bg-gray-800 px-6 py-4 flex items-center gap-3">
           <MessageSquare className="w-5 h-5 text-white" />
           <div>

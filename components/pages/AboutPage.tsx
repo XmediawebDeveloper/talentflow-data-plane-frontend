@@ -294,7 +294,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             <Users style={{ width: 16, height: 16 }} />
             About Us
           </div>
-          <h1 style={titleStyle}>Building the future of hiring</h1>
+          <h1 className="tf-page-title" style={titleStyle}>Building the future of hiring</h1>
           <p style={subtitleStyle}>
             We're a team of recruiters, engineers, and AI researchers on a mission to make hiring smarter and more human.
           </p>

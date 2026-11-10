@@ -11,7 +11,6 @@ const ROLE_LABELS: Record<string, string> = {
   recruiter: 'Recruiter',
   billing_manager: 'Billing Manager',
   viewer: 'Viewer',
-  standard_user: 'Standard User',
 };
 
 function timeOfDayGreeting(): string {
@@ -56,11 +55,11 @@ export default function DashboardHero() {
 
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-1 text-2xs font-medium tracking-wide text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+          <div className="tf-badge mb-3 gap-1.5 bg-white/10 text-2xs tracking-wide text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
             <Calendar className="h-3 w-3 text-brand-cyan" />
             {dateLabel}
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl lg:text-[2.125rem]">
+          <h1 className="tf-page-title">
             {timeOfDayGreeting()}, {firstName}
             <span aria-hidden className="ml-2 inline-block">👋</span>
           </h1>

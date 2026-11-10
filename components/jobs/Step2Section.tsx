@@ -55,7 +55,7 @@ export const Step2SectionHeader = ({
       </div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
-          <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
+          <h2 className="tf-row-title sm:text-base tracking-tight">{title}</h2>
           {badge}
         </div>
         <p className="tf-body-muted mt-0.5">{hint}</p>

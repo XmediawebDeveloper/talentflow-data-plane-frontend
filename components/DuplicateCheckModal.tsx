@@ -66,7 +66,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               <FileText className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title truncate">Check for Duplicate Resumes</h2>
+              <h2 className="tf-section-title sm:text-lg truncate">Check for Duplicate Resumes</h2>
               <p className="tf-body-muted truncate">Upload a resume to check if it already exists</p>
             </div>
           </div>
@@ -99,8 +99,8 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                 <div className="w-16 h-16 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Upload className="w-8 h-8 text-brand-blue" />
                 </div>
-                <h3 className="tf-section-title mb-2">Upload Resume to Check</h3>
-                <p className="tf-card-desc mb-4">
+                <h3 className="tf-section-title sm:text-lg mb-2">Upload Resume to Check</h3>
+                <p className="tf-body-secondary mb-4">
                   Drop your resume file here or click to browse
                 </p>
                 <label className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors cursor-pointer">
@@ -139,7 +139,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
               </div>
 
               {/* Existing Resume Details */}
-              <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl overflow-hidden mb-6">
+              <div className="tf-panel overflow-hidden mb-6">
                 <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-5 py-3">
                   <h4 className="text-brand-blue font-semibold flex items-center gap-2">
                     <Eye className="w-5 h-5" />
@@ -155,9 +155,9 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                         {existingResume.name.split(' ').map(n => n[0]).join('')}
                       </div>
                       <div>
-                        <h3 className="text-base sm:text-xl text-gray-900 dark:text-slate-50 font-semibold mb-1">{existingResume.name}</h3>
-                        <p className="text-sm sm:text-base text-gray-700 dark:text-slate-300 mb-2">{existingResume.title}</p>
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-card-desc">
+                        <h3 className="tf-section-title sm:text-xl mb-1">{existingResume.name}</h3>
+                        <p className="tf-body sm:text-base mb-2">{existingResume.title}</p>
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 tf-body-secondary">
                           <div className="flex items-center gap-1">
                             <Briefcase className="w-4 h-4" />
                             {existingResume.experience}
@@ -169,7 +169,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                         </div>
                       </div>
                     </div>
-                    <span className="px-2.5 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-xs font-medium">
+                    <span className="tf-badge bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                       Existing
                     </span>
                   </div>
@@ -177,29 +177,29 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                   {/* Contact Information */}
                   <div className="grid grid-cols-2 gap-6 mb-6">
                     <div>
-                      <div className="flex items-center gap-2 tf-card-desc mb-1">
+                      <div className="flex items-center gap-2 tf-body-secondary mb-1">
                         <Mail className="w-4 h-4" />
                         Email
                       </div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50 font-medium">{existingResume.email}</div>
+                      <div className="tf-row-name">{existingResume.email}</div>
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 tf-card-desc mb-1">
+                      <div className="flex items-center gap-2 tf-body-secondary mb-1">
                         <Phone className="w-4 h-4" />
                         Phone
                       </div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50 font-medium">{existingResume.phone}</div>
+                      <div className="tf-row-name">{existingResume.phone}</div>
                     </div>
                   </div>
 
                   {/* Skills */}
                   <div className="mb-6">
-                    <div className="tf-card-desc mb-2">Skills</div>
+                    <div className="tf-body-secondary mb-2">Skills</div>
                     <div className="flex flex-wrap gap-2">
                       {existingResume.skills.map((skill, idx) => (
                         <span
                           key={idx}
-                          className="px-2.5 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium"
+                          className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                         >
                           {skill}
                         </span>
@@ -210,20 +210,20 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                   {/* Timeline */}
                   <div className="grid grid-cols-2 gap-6 pt-6 border-t border-gray-200 dark:border-slate-700">
                     <div>
-                      <div className="flex items-center gap-2 tf-card-desc mb-1">
+                      <div className="flex items-center gap-2 tf-body-secondary mb-1">
                         <Calendar className="w-4 h-4" />
                         First Uploaded
                       </div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50">
+                      <div className="tf-body">
                         {formatISTDate(existingResume.uploadDate)}
                       </div>
                     </div>
                     <div>
-                      <div className="flex items-center gap-2 tf-card-desc mb-1">
+                      <div className="flex items-center gap-2 tf-body-secondary mb-1">
                         <Calendar className="w-4 h-4" />
                         Last Updated
                       </div>
-                      <div className="text-sm text-gray-900 dark:text-slate-50">
+                      <div className="tf-body">
                         {existingResume.lastUpdated ? formatISTDate(existingResume.lastUpdated) : 'Never'}
                       </div>
                     </div>
@@ -240,7 +240,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                       onClose();
                     }
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                  className="tf-btn tf-btn-primary flex-1 flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal font-normal"
                 >
                   <Eye className="w-4 h-4" />
                   View Existing Resume
@@ -250,7 +250,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
                     setShowDuplicateWarning(false);
                     setUploadedFiles([]);
                   }}
-                  className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+                  className="tf-btn tf-btn-secondary flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-normal gap-0 font-normal"
                 >
                   Check Another Resume
                 </button>
@@ -258,7 +258,7 @@ export default function DuplicateCheckModal({ onClose, onUploadNew, onViewExisti
 
               {/* Info Note */}
               <div className="mt-4 bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 rounded-lg p-4">
-                <p className="tf-meta-strong">
+                <p className="tf-meta">
                   <strong>Note:</strong> If you want to update this candidate's resume with a new version, use the <span className="font-semibold text-brand-blue">"Version"</span> button instead. The Duplicate Check is designed to prevent accidental re-uploads of the same candidate.
                 </p>
               </div>

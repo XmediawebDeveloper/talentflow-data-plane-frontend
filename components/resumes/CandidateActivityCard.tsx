@@ -89,7 +89,7 @@ const VersionTag = ({ version }: { version: number | null | undefined }) =>
 
 const ViaEmailTag = () => (
   <span
-    className="px-1.5 py-0.5 rounded bg-slate-100 text-gray-600 text-2xs ring-1 ring-gray-200"
+    className="px-1.5 py-0.5 rounded bg-slate-100 tf-micro-hint ring-1 ring-gray-200"
     title="Invited by email address, not from a resume — matched to this candidate by the same email"
   >
     via email
@@ -118,7 +118,7 @@ const COLUMNS: Record<TabKey, { heads: string[]; grid: string }> = {
 };
 const gridFor = (tab: TabKey) => `lg:grid ${COLUMNS[tab].grid} lg:items-center lg:gap-x-3`;
 
-const NoValue = () => <span className="text-sm text-gray-400">—</span>;
+const NoValue = () => <span className="tf-body-muted">—</span>;
 
 /* Every tab colours its score the same way: by that row's own result —
    Pass green / Fail red (assessments, interviews), the verdict's colour
@@ -153,7 +153,7 @@ function Row({
   return (
     <div className={`flex flex-col gap-2 ${gridFor(tab)} py-3 px-3 rounded-lg ring-1 ring-gray-100 hover:ring-brand-blue/20 hover:bg-brand-blue/[0.02] transition-all`}>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium text-gray-900">{title}</div>
+        <div className="flex flex-wrap items-center gap-1.5 tf-row-name">{title}</div>
         <div className="mt-0.5 tf-meta flex flex-wrap gap-x-3 gap-y-0.5">{meta}</div>
       </div>
       <div className="flex flex-wrap items-center gap-2 lg:contents">
@@ -407,14 +407,14 @@ export default function CandidateActivityCard({
   };
 
   return (
-    <div ref={cardRef} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+    <div ref={cardRef} className="tf-card-soft p-4 sm:p-6">
       <div className="flex items-center gap-2 gap-y-1 mb-4 flex-wrap">
         <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0">
           <Activity className="w-4 h-4 text-brand-blue" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 tracking-tight whitespace-nowrap">Candidate Activity</h3>
+        <h3 className="tf-section-title tracking-tight whitespace-nowrap">Candidate Activity</h3>
         {!loading && data && (
-          <span className="px-2.5 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs ring-1 ring-brand-blue/20 shrink-0 whitespace-nowrap">
+          <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 shrink-0">
             {total} record{total !== 1 ? 's' : ''}
           </span>
         )}
@@ -452,12 +452,12 @@ export default function CandidateActivityCard({
                   aria-disabled={permissionLocked || undefined}
                   title={planLocked ? PLAN_LOCKED_MESSAGE : permissionLocked ? `You do not have permission to view ${label}` : undefined}
                   onClick={() => { if (locked) return; setActive(key); }}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-sm whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                  className={`tf-tab-line -mb-px ${
                     locked
-                      ? 'border-transparent text-gray-300 cursor-not-allowed'
+                      ? 'tf-tab-line-disabled'
                       : selected
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-600 hover:text-brand-blue'
+                        ? 'tf-tab-line-active'
+                        : ''
                   }`}
                 >
                   {locked ? <Lock className="w-3.5 h-3.5" /> : <Icon className="w-3.5 h-3.5" />}

@@ -69,7 +69,7 @@ export default function QuotaUsageCard({
           <div>
             <h3 className="tf-section-title">Quota Usage</h3>
             {planName && (
-              <p className="tf-card-desc mt-0.5">
+              <p className="tf-body-secondary mt-0.5">
                 Current Plan: <span className="font-medium">{planName}</span>
               </p>
             )}
@@ -101,7 +101,7 @@ export default function QuotaUsageCard({
                   <span className="font-medium text-gray-900">{quota.label}</span>
                 </div>
                 <div className="text-right">
-                  <p className="tf-cell-name">
+                  <p className="tf-row-title">
                     {quota.used.toLocaleString()} / {quota.limit.toLocaleString()}
                     <span className="text-gray-500 ml-1">{quota.unit}</span>
                   </p>
@@ -175,7 +175,7 @@ export default function QuotaUsageCard({
                   )}
 
                   {warningLevel === 'low' && remaining > 0 && (
-                    <p className="tf-meta-strong">
+                    <p className="tf-meta">
                       {remaining.toLocaleString()} {quota.unit} available
                     </p>
                   )}
@@ -189,7 +189,7 @@ export default function QuotaUsageCard({
       {/* Footer Action */}
       <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
         <div className="flex items-center justify-between">
-          <p className="tf-card-desc">
+          <p className="tf-body-secondary">
             Need more quota?
           </p>
           <button

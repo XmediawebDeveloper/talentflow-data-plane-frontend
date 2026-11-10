@@ -253,7 +253,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
             </div>
             <div>
               <h2 className="text-gray-900">Support Center</h2>
-              <p className="tf-card-desc">We're here to help</p>
+              <p className="tf-body-secondary">We're here to help</p>
             </div>
           </div>
           <button
@@ -270,7 +270,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
           {view === 'main' && (
             <div className="p-6 space-y-4">
               <div className="bg-gradient-to-r from-gray-50 to-gray-50 border border-gray-200 rounded-lg p-4">
-                <h3 className="text-sm text-gray-800 mb-1">Need Help?</h3>
+                <h3 className="tf-body mb-1">Need Help?</h3>
                 <p className="text-xs text-gray-900">
                   Submit a ticket or browse your existing support requests.
                 </p>
@@ -293,14 +293,14 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
               >
                 <Ticket className="w-5 h-5 text-gray-600" />
                 <div className="text-left">
-                  <div className="text-sm text-gray-900">My Tickets</div>
-                  <div className="tf-meta-strong">View and track your support tickets</div>
+                  <div className="tf-body">My Tickets</div>
+                  <div className="tf-meta">View and track your support tickets</div>
                 </div>
               </button>
 
               {/* Recent Tickets Preview */}
               <div className="mt-6">
-                <h3 className="text-sm text-gray-900 mb-3">Recent Tickets</h3>
+                <h3 className="tf-body mb-3">Recent Tickets</h3>
                 <div className="space-y-2">
                   {tickets.slice(0, 3).map(ticket => (
                     <button
@@ -312,11 +312,11 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                       className="w-full text-left p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
                       <div className="flex items-start justify-between mb-1">
-                        <span className="tf-meta-strong">{ticket.ticketNumber}</span>
+                        <span className="tf-meta">{ticket.ticketNumber}</span>
                         {getStatusBadge(ticket.status)}
                       </div>
-                      <div className="text-sm text-gray-900 mb-1 truncate">{ticket.title}</div>
-                      <div className="tf-meta-strong">{formatISTDate(ticket.updatedAt)}</div>
+                      <div className="tf-body mb-1 truncate">{ticket.title}</div>
+                      <div className="tf-meta">{formatISTDate(ticket.updatedAt)}</div>
                     </button>
                   ))}
                 </div>
@@ -324,7 +324,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
               {/* Quick Help */}
               <div className="mt-6 pt-6 border-t border-gray-200">
-                <h3 className="text-sm text-gray-900 mb-3">Quick Help</h3>
+                <h3 className="tf-body mb-3">Quick Help</h3>
                 <div className="space-y-2">
                   <a href="#" className="block text-sm text-gray-800 hover:text-gray-900">
                     📚 Knowledge Base
@@ -366,7 +366,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Brief description of your issue"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                    className="tf-input"
                   />
                 </div>
 
@@ -403,7 +403,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Please provide detailed information about your issue..."
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+                    className="tf-textarea resize-none"
                   />
                 </div>
 
@@ -424,7 +424,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                       className="cursor-pointer flex flex-col items-center"
                     >
                       <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                      <span className="tf-card-desc">
+                      <span className="tf-body-secondary">
                         Click to upload files
                       </span>
                       <span className="tf-meta mt-1">
@@ -439,7 +439,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                         <div key={index} className="flex items-center justify-between p-2 bg-gray-50 rounded">
                           <div className="flex items-center gap-2">
                             <FileText className="w-4 h-4 text-gray-600" />
-                            <span className="text-sm text-gray-900">{file.name}</span>
+                            <span className="tf-body">{file.name}</span>
                             <span className="tf-meta">
                               ({(file.size / 1024).toFixed(1)} KB)
                             </span>
@@ -482,7 +482,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-gray-900">My Support Tickets</h3>
-                <span className="tf-card-desc">{tickets.length} tickets</span>
+                <span className="tf-body-secondary">{tickets.length} tickets</span>
               </div>
 
               {/* Search */}
@@ -493,7 +493,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search tickets..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  className="tf-input pl-10 pr-4"
                 />
               </div>
 
@@ -510,12 +510,12 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div>
-                        <span className="tf-meta-strong block mb-1">{ticket.ticketNumber}</span>
-                        <h4 className="text-sm text-gray-900">{ticket.title}</h4>
+                        <span className="tf-meta block mb-1">{ticket.ticketNumber}</span>
+                        <h4 className="tf-body">{ticket.title}</h4>
                       </div>
                       {getStatusBadge(ticket.status)}
                     </div>
-                    <div className="flex items-center gap-2 tf-meta-strong">
+                    <div className="flex items-center gap-2 tf-meta">
                       <span>{getCategoryLabel(ticket.category)}</span>
                       <span>•</span>
                       {getPriorityBadge(ticket.priority)}
@@ -553,22 +553,22 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
               <div className="mb-4 pb-4 border-b border-gray-200">
                 <div className="flex items-start justify-between mb-2">
                   <div>
-                    <span className="tf-meta-strong block mb-1">{selectedTicket.ticketNumber}</span>
+                    <span className="tf-meta block mb-1">{selectedTicket.ticketNumber}</span>
                     <h3 className="text-gray-900">{selectedTicket.title}</h3>
                   </div>
                   {getStatusBadge(selectedTicket.status)}
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-2 mt-3">
-                  <span className="tf-meta-strong">{getCategoryLabel(selectedTicket.category)}</span>
-                  <span className="text-xs text-gray-400">•</span>
+                  <span className="tf-meta">{getCategoryLabel(selectedTicket.category)}</span>
+                  <span className="tf-hint">•</span>
                   {getPriorityBadge(selectedTicket.priority)}
-                  <span className="text-xs text-gray-400">•</span>
-                  <span className="tf-meta-strong">Created {formatISTDate(selectedTicket.createdAt)}</span>
+                  <span className="tf-hint">•</span>
+                  <span className="tf-meta">Created {formatISTDate(selectedTicket.createdAt)}</span>
                 </div>
 
                 {selectedTicket.assignedAgent && (
-                  <div className="mt-2 tf-meta-strong">
+                  <div className="mt-2 tf-meta">
                     Assigned to: <span className="text-gray-900">{selectedTicket.assignedAgent}</span>
                   </div>
                 )}
@@ -613,7 +613,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                   <textarea
                     placeholder="Add a reply..."
                     rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 resize-none"
+                    className="tf-textarea resize-none"
                   />
                   <button className="mt-2 w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2">
                     <MessageSquare className="w-4 h-4" />

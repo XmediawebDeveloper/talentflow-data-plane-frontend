@@ -1,22 +1,23 @@
 'use client';
 
-import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Trash2, Video, X } from 'lucide-react';
+import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Minus, Plus, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { saveInviteUnitsHandoff, USAGE_QUOTAS_FROM_INVITE_URL, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
 import VersionList, { STATUS_PILL, VersionTitle, VersionUsage } from './VersionList';
-import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickerSelection } from './ServerCandidatePicker';
-import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode } from './ExtraCandidatesInput';
+import ServerCandidatePicker, { EMPTY_SELECTION, TAB_LABEL, selectionCount, toRequestSelection, type PickReveal, type PickerSelection } from './ServerCandidatePicker';
+import ExtraCandidatesInput, { MAX_EXTRA_CANDIDATES, type EmailCheck, type ExistingCandidateMatch, type ExtraCounts, type ExtraMode, type PickedPerson } from './ExtraCandidatesInput';
 import InviteQuotaBar, { isUnlimitedQuota } from './InviteQuotaBar';
 import InviteReviewStep, { type LeftOut, type ReviewCounts } from './InviteReviewStep';
 import InviteMessageStep from './InviteMessageStep';
 import { DEFAULT_EXPIRY_DAYS, defaultInviteMessage } from './inviteDefaults';
 import BulkInviteProgressPanel from '@/components/bulk-invite/BulkInviteProgressPanel';
-import { bulkInviteService, SERVER_MATCH_LABEL, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection, type InviteCandidateSourceTab, type ServerInviteCandidate } from '@/lib/services/bulkInviteService';
+import { bulkInviteService, isBulkInviteActive, SERVER_MATCH_LABEL, type BulkInviteJob, type BulkExtraCandidate, type BulkInviteSelection, type InviteCandidateSourceTab, type ServerInviteCandidate } from '@/lib/services/bulkInviteService';
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -84,7 +85,7 @@ const stepLabel = (s: Step, singular: string) => (s === 'version' ? singular : S
 /* The page's sections: an intro over each step, a white block. */
 const INTRO_H = 'text-base font-semibold text-gray-900 dark:text-slate-50';
 const INTRO_P = 'mt-1 text-sm text-gray-600 dark:text-slate-400';
-const BLOCK = 'rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4';
+const BLOCK = 'tf-panel p-4';
 
 /** A candidate's identity in the review — the backend's `review_key`. */
 const reviewKey = (c: { resume_id?: string | null; email?: string | null }) =>
@@ -129,6 +130,8 @@ export default function VersionInviteDialog({
   inviteDeniedReason,
   preselect = true,
   pickInto,
+  openOn,
+  restore,
 }: {
   kind: InviteKind;
   onClose: () => void;
@@ -144,6 +147,12 @@ export default function VersionInviteDialog({
    *  the page's ticked resumes are picked in that list (shown ticked there,
    *  not sent as page candidates) and the Resume Database tab opens on it. */
   pickInto?: 'my-resumes' | 'internal-db';
+  /** Opened from the AI Talent Match / Score Resume page: that list's tab
+   *  opens first (the page's candidates are still sent as they are). */
+  openOn?: 'talent-match' | 'score-resume';
+  /** Back from Usage & Quotas (Add units): how far the popup had got — the
+   *  version, the picks, the rows added, the tab — put back as it was. */
+  restore?: InviteUnitsRestore;
   /** The version the button is for (a version row's Invite, Invite More):
    *  the Version step is left out. Omitted: the cards, newest sendable ticked. */
   versionId?: string;
@@ -220,18 +229,23 @@ export default function VersionInviteDialog({
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(!off && !!job);
   const [error, setError] = useState<string | null>(null);
-  const [versionId, setVersionId] = useState<string | null>(null);
+  const [versionId, setVersionId] = useState<string | null>(restore?.versionId ?? null);
   const [step, setStep] = useState<Step | null>(null);
   /* The page's candidates with an email go straight into the send (no email,
      no invite — said once in Review). `preselect` false lists them left out.
-     With `pickInto` they are the list's own picks instead (`pagePicks`). */
-  const recipients = pickInto ? [] : candidates.filter((c) => c.email);
-  const [pagePicks] = useState<PickerSelection>(() => (pickInto
+     With `pickInto` they are the list's own picks instead (`pagePicks`) —
+     and so from AI Talent Match / Score Resume for one job: ticked in that
+     page's own tab (a pick with no resume id stays a page candidate). */
+  const listPicks: InviteCandidateSourceTab | undefined = pickInto ?? (openOn && jdId ? openOn : undefined);
+  const recipients = pickInto ? []
+    : listPicks ? candidates.filter((c) => c.email && !c.resumeId)
+    : candidates.filter((c) => c.email);
+  const [pagePicks] = useState<PickerSelection>(() => (listPicks
     ? {
         mode: 'ids',
         picked: Object.fromEntries(candidates
           .filter((c) => c.email && c.resumeId)
-          .map((c) => [c.resumeId!, { resumeId: c.resumeId!, name: c.name, email: c.email, source: pickInto }])),
+          .map((c) => [c.resumeId!, { resumeId: c.resumeId!, name: c.name, email: c.email, source: listPicks }])),
       }
     : EMPTY_SELECTION));
   const noEmailCount = candidates.filter((c) => !c.email).length;
@@ -239,19 +253,25 @@ export default function VersionInviteDialog({
     preselect ? {} : Object.fromEntries(recipients.map((c) => [reviewKey({ resume_id: c.resumeId, email: c.email }), 'extra' as const]))
   ));
   const [reviewCounts, setReviewCounts] = useState<ReviewCounts | null>(null);
-  const [message, setMessage] = useState('');
-  const messageTouched = useRef(false);
-  const [expiryDays, setExpiryDays] = useState(DEFAULT_EXPIRY_DAYS);
+  const [message, setMessage] = useState(restore?.message ?? '');
+  const messageTouched = useRef(restore?.message !== undefined);
+  const [expiryDays, setExpiryDays] = useState(restore?.expiryDays ?? DEFAULT_EXPIRY_DAYS);
   const [quotaAvailable, setQuotaAvailable] = useState<number | null>(null);
   const [quotaUnlimited, setQuotaUnlimited] = useState(false);
   /* Pick from lists: the picked rows or the filter — never the rows themselves. */
-  const [serverSelection, setServerSelection] = useState<PickerSelection>(pagePicks);
+  const [serverSelection, setServerSelection] = useState<PickerSelection>(restore?.selection ?? pagePicks);
   /* Added by email (typed / Excel). */
-  const [extras, setExtras] = useState<BulkExtraCandidate[]>([]);
-  const [extraCounts, setExtraCounts] = useState<ExtraCounts>({ manual: 0, excel: 0 });
+  const [extras, setExtras] = useState<BulkExtraCandidate[]>(restore?.extras ?? []);
+  const [extraCounts, setExtraCounts] = useState<ExtraCounts>(() => {
+    const excel = (restore?.extras ?? []).filter((x) => x.invite_source === 'Excel upload').length;
+    return { manual: (restore?.extras?.length ?? 0) - excel, excel };
+  });
   /* The candidates step's open tab when it is Manual / Upload Excel (null =
-     one of the lists), and a key that empties what was added directly. */
-  const [addTab, setAddTab] = useState<ExtraMode | null>(null);
+     one of the lists), and a key that empties what was added directly.
+     Opens on Manual — or, opened from a list's own page (My Resumes, Shared
+     Database, AI Talent Match, Score Resume), on that list. */
+  const openTab: ExtraMode | null = pickInto || openOn ? null : 'manual';
+  const [addTab, setAddTab] = useState<ExtraMode | null>(restore ? restore.addTab : openTab);
   const [extrasKey, setExtrasKey] = useState(0);
   /* The candidates step, once opened, stays mounted (hidden on other steps). */
   const [candidatesMounted, setCandidatesMounted] = useState(false);
@@ -273,6 +293,25 @@ export default function VersionInviteDialog({
     return () => setBulkInPopup(bulkJobId, false);
   }, [bulkJobId, setBulkInPopup]);
   const bulkReported = useRef(false);
+  /* After Send, the popup hands the send to the floating widget: Minimize
+     (top right, before the send starts, while it runs and after it ends)
+     to its round icon; Done to its mini popup, where the send stays listed
+     until the recruiter clears it. Neither ever cancels the send. */
+  const afterSend = !!bulkJob;
+  /* Minimize shrinks the popup into the bottom-right corner, where the
+     widget's icon is, instead of the popup just vanishing — closing on the
+     spot read as a glitch, not a hand-over. */
+  const [minimizing, setMinimizing] = useState(false);
+  const minimize = () => {
+    if (minimizing) return;
+    bulkTracker?.setWidget('icon');
+    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      onClose();
+      return;
+    }
+    setMinimizing(true);
+    window.setTimeout(onClose, 260);
+  };
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -317,10 +356,17 @@ export default function VersionInviteDialog({
       // version → Candidates; else the Version step. Picked from the list
       // (Resume Database and the other job-less buttons): step 1, Add
       // candidates — the page's candidates are already in, so it skipped
-      // straight to Review.
-      setStep(!chosen ? 'version'
+      // straight to Review. From AI Talent Match / Score Resume the page's
+      // picks open on Candidates instead (step 2): seen ticked in that page's
+      // tab with the rest of the list first.
+      // Back from Add units: the step it was on, while its version still sends.
+      const restored = restore?.versionId ? pool.find((v) => v.id === restore.versionId && v.sendable) : undefined;
+      setStep(restore ? (restored ? restore.step : 'version')
+        : !chosen ? 'version'
         : fromListPick.current ? (fixed ? 'candidates' : 'version')
-        : recipients.length > 0 ? 'review' : fixed ? 'candidates' : 'version');
+        : openOn && (recipients.length > 0 || selectionCount(pagePicks) > 0) ? 'candidates'
+        : recipients.length > 0 ? 'review'
+        : fixed ? 'candidates' : 'version');
       fromListPick.current = false;
     }
     setVersionId((cur) => {
@@ -410,6 +456,10 @@ export default function VersionInviteDialog({
      everyone added so far. Null = no limit (unlimited plan, or the units
      could not be read — the server checks at send). */
   const unitsRoom = quotaAvailable === null ? null : quotaAvailable - recipientCount;
+  /* No units left at all: picking is greyed out, and Next is held from the
+     candidates step on (the Version step stays open to look at). */
+  const noUnits = quotaAvailable !== null && quotaAvailable <= 0;
+  const unitsNoun = kind === 'interview' ? 'AI interview' : 'Assessment';
   /* How many typed-in / Excel rows fit: the units available (or the backend's
      per-send cap on unlimited plans), less everyone already picked elsewhere. */
   const extraLimitByUnits = !quotaUnlimited && quotaAvailable !== null && quotaAvailable < MAX_EXTRA_CANDIDATES;
@@ -572,7 +622,7 @@ export default function VersionInviteDialog({
     // The page's own picks come back with the next pick from the list.
     setServerSelection(pagePicks);
     setCandidatesMounted(false);
-    setAddTab(null);
+    setAddTab(openTab);
     setVerNote(null);
     messageTouched.current = false;
   };
@@ -704,6 +754,68 @@ export default function VersionInviteDialog({
     setQuotaKey((k) => k + 1);
     return res.link;
   };
+
+  /* Everyone picked outside Manual / Upload Excel — the Manual tab says a
+     typed email among them is already included, and asks about a typed name
+     among them (same person, another email?). */
+  const pickedPeople: PickedPerson[] = [
+    ...recipients.map((c) => ({ name: c.name, email: c.email, sourceLabel: 'this page' })),
+    ...(serverSelection.mode === 'ids'
+      ? Object.values(serverSelection.picked).map((x) => ({
+          name: x.name, email: x.email, sourceLabel: TAB_LABEL[x.source], sourceKey: x.source, resumeId: x.resumeId,
+        }))
+      : []),
+  ];
+  /* Manual's View: the pick shown in its own tab. */
+  const revealPick = useRef<((r: PickReveal) => void) | null>(null);
+  const viewPicked = (p: PickedPerson) => {
+    if (!p.resumeId || !p.sourceKey) return;
+    revealPick.current?.({ source: p.sourceKey as InviteCandidateSourceTab, resumeId: p.resumeId, email: p.email });
+  };
+
+  /* Add units: the popup saved as it is, then Usage & Quotas; buying and
+     coming back reopens it here. Without access to Usage & Quotas, who to
+     ask instead. */
+  const router = useRouter();
+  // Buying units is a billing action (2026-11-10): Upgrade Plan, same as the add-on API.
+  const canAddUnits = can('canUpgradePlan');
+  const addUnits = () => {
+    saveInviteUnitsHandoff({
+      request: {
+        kind,
+        job: job ? { jdId: job.jdId, jdCode: job.jdCode, jdTitle: job.jdTitle, versionNumber: job.jobVersionNumber } : undefined,
+        versionId: fixedVersionId,
+        candidates,
+        preselect,
+        pickInto,
+        openOn,
+        hideDuplicate,
+        inviteGate: { allowed: inviteAllowed, reason: inviteDeniedReason },
+      },
+      restore: {
+        step: current === 'version' ? 'version' : 'candidates',
+        versionId,
+        selection: serverSelection,
+        extras,
+        addTab,
+        ...(messageTouched.current ? { message, expiryDays } : {}),
+      },
+      noun: unitsNoun,
+      candidateCount: recipientCount,
+    });
+    // The popup's own history entry is swapped for Usage & Quotas (replace),
+    // so Back from there lands on this page — not taken off with history.back().
+    guard.current.active = false;
+    onClose();
+    router.replace(USAGE_QUOTAS_FROM_INVITE_URL);
+  };
+  const addUnitsAction: ReactNode = canAddUnits ? (
+    <Button variant="primary" size="sm" onClick={addUnits} className="shrink-0 whitespace-nowrap">
+      Add units
+    </Button>
+  ) : (
+    <span className="block text-xs font-medium">Ask the account owner or a Billing Manager to add units.</span>
+  );
 
   /* An email typed in that is already picked elsewhere — said at once. */
   const takenEmail = (email: string): string | null => {
@@ -868,13 +980,22 @@ export default function VersionInviteDialog({
         delivery: 'email',
         message: message.trim() || undefined,
         expiry_days: expiryDays,
+        // Kept on the send so the progress widget names it on any browser.
+        jd_code: job.jdCode || undefined,
+        job_version: selected.jobVersion ?? job.jobVersionNumber ?? undefined,
+        version_number: selected.version ?? undefined,
       });
       bulkReported.current = false;
       setBulkJob(started);
       // Mark it as on screen first, so the floating card never flashes up
       // while this popup is showing the run.
       bulkTracker?.setInPopup(started.job_id, true);
-      bulkTracker?.track(started, { jdTitle: job.jdTitle, jdCode: job.jdCode });
+      bulkTracker?.track(started, {
+        jdTitle: job.jdTitle,
+        jdCode: job.jdCode,
+        jobVersion: selected.jobVersion ?? job.jobVersionNumber,
+        versionNumber: selected.version,
+      });
       bodyRef.current?.scrollTo({ top: 0 });
       const queued = started.queued ?? 0;
       if (queued === 0) toast.info('Nothing to send — every selected candidate was skipped (see the reasons below)');
@@ -909,7 +1030,7 @@ export default function VersionInviteDialog({
      same review the Review step uses, per version. Said in the candidates
      footer, so a first-time user sees why 62 became 61. */
   const pagePickIds = Object.keys(pagePicks.mode === 'ids' ? pagePicks.picked : {});
-  const pageCheckKey = pickInto && job && sendableId && pagePickIds.length ? `${sendableId}` : null;
+  const pageCheckKey = listPicks && job && sendableId && pagePickIds.length ? `${sendableId}` : null;
   const [pageCheck, setPageCheck] = useState<{ key: string; invited: number; other: number } | null>(null);
   useEffect(() => {
     if (!pageCheckKey || !job || !selected) return;
@@ -935,7 +1056,7 @@ export default function VersionInviteDialog({
   }, [pageCheckKey]);
   const pageCheckNow = pageCheck && pageCheck.key === pageCheckKey ? pageCheck : null;
   const pageTip = (() => {
-    if (!pickInto || candidates.length === 0) return null;
+    if (!listPicks || candidates.length === 0) return null;
     const parts: string[] = [];
     if (noEmailCount > 0) parts.push(`${noEmailCount.toLocaleString()} without email`);
     if (pageCheckNow?.invited) parts.push(`${pageCheckNow.invited.toLocaleString()} already invited to ${versionTag}`);
@@ -954,7 +1075,9 @@ export default function VersionInviteDialog({
       // The list's pick named, once there is one: Continue is the next move.
       ? ((kind === 'assessment' ? asPick : aiPick) ? `${label.singular} picked — press Continue` : `Select ${article} to continue`)
       : bulkJob
-        ? (bulkJob.status === 'queued' || bulkJob.status === 'running' ? 'Sending in the background — safe to close' : '')
+        ? (isBulkInviteActive(bulkJob)
+          ? 'Sending in the background — minimize or close, it carries on'
+          : 'Done keeps the result in the corner until you clear it')
         : !loaded
           ? ''
           : jobLock
@@ -963,6 +1086,8 @@ export default function VersionInviteDialog({
               ? (!selected?.sendable ? `Select ${article} version to continue` : `${versionTag} picked`)
               : deniedTitle
                 ? deniedTitle
+              : noUnits
+                ? 'No units left — add units to continue.'
               : current === 'candidates' && recipientCount === 0
                 ? 'Add at least one candidate to continue'
                 : current === 'review' && reviewCounts && selectedNow === 0
@@ -979,7 +1104,7 @@ export default function VersionInviteDialog({
   const stepReady = (s: Step): boolean => s === 'version'
     ? !!selected?.sendable
     : s === 'candidates'
-      ? recipientCount > 0 && !pickingOff
+      ? recipientCount > 0 && !pickingOff && !noUnits
       : s === 'review'
         ? !!reviewCounts && reviewCounts.invite > 0 && !quotaShort && !jobLock && perms.canInvite
         : canSend;
@@ -1007,15 +1132,22 @@ export default function VersionInviteDialog({
   const latestId = (jobWideVersions ?? listedVersions(kind, versions))[0]?.id;
   const jobName = job ? job.jdTitle || selected?.raw?.jd_title || selected?.name || '' : '';
   const pickedName = selected ? `${jobName || selected.name} · v${selected.version}` : '—';
-  const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void }[] = [];
+  const alerts: { tone: 'warn' | 'info' | 'danger'; text: string; onDismiss?: () => void; action?: ReactNode }[] = [];
   if (inSteps && deniedTitle) {
     alerts.push({ tone: 'warn', text: !inviteAllowed && inviteDeniedReason ? inviteDeniedReason : `Sending invites needs the Invite permission for ${label.plural}. Ask a workspace admin.` });
   }
   if (inSteps && verNote) alerts.push({ tone: 'info', text: verNote, onDismiss: () => setVerNote(null) });
-  if (inSteps && quotaShort && current !== 'version') {
+  if (inSteps && noUnits && current === 'version') {
+    alerts.push({ tone: 'danger', text: `No ${unitsNoun} units left. You can view versions, but invites can't be sent until units are added.`, action: addUnitsAction });
+  }
+  if (inSteps && quotaShort && current !== 'version' && noUnits) {
+    // Nothing to deselect towards: the picks are kept for when units are added.
+    alerts.push({ tone: 'danger', text: `${plural(willInvite, 'candidate')} ${willInvite === 1 ? 'is' : 'are'} selected, but no ${unitsNoun} units are left. Add units to send, or close and come back later.`, action: addUnitsAction });
+  } else if (inSteps && quotaShort && current !== 'version') {
     alerts.push({ tone: 'danger', text: `Only ${plural(quotaAvailable ?? 0, 'unit')} ${quotaAvailable === 1 ? 'is' : 'are'} available for ${plural(willInvite, 'candidate')}. Deselect ${shortBy.toLocaleString()} to continue, or add units.` });
   }
-  if (inSteps && current === 'candidates' && !quotaShort && unitsRoom === 0) {
+  // No units at all is said on the lists themselves (greyed, with the reason).
+  if (inSteps && current === 'candidates' && !quotaShort && unitsRoom === 0 && !noUnits) {
     alerts.push({
       tone: 'warn',
       text: recipientCount === 0
@@ -1032,35 +1164,56 @@ export default function VersionInviteDialog({
   return (
     <>
       <div
-        className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-        onClick={requestClose}
+        className={`fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 ${minimizing ? 'opacity-0 transition-opacity duration-200' : 'animate-in fade-in duration-200'}`}
+        onClick={minimizing ? undefined : requestClose}
       />
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className={`fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 ${minimizing ? 'pointer-events-none' : ''}`}>
         <div
           ref={dialogRef}
           role="dialog"
           aria-modal="true"
           aria-labelledby="version-invite-title"
-          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200`}
+          className={`${inSteps ? 'max-sm:overflow-y-auto max-sm:overscroll-contain' : ''} relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-5xl xl:max-w-[70rem] 2xl:max-w-[75rem] h-[calc(100dvh-1.5rem)] sm:h-[min(48rem,calc(100dvh-3rem))] 2xl:h-[min(50rem,calc(100dvh-3rem))] max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col ${minimizing ? 'origin-bottom-right translate-x-[30vw] translate-y-[35vh] scale-[0.12] opacity-0 transition-[translate,scale,opacity] duration-[260ms] ease-in' : 'animate-in zoom-in-95 duration-200'}`}
         >
           {/* Header: what this is, and the units it spends. No X — the
-              footer's Cancel closes (the popup standard). */}
-          <div className="flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60">
+              footer's Cancel closes (the popup standard). While a send runs,
+              Minimize in the top-right corner — the Resume Scoring progress
+              popup's — hands it to the floating card, bottom right. */}
+          <div className={`relative flex-shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-3.5 border-b border-gray-100 dark:border-slate-700/60 ${afterSend ? 'pr-14 sm:pr-16' : ''}`}>
+            {afterSend && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={minimize}
+                className="w-8 !px-0 absolute top-3 right-4 sm:top-1/2 sm:-translate-y-1/2 sm:right-6"
+                aria-label="Minimize"
+                title="Minimize — sending carries on; follow it from the icon bottom right"
+              >
+                <Minus className="w-4 h-4" />
+              </Button>
+            )}
             <div className="flex items-center gap-3 min-w-0">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <Icon className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <h2 id="version-invite-title" className="tf-section-title">
+                <h2 id="version-invite-title" className="tf-section-title sm:text-lg tracking-tight">
                   Invite to {label.singular}
                 </h2>
                 <p className="tf-meta">Send the {label.singular.toLowerCase()} link to candidates</p>
               </div>
             </div>
-            {!off && (
+            {/* Units belong to choosing and sending; once sent, they are gone from here. */}
+            {!off && !afterSend && (
               <InviteQuotaBar
                 kind={kind}
                 refreshKey={quotaKey}
+                /* Add-ons (more units), always at hand — not only once they run out. */
+                action={canAddUnits ? (
+                  <Button variant="primary" size="sm" onClick={addUnits} icon={<Plus className="w-3 h-3" />} className="h-6 px-2 gap-1 text-2xs whitespace-nowrap">
+                    Add-ons
+                  </Button>
+                ) : undefined}
                 onStats={(s) => {
                   setQuotaUnlimited(isUnlimitedQuota(s));
                   setQuotaAvailable(s && !isUnlimitedQuota(s) ? s.available : null);
@@ -1075,22 +1228,25 @@ export default function VersionInviteDialog({
               <nav aria-label="Steps" className="flex-shrink-0 max-sm:sticky max-sm:top-0 max-sm:z-10 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 overflow-x-auto">
                 {/* Below laptop width only the current step names itself — four
                     labels overran a tablet-width popup and were cut off. */}
-                <ol className="flex min-w-max lg:min-w-0 items-center gap-1.5 sm:gap-2">
+                {/* Phones / tablets: the row fits the popup (all four circles visible)
+                    rather than scrolling sideways with step 4 out of view; on phones
+                    the current step's name sits on its own line below. */}
+                <ol className="flex w-full min-w-0 items-center gap-1.5 sm:gap-2">
                   {steps.map((s, i) => {
                     const done = i < stepIndex;
                     const here = i === stepIndex;
                     const open = !here && reachable(i);
                     return (
                       <Fragment key={s}>
-                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-4 sm:min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
-                        <li>
+                        {i > 0 && <li aria-hidden="true" className={`h-px flex-1 min-w-3 sm:min-w-6 ${done || here ? 'bg-brand-blue/40' : 'bg-gray-200 dark:bg-slate-700'}`} />}
+                        <li className={here ? 'min-w-0' : 'shrink-0'}>
                           <button
                             type="button"
                             onClick={() => { if (open) goTo(s); }}
                             disabled={!open}
                             aria-current={here ? 'step' : undefined}
                             title={stepLabel(s, label.singular)}
-                            className={`flex items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
+                            className={`flex max-w-full min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-sm whitespace-nowrap disabled:cursor-default ${
                               here ? 'font-semibold text-gray-900 dark:text-slate-50' : open ? 'font-medium text-brand-blue hover:underline underline-offset-2' : 'font-medium text-gray-400 dark:text-slate-500'
                             }`}
                           >
@@ -1099,13 +1255,17 @@ export default function VersionInviteDialog({
                             }`}>
                               {done ? <Check className="w-3.5 h-3.5" aria-hidden="true" /> : i + 1}
                             </span>
-                            <span className={here ? '' : 'max-lg:hidden'}>{stepLabel(s, label.singular)}</span>
+                            <span className={here ? 'min-w-0 truncate max-sm:hidden' : 'max-lg:hidden'}>{stepLabel(s, label.singular)}</span>
                           </button>
                         </li>
                       </Fragment>
                     );
                   })}
                 </ol>
+                {/* Phones: the current step's name on its own line, never squeezed between the circles. */}
+                <p className="sm:hidden mt-2 text-sm text-gray-600 dark:text-slate-300">
+                  Step {stepIndex + 1} of {steps.length} · <span className="font-semibold text-gray-900 dark:text-slate-50">{stepLabel(steps[stepIndex], label.singular)}</span>
+                </p>
               </nav>
 
               {/* The version being sent, pinned under the steps. */}
@@ -1142,22 +1302,23 @@ export default function VersionInviteDialog({
             {alerts.length > 0 && (
               <div className="mb-4 space-y-2">
                 {alerts.map((al) => (
-                  <p key={al.text} role={al.tone === 'info' ? 'status' : 'alert'} className={`flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm ${ALERT_TONE[al.tone]}`}>
-                    <span className="flex items-start gap-2 min-w-0">
+                  <div key={al.text} role={al.tone === 'info' ? 'status' : 'alert'} className={`flex flex-wrap items-start justify-between gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5 text-sm ${ALERT_TONE[al.tone]}`}>
+                    <span className="flex items-start gap-2 min-w-0 flex-1 basis-60">
                       {al.tone === 'info' ? <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" /> : <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />}
                       <span>{al.text}</span>
                     </span>
+                    {al.action && <span className="pl-6 sm:pl-0">{al.action}</span>}
                     {al.onDismiss && (
                       <button type="button" onClick={al.onDismiss} aria-label="Dismiss" className="shrink-0 inline-flex items-center justify-center w-6 h-6 -mr-1 rounded-md hover:bg-black/5 dark:hover:bg-white/10">
                         <X className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     )}
-                  </p>
+                  </div>
                 ))}
               </div>
             )}
             {off ? (
-              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-card-desc">{off}</div>
+              <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 py-10 px-4 text-center tf-body-secondary">{off}</div>
             ) : !job ? (
               /* No job given: every published one, any job — the pick names
                  the job and the version. */
@@ -1205,7 +1366,7 @@ export default function VersionInviteDialog({
                         <ArrowLeft className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
                         Choose a different {label.singular.toLowerCase()}
                       </button>
-                    ) : <h4 className="tf-subsection-title">Select {label.singular.toLowerCase()} version</h4>}
+                    ) : <h4 className="tf-row-title">Select {label.singular.toLowerCase()} version</h4>}
                     {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
                   <VersionList
@@ -1259,7 +1420,7 @@ export default function VersionInviteDialog({
                   <h3 className={INTRO_H}>Check the message and send</h3>
                   <p className={INTRO_P}>This is the email each candidate receives with their personal link.</p>
                 </div>
-                <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <dl className="tf-grid-3">
                   {[
                     { term: label.singular, value: pickedName, bad: false },
                     {
@@ -1275,8 +1436,8 @@ export default function VersionInviteDialog({
                       bad: unitsAfter !== null && unitsAfter < 0,
                     },
                   ].map((d) => (
-                    <div key={d.term} className="min-w-0 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5">
-                      <dt className="text-xs text-gray-500 dark:text-slate-400">{d.term}</dt>
+                    <div key={d.term} className="min-w-0 tf-panel px-3 py-2.5">
+                      <dt className="tf-meta">{d.term}</dt>
                       <dd className={`mt-0.5 truncate text-[0.9375rem] font-semibold tabular-nums ${d.bad ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`} title={d.value}>{d.value}</dd>
                     </div>
                   ))}
@@ -1312,7 +1473,7 @@ export default function VersionInviteDialog({
                   </p>
                 </div>
                 <ServerCandidatePicker
-                  initialSource={pickInto}
+                  initialSource={pickInto ?? openOn}
                   selectedTotal={addedCount}
                   onClearSelection={clearCandidates}
                   jdId={job.jdId}
@@ -1327,6 +1488,9 @@ export default function VersionInviteDialog({
                   addCounts={extraCounts}
                   room={unitsRoom}
                   addedEmails={addedEmails}
+                  revealRef={revealPick}
+                  noUnitsNoun={noUnits ? unitsNoun : null}
+                  noUnitsAction={addUnitsAction}
                   addPanel={(
                     <ExtraCandidatesInput
                       key={extrasKey}
@@ -1340,6 +1504,11 @@ export default function VersionInviteDialog({
                       checkEmail={checkEmail}
                       checkEmails={checkEmails}
                       onUseExisting={useExistingCandidate}
+                      picked={pickedPeople}
+                      onViewPicked={viewPicked}
+                      noUnitsNoun={noUnits ? unitsNoun : null}
+                      noUnitsAction={addUnitsAction}
+                      initialRows={restore?.extras}
                       maxRows={extraMaxRows}
                       limitByUnits={extraLimitByUnits}
                     />
@@ -1357,11 +1526,13 @@ export default function VersionInviteDialog({
               {footerText}
             </p>
             {/* Back / Cancel is as wide as its word; the main action takes the rest on phones. */}
-            <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto">
+            {/* Phones: Cancel / Back share the first line, the main action takes a full
+                line under them, so its label is never cut. */}
+            <div className="flex items-center justify-end gap-2 sm:gap-3 w-full sm:w-auto max-sm:flex-wrap">
               {bulkJob ? (
                 <button
-                  onClick={onClose}
-                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  onClick={() => { bulkTracker?.setWidget('mini'); onClose(); }}
+                  className="tf-btn tf-btn-primary w-full sm:w-auto flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                 >
                   Done
                 </button>
@@ -1372,7 +1543,7 @@ export default function VersionInviteDialog({
                   <Button
                     variant="secondary"
                     onClick={requestClose}
-                    className="!h-9 shrink-0 px-4"
+                    className="!h-9 shrink-0 px-4 max-sm:flex-1"
                   >
                     Cancel
                   </Button>
@@ -1380,7 +1551,7 @@ export default function VersionInviteDialog({
                     <Button
                       variant="secondary"
                       onClick={() => goTo(steps[stepIndex - 1])}
-                      className="!h-9 shrink-0 px-4"
+                      className="!h-9 shrink-0 px-4 max-sm:flex-1"
                     >
                       Back
                     </Button>
@@ -1389,7 +1560,7 @@ export default function VersionInviteDialog({
                     <button
                       onClick={chooseFromList}
                       disabled={!listPicked}
-                      className="flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none min-w-0 max-sm:basis-full flex px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal font-normal"
                     >
                       Continue
                     </button>
@@ -1399,14 +1570,12 @@ export default function VersionInviteDialog({
                       disabled={!inSteps || (nextDisabled && !(current === 'send' && !perms.canInvite))}
                       aria-disabled={!inSteps || nextDisabled}
                       aria-label={primaryLabel}
-                      title={current === 'send' ? deniedTitle : undefined}
-                      className={`flex-1 sm:flex-none min-w-0 flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      title={current !== 'version' && noUnits ? `No ${unitsNoun} units left.` : current === 'send' ? deniedTitle : undefined}
+                      className={`flex-1 sm:flex-none min-w-0 max-sm:basis-full flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed ${nextDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : current === 'send' ? <Mail className="w-4 h-4" /> : null}
-                      {/* Phones: "Next:" gives way so the label fits — except
-                          before the send step, where "Send invite" alone would
-                          read as sending now. */}
-                      {primaryLabel.startsWith('Next: ') ? <span className="truncate"><span className={nextStep === 'send' ? '' : 'max-sm:hidden'}>Next: </span>{primaryLabel.slice(6)}</span> : primaryLabel}
+                      {/* On phones the button has a full line of its own, so the whole label fits. */}
+                      {primaryLabel.startsWith('Next: ') ? <span className="truncate">{primaryLabel}</span> : primaryLabel}
                     </button>
                   )}
                 </>
@@ -1457,8 +1626,8 @@ export default function VersionInviteDialog({
                 </div>
               ) : (
               <div role="alertdialog" aria-modal="true" aria-labelledby="version-invite-confirm" className="w-full max-w-md rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xl p-4 sm:p-5">
-                <h3 id="version-invite-confirm" className="tf-card-title">{confirm.title}</h3>
-                <p className="mt-1.5 tf-card-desc">{confirm.message}</p>
+                <h3 id="version-invite-confirm" className="tf-section-title">{confirm.title}</h3>
+                <p className="mt-1.5 tf-body-secondary">{confirm.message}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button variant="secondary" size="sm" onClick={() => setConfirm(null)} disabled={confirmBusy} className="w-full">{confirm.cancelText ?? 'Cancel'}</Button>
                   <Button

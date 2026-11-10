@@ -67,7 +67,7 @@ export default function ArchiveAIInterviewModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 Archive AI Interview?
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Move this AI interview to the Archived tab.
               </p>
             </div>

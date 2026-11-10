@@ -7,7 +7,7 @@
  * Endpoint: POST /api/v1/usage/record (proxies to Admin API)
  */
 
-import { dispatchUnitsConsumed, handleUnauthorized } from './api';
+import api, { dispatchUnitsConsumed, handleUnauthorized } from './api';
 
 // Use backend API - no direct Admin API calls
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -261,6 +261,27 @@ export interface QuotaInfo {
   status: 'OK' | 'APPROACHING' | 'WARNING' | 'CRITICAL' | 'EXCEEDED' | 'NOT_PROVISIONED';
 }
 
+/**
+ * The full limit for one quota: plan limit + add-on units the tenant was given.
+ * Units added from the admin panel only show up in `addon.total_purchased`, so
+ * showing `subscription.limit` alone hides them (e.g. "1235 / 1200").
+ * Returns null when the quota is unlimited or the limit is unknown.
+ */
+export function getQuotaTotalLimit(
+  q?: {
+    subscription?: { limit?: number | string } | null;
+    addon?: { total_purchased?: number | string } | null;
+  } | null
+): number | null {
+  const rawLimit = q?.subscription?.limit;
+  if (rawLimit === undefined || rawLimit === null) return null;
+  if (rawLimit === -1 || String(rawLimit).toLowerCase() === 'unlimited') return null;
+  const planLimit = Number(rawLimit);
+  if (!Number.isFinite(planLimit)) return null;
+  const addon = Number(q?.addon?.total_purchased ?? 0);
+  return planLimit + (Number.isFinite(addon) ? addon : 0);
+}
+
 export interface QuotaStatusResponse {
   status: 'success' | 'error';
   data?: {
@@ -297,13 +318,10 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
   }
 
   try {
-    const response = await fetch(`${API_URL}/usage/quota-status`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-      },
-    });
+    // Through the shared api client (was a raw fetch): it shares an identical
+    // in-flight / just-finished quota-status GET instead of another round trip.
+    // validateStatus keeps every status on the branches below, as before.
+    const response = await api.get('/usage/quota-status', { validateStatus: () => true });
 
     // Handle 401 - logout and redirect
     if (response.status === 401) {
@@ -311,9 +329,9 @@ export async function checkQuotaStatus(): Promise<QuotaStatusResponse> {
       return { status: 'error', error: 'Session expired' };
     }
 
-    const data = await response.json();
+    const data = response.data || {};
 
-    if (response.ok) {
+    if (response.status >= 200 && response.status < 300) {
       return {
         status: 'success',
         data: data.data || data,

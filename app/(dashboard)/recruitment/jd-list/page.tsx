@@ -19,9 +19,9 @@ export default function JdListLegacyRedirect() {
   // bare "Redirecting…" line. Mirrors JobsListing: white card shell, breadcrumb,
   // header (icon + title + subtitle + Config/Create buttons), 4-up stat grid.
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 h-4 w-56 rounded bg-gray-200 animate-pulse" />
 
@@ -42,9 +42,9 @@ export default function JdListLegacyRedirect() {
             </div>
 
             {/* Stat cards — 4-up grid */}
-            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="tf-grid-4">
               {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                <div key={i} className="relative overflow-hidden tf-panel px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex items-start gap-2.5">
                       <div className="h-9 w-9 shrink-0 rounded-lg bg-gray-200 animate-pulse" />

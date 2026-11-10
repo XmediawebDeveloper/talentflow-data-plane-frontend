@@ -66,7 +66,7 @@ export default function InviteMessageStep({
           onChange={(v) => onExpiry(Number(v))}
           // Hidden options stay out of the list, unless one is already the value.
           options={EXPIRY_OPTIONS.filter((o) => !o.hidden || o.value === expiryDays).map((o) => ({ value: String(o.value), label: o.label }))}
-          className="w-full sm:w-full text-sm px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg text-gray-700 dark:text-slate-300"
+          className="w-full sm:w-full tf-body px-2 sm:pl-2 sm:pr-2 py-1.5 sm:py-1.5 rounded-lg sm:rounded-lg"
         />
         <span className="tf-meta">Candidates can open the link until it expires.</span>
       </div>

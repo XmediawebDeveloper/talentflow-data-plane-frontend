@@ -5,10 +5,11 @@ import { useRouter } from 'next/navigation';
 import {
   X, ClipboardList, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
-  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet, Send, CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { listAssessmentsBatched } from '@/lib/utils/jobAssessmentHierarchy';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, ASSESSMENT_JOB_DISABLED_MESSAGE, ASSESSMENT_JOB_ARCHIVED_MESSAGE } from '@/lib/utils/assessmentJobLock';
 import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
@@ -23,6 +24,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 /* The app's one list search/filter layout — the same row and the same panel
@@ -40,7 +42,8 @@ import { ListToolbarPortal, ListBulkActions } from '@/components/ui/list-toolbar
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { DateField } from '@/components/ui/date-field';
-import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
+import { assessmentService, type AssessmentResponse, type AssessmentListFilterParams, type AssessmentPageParams, type AssessmentListSortKey, type AssessmentFilterOptions } from '@/lib/services/assessmentService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { readListSnapshot, writeListSnapshot, clearListSnapshots, perfNote } from '@/lib/utils/listSnapshot';
@@ -55,14 +58,13 @@ import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAss
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
 
-/* Same batch size and same reason as the Assessments dashboard's own list: the
+/* The whole set is read (pages of 100, `listAssessmentsBatched`), the same
+   batch size and the same reason as the Assessments dashboard's own list: the
    /assessments endpoint takes only jd_id, status, search and paging, so every
    filter this screen offers (job, job version, assessment version, created-on
    range) and every sort has to run over the WHOLE result set. Filtering one
    server page would silently scope "Job Version = V3" to whatever happened to
    be on screen, and sorting it would order 20 rows out of 156. */
-const FULL_SET_BATCH_SIZE = 100;
-
 
 /* ── Row model ─────────────────────────────────────────────────────────────
    One flat row per assessment, derived once from the API shape so the table,
@@ -224,7 +226,7 @@ function CreatedBy({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center gap-2 min-w-0 max-w-[10rem]">
       <NameAvatar name={name} size="xs" title="" />
-      <span className="truncate tf-card-desc" title={name}>
+      <span className="truncate tf-body-secondary" title={name}>
         {name}
       </span>
     </span>
@@ -356,6 +358,10 @@ interface AllAssessmentsTableProps {
   /** When passed, the List/Card switch shows at the end of this table's
    *  toolbar row. */
   onDisplayModeChange?: (mode: ListDisplayMode) => void;
+  /** Told the API records on screen each time a page lands — so the host can
+   *  read what its row menus need (the versions of THESE jobs) instead of
+   *  downloading every assessment. */
+  onVisibleRowsChange?: (rows: AssessmentResponse[]) => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -375,21 +381,15 @@ const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
  * level so the page can warm a tab (`prefetchAssessmentRows`) before it is
  * opened, through the same code the table itself uses.
  */
-async function fetchAssessmentRows(fixedStatus?: FixedAssessmentStatus): Promise<AssessmentRow[]> {
-  const collected: AssessmentResponse[] = [];
-  let apiPage = 1;
-  for (;;) {
-    const batch = await assessmentService.list({
-      ...(fixedStatus ? { status: fixedStatus } : {}),
-      page: apiPage,
-      page_size: FULL_SET_BATCH_SIZE,
-    });
-    const items = batch.items || [];
-    collected.push(...items);
-    const total = batch.total ?? collected.length;
-    if (items.length < FULL_SET_BATCH_SIZE || collected.length >= total) break;
-    apiPage += 1;
-  }
+async function fetchAssessmentRows(fixedStatus?: FixedAssessmentStatus, opts?: { fresh?: boolean }): Promise<AssessmentRow[]> {
+  /* Pages of 100 one after another to the end (listAssessmentsBatched) — through
+     the shared list cache, so the Assessments page reading the same set at the
+     same time pays for it once. `fresh` (any reload after the first) always
+     asks the server. */
+  const collected = await listAssessmentsBatched(
+    fixedStatus ? { status: fixedStatus } : {},
+    opts?.fresh ? { fresh: true } : { reuseRecent: true },
+  );
   /* Offset paging over a list that can change between batches (a row
      created or archived mid-walk) can hand the same assessment back on two
      pages — one row per id. */
@@ -403,7 +403,7 @@ export async function prefetchAssessmentRows(fixedStatus?: FixedAssessmentStatus
   writeListSnapshot(`assessments:rows:${fixedStatus ?? 'all'}`, rows);
 }
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, sortPreset = 'newest', onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange }: AllAssessmentsTableProps = {}) {
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, sortPreset = 'newest', onSortDefaultChange, onRowCountChange, extraRowActions, reloadSignal = 0, onMutated, displayMode = 'list', onDisplayModeChange, onVisibleRowsChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -430,14 +430,95 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           : 'View and manage all assessments across jobs and job versions.'
   );
 
-  /* What this tab last loaded draws at once on the next mount, so switching
-     tabs or coming back from a details page skips the skeleton. Remembered per
-     status because each tab asks the server for its own set. The fetch below
-     still runs and swaps the fresh rows in. */
-  const snapshotName = `assessments:rows:${fixedStatus ?? 'all'}`;
-  const hasLoadedOnce = useRef(false);
-  const [initialRows] = useState<AssessmentRow[] | null>(() => readListSnapshot<AssessmentRow[]>(snapshotName));
-  const [rows, setRows] = useState<AssessmentRow[]>(initialRows ?? []);
+  /* Search is applied as you type (debounced), because a search box that needs
+     a second click to take effect reads as broken. The FILTERS are the
+     opposite: six controls confirmed together by Apply, so picking a job then a
+     version then a date range refetches nothing and re-sorts nothing until the
+     user is done. `draft` is what the controls write to; `applied` is what the
+     table reads. */
+  const [search, setSearch] = useState('');
+  const appliedSearch = useDebounce(search, 300);
+  const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+
+  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(DEFAULT_SORT_DIR);
+
+  const [page, setPage] = useState(1);
+  /* Total Jobs' starting size (the Assessments page's assessmentItemsPerPage). */
+  const [pageSize, setPageSize] = useState(10);
+
+  /* Clear Sort. The first value is whatever the signal was when this tab
+     mounted, so arriving on a tab never clears anything — only a click does. */
+  const lastClearSortSignal = useRef(clearSortSignal);
+  useEffect(() => {
+    if (clearSortSignal === lastClearSortSignal.current) return;
+    lastClearSortSignal.current = clearSortSignal;
+    setSortKey(DEFAULT_SORT_KEY);
+    setSortDir(DEFAULT_SORT_DIR);
+  }, [clearSortSignal]);
+
+  const isDefaultSort = sortKey === DEFAULT_SORT_KEY && sortDir === DEFAULT_SORT_DIR;
+  useEffect(() => {
+    onSortDefaultChange?.(isDefaultSort);
+  }, [isDefaultSort, onSortDefaultChange]);
+
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  /* ── Load: ONE server page ────────────────────────────────────────────────
+     The tab used to read EVERY assessment (pages of 100 to the end) and
+     search / filter / sort / page in the browser. The server does all four
+     now, from the same filter builder its /stats uses, so this asks for the
+     ten rows on screen (usePagedList: cached per query, previous rows kept on
+     screen while the next page loads, next page prefetched). */
+  const serverSort = (() => {
+    /* The default order: latest publish first, or — on Draft / Archived —
+       latest change first. */
+    const key: AssessmentListSortKey = sortKey === 'published'
+      ? (fixedStatus === 'draft' || fixedStatus === 'archived' ? 'updated' : 'published')
+      : sortKey;
+    let dir = sortDir;
+    let statusFirst: string | undefined;
+    /* The host's Sort by applies on top of the default order only. */
+    if (sortKey === DEFAULT_SORT_KEY && sortDir === DEFAULT_SORT_DIR) {
+      if (sortPreset === 'oldest') dir = 'asc';
+      else if (sortPreset === 'active') statusFirst = 'published';
+      else if (sortPreset === 'draft') statusFirst = 'draft';
+    }
+    return { sort_by: key, sort_dir: dir, status_first: statusFirst };
+  })();
+  const listFilters: AssessmentListFilterParams = {
+    status: fixedStatus || filters.status || undefined,
+    search: appliedSearch.trim() || undefined,
+    search_scope: appliedSearch.trim() ? 'job' : undefined,
+    job: filters.job || undefined,
+    jd_version: filters.jobVersion ? Number(filters.jobVersion) : undefined,
+    version: filters.assessmentVersion ? Number(filters.assessmentVersion) : undefined,
+    created_from: filters.createdFrom || undefined,
+    created_to: filters.createdTo || undefined,
+  };
+  const pagedQuery: AssessmentPageParams = { ...listFilters, ...serverSort, page, page_size: pageSize };
+  const paged = usePagedList<AssessmentResponse, unknown, AssessmentPageParams>({
+    name: `assessments:table:${fixedStatus ?? 'all'}`,
+    query: pagedQuery,
+    fetchPage: (q) => assessmentService.listPage(q),
+  });
+  const rows = useMemo(() => {
+    /* Offset paging over a list that can change under it can repeat a row. */
+    const seen = new Set<string>();
+    return paged.items.filter((a) => !seen.has(a.id) && !!seen.add(a.id)).map(toRow);
+  }, [paged.items]);
+  const totalMatching = paged.total;
+  /* Every row this table has shown, by id — the ticked rows of other pages
+     (bulk actions, export) are read from here. */
+  const knownRowsRef = useRef(new Map<string, AssessmentRow>());
+  useEffect(() => {
+    for (const row of rows) knownRowsRef.current.set(row.id, row);
+    if (rows.length) onVisibleRowsChange?.(rows.map((r) => r.raw));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
+
   /* Each row's job version status (by JD id): on an Archived / Disabled job
      version every action that changes the assessment is off — the Assessments
      page's rule. One batched read. */
@@ -477,155 +558,56 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     const kind = row.jdId ? jobLockBadgeFor(jobVersionStatusById[row.jdId], jobLineageById[row.jdId]) : null;
     return kind ? <AssessmentJobStatusBadge kind={kind} /> : null;
   };
-  const [isLoading, setIsLoading] = useState(initialRows === null);
-  const [error, setError] = useState<string | null>(null);
+  const isLoading = paged.loading;
+  const error: string | null = paged.error
+    ? (paged.error instanceof Error ? paged.error.message : 'Failed to load assessments')
+    : null;
   useEffect(() => {
-    onRowCountChange?.(isLoading || error ? null : rows.length);
-  }, [isLoading, error, rows.length, onRowCountChange]);
-  /** Bumped by Retry to re-run the load effect. See `retry` below. */
-  const [reloadToken, setReloadToken] = useState(0);
-
-  /* Search is applied as you type (debounced), because a search box that needs
-     a second click to take effect reads as broken. The FILTERS are the
-     opposite: six controls confirmed together by Apply, so picking a job then a
-     version then a date range refetches nothing and re-sorts nothing until the
-     user is done. `draft` is what the controls write to; `applied` is what the
-     table reads. */
-  const [search, setSearch] = useState('');
-  const appliedSearch = useDebounce(search, 300);
-  const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-
-  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(DEFAULT_SORT_DIR);
-
-  const [page, setPage] = useState(1);
-  /* Total Jobs' starting size (the Assessments page's assessmentItemsPerPage). */
-  const [pageSize, setPageSize] = useState(10);
-
-  /* Clear Sort. The first value is whatever the signal was when this tab
-     mounted, so arriving on a tab never clears anything — only a click does. */
-  const lastClearSortSignal = useRef(clearSortSignal);
+    if (paged.error) console.error('[TalentFlow] Failed to load assessments:', paged.error);
+  }, [paged.error]);
   useEffect(() => {
-    if (clearSortSignal === lastClearSortSignal.current) return;
-    lastClearSortSignal.current = clearSortSignal;
-    setSortKey(DEFAULT_SORT_KEY);
-    setSortDir(DEFAULT_SORT_DIR);
-  }, [clearSortSignal]);
+    onRowCountChange?.(isLoading || error ? null : totalMatching);
+  }, [isLoading, error, totalMatching, onRowCountChange]);
 
-  const isDefaultSort = sortKey === DEFAULT_SORT_KEY && sortDir === DEFAULT_SORT_DIR;
+  /* Retry / refresh after a change: re-read the current page from the server
+     (the write itself already cleared the shared list cache). */
+  const { refresh: refreshPaged } = paged;
+  const lastReloadSignal = useRef(reloadSignal);
   useEffect(() => {
-    onSortDefaultChange?.(isDefaultSort);
-  }, [isDefaultSort, onSortDefaultChange]);
-
-  const scrollRef = useRef<HTMLDivElement | null>(null);
-
-  /* ── Load ────────────────────────────────────────────────────────────────
-     Batched to the end of the set, mirroring how the dashboard pulls its own
-     list. The fetch is separated from the state writes on purpose: `fetchAll`
-     only returns rows, so `runLoad` can `await` before it touches state and
-     the mount effect below therefore contains no synchronous setState at all.
-     `isLoading` starts true, so a mount needs no "start loading" write either
-     — only Retry does, and that is an event handler. */
-  const fetchAll = useCallback(() => fetchAssessmentRows(fixedStatus), [fixedStatus]);
-
-  /* Every state write lands in a promise callback rather than in the effect
-     body — the shape React actually wants for "subscribe to an external system
-     and setState when it answers", and the reason nothing here fires a
-     synchronous render pass on mount.
-     `alive` drops the answer to a request whose component has already
-     unmounted, which on this screen is a real case: the full set is several
-     batched requests, and a reader can click into a row long before the last
-     one returns. */
-  useEffect(() => {
-    let alive = true;
-    const startedAt = performance.now();
-    /* Any load after the first is a refresh after a change (status action, host
-       mutation, Retry): the other tabs' remembered rows may now be wrong, so
-       they are dropped rather than shown stale. */
-    const isRefresh = hasLoadedOnce.current;
-    hasLoadedOnce.current = true;
-    fetchAll()
-      .then((next) => {
-        if (!alive) return;
-        if (isRefresh) clearListSnapshots();
-        writeListSnapshot(snapshotName, next);
-        perfNote(`Assessments (${fixedStatus ?? 'all'}) — rows ready`, startedAt);
-        setRows(next);
-        setError(null);
-      })
-      .catch((err) => {
-        if (!alive) return;
-        console.error('[TalentFlow] Failed to load assessments:', err);
-        /* The message is deliberately not surfaced to the reader — the spec's
-           copy is fixed, and an axios string is not something a recruiter can
-           act on. It stays in the console for whoever is debugging. */
-        setError(err instanceof Error ? err.message : 'Failed to load assessments');
-        setRows([]);
-      })
-      .finally(() => {
-        if (alive) setIsLoading(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [fetchAll, reloadToken, reloadSignal, snapshotName, fixedStatus]);
-
-  /* Retry from the error state. Bumping the token re-runs the effect above,
-     so the retry path and the mount path are the same code — a second
-     hand-rolled fetch here is how the two drift into handling failure
-     differently. */
-  const retry = () => {
-    setIsLoading(true);
-    setError(null);
-    setReloadToken((t) => t + 1);
-  };
-
-  /* After a status action: the same load, without the skeleton, so the row
-     picks up its new status in place (or leaves a status tab it no longer
-     belongs on) and the table does not flash empty in between. */
-  const refreshRows = () => setReloadToken((t) => t + 1);
+    if (reloadSignal === lastReloadSignal.current) return;
+    lastReloadSignal.current = reloadSignal;
+    refreshPaged();
+  }, [reloadSignal, refreshPaged]);
+  const retry = () => refreshPaged();
+  const refreshRows = () => refreshPaged();
 
   /* ── Filter option lists ─────────────────────────────────────────────────
-     Derived from the loaded rows, so a dropdown can only ever offer a value
-     that some assessment actually has — no dead options, and no second
-     endpoint to enumerate jobs. */
-  const jobOptions: SearchableSelectOption[] = useMemo(() => {
-    const byId = new Map<string, { label: string; count: number }>();
-    for (const row of rows) {
-      if (!row.jobId) continue;
-      const entry = byId.get(row.jobId) ?? { label: row.jobName, count: 0 };
-      entry.count += 1;
-      byId.set(row.jobId, entry);
-    }
-    return [...byId.entries()]
-      .sort((a, b) => text(a[1].label, b[1].label))
-      .map(([id, { label, count }]) => ({
-        value: id,
-        // The job id is in the label as well as the hint so the filter box
-        // matches on either "Senior Java" or "JD-014".
-        label: `${label} (${id})`,
-        hint: String(count),
-      }));
-  }, [rows]);
-
-  const versionOptions = useCallback(
-    (pick: (row: AssessmentRow) => number): SearchableSelectOption[] => {
-      const seen = new Set<number>();
-      for (const row of rows) seen.add(pick(row));
-      return [...seen]
-        .sort((a, b) => a - b)
-        .map((v) => ({ value: String(v), label: `V${v}` }));
-    },
-    [rows],
+     Read from the server (/assessments/filter-options) when the panel first
+     opens — they used to be derived from the full list this tab downloaded,
+     which it no longer does. Still only values some assessment has. */
+  const [filterOptions, setFilterOptions] = useState<AssessmentFilterOptions | null>(null);
+  useEffect(() => {
+    if (!filtersOpen || filterOptions) return;
+    let alive = true;
+    assessmentService.getFilterOptions(fixedStatus)
+      .then((opts) => { if (alive) setFilterOptions(opts); })
+      .catch((err) => console.warn('[TalentFlow] filter options failed:', err));
+    return () => { alive = false; };
+  }, [filtersOpen, filterOptions, fixedStatus]);
+  const jobOptions: SearchableSelectOption[] = useMemo(
+    () => (filterOptions?.jobs ?? []).map((j) => ({
+      value: j.value,
+      // The job id is in the label as well as the hint so the filter box
+      // matches on either "Senior Java" or "JD-014".
+      label: `${j.label} (${j.value})`,
+      hint: String(j.count),
+    })),
+    [filterOptions],
   );
-
-  const jobVersionOptions = useMemo(() => versionOptions((r) => r.jobVersion), [versionOptions]);
-  const assessmentVersionOptions = useMemo(
-    () => versionOptions((r) => r.assessmentVersion),
-    [versionOptions],
-  );
+  const toVersionOptions = (list: number[] | undefined): SearchableSelectOption[] =>
+    (list ?? []).map((v) => ({ value: String(v), label: `V${v}` }));
+  const jobVersionOptions = useMemo(() => toVersionOptions(filterOptions?.job_versions), [filterOptions]);
+  const assessmentVersionOptions = useMemo(() => toVersionOptions(filterOptions?.versions), [filterOptions]);
 
   /* Status offers exactly the two states this screen specifies. Written as
      data rather than as markup so the chip label below reads from the same
@@ -635,111 +617,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     { value: 'draft', label: 'Draft' },
   ];
 
-  /* ── Search + filter + sort ──────────────────────────────────────────────
-     AND across every dimension: a row survives only if it matches the search
-     AND the job AND the job version AND the assessment version AND the status
-     AND the created-on range. Each test is an early `false`, so adding a
-     dimension cannot accidentally widen the result. */
-  const filtered = useMemo(() => {
-    const q = appliedSearch.trim().toLowerCase();
-
-    /* The range is inclusive at BOTH ends and compared on the IST calendar
-       day, not on the raw timestamp. Comparing `createdAt >= '2026-09-03'`
-       as strings is what makes a "to" date exclude everything created that
-       day — 2026-09-03T10:42 sorts after 2026-09-03 — so the row's own day
-       is extracted and compared day-to-day. */
-    const dayOf = (row: AssessmentRow) => {
-      const d = parseIST(row.createdAt);
-      if (isNaN(d.getTime())) return '';
-      const parts = new Intl.DateTimeFormat('en-CA', {
-        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-      }).format(d);
-      return parts; // en-CA gives yyyy-mm-dd, which compares as a string
-    };
-
-    return rows.filter((row) => {
-      if (q) {
-        /* Job ID and Job Name only. `jobName` falls back to "General
-           Assessment" for an assessment with no job, which is a label, not
-           a job name — so it is searched only when there is a job. */
-        const haystack = `${row.jobId} ${row.jdId ? row.jobName : ''}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      if (filters.job && row.jobId !== filters.job) return false;
-      if (filters.jobVersion && String(row.jobVersion) !== filters.jobVersion) return false;
-      if (filters.assessmentVersion && String(row.assessmentVersion) !== filters.assessmentVersion) {
-        return false;
-      }
-      if (!fixedStatus && filters.status && row.rawStatus !== filters.status) return false;
-      /* A status page shows that status only. The request already asks for
-         it; this holds even if the API hands back other statuses. */
-      if (fixedStatus && row.rawStatus !== fixedStatus) return false;
-      if (filters.createdFrom || filters.createdTo) {
-        const day = dayOf(row);
-        if (!day) return false;
-        if (filters.createdFrom && day < filters.createdFrom) return false;
-        if (filters.createdTo && day > filters.createdTo) return false;
-      }
-      return true;
-    });
-  }, [rows, appliedSearch, filters, fixedStatus]);
-
-  const sortedByColumn = useMemo(() => {
-    const compare = COMPARATORS[sortKey];
-    /* A copy, because `filtered` is memoised and sorting in place would mutate
-       the array the memo hands back on the next render. Ties break on the
-       creation stamp so equal values (two V1s, two Drafts) keep a stable,
-       meaningful order instead of the array's incidental one. */
-    /* Latest publish first, on all four tabs alike: a row's OWN publish time,
-       then — for versions not published themselves (drafts, and every row on
-       the Draft tab) — the latest publish among its job's versions, so a job
-       that has just had a version published leads with its other versions
-       next; then creation. All three newest first. */
-    /* The Draft and Archived tabs, on the Active tab's pattern: Active leads
-       with the version most recently MOVED to Active (published); Draft and
-       Archived lead with the row most recently created or updated into that
-       status (archiving updates `updated_at`) — newest first, then creation. */
-    if (sortKey === 'published' && (fixedStatus === 'draft' || fixedStatus === 'archived')) {
-      return [...filtered].sort((a, b) => {
-        const result = (a.updatedSort - b.updatedSort) || (a.createdSort - b.createdSort);
-        return sortDir === 'asc' ? result : -result;
-      });
-    }
-    if (sortKey === 'published') {
-      const jobLatest = new Map<string, number>();
-      for (const row of filtered) {
-        if (row.publishedSort > (jobLatest.get(row.jobKey) ?? 0)) jobLatest.set(row.jobKey, row.publishedSort);
-      }
-      return [...filtered].sort((a, b) => {
-        const result = (a.publishedSort - b.publishedSort)
-          || ((jobLatest.get(a.jobKey) ?? 0) - (jobLatest.get(b.jobKey) ?? 0))
-          || (a.createdSort - b.createdSort);
-        return sortDir === 'asc' ? result : -result;
-      });
-    }
-    return [...filtered].sort((a, b) => {
-      const primary = compare(a, b);
-      const result = primary !== 0 ? primary : b.createdSort - a.createdSort;
-      return sortDir === 'asc' ? result : -result;
-    });
-  }, [filtered, sortKey, sortDir, fixedStatus]);
-
-  /* The host's Sort by, on top of the default order only — a clicked column
-     header wins. Oldest reverses it; Active / Draft first float that status
-     to the top and keep the newest-first order inside each group. */
-  const sorted = useMemo(() => {
-    if (!isDefaultSort || sortPreset === 'newest') return sortedByColumn;
-    if (sortPreset === 'oldest') return [...sortedByColumn].reverse();
-    const first = sortPreset === 'active' ? 'Active' : 'Draft';
-    return [...sortedByColumn.filter((r) => r.status === first), ...sortedByColumn.filter((r) => r.status !== first)];
-  }, [sortedByColumn, isDefaultSort, sortPreset]);
-
-  /* Clamped on read: a shrinking result set (a new filter, a narrower search)
-     leaves the page number past the end, and the rows would come back empty
-     while the pager still pointed at page 4. */
-  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  /* ── Search + filter + sort ── on the server (see the load above). The
+     pager is clamped on read: a refetch that shrinks the set while the reader
+     sits on the last page must not leave it pointing past the end. */
+  const totalPages = Math.max(1, Math.ceil(totalMatching / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+  useEffect(() => {
+    if (!isLoading && page > totalPages) setPage(totalPages);
+  }, [isLoading, page, totalPages]);
+  const pageRows = rows;
 
   /* ── Row selection ─────────────────────────────────────────────────────
      The AI Interviews All / Active / Draft / Archived table's checkbox
@@ -748,14 +634,27 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      paging; it is pruned to the rows that still exist after a reload or a
      narrower filter. */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  /* Pruned to what still matches after a narrower filter / search or a
+     reload — asked of the server (/assessments/ids, same filters), since the
+     ticked rows may sit on pages not loaded. */
+  const listFiltersKey = JSON.stringify(listFilters);
   useEffect(() => {
-    setSelectedIds((prev) => {
-      if (prev.size === 0) return prev;
-      const visible = new Set(sorted.map((row) => row.id));
-      const next = new Set([...prev].filter((id) => visible.has(id)));
-      return next.size === prev.size ? prev : next;
-    });
-  }, [sorted]);
+    if (selectedIdsRef.current.size === 0) return;
+    let alive = true;
+    assessmentService.listIds(JSON.parse(listFiltersKey))
+      .then((ids) => {
+        if (!alive) return;
+        const matching = new Set(ids);
+        setSelectedIds((prev) => {
+          const next = new Set([...prev].filter((id) => matching.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
+      })
+      .catch(() => { /* keep the selection; the bulk call reports per row */ });
+    return () => { alive = false; };
+  }, [listFiltersKey, paged.items]);
   const toggleSelected = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -771,7 +670,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       else pageRows.forEach((row) => next.add(row.id));
       return next;
     });
-  const selectedRows = useMemo(() => sorted.filter((row) => selectedIds.has(row.id)), [sorted, selectedIds]);
+  const selectedRows = useMemo(
+    () => [...selectedIds].map((id) => knownRowsRef.current.get(id)).filter((row): row is AssessmentRow => !!row),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedIds, rows],
+  );
 
   const isNarrowed = !!appliedSearch.trim() || hasAnyFilter(filters);
 
@@ -817,11 +720,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const chips: FilterChip[] = useMemo(() => {
     const out: FilterChip[] = [];
     if (filters.job) {
-      const job = rows.find((r) => r.jobId === filters.job);
+      const job = filterOptions?.jobs.find((j) => j.value === filters.job);
       out.push({
         key: 'job',
         label: 'Job',
-        value: job ? `${job.jobName} (${job.jobId})` : filters.job,
+        value: job ? `${job.label} (${job.value})` : filters.job,
         onRemove: () => clearOne({ job: '' }),
       });
     }
@@ -857,7 +760,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     }
     return out;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters, rows, fixedStatus]);
+  }, [filters, filterOptions, fixedStatus]);
 
   const activeFilterCount = chips.length;
 
@@ -896,12 +799,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
          refetch below then confirms it. Only on success: a failed call
          throws past this. */
       const reply = result as AssessmentResponse | undefined;
-      if (verb === 'delete' || reply?.status) {
-        const updated = verb === 'delete' ? null : toRow(reply as AssessmentResponse);
-        setRows((prev) => (updated === null || (fixedStatus && updated.rawStatus !== fixedStatus)
-          ? prev.filter((r) => r.id !== row.id)
-          : prev.map((r) => (r.id === row.id ? { ...r, rawStatus: updated.rawStatus, status: updated.status } : r))));
-      }
+      if (reply?.status) knownRowsRef.current.set(row.id, toRow(reply));
+      if (verb === 'delete') knownRowsRef.current.delete(row.id);
       refreshRows();
       onMutated?.();
     } catch (err) {
@@ -1198,8 +1097,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       : fixedStatus === 'draft' ? 'draft-assessments'
         : fixedStatus === 'archived' ? 'archived-assessments'
           : 'all-assessments';
-  const openAssessmentDetails = (row: AssessmentRow, query = '') => {
-    rememberAssessmentPagerOrder(pagerList, sorted.map((r) => r.id));
+  const openAssessmentDetails = async (row: AssessmentRow, query = '') => {
+    /* Every matching id in this table's order (the server's /ids with the
+       same filters and sort); the page on screen if that read fails. */
+    let order = rows.map((r) => r.id);
+    try {
+      order = await assessmentService.listIds({ ...listFilters, ...serverSort });
+    } catch { /* fall back to this page */ }
+    rememberAssessmentPagerOrder(pagerList, order);
     const params = new URLSearchParams(query);
     params.set(PAGER_LIST_PARAM, pagerList);
     router.push(`/recruitment/assessments/${row.id}?${params.toString()}`);
@@ -1390,10 +1295,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
         <AlertTriangle className="w-7 h-7 text-destructive" />
       </div>
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         Unable to load assessments
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         Something went wrong while loading the assessment list. Please try again.
       </p>
       <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
@@ -1416,14 +1321,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="tf-card-title mb-1">
+      <h3 className="tf-section-title mb-1">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="tf-card-desc mb-4 max-w-md mx-auto">
+      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'
@@ -1480,9 +1385,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
   return (
-    <div className={embedded ? 'w-full' : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <div className={embedded ? 'w-full' : 'tf-page'}>
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? 'w-full' : 'tf-page-sheet'}>
           {!embedded && (
             <PageBreadcrumb
               className="mb-4 md:mb-6"
@@ -1515,7 +1420,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               <h1 className="tf-page-title mb-0.5">
                 {heading}
               </h1>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {subheading}
               </p>
             </div>
@@ -1631,7 +1536,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="all-assessments-created-from"
-                    className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
+                    className="block tf-caption mb-1.5"
                   >
                     Created On
                   </label>
@@ -1642,15 +1547,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       value={draftFilters.createdFrom}
                       max={draftFilters.createdTo || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
-                    <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                    <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                     <DateField
                       aria-label="Created to"
                       value={draftFilters.createdTo}
                       min={draftFilters.createdFrom || undefined}
                       onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
-                      className="sm:flex-1 sm:min-w-0 h-[38px] px-2 sm:px-3 text-sm"
+                      className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
                   </div>
                 </div>
@@ -1675,9 +1580,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           {/* ── Card view ── the Candidate Results tab's card grid: one card
               per row, carrying the same fields the table shows. */}
           {displayMode === 'grid' ? (
-          <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+          <div className="tf-card overflow-hidden">
             {isLoading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              <div className="tf-grid-4 p-4">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={`skeleton-${i}`} className="rounded-xl border border-gray-100 dark:border-slate-700/60 p-4 flex flex-col gap-3">
                     <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
@@ -1691,7 +1596,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             ) : pageRows.length === 0 ? (
               emptyPanel
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              <div className="tf-grid-4 p-4">
                 {pageRows.map((row) => {
                   const openable = opensView(row);
                   const isSelected = selectedIds.has(row.id);
@@ -1714,11 +1619,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         onToggle={() => toggleSelected(row.id)}
                         label={row.jobName}
                         selectionActive={selectedIds.size > 0}
+                        inline
                       />
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                      {/* Select seal and name on one line: the seal sits level with this row, pl-7 clears it. */}
+                      <div className="flex items-start justify-between gap-2 pl-7">
+                        {/* Phones / tablets: the name in full (wraps), as the Job Openings card; "…" from lg. */}
+                        <div className="min-w-0 flex-1 flex flex-wrap lg:flex-nowrap items-center gap-1.5">
                           <span
-                            className="min-w-0 truncate font-medium text-gray-900 dark:text-slate-50"
+                            className="min-w-0 break-words lg:truncate font-medium text-gray-900 dark:text-slate-50"
                             title={row.jobName}
                           >
                             {row.jobName}
@@ -1741,11 +1649,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       <div className="flex items-center gap-4 text-sm">
                         <span>
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.invitations.toLocaleString()}</span>
-                          <span className="text-xs text-gray-400 ml-1">sent</span>
+                          <span className="tf-hint ml-1">sent</span>
                         </span>
                         <span>
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">{row.completed.toLocaleString()}</span>
-                          <span className="text-xs text-gray-400 ml-1">Completed</span>
+                          <span className="tf-hint ml-1">Completed</span>
                         </span>
                       </div>
 
@@ -1760,14 +1668,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             )}
           </div>
           ) : (
-          <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+          <>
+          <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
                 {hasBodyRows && (
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {/* Select All — this page's rows. */}
-                    <th scope="col" className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-3 sm:py-3.5 lg:py-4 w-10 align-middle tf-th">
+                    <th scope="col" className="tf-th-cell pl-3 sm:pl-4 lg:pl-6 pr-0 w-10 tf-th">
                       {isLoading ? (
                         <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                       ) : (
@@ -1819,7 +1728,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     })}
                     <th
                       scope="col"
-                      className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-right tf-th tf-sticky-col"
+                      className="tf-th-cell text-right tf-th tf-sticky-col"
                     >
                       {isLoading ? <div className="h-3.5 w-14 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" /> : 'Actions'}
                     </th>
@@ -1834,7 +1743,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {isLoading &&
                     Array.from({ length: 8 }).map((_, i) => (
                       <tr key={`skeleton-${i}`}>
-                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10">
+                        <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10">
                           <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                         </td>
                         {COLUMNS.map((col) => (
@@ -1848,7 +1757,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             />
                           </td>
                         ))}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                        <td className="tf-td tf-sticky-col">
                           <div className="h-6 w-6 ml-auto rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
                         </td>
                       </tr>
@@ -1880,7 +1789,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         className={`${opensView(row) ? 'cursor-pointer' : ''} transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${selectedIds.has(row.id) ? 'bg-brand-blue/[0.04] dark:bg-brand-blue/10' : ''}`}
                       >
                         {/* 0. Select — its own click, never the row's open. */}
-                        <td className="pl-3 sm:pl-4 lg:pl-6 pr-0 py-2.5 sm:py-3 lg:py-4 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                        <td className="tf-td pl-3 sm:pl-4 lg:pl-6 pr-0 w-10" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => toggleSelected(row.id)}
@@ -1897,18 +1806,18 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         {/* 1. Job ID — secondary by design: the chip is the
                             house Job Openings badge, which reads as a
                             reference rather than as the row's headline. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           {row.jobId ? (
                             <JobIdBadge>{row.jobId}</JobIdBadge>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
 
                         {/* 2. Job Name — the row's anchor, so it carries the
                             weight. The job name only, truncated with the full
                             name in `title`. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           {/* Fixed width on the span (a table cell's own
                               max-width is ignored): same column width on every
                               row, longer names end in "…", full name on hover. */}
@@ -1924,23 +1833,23 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 3. Job Version — its own column, blue chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <VersionPill kind="job" version={row.jobVersion} />
                         </td>
 
                         {/* 4. Assessment Version — its own column, cyan chip. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <VersionPill kind="assessment" version={row.assessmentVersion} />
                         </td>
 
                         {/* 5. Status */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           <StatusBadge status={row.status} />
                         </td>
 
                         {/* 6. Invitations Sent — the number alone (the header
                             names it), centred, tabular figures. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center">
+                        <td className="tf-td text-center">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.invitations.toLocaleString()}
                           </span>
@@ -1950,14 +1859,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             assessment (`completed_count`), in the same
                             centred tabular figures as Invitations Sent
                             beside it — the number alone. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-center whitespace-nowrap">
+                        <td className="tf-td text-center whitespace-nowrap">
                           <span className="tabular-nums text-gray-900 dark:text-slate-100">
                             {row.completed.toLocaleString()}
                           </span>
                         </td>
 
                         {/* 7. Created — date and time, with who created it underneath. */}
-                        <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle">
+                        <td className="tf-td">
                           <div className="flex flex-col gap-1 min-w-0">
                             <span className="text-gray-600 dark:text-slate-400 tabular-nums">
                               {formatISTStamp(row.createdAt)}
@@ -1973,7 +1882,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             by them, which a hand-rolled absolute menu inside
                             an overflow:auto shell would be. */}
                         <td
-                          className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 align-middle text-right tf-sticky-col"
+                          className="tf-td text-right tf-sticky-col"
                           onClick={(e) => e.stopPropagation()}
                         >
                           {actionsCell(row)}
@@ -1984,6 +1893,68 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </table>
             </div>
           </div>
+          <MobileRecordList
+            empty={
+              isLoading ? (
+                Array.from({ length: 4 }).map((_, i) => (
+                  <div key={`skeleton-${i}`} className="tf-record-card flex flex-col gap-3">
+                    <div className="h-4 w-2/3 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-1/2 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    <div className="h-3 w-3/4 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                  </div>
+                ))
+              ) : error ? (
+                <div className="tf-card overflow-hidden">{errorPanel}</div>
+              ) : (
+                <div className="tf-card overflow-hidden">{emptyPanel}</div>
+              )
+            }
+          >
+            {!isLoading && !error && pageRows.map((row) => (
+              <MobileRecordCard
+                key={row.id}
+                selected={selectedIds.has(row.id)}
+                onClick={opensView(row) ? () => openAssessmentDetails(row) : undefined}
+                select={
+                  <button
+                    type="button"
+                    onClick={() => toggleSelected(row.id)}
+                    className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                    aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
+                  >
+                    {selectedIds.has(row.id) ? (
+                      <CheckSquare className="w-4 h-4 text-brand-blue" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                }
+                idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
+                /* The job's Disabled / Archived tag sits beside the status on the top
+                   row; in titleAddon it pulled the ⋮ menu up under the name. */
+                badges={<><StatusBadge status={row.status} />{jobBadge(row)}</>}
+                title={<span title={row.jobName}>{row.jobName}</span>}
+                actions={actionsCell(row)}
+                fields={[
+                  { label: 'Job Version', value: <VersionPill kind="job" version={row.jobVersion} /> },
+                  { label: 'Assessment Version', value: <VersionPill kind="assessment" version={row.assessmentVersion} /> },
+                  { label: 'Created', value: <span className="tabular-nums">{formatISTStamp(row.createdAt)}</span> },
+                  { label: 'By', value: <CreatedBy name={row.createdBy} /> },
+                ]}
+                footer={
+                  <>
+                    <MobileStatChip tone="info" icon={<Send className="w-3.5 h-3.5" />}>
+                      {row.invitations.toLocaleString()} Sent
+                    </MobileStatChip>
+                    <MobileStatChip tone="success" icon={<CheckCircle2 className="w-3.5 h-3.5" />}>
+                      {row.completed.toLocaleString()} Completed
+                    </MobileStatChip>
+                  </>
+                }
+              />
+            ))}
+          </MobileRecordList>
+          </>
           )}
 
           {/* ── 6. Pagination ── The shared control, on this screen's ladder.
@@ -1993,9 +1964,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             <ListPagination
               currentPage={safePage}
               itemsPerPage={pageSize}
-              totalItems={sorted.length}
+              totalItems={totalMatching}
               onPageChange={setPage}
-              onItemsPerPageChange={setPageSize}
+              onItemsPerPageChange={(size: number) => { setPageSize(size); setPage(1); }}
               itemLabel="assessments"
               scrollContainerRef={scrollRef}
             />
@@ -2033,8 +2004,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </p>
               {skipped.size > 0 && (
                 <div className="rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700 p-3">
-                  <p className="text-xs font-semibold text-gray-600 dark:text-slate-400 mb-1.5">Skipped</p>
-                  <ul className="space-y-1 text-xs text-gray-600 dark:text-slate-400">
+                  <p className="tf-caption mb-1.5">Skipped</p>
+                  <ul className="space-y-1 tf-meta">
                     {[...skipped.entries()].map(([reason, count]) => (
                       <li key={reason}>{count} — {reason}</li>
                     ))}

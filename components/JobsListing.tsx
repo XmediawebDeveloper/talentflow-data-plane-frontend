@@ -1,8 +1,10 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info, ArrowUp, ArrowDown } from 'lucide-react';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { centerMenuOnPhoneRef } from '@/lib/hooks/useCenteredMenuOnPhone';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -18,18 +20,22 @@ import {
   formatEmploymentType,
   formatIndustryType,
   matchesStatusFilter,
-  collapseToLatestVersions,
-  groupByLineage,
   lineageKey,
-  sortJobs,
+  mapJDToJob,
+  mapJDStatus,
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
+import { jdService, type JDLineageVersion, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
-import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JobOpeningSummary, { JobOpeningPrimaryItems, JobOpeningDatesGrid } from '@/components/jobs/JobOpeningSummary';
+import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
+import { getCreationMethodConfig, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
+import { useJobCandidateCountsFor } from '@/lib/hooks/useJobCandidateCounts';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -45,6 +51,9 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, ExportFileFormat } from '@/lib/utils/exportUtils';
 import { Tooltip } from '@/components/ui/tooltip';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import type { InviteKind } from '@/components/talent-match-invite/inviteVersions';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -52,8 +61,32 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/** The fields the job list sorts by — one list for the Sort control and the phone Sort menu. */
+const JOB_SORT_OPTIONS: { value: JobSortBy; label: string }[] = [
+  { value: 'date', label: 'Date Posted' },
+  { value: 'applicants', label: 'Scored' },
+  { value: 'assessed', label: 'Assessed' },
+  { value: 'interviewed', label: 'Interviewed' },
+  { value: 'title', label: 'Job Title' },
+  { value: 'status', label: 'Status' },
+  { value: 'industry', label: 'Industry Type' },
+];
+
+/** The two sort orders, worded for the field: dates newest / oldest, counts highest / lowest,
+ *  text A → Z / Z → A. */
+const sortOrderLabels = (field: JobSortBy): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'applicants' || field === 'assessed' || field === 'interviewed'
+      ? { desc: 'Highest first', asc: 'Lowest first' }
+      : { desc: 'Z → A', asc: 'A → Z' };
 
 const viewVersionsMenuItemClass = 'group text-gray-700 dark:text-slate-200';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 dark:text-orange-300 [&_svg]:!text-current';
@@ -80,14 +113,11 @@ const JOBS_EXPORT_HEADERS = [
   'Scored'
 ];
 
+/* The list loads itself, one page at a time (GET /jd?view=jobs) with the stat
+   cards beside it (GET /jd/stats) — both built server-side from one filter, so
+   a card always equals the total its tab lists. The host no longer passes
+   `jobs`: it used to download every JD version to compute all of this here. */
 interface JobsListingProps {
-  jobs: Job[];
-  /** Whether `jobs` holds every page yet. Until it does, the stat cards show a
-   *  placeholder rather than the partial tally of the pages loaded so far; once
-   *  it does, they count `jobs` live (so a publish/archive/delete action updates
-   *  them instantly). Defaults to true, so a host that loads `jobs` in one go
-   *  doesn't need to pass it. */
-  jobsFullyLoaded?: boolean;
   onCreateNew: () => void;
   /** Permission gate for onCreateNew — action/icon must stay visible and only
    *  become non-clickable (with a toast on click) when this is true, never
@@ -106,7 +136,7 @@ interface JobsListingProps {
   onScoreResumes?: (job: Job) => void;
   onScoreResumesDisabled?: boolean;
   onScoreResumesDisabledReason?: string;
-  onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
+  onUpdateJobStatus?: (jobId: string, status: Job['status'], job?: Job) => void;
   onEditJob?: (job: Job) => void;
   /**
    * Statuses the host has successfully written since the version lineage was
@@ -180,7 +210,7 @@ interface JobsListingProps {
  * abstracted because that is how every other caller carries it.
  */
 const StatVersions = ({ count }: { count: number }) => (
-  <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+  <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
     {count} {count === 1 ? 'version' : 'versions'}
   </span>
 );
@@ -194,22 +224,43 @@ const StatVersionsPlaceholder = () => (
   <span aria-hidden className="mt-1.5 block h-5 w-20 rounded-full bg-gray-100 dark:bg-slate-800 animate-pulse" />
 );
 
+/** A list row plus the server's per-row version counts (GET /jd?view=jobs). */
+type JobRow = Job & { versionCount?: number; tabVersionCount?: number };
+
+/* The rows' placeholder while the first page loads — card-shaped pulses, so
+   the cards above (which have their own placeholders) and the list arrive
+   without a layout jump. */
+const JobsListLoading = () => (
+  <div className="space-y-3" role="status" aria-label="Loading job openings">
+    {Array.from({ length: 4 }).map((_, i) => (
+      <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 dark:bg-slate-900 dark:border-slate-700">
+        <div className="h-4 w-40 rounded bg-gray-200 dark:bg-slate-700 animate-pulse" />
+        <div className="mt-3 h-3 w-3/4 rounded bg-gray-100 dark:bg-slate-800 animate-pulse" />
+        <div className="mt-2 h-3 w-1/2 rounded bg-gray-100 dark:bg-slate-800 animate-pulse" />
+      </div>
+    ))}
+  </div>
+);
+
 /** The status transitions the bulk Actions menu can apply. */
 export type BulkStatusAction = 'disable' | 'reenable' | 'archive' | 'unarchive';
 
-export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false, onRefresh }: JobsListingProps) {
+export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onAIMatchDisabledReason = 'You do not have permission to run AI Talent Match', onScoreResumes, onScoreResumesDisabled = false, onScoreResumesDisabledReason = 'You do not have permission to run resume scoring', onUpdateJobStatus, onEditJob, versionStatusOverrides, deletedVersionIds, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, onBulkStatusChange, onCheckJobsInUse, onAllJobsInUse, quotaInfo, initialStatusFilter, forceListView, configHref, configDisabled = false, onRefresh }: JobsListingProps) {
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // Assigned once the paged list exists (below); Refresh re-reads it bypassing the cache.
+  const refreshListRef = useRef<() => void>(() => {});
   const handleRefresh = async () => {
-    if (isRefreshing || !onRefresh) return;
+    if (isRefreshing) return;
     setIsRefreshing(true);
     try {
-      await onRefresh();
+      refreshListRef.current();
+      await onRefresh?.();
     } finally {
       setIsRefreshing(false);
     }
   };
   const router = useRouter();
-  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode, hasPermission, tenant } = useAuth();
   // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
   // real, populated fields — AuthProvider never sets the deprecated lowercase
   // canUpdateJd/etc. aliases, so checking those left every non-admin's Edit/
@@ -219,6 +270,37 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJD ?? false);
   const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJD ?? false);
   const canExportJd = isTenantAdmin || hasPermissionCode('jd:export');
+  /* Create / Send Assessment | AI Interview on a Published (or Republished)
+     job's ⋮ menu — Job Details' Create / Send tiles: THE invite popup for
+     that job version, which creates, publishes and sends versions in place.
+     Same gates as the tiles: permission, tenant feature, plan. */
+  const { open: openInvite } = useInviteDialog();
+  const { hasPlanFeature } = usePlanFeatures();
+  const featureOn = (f: 'assessment' | 'ai_interview') =>
+    !tenant?.features || (tenant.features as Record<string, unknown>)[f] === true;
+  const createSendDenied = (kind: InviteKind): string | null => {
+    if (kind === 'assessment') {
+      // The JD's own "Invite to Assessment" plus the module's Create or Invite
+      // (same rule as the job page, JobDetailView canInviteJdAssessment; 2026-11-10).
+      if (!(isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && (hasPermission('canCreateAssessments') || hasPermissionCode('assessments:invite'))))) return 'You do not have permission to create or send assessments';
+      if (!featureOn('assessment')) return 'Assessments not enabled';
+      return hasPlanFeature('assessment') ? null : PLAN_LOCKED_MESSAGE;
+    }
+    if (!(isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && (hasPermission('canCreateAIInterviews') || hasPermissionCode('ai_interview:invite'))))) return 'You do not have permission to create or send AI interviews';
+    if (!featureOn('ai_interview')) return 'AI Interviews not enabled';
+    return hasPlanFeature('ai_interview') ? null : PLAN_LOCKED_MESSAGE;
+  };
+  const openCreateSend = (job: Job, kind: InviteKind) =>
+    openInvite({
+      kind,
+      job: { jdId: job.id, jdTitle: job.title, jdCode: job.job_id, versionNumber: job.versionNumber, status: job.status },
+      candidates: [],
+      preselect: false,
+    });
+  const CREATE_SEND_ITEMS: { kind: InviteKind; label: string; Icon: typeof Video; tone: string }[] = [
+    { kind: 'assessment', label: 'Invite Assessment', Icon: ClipboardList, tone: 'text-menu-icon-view' },
+    { kind: 'interview', label: 'Invite AI Interview', Icon: Video, tone: 'text-menu-icon-ai' },
+  ];
   // Search + all eleven filters, in the shared hook. The controls commit as they
   // change, so this uses `setFilter` and leaves the draft pair alone.
   const search = useListSearch({
@@ -271,6 +353,23 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     workMode: workModeFilter,
   } = search.filters;
 
+  // All / AI Generated / Manual: one white chip that slides to the active
+  // option (measured from the buttons) instead of jumping between them.
+  const [methodTrack, setMethodTrack] = useState<HTMLDivElement | null>(null);
+  const [methodChip, setMethodChip] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const track = methodTrack;
+    if (!track) return;
+    const measure = () => {
+      const active = track.querySelector<HTMLElement>('[data-active="true"]');
+      if (active) setMethodChip({ left: active.offsetLeft, width: active.offsetWidth });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(track);
+    return () => ro.disconnect();
+  }, [methodTrack, creationMethodFilter]);
+
   // Sync status filter with URL parameter changes
   useEffect(() => {
     if (initialStatusFilter) {
@@ -285,9 +384,6 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
   const versionLineage = useJobVersionLineage();
-  // "N assessed" / "N interviewed" on each card — tallied client-side, since
-  // the JD list endpoint carries neither count.
-  const candidateCounts = useJobCandidateCounts();
   /* No lineage is fetched to answer a status pill any more. The pill reads the
      job's representative row, which the list already has, so selecting one
      costs zero requests — where it used to fire one per job on the page. The
@@ -335,15 +431,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [listScrollRequest, setListScrollRequest] = useState(0);
 
-  // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows the
-  // toolbar + filters + jobs list. Initial render is 'cards' unless the URL
-  // already carried a specific status (deep-link from a notification, etc.).
-  // We deliberately ignore the default 'all' so a fresh visit lands on cards.
-  // `forceListView` also opens on the list: it means "show me every job", which the
-  // tiles can't do — and it survives the 'all' exclusion above, unlike a status filter.
-  const [pageView, setPageView] = useState<'cards' | 'list'>(
-    forceListView || (initialStatusFilter && initialStatusFilter !== 'all') ? 'list' : 'cards',
-  );
+  // Every module lands on its Total card with the list already open (same as
+  // Resume Scoring / AI Talent Match): the tiles stay on top, the list renders
+  // under them without a click. 'cards' is kept in the type only so an old
+  // persisted snapshot still parses.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   // When URL changes to include a specific status filter, jump to list view.
   useEffect(() => {
     if (initialStatusFilter && initialStatusFilter !== 'all') setPageView('list');
@@ -388,7 +480,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   // Persist this list's view state (filters / search / sort / pagination / view
   // toggles) so returning from a job-details page restores it. Declared after the
   // useState + URL-sync effects above so restore wins over the mount-time resets.
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'job-openings-list',
     {
       searchQuery, statusFilter, creationMethodFilter, locationFilter,
@@ -406,7 +498,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
       // were restored but the whole list stayed hidden behind the stat tiles,
       // which read as "the table vanished". A deep link carrying an explicit
       // status still wins: it means "show me that list".
-      if ((s.pageView === 'cards' || s.pageView === 'list')
+      if (s.pageView === 'list'
         && !forceListView
         && !(initialStatusFilter && initialStatusFilter !== 'all')) {
         setPageView(s.pageView);
@@ -441,179 +533,117 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     },
   );
 
-  const matchesCriteria = (job: Job) => {
-    // Enhanced search - search across multiple fields
-    const searchLower = searchQuery.toLowerCase();
-    const matchesSearch = searchQuery === '' || (
-      job.title.toLowerCase().includes(searchLower) ||
-      job.job_id?.toLowerCase().includes(searchLower) ||
-      job.location?.toLowerCase().includes(searchLower) ||
-      job.industry_type?.toLowerCase().includes(searchLower) ||
-      formatIndustryType(job.industry_type).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Information Technology")
-      job.department?.toLowerCase().includes(searchLower) ||
-      job.employmentType?.toLowerCase().includes(searchLower) ||
-      formatEmploymentType(job.employmentType).toLowerCase().includes(searchLower) ||  // Also search formatted version (e.g., "Full Time")
-      job.experience?.toLowerCase().includes(searchLower) ||
-      job.postedBy?.toLowerCase().includes(searchLower) ||  // Created by
-      (job as any).workMode?.toLowerCase().includes(searchLower) ||  // Work mode (onsite, hybrid, remote)
-      formatEmploymentType((job as any).workMode).toLowerCase().includes(searchLower)  // Also search formatted work mode
-    );
+  /* ── The list: one page from the server ─────────────────────────────────
+     GET /jd?view=jobs returns exactly the rows this page used to compute from
+     every JD version: on "All Jobs" each job's latest version, on a status tab
+     each job's latest version WITH that status; search / More Filters /
+     creation method then test that chosen row (they never pick it). Sort and
+     paging run server-side too. GET /jd/stats answers the cards, tab badges,
+     creation-method badges and the filter dropdown options for the same
+     filters, from the same server-side filter, so a card equals its tab. */
+  const statusTab = (statusFilter || 'all').toLowerCase();
+  const serverFilters = useMemo<JobOpeningsFilters>(() => ({
+    search: searchQuery.trim() || undefined,
+    creation_method: creationMethodFilter ?? undefined,
+    location: locationFilter,
+    department: departmentFilter,
+    industry: industryFilter,
+    employment_type: employmentTypeFilter,
+    work_mode: workModeFilter,
+    created_by_name: createdByFilter,
+    experience: experienceFilter,
+    applicants: applicantsFilter,
+    date_from: datePostedFromFilter || undefined,
+    date_to: datePostedToFilter || undefined,
+  }), [searchQuery, creationMethodFilter, locationFilter, departmentFilter, industryFilter, employmentTypeFilter, workModeFilter, createdByFilter, experienceFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter]);
+  const hasCriteria = Object.values(serverFilters).some((v) => v !== undefined && v !== null && v !== '' && v !== 'all');
+  const listQuery = useMemo(() => ({
+    ...serverFilters,
+    status_tab: statusTab,
+    sort_by: sortBy,
+    sort_order: sortOrder,
+    page: currentPage,
+    page_size: itemsPerPage,
+  }), [serverFilters, statusTab, sortBy, sortOrder, currentPage, itemsPerPage]);
 
-    const matchesLocation = locationFilter === 'all' || job.location === locationFilter;
-    const matchesDepartment = departmentFilter === 'all' || job.department === departmentFilter;
-    const matchesIndustry = industryFilter === 'all' || job.industry_type === industryFilter;
-    const matchesEmploymentType = employmentTypeFilter === 'all' || job.employmentType === employmentTypeFilter;
-    const matchesCreatedBy = createdByFilter === 'all' || job.postedBy?.trim() === createdByFilter;
-    const matchesWorkMode = workModeFilter === 'all' || job.workMode?.trim().toLowerCase() === workModeFilter;
-
-    // Creation method filter (Manual vs AI) - null means show all
-    const matchesCreationMethod = creationMethodFilter === null ||
-      (creationMethodFilter === 'ai' && (job as any).creation_method === 'ai_generated') ||
-      (creationMethodFilter === 'manual' && (job as any).creation_method === 'manual');
-
-    // Experience filter — compare actual year ranges, not digit substrings.
-    // Each bucket is a [min, max] year span; a job matches if its own
-    // [min, max] span overlaps the bucket's span.
-    let matchesExperience = true;
-    if (experienceFilter !== 'all') {
-      const buckets: Record<string, [number, number]> = {
-        entry: [0, 2],
-        junior: [2, 4],
-        mid: [5, 7],
-        senior: [8, 10],
-        architect: [10, Infinity],
-        management: [10, Infinity],
+  const paged = usePagedList<JobRow, JobOpeningsStats, typeof listQuery>({
+    name: 'job-openings',
+    query: listQuery,
+    // Wait for the saved filters/page, or landing fetches twice.
+    enabled: listStateRestored,
+    fetchPage: async (q) => {
+      const res = await jdService.listJobs(q);
+      const meta = res.versions_meta ?? {};
+      return {
+        items: (res.items ?? []).map((jd) => ({
+          ...mapJDToJob(jd),
+          versionCount: meta[jd.id]?.version_count,
+          tabVersionCount: meta[jd.id]?.tab_version_count,
+        })),
+        total: res.total ?? 0,
       };
-      const bucket = buckets[experienceFilter];
-      if (bucket) {
-        // Derive the job's year span from numeric fields, falling back to
-        // parsing the experience string (e.g. "5-10", "10+", "3").
-        let jobMin = job.experience_min;
-        let jobMax = job.experience_max;
-        if (jobMin == null && jobMax == null) {
-          const exp = job.experience?.toLowerCase() || '';
-          const nums = exp.match(/\d+/g)?.map(Number) ?? [];
-          if (nums.length > 0) {
-            jobMin = nums[0];
-            jobMax = exp.includes('+') ? Infinity : (nums[1] ?? nums[0]);
-          }
-        }
-        if (jobMin == null && jobMax == null) {
-          // No experience data on the job — exclude when a specific level is selected.
-          matchesExperience = false;
-        } else {
-          const lo = jobMin ?? jobMax ?? 0;
-          const hi = jobMax ?? jobMin ?? Infinity;
-          // Ranges overlap when each starts at/before the other ends.
-          matchesExperience = lo <= bucket[1] && hi >= bucket[0];
-        }
-      }
-    }
+    },
+    // Each card is a tab, so the tab is not a stats filter.
+    fetchStats: (f) => {
+      const { status_tab: _tab, ...filters } = f as typeof f & { status_tab?: string };
+      void _tab;
+      return jdService.getJobStats(filters as JobOpeningsFilters);
+    },
+  });
+  refreshListRef.current = paged.refresh;
+  const serverStats = paged.stats;
 
-    // Date posted filter
-    let matchesDatePosted = true;
-    if (datePostedFromFilter || datePostedToFilter) {
-      const jobDate = job.created_at ? new Date(job.created_at) : (job.postedDate ? new Date(job.postedDate) : null);
-      if (jobDate) {
-        if (datePostedFromFilter) {
-          const fromDate = new Date(datePostedFromFilter);
-          matchesDatePosted = matchesDatePosted && jobDate >= fromDate;
-        }
-        if (datePostedToFilter) {
-          const toDate = new Date(datePostedToFilter);
-          toDate.setHours(23, 59, 59, 999); // End of day
-          matchesDatePosted = matchesDatePosted && jobDate <= toDate;
-        }
-      } else {
-        matchesDatePosted = false;
-      }
-    }
+  useEffect(() => {
+    if (paged.error) toast.error('Failed to load job openings');
+  }, [paged.error]);
 
-    // Applicants filter
-    let matchesApplicants = true;
-    if (applicantsFilter !== 'all') {
-      const count = job.applicants || 0;
-      if (applicantsFilter === 'low') matchesApplicants = count < 10;
-      else if (applicantsFilter === 'medium') matchesApplicants = count >= 10 && count < 50;
-      else if (applicantsFilter === 'high') matchesApplicants = count >= 50;
-    }
-
-    /* Status is deliberately NOT here — see the lineage-aware selection below.
-       It cannot be decided one row at a time, because the version that carries
-       the status the pill asks for may not be among these rows at all. */
-    return matchesSearch && matchesLocation && matchesDepartment &&
-           matchesIndustry && matchesEmploymentType && matchesExperience && matchesDatePosted &&
-           matchesApplicants && matchesCreationMethod && matchesCreatedBy && matchesWorkMode;
+  /* Statuses / deletes the host has just written show at once; the refetch
+     the write triggers (any write clears the list cache) then confirms them. */
+  const withOverride = <J extends Job>(job: J): J => {
+    const override = versionStatusOverrides?.[job.id];
+    return override ? { ...job, status: mapJDStatus(override) } : job;
   };
+  const pageRows: JobRow[] = paged.items
+    .filter((row) => !deletedVersionIds?.has(row.id))
+    .map(withOverride);
+  const totalMatching = paged.total;
+  const currentJobs = pageRows;
 
-  /* ── One row per job on "All Jobs" — one row per MATCHING version on a status tab ──
-     Every version of a JD is its own row in the API response (its own id,
-     sharing the lineage's human-readable `job_id`).
+  // Assessed / interviewed for the rows on screen only (GET /jd/candidate-counts).
+  const candidateCounts = useJobCandidateCountsFor(pageRows.map((row) => row.id));
 
-     "All Jobs" collapses to one row per job_id (the latest version), so a job
-     republished twice doesn't read as duplicates there.
-
-     ── A status tab shows whichever version actually had that status ──
-     Filter FIRST, then collapse WITHIN the matches — so a JD with v1 Published
-     and v2 Disabled shows its v1 row under the Published tab AND its v2 row
-     under the Disabled tab, each the version that was really in that state.
-     (Deliberate: a job can therefore appear under more than one tab at once,
-     and the stat tiles above — which still count distinct jobs by their LATEST
-     version only — can disagree with a tab's row count. That's intentional
-     here, not the bug this comment used to warn about.) */
-  /* Version FIRST, criteria SECOND. Each job is represented by its latest
-     version (All Jobs) or its latest version with the tab's status, and only
-     THAT version is then tested against search and More Filters. Filtering
-     every version before collapsing let a filter drop the newest version and
-     promote an older one in its place — v4 listed under Published while v5
-     was the job's latest published version, because v5 alone missed a filter.
-     Now a job whose chosen version misses a filter is simply not listed. */
-  const statusSelectedJobs = (statusFilter === 'all'
-    ? collapseToLatestVersions(jobs)
-    : collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, statusFilter)))
-  ).filter(matchesCriteria);
-
-  const dedupedJobs = statusSelectedJobs;
-
-  /* Grouped over the WHOLE list, not the filtered one, so the counts below
-     describe the library rather than the current filter. The expanded history
-     itself does not come from here — it is fetched per job from the lineage
-     endpoint, which is authoritative about what versions exist. */
-  const allVersionGroups = groupByLineage(jobs);
-
-  /* Distinct jobs, ignoring filters — what the stat cards and the "of N jobs"
-     badge count, so those numbers describe the same thing the list shows. */
-  const distinctJobs = Array.from(allVersionGroups.values(), bucket => bucket[0]);
-
-  // Apply sorting to filtered jobs
-  // Assessed/interviewed counts come from the candidate-counts hook, not the
-  // JD payload, so attach them before sorting on either.
-  const sortedJobs = sortJobs(
-    (sortBy === 'assessed' || sortBy === 'interviewed') && candidateCounts
-      ? dedupedJobs.map(job => ({
-          ...job,
-          assessed: candidateCounts[job.id]?.assessed ?? 0,
-          interviewed: candidateCounts[job.id]?.interviewed ?? 0,
-        }))
-      : dedupedJobs,
-    sortBy,
-    sortOrder,
-  );
+  /* Every JD row this page has seen (page rows, "select all" fetches, ticked
+     versions), so a selection that spans pages can still name its jobs for
+     the bulk actions and the export. */
+  const knownJobsRef = useRef(new Map<string, Job>());
+  pageRows.forEach((row) => knownJobsRef.current.set(row.id, row));
+  const rememberJobs = (list: Job[]) => list.forEach((job) => knownJobsRef.current.set(job.id, job));
+  const knownJob = (id: string): Job | undefined => {
+    const job = knownJobsRef.current.get(id);
+    return job ? withOverride(job) : undefined;
+  };
 
   // Bulk action handlers
   /* The single Select All control offers these scopes through its dropdown:
      - current page: add the jobs visible on the active page (count tracks the
        Show: N per-page value);
-     - all pages: select the whole filtered list across every page;
-     - all versions: every version of every listed job, not just the row's own;
+     - all pages: every job matching the filters, across every page (fetched
+       from the server with the same filters);
+     - all versions: every version of every matching job, not just the row's own;
      - clear: empty the selection.
      A job row's checkbox selects that row's own version only; other versions
      are ticked in View Versions or through "Select all versions". */
-  const rowVersionsOf = (row: Job) =>
-    (allVersionGroups.get(lineageKey(row)) ?? [row]).filter(version =>
-      !deletedVersionIds?.has(version.id) &&
-      (statusFilter === 'all' || matchesStatusFilter(version, statusFilter))
-    );
+  const rowVersionsOf = (row: Job): Job[] => {
+    const key = lineageKey(row);
+    const versions = Array.from(knownJobsRef.current.keys())
+      .map(knownJob)
+      .filter((version): version is Job =>
+        !!version &&
+        lineageKey(version) === key &&
+        !deletedVersionIds?.has(version.id) &&
+        (statusFilter === 'all' || matchesStatusFilter(version, statusFilter)));
+    return versions.length ? versions : [row];
+  };
   /* Drop per-version ticks: the rows' own versions only, or every version of
      those jobs. */
   const resetVersionPicks = (rows: Job[], wholeJob = false) => {
@@ -640,21 +670,68 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
       return next;
     });
   };
-  const selectAllPages = () => {
-    setVersionPicks(new Map());
-    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+
+  /* Ids of every matching job / every version of them, once "Select all
+     jobs" / "Select all versions" has fetched them for the current filters. */
+  const [allMatchingIds, setAllMatchingIds] = useState<string[] | null>(null);
+  const [allVersionIds, setAllVersionIds] = useState<string[] | null>(null);
+  const [selectingAll, setSelectingAll] = useState(false);
+  /** Every job the list matches, all pages, in list order (pages of 100). */
+  const fetchAllMatching = async (): Promise<Job[]> => {
+    const PAGE = 100;
+    const base = { ...serverFilters, status_tab: statusTab, sort_by: sortBy, sort_order: sortOrder };
+    const first = await jdService.listJobs({ ...base, page: 1, page_size: PAGE });
+    const pages = Math.max(1, Math.ceil((first.total ?? 0) / PAGE));
+    const rest = await fetchRemainingPages(pages, (page) => jdService.listJobs({ ...base, page, page_size: PAGE }));
+    return [first, ...rest].flatMap((res) => (res.items ?? []).map(mapJDToJob));
+  };
+  const selectAllPages = async () => {
+    if (selectingAll) return;
+    setSelectingAll(true);
+    try {
+      const rows = await fetchAllMatching();
+      rememberJobs(rows);
+      const ids = rows.map((row) => row.id).filter((id) => !deletedVersionIds?.has(id));
+      setAllMatchingIds(ids);
+      setVersionPicks(new Map());
+      setSelectedJobs(new Set(ids));
+    } catch {
+      toast.error('Could not select all jobs. Please try again.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
   const clearSelection = () => {
     setVersionPicks(new Map());
     setSelectedJobs(new Set());
+    setBulkVersionScope('selected');
   };
-  const selectAllVersions = () => {
-    setVersionPicks(new Map(sortedJobs.flatMap(rowVersionsOf).map(version => [version.id, true])));
-    setSelectedJobs(new Set(sortedJobs.map(job => job.id)));
+  const selectAllVersions = async () => {
+    if (selectingAll) return;
+    setSelectingAll(true);
+    try {
+      const [rows, versions] = await Promise.all([
+        fetchAllMatching(),
+        jdService.listJobVersions({ ...serverFilters, status_tab: statusTab }),
+      ]);
+      const versionJobs = versions.map(mapJDToJob);
+      rememberJobs(rows);
+      rememberJobs(versionJobs);
+      const rowIds = rows.map((row) => row.id).filter((id) => !deletedVersionIds?.has(id));
+      const versionIds = versionJobs.map((version) => version.id).filter((id) => !deletedVersionIds?.has(id));
+      setAllMatchingIds(rowIds);
+      setAllVersionIds(versionIds);
+      setVersionPicks(new Map(versionIds.map((id) => [id, true])));
+      setSelectedJobs(new Set(rowIds));
+    } catch {
+      toast.error('Could not select all versions. Please try again.');
+    } finally {
+      setSelectingAll(false);
+    }
   };
 
   const handleSelectJob = (jobId: string) => {
-    const row = sortedJobs.find(job => job.id === jobId);
+    const row = pageRows.find(job => job.id === jobId);
     if (row) resetVersionPicks([row]);
     const newSelected = new Set(selectedJobs);
     if (newSelected.has(jobId)) {
@@ -665,37 +742,106 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     setSelectedJobs(newSelected);
   };
 
-  /* A selection belongs to the tab it was made on. Switching tabs clears it,
-     so the "N Selected" count, the confirm popups and the action itself all
-     describe the same jobs — rather than counting rows from another tab that
-     the action would then silently skip. */
-  const [selectionTab, setSelectionTab] = useState(statusFilter);
-  if (selectionTab !== statusFilter) {
-    setSelectionTab(statusFilter);
+  /* A selection belongs to the tab — and the filters — it was made on.
+     Changing either clears it, so the "N Selected" count, the confirm popups
+     and the action itself all describe the same jobs, rather than counting
+     rows the list no longer shows that the action would then act on. */
+  const selectionScope = `${statusFilter}|${JSON.stringify(serverFilters)}`;
+  const [selectionTab, setSelectionTab] = useState(selectionScope);
+  if (selectionTab !== selectionScope) {
+    setSelectionTab(selectionScope);
     setSelectedJobs(new Set());
     setVersionPicks(new Map());
+    setAllMatchingIds(null);
+    setAllVersionIds(null);
     setShowBulkActions(false);
   }
 
-  /* The selected jobs on screen, and the ones each bulk action applies to —
-     the same eligibility rules as each job's three-dot menu. */
-  /* A version is selected when ticked in View Versions (or by "Select all
-     versions"); with no tick of its own, the row's own version follows the
-     row checkbox. On a status tab only the versions with that tab's status. */
-  const allRowVersions = sortedJobs.flatMap(rowVersionsOf);
-  const selectedVisibleJobs = allRowVersions.filter(version =>
-    versionPicks.get(version.id) ?? selectedJobs.has(version.id)
-  );
-  const allVersionsSelected = allRowVersions.length > 0 && selectedVisibleJobs.length === allRowVersions.length;
+  /* The selected jobs, and the ones each bulk action applies to — the same
+     eligibility rules as each job's three-dot menu. A version is selected when
+     ticked in View Versions (or by "Select all versions"); with no tick of its
+     own, a row follows its checkbox. */
+  const selectedVisibleJobs: Job[] = Array.from(new Set([...selectedJobs, ...versionPicks.keys()]))
+    .filter(id => (versionPicks.get(id) ?? selectedJobs.has(id)) && !deletedVersionIds?.has(id))
+    .map(knownJob)
+    .filter((job): job is Job => !!job);
+  const isPicked = (id: string) => versionPicks.get(id) ?? selectedJobs.has(id);
+  const allVersionsSelected = !!allVersionIds && allVersionIds.length > 0 && allVersionIds.every(isPicked);
+  /* "Select all versions (N)": exact once fetched; before that, with no
+     search/filter the stats already know it (versions with the tab's status). */
+  const allVersionsCount: number | null = allVersionIds
+    ? allVersionIds.length
+    : !hasCriteria && serverStats
+      ? serverStats.versions?.[statusTab as JobOpeningsTab] ?? null
+      : null;
   const checkedVersionIds = new Set(selectedVisibleJobs.map(job => job.id));
   const hasSelection = selectedJobs.size > 0 || selectedVisibleJobs.length > 0;
-  const toggleVersionChecked = (versionJob: Job) =>
+  const toggleVersionChecked = (versionJob: Job) => {
+    if (!knownJobsRef.current.has(versionJob.id)) {
+      const detail = versionLineage.versionDetails[versionJob.id];
+      rememberJobs([detail?.id ? { ...mapJDToJob(detail), status: versionJob.status } : versionJob]);
+    }
     setVersionPicks(prev => new Map(prev).set(versionJob.id, !checkedVersionIds.has(versionJob.id)));
-  const bulkDisableJobs = selectedVisibleJobs.filter(job => job.status === 'Published');
-  const bulkReenableJobs = selectedVisibleJobs.filter(job => job.status === 'Disabled');
-  const bulkArchiveJobs = selectedVisibleJobs.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
-  const bulkUnarchiveJobs = selectedVisibleJobs.filter(job => job.status === 'Archived');
-  const bulkSelectionLabel = (count: number) => `${count} Job Description${count === 1 ? '' : 's'} Selected`;
+  };
+  /* What Disable / Re-enable / Archive / Unarchive act on, picked at the top
+     of the Actions menu: the ticked versions only, or every version of the
+     ticked jobs. "All versions" reads each job's lineage (GET /jd/lineages,
+     one request for every job not loaded yet); a job whose lineage fails
+     falls back to its ticked versions rather than silently doing nothing. */
+  const [bulkVersionScope, setBulkVersionScope] = useState<'selected' | 'all'>('selected');
+  const [scopeLineages, setScopeLineages] = useState<Record<string, JDLineageVersion[]>>({});
+  const scopeLineagesInFlight = useRef(new Set<string>());
+  const selectedByLineage = new Map<string, Job[]>();
+  selectedVisibleJobs.forEach(job => {
+    const key = lineageKey(job);
+    selectedByLineage.set(key, [...(selectedByLineage.get(key) ?? []), job]);
+  });
+  const missingScopeKeys = bulkVersionScope === 'all'
+    ? Array.from(selectedByLineage.keys()).filter(key => !scopeLineages[key])
+    : [];
+  const scopeLoading = missingScopeKeys.length > 0;
+  const missingScopeSignature = missingScopeKeys.join('|');
+  useEffect(() => {
+    const wanted = missingScopeSignature
+      ? missingScopeSignature.split('|').filter(key => !scopeLineagesInFlight.current.has(key))
+      : [];
+    if (wanted.length === 0) return;
+    wanted.forEach(key => scopeLineagesInFlight.current.add(key));
+    const idOf = (key: string) => selectedByLineage.get(key)?.[0]?.id ?? key;
+    jdService
+      .getLineagesBatch(wanted.map(idOf), { fresh: true })
+      .then(byId => setScopeLineages(prev => {
+        const next = { ...prev };
+        wanted.forEach(key => { next[key] = byId[idOf(key)] ?? []; });
+        return next;
+      }))
+      .catch(() => setScopeLineages(prev => {
+        const next = { ...prev };
+        wanted.forEach(key => { next[key] = []; });
+        return next;
+      }))
+      .finally(() => wanted.forEach(key => scopeLineagesInFlight.current.delete(key)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the missing lineages only
+  }, [missingScopeSignature]);
+  const bulkTargets: Job[] = bulkVersionScope === 'all'
+    ? Array.from(selectedByLineage.entries()).flatMap(([key, picked]) => {
+        const lineage = (scopeLineages[key] ?? []).filter(version => !deletedVersionIds?.has(version.id));
+        if (lineage.length === 0) return picked;
+        /* The lineage's status is the fresh one; a change made here since
+           (withOverride) still wins. */
+        return lineage.map(version => withOverride({
+          ...(picked.find(job => job.id === version.id) ?? { ...picked[0], id: version.id, title: version.title || picked[0].title, versionNumber: version.version_number }),
+          status: mapJDStatus(version.status),
+        }));
+      })
+    : selectedVisibleJobs;
+  const bulkDisableJobs = bulkTargets.filter(job => job.status === 'Published');
+  const bulkReenableJobs = bulkTargets.filter(job => job.status === 'Disabled');
+  const bulkArchiveJobs = bulkTargets.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
+  const bulkUnarchiveJobs = bulkTargets.filter(job => job.status === 'Archived');
+  const bulkSelectionLabel = (count: number) => bulkVersionScope === 'all'
+    ? `${count} Job Description Version${count === 1 ? '' : 's'} Selected`
+    : `${count} Job Description${count === 1 ? '' : 's'} Selected`;
 
   const [bulkStatusBusy, setBulkStatusBusy] = useState(false);
   const runBulkStatus = async (targets: Job[], action: BulkStatusAction) => {
@@ -704,6 +850,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     try {
       await onBulkStatusChange(targets, action);
       clearSelection();
+      setBulkVersionScope('selected');
+      setScopeLineages({});
     } finally {
       setBulkStatusBusy(false);
     }
@@ -881,74 +1029,49 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   // Get unique values for filters — drop empty/blank values (so the dropdowns
   // don't show a blank option) and sort alphabetically so the lists are ordered
   // rather than appearing in random job-fetch order.
-  const byName = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
-  const uniqueLocations = Array.from(new Set(jobs.map(job => job.location).filter(Boolean))).sort(byName);
-  const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean))).sort(byName);
-  const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
-  const uniqueCreators = Array.from(new Set(jobs.map(job => job.postedBy?.trim()).filter(Boolean))).sort(byName);
-  const uniqueWorkModes = Array.from(new Set(jobs.map(job => job.workMode?.trim().toLowerCase()).filter(Boolean))).sort(byName);
+  // Filter dropdown options — every value in the tenant's JDs (all versions),
+  // from GET /jd/stats, already de-blanked and sorted.
+  const uniqueLocations = serverStats?.facets?.locations ?? [];
+  const uniqueEmploymentTypes = serverStats?.facets?.employment_types ?? [];
+  const uniqueIndustries = serverStats?.facets?.industries ?? [];
+  const uniqueCreators = serverStats?.facets?.creators ?? [];
+  const uniqueWorkModes = serverStats?.facets?.work_modes ?? [];
 
-  // Calculate stats
-  /* Each status card IS its tab's filter — clicking it opens that tab — so its
-     number must be exactly the row count that tab shows (filters aside).
-     They used to disagree: the cards counted a job only when its LATEST
-     version had the status, while the tab lists a job when ANY version has it
-     (filter versions first, then one row per job — see statusSelectedJobs).
-     A job with v1 Published under a newer Draft/Disabled/Archived version
-     was a Published row but not a Published count: "129" on the card,
-     "135 of 216" after clicking it. Both now come from the same call.
-
-     The versions pill counts the versions that HAVE the card's status —
-     not every version of those jobs. A job holds at most one draft (always
-     its latest version), so Drafts reads N jobs / N versions; Published
-     counts each published version once, however many a job has. Counting
-     all of a job's versions put a draft job's earlier published versions
-     under "Drafts" (79 jobs, "82 versions"). */
-  const jobsInStatusTab = (pill: string) =>
-    collapseToLatestVersions(jobs.filter(job => matchesStatusFilter(job, pill)));
-  const versionsWithStatus = (pill: string) =>
-    jobs.filter(job => matchesStatusFilter(job, pill)).length;
-  /* Count badges for the toolbar pills. Same rule as the cards above: each
-     status badge is the row count its tab shows, filters aside. The creation
-     method badges count the jobs in the CURRENT status tab, so All = AI +
-     Manual reads straight off the list. */
-  const statusPillCount = (pill: string) =>
-    pill === 'all' ? distinctJobs.length : jobsInStatusTab(pill.toLowerCase()).length;
-  const methodTabJobs = statusFilter === 'all'
-    ? collapseToLatestVersions(jobs)
-    : jobsInStatusTab(statusFilter.toLowerCase());
-  const methodPillCount = (method: 'ai' | 'manual' | null) =>
-    method === null
-      ? methodTabJobs.length
-      : methodTabJobs.filter((j) => (j as any).creation_method === (method === 'ai' ? 'ai_generated' : 'manual')).length;
-  const pillCountBadge = (active: boolean, n: number) => (
+  /* Each status card IS its tab — clicking it opens that tab — so its number
+     is exactly the row count that tab lists for the current search/filters
+     (GET /jd/stats builds it from the same server-side filter as the list).
+     The versions pill counts the versions that HAVE the card's status.
+     With no search/filter these are the same numbers the page showed when it
+     computed them from every JD version in the browser. */
+  const statusPillCount = (pill: string): number | null =>
+    serverStats ? serverStats.jobs?.[pill.toLowerCase() as JobOpeningsTab] ?? 0 : null;
+  const methodPillCount = (method: 'ai' | 'manual' | null): number | null => {
+    if (!serverStats) return null;
+    const row = serverStats.by_method?.[statusTab as JobOpeningsTab];
+    return row ? row[method ?? 'all'] ?? 0 : 0;
+  };
+  const pillCountBadge = (active: boolean, n: number | null) => (
     <span className={`ml-1.5 px-1.5 py-0.5 rounded text-xs font-semibold tabular-nums ${
       active ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
     }`}>
-      {n.toLocaleString()}
+      {n == null ? '–' : n.toLocaleString()}
     </span>
   );
-  const publishedTabJobs = jobsInStatusTab('published');
-  const draftTabJobs = jobsInStatusTab('draft');
-  const archivedTabJobs = jobsInStatusTab('archived');
   const stats = {
-    total: distinctJobs.length,
-    published: publishedTabJobs.length,
-    draft: draftTabJobs.length,
-    closed: distinctJobs.filter(j => j.status === 'Closed').length,
-    archived: archivedTabJobs.length,
-    totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0),
-    totalVersions: jobs.length,
-    publishedVersions: versionsWithStatus('published'),
-    draftVersions: versionsWithStatus('draft'),
-    archivedVersions: versionsWithStatus('archived'),
+    total: serverStats?.total ?? 0,
+    published: serverStats?.published ?? 0,
+    draft: serverStats?.draft ?? 0,
+    archived: serverStats?.archived ?? 0,
+    totalVersions: serverStats?.versions?.all ?? 0,
+    publishedVersions: serverStats?.versions?.published ?? 0,
+    draftVersions: serverStats?.versions?.draft ?? 0,
+    archivedVersions: serverStats?.versions?.archived ?? 0,
   };
 
-  /* The stat cards (number and versions pill) only ever show a count of the
-   * complete list — while later pages are still loading they show a
-   * placeholder, never a partial tally that would then jump. */
-  const statValue = (count: number) => (jobsFullyLoaded ? count : <StatValuePlaceholder />);
-  const statVersions = (count: number) => (jobsFullyLoaded ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
+  /* The stat cards show a placeholder until the counts land — never a
+   * partial tally that would then jump. */
+  const statValue = (count: number) => (serverStats ? count : <StatValuePlaceholder />);
+  const statVersions = (count: number) => (serverStats ? <StatVersions count={count} /> : <StatVersionsPlaceholder />);
 
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
@@ -980,12 +1103,16 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   };
 
   // NEW: Pagination logic
-  const totalPages = Math.ceil(sortedJobs.length / itemsPerPage);
-  const currentJobs = sortedJobs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalPages = Math.ceil(totalMatching / itemsPerPage);
 
   /* Whether every matching job (across all pages) is selected — drives the
-     Select All button's "fully checked" icon. */
-  const allPagesSelected = sortedJobs.length > 0 && sortedJobs.every(job => selectedJobs.has(job.id));
+     Select All button's "fully checked" icon. Known for certain once "Select
+     all jobs" has fetched them, or when every match is on this page. */
+  const allPagesSelected = totalMatching > 0 && (
+    allMatchingIds && allMatchingIds.length >= totalMatching
+      ? allMatchingIds.every(id => selectedJobs.has(id))
+      : totalMatching <= pageRows.length && pageRows.every(job => selectedJobs.has(job.id))
+  );
   /* Same for the active page — drives the "this page" menu checkbox. */
   const currentPageSelected = currentJobs.length > 0 && currentJobs.every(job => selectedJobs.has(job.id));
 
@@ -1026,17 +1153,18 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
     noneEligibleMessage: string;
     onSelect: () => void;
   }) => {
-    const unavailable = !allowed || eligible === 0 || bulkStatusBusy;
-    const countSuffix = isAllJobsTab ? ` (${eligible} of ${selectedVisibleJobs.length})` : '';
+    const unavailable = !allowed || eligible === 0 || bulkStatusBusy || scopeLoading;
+    const countSuffix = scopeLoading ? '' : isAllJobsTab || bulkVersionScope === 'all' ? ` (${eligible} of ${bulkTargets.length})` : '';
     /* Why the count is short — behind an ⓘ at the row's end, on hover.
        Nothing when every selected job takes the action. */
-    const skipped = selectedVisibleJobs.length - eligible;
-    const reason = !allowed
+    const skipped = bulkTargets.length - eligible;
+    const noun = bulkVersionScope === 'all' ? 'versions' : 'selected jobs';
+    const reason = !allowed || scopeLoading
       ? null
       : eligible === 0
         ? noneEligibleMessage
         : skipped > 0
-          ? `Applies to ${eligible} of ${selectedVisibleJobs.length} selected jobs. ${noneEligibleMessage}; the other ${skipped} will be skipped.`
+          ? `Applies to ${eligible} of ${bulkTargets.length} ${noun}. ${noneEligibleMessage}; the other ${skipped} will be skipped.`
           : null;
     return (
       <div key={label} className={`flex items-center pr-3 ${unavailable ? '' : 'hover:bg-gray-50'}`}>
@@ -1116,9 +1244,9 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb barRef={breadcrumbRef} className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Job Descriptions' }]} />
         {/* SaaS Header */}
         <div className="mb-5">
@@ -1129,7 +1257,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               </div>
               <div>
                 <h1 className="tf-page-title mb-1">Job Openings</h1>
-                <p className="tf-card-desc">Create and manage your job postings</p>
+                <p className="tf-body-secondary">Create and manage your job postings</p>
               </div>
             </div>
             <div className="flex flex-col sm:items-end gap-2">
@@ -1141,7 +1269,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 </div>
               )}
               {(configHref || onCreateNew) && (
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                <div className="flex w-full flex-row items-center gap-2 sm:w-auto sm:justify-end">
                   {configHref && configDisabled && (
                     // Permission-locked: same Button, greyed out, tooltip only.
                     <Button
@@ -1150,7 +1278,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       aria-disabled
                       onClick={() => { /* locked: tooltip only */ }}
                       title="You do not have permission to manage job configuration"
-                      className="w-full sm:w-auto opacity-50 cursor-not-allowed"
+                      className="shrink-0 opacity-50 cursor-not-allowed disabled:opacity-50"
                     >
                       <Settings className="w-4 h-4" />
                       Config
@@ -1160,7 +1288,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     // Config shares Create New Job's exact size/shape by using the
                     // same Button (size md). It stays `secondary` — a neutral nav
                     // action — against Create's `primary` CTA, per the design system.
-                    <Button asChild variant="secondary" size="md" className="w-full sm:w-auto">
+                    <Button asChild variant="secondary" size="md" className="shrink-0">
                       <Link href={configHref}>
                         <Settings className="w-4 h-4" />
                         Config
@@ -1175,7 +1303,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       aria-disabled={onCreateNewDisabled}
                       title={onCreateNewDisabled ? 'You do not have permission to create job descriptions' : undefined}
                       icon={<Plus className="w-4 h-4" />}
-                      className={`w-full sm:w-auto ${onCreateNewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`min-w-0 flex-1 sm:flex-none ${onCreateNewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Create New Job
                     </Button>
@@ -1207,8 +1335,12 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         <>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
-        <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+        {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort.
+            Phones (globals.css, `.tf-jobs-toolbar`): search · filter icon, the
+            Location / Industry / Creator pills (scrolling), the status tabs
+            (underlined, scrolling), All / AI / Manual, then Select all · Sort ·
+            Refresh. From sm the layout below is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
           {/* Row 1: Search + More Filters — the canonical toolbar, now shared
               via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
@@ -1225,7 +1357,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             // all come from the shared SearchableSelect chrome, so they match the
             // Search input and the date fields. They stack full-width on mobile.
             leadingActions={
-              <>
+              <div className="tf-jobs-filter-pills contents">
                 {uniqueLocations.length > 1 && (
                   <SearchableSelect
                     className="w-full sm:w-48"
@@ -1262,7 +1394,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     ariaLabel="Filter by created by"
                   />
                 )}
-              </>
+              </div>
             }
             // Search flexes to fill the row; `controlsFollowSearch` gives the
             // search→control gap the same 8px as control→control, so Search,
@@ -1277,8 +1409,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             onClearFilters={clearAllFilters}
             // Sort by sits right after More Filters, in the search row.
             afterFiltersActions={
-            sortedJobs.length > 0 ? (
-              <div className="flex items-center gap-2">
+            totalMatching > 0 ? (
+              <div className="tf-jobs-sort flex items-center gap-2">
                 <span className="tf-body">Sort by</span>
                 {/* bg-brand-blue/5 + rounded-lg = the tab pills' resting style, so
                     the sort control belongs to the same pill system. One size at
@@ -1292,15 +1424,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     }}
                     ariaLabel="Sort jobs by"
                     className="w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700"
-                    options={[
-                      { value: 'date', label: 'Date Posted' },
-                      { value: 'applicants', label: 'Scored' },
-                      { value: 'assessed', label: 'Assessed' },
-                      { value: 'interviewed', label: 'Interviewed' },
-                      { value: 'title', label: 'Job Title' },
-                      { value: 'status', label: 'Status' },
-                      { value: 'industry', label: 'Industry Type' },
-                    ]}
+                    options={JOB_SORT_OPTIONS}
                   />
                   <button
                     type="button"
@@ -1329,7 +1453,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <select> option (e.g. a full "City, State, Country" location) would
                   force its cell wider than the screen and overflow. min-w-0 lets the
                   cells (and the w-full selects inside) shrink to the grid track. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 [&>div]:min-w-0">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {/* Location and Industry now live inline with Search (see the
                     toolbar's leadingActions above). Department was removed. */}
                 {uniqueWorkModes.length > 0 && (
@@ -1406,11 +1530,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               The row itself always renders (so the status tabs stay reachable even
               when a filter yields no rows); Select all and Sort render only when
               there are jobs to act on. */}
-          <div className="flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
+          <div className="tf-jobs-row2 flex items-center gap-2 lg:gap-1.5 flex-wrap pt-3 border-t border-gray-200 mb-3">
             {/* Select all + Bulk Actions — sits at the head of the row, where the
                 "Show:" label used to be. */}
-            {sortedJobs.length > 0 && (
-              <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+            {totalMatching > 0 && (
+              <div className="tf-jobs-select flex items-center gap-2 sm:gap-3 flex-wrap">
                 {/* One Select All button. Its dropdown carries BOTH scopes:
                     "this page (N)" — tracks the Show: N per-page value — and
                     "all jobs (N)" — the total across every page. */}
@@ -1419,7 +1543,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     onClick={() => setShowSelectMenu((open) => !open)}
                     aria-haspopup="menu"
                     aria-expanded={showSelectMenu}
-                    className={`${tabPill(hasSelection)} h-9`}
+                    className={`tf-jobs-selectall ${tabPill(hasSelection)} h-9`}
+                    data-active={hasSelection || undefined}
                   >
                     {allPagesSelected ? (
                       <CheckSquare className="w-3.5 h-3.5" />
@@ -1464,7 +1589,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           aria-checked={allPagesSelected}
                           onClick={() => {
                             if (allPagesSelected) clearSelection();
-                            else selectAllPages();
+                            else void selectAllPages();
                             setShowSelectMenu(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
@@ -1474,7 +1599,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           ) : (
                             <Square className="w-4 h-4 text-gray-500" />
                           )}
-                          Select all jobs ({sortedJobs.length})
+                          {selectingAll ? 'Selecting…' : `Select all jobs (${totalMatching})`}
                         </button>
                         <button
                           type="button"
@@ -1482,7 +1607,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           aria-checked={allVersionsSelected}
                           onClick={() => {
                             if (allVersionsSelected) clearSelection();
-                            else selectAllVersions();
+                            else void selectAllVersions();
                             setShowSelectMenu(false);
                           }}
                           className="w-full px-3 py-2 text-left text-sm flex items-center gap-2 text-gray-700 hover:bg-gray-50"
@@ -1492,7 +1617,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                           ) : (
                             <Square className="w-4 h-4 text-gray-500" />
                           )}
-                          Select all versions ({allRowVersions.length})
+                          {selectingAll ? 'Selecting…' : allVersionsCount != null ? `Select all versions (${allVersionsCount})` : 'Select all versions'}
                         </button>
                         <div className="border-t border-gray-200 my-1" />
                         <button
@@ -1514,8 +1639,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 button (not inline beside it), matching the Resume Scoring toolbar.
                 `basis-full order-last` drops this group onto its own line at the
                 bottom of the wrap-row. */}
-            {sortedJobs.length > 0 && hasSelection && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {totalMatching > 0 && hasSelection && (
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
 
                 {/* Actions Dropdown — shown whenever at least one job is selected. */}
                 {hasSelection && (
@@ -1539,7 +1664,39 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       // row, so the menu opens rightward (left-0) and width is
                       // clamped to the viewport, keeping it on-screen on every
                       // size instead of running off the left edge.
-                      <div className="absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="absolute top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                        {/* Which versions the status actions below change. */}
+                        {hasStatusActions && (
+                          <div className="px-3 pt-1 pb-3 mb-2 border-b border-gray-200">
+                            <div className="text-xs font-medium text-gray-500 mb-1.5">Apply status changes to</div>
+                            <div role="radiogroup" aria-label="Apply status changes to" className={`${SEGMENT_TOGGLE} w-full`}>
+                              {([['selected', 'Selected version'], ['all', 'All versions']] as const).map(([scope, label]) => (
+                                <button
+                                  key={scope}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={bulkVersionScope === scope}
+                                  onClick={() => setBulkVersionScope(scope)}
+                                  className={`${segmentBtn(bulkVersionScope === scope)} flex-1 justify-center whitespace-nowrap !px-2 !text-xs`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500 tabular-nums" aria-live="polite">
+                              {bulkVersionScope === 'selected'
+                                ? `Only the ${selectedVisibleJobs.length === 1 ? 'version' : `${selectedVisibleJobs.length} versions`} you ticked.`
+                                : scopeLoading
+                                  ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                                      Loading versions…
+                                    </span>
+                                  )
+                                  : `Every version of the ${selectedByLineage.size === 1 ? 'selected job' : `${selectedByLineage.size} selected jobs`} — ${bulkTargets.length} version${bulkTargets.length === 1 ? '' : 's'}.`}
+                            </p>
+                          </div>
+                        )}
                         {showDisableAction && renderBulkStatusItem({
                           label: 'Disable Selected',
                           icon: Ban,
@@ -1637,13 +1794,16 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     Clear
                   </button>
                 )}
-              </div>
+              </StickyBulkBar>
             )}
 
             {/* Status tabs */}
+            <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Job status">
             {['all', 'Published', 'Draft', 'Disabled', 'Archived'].map((status) => (
               <button
                 key={status}
+                role="tab"
+                aria-selected={statusFilter.toLowerCase() === status.toLowerCase()}
                 onClick={() => search.setFilter('status', status.toLowerCase())}
                 className={`${tabPill(statusFilter.toLowerCase() === status.toLowerCase())} h-9`}
               >
@@ -1651,6 +1811,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 {pillCountBadge(statusFilter.toLowerCase() === status.toLowerCase(), statusPillCount(status))}
               </button>
             ))}
+            </div>
 
             {/* Creation method: [ All | AI Generated | Manual ] — a single
                 connected segmented toggle (shared tinted track; the active
@@ -1658,18 +1819,27 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 Phones: the toggle takes the full row, each option sized to its
                 label + count plus an even share of the rest (Manual is widest),
                 no icons, tighter badge gap. From sm: the inline toggle as before. */}
-            <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
-              <div className={`${SEGMENT_TOGGLE} w-full sm:w-auto`}>
+            <div className="tf-jobs-method flex items-center gap-2 w-full sm:w-auto sm:ml-0.5 sm:border-l sm:border-gray-200 sm:pl-2">
+              <div ref={setMethodTrack} className={`${SEGMENT_TOGGLE} relative w-full sm:w-auto`}>
+                {methodChip && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute top-1 bottom-1 rounded-md bg-white shadow-sm shadow-brand-blue/10 transition-[left,width] duration-300 ease-out"
+                    style={{ left: methodChip.left, width: methodChip.width }}
+                  />
+                )}
                 <button
                   onClick={() => search.setFilter('creationMethod', null)}
-                  className={`${segmentBtn(creationMethodFilter === null)} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === null}
+                  className={`${segmentBtn(creationMethodFilter === null)} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   All
                   {pillCountBadge(false, methodPillCount(null))}
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'ai' ? null : 'ai')}
-                  className={`${segmentBtn(creationMethodFilter === 'ai')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'ai'}
+                  className={`${segmentBtn(creationMethodFilter === 'ai')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Sparkles className="hidden sm:block w-3.5 h-3.5" />
                   <span className="hidden sm:inline">AI Generated</span>
@@ -1678,7 +1848,8 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 </button>
                 <button
                   onClick={() => search.setFilter('creationMethod', creationMethodFilter === 'manual' ? null : 'manual')}
-                  className={`${segmentBtn(creationMethodFilter === 'manual')} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
+                  data-active={creationMethodFilter === 'manual'}
+                  className={`${segmentBtn(creationMethodFilter === 'manual')} relative z-10 duration-300 ${methodChip ? "!bg-transparent !shadow-none" : ""} flex-auto sm:flex-none justify-center whitespace-nowrap !gap-1 sm:!gap-1.5 [&>span]:!ml-0 sm:[&>span]:!ml-1.5 !px-1.5 sm:!px-2.5`}
                 >
                   <Edit className="hidden sm:block w-3.5 h-3.5" />
                   Manual
@@ -1687,8 +1858,46 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               </div>
             </div>
 
+            {/* Phones: one "Sort" button that opens a menu — the fields, then the order
+                (worded for the field). From sm the inline Sort control above is used. */}
+            {pageRows.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="tf-jobs-sortmenu sm:hidden inline-flex h-9 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 text-sm font-medium text-gray-700 hover:border-brand-blue/40 hover:text-brand-blue data-[state=open]:border-brand-blue/40 data-[state=open]:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
+                    aria-label={`Sort: ${JOB_SORT_OPTIONS.find((o) => o.value === sortBy)?.label ?? ''}, ${sortOrderLabels(sortBy)[sortOrder]}`}
+                  >
+                    <ArrowUpDown className="w-4 h-4 text-brand-blue" />
+                    Sort
+                    <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56 bg-white dark:bg-slate-900">
+                  <DropdownMenuLabel className="text-xs text-gray-500">Sort by</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortBy} onValueChange={(v) => setSortBy(v as JobSortBy)}>
+                    {JOB_SORT_OPTIONS.map((o) => (
+                      <DropdownMenuRadioItem key={o.value} value={o.value}>{o.label}</DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs text-gray-500">Order</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup value={sortOrder} onValueChange={(v) => setSortOrder(v as 'asc' | 'desc')}>
+                    <DropdownMenuRadioItem value="desc">
+                      <ArrowDown className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).desc}
+                    </DropdownMenuRadioItem>
+                    <DropdownMenuRadioItem value="asc">
+                      <ArrowUp className="w-3.5 h-3.5 text-gray-500" />
+                      {sortOrderLabels(sortBy).asc}
+                    </DropdownMenuRadioItem>
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
             {/* Refresh — right corner of the pill row, as on AI Interviews. */}
-            {onRefresh && (
+            {(
               <Button
                 variant="secondary"
                 size="sm"
@@ -1697,7 +1906,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 title="Refresh"
                 aria-label="Refresh"
                 icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />}
-                className="flex-shrink-0 !h-9 sm:ml-auto"
+                className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
               >
                 <span className="hidden 2xl:inline">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
               </Button>
@@ -1707,7 +1916,9 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
 
         {/* Jobs Grid/List — `jobsListRef` is the phone scroll target. */}
         <div ref={jobsListRef} aria-hidden="true" />
-        {currentJobs.length > 0 ? (
+        {paged.loading && currentJobs.length === 0 ? (
+          <JobsListLoading />
+        ) : currentJobs.length > 0 ? (
             // List View
             <div className="space-y-3">
               {currentJobs.map(job => {
@@ -1737,17 +1948,11 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                    overall but only ONE of them matching the active tab (e.g.
                    v1 Published / v2 Draft, viewed on the Published tab) — the
                    card already shows that one version in full, so expanding it
-                   would just repeat the same row. Counted from siblings that
-                   match the tab's status, not the whole lineage. */
-                const lineageSiblings = allVersionGroups.get(versionKey) ?? [job];
+                   would just repeat the same row. Counted server-side (GET /jd?view=jobs → versions_meta):
+                   distinct versions in the lineage, or with the tab's status. */
                 const hasVersionHistory = statusFilter === 'all'
-                  ? (job.versionNumber ?? 1) > 1 ||
-                    new Set(lineageSiblings.map((sibling) => sibling.versionNumber ?? 1)).size > 1
-                  : new Set(
-                      lineageSiblings
-                        .filter((sibling) => matchesStatusFilter(sibling, statusFilter))
-                        .map((sibling) => sibling.versionNumber ?? 1),
-                    ).size > 1;
+                  ? (job.versionNumber ?? 1) > 1 || (job.versionCount ?? 1) > 1
+                  : (job.tabVersionCount ?? 1) > 1;
 
                 /* Counts for the colored badge stack beside the row actions.
                    assessed/interviewed come from the candidate-counts hook (null
@@ -1758,12 +1963,274 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 const interviewedCount = candidateCounts ? candidateCounts[job.id]?.interviewed ?? 0 : null;
                 const hasCountBadges = applicantsCount != null || assessedCount != null || interviewedCount != null;
 
+                /* Edit / View / More - built once and placed in both layouts below
+                   (the phone/tablet card and the desktop row), so the two can
+                   never drift apart. Only one layout is visible at a time. */
+                const rowActions = (
+                  <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
+                    {/* Edit Button - icon only. Shown on every row except
+                        Archived/Disabled ones — those are already retired,
+                        so there is nothing on them to edit in place.
+                        Greyed out (not hidden) once a lineage has reached
+                        5 versions — that is the cap on how many versions
+                        one JD can have. */}
+                    {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
+                      const atMaxVersions = (job.versionNumber ?? 1) >= 5;
+                      return (
+                        <Button
+                          variant="secondary"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (atMaxVersions) {
+                              toast.error('This JD has reached the maximum of 5 versions and cannot be edited further.');
+                              return;
+                            }
+                            if (!canUpdateJd) {
+                              // Locked: tooltip only (no toast).
+                              return;
+                            }
+                            onEditJob(job);
+                          }}
+                          aria-disabled={!canUpdateJd || atMaxVersions}
+                          className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
+                          aria-label="Edit"
+                          title={
+                            atMaxVersions
+                              ? 'Maximum of 5 versions reached'
+                              : !canUpdateJd
+                                ? 'You do not have permission to edit job descriptions'
+                                : 'Edit'
+                          }
+                        >
+                          <Edit className="w-3.5 h-3.5" />
+                        </Button>
+                      );
+                    })()}
+
+                    {/* View Button - icon only. Shown on every row for a
+                        consistent action set. */}
+                    <Button
+                      variant="secondary"
+                      onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
+                      aria-disabled={draftLocked || undefined}
+                      className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+                      aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </Button>
+
+                    {/* Three-dot Menu */}
+                    <div className="relative">
+                      {/* Same Button (secondary, h-9 w-9) as Edit and View, so
+                          all three row actions share one border, background,
+                          icon color, hover state and shape. */}
+                      <Button
+                        variant="secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown === job.id ? null : job.id);
+                        }}
+                        className="!h-7 !w-7 !p-0 rounded-md"
+                        aria-label="More actions"
+                        title="More actions"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5" />
+                      </Button>
+                      {activeDropdown === job.id && (
+                        <div ref={centerMenuOnPhoneRef} className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
+                          {/* View Applicants - Hide for Draft */}
+                          {job.status.toLowerCase() !== 'draft' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                (onViewApplicants || onViewJob)(job);
+                                setActiveDropdown(null);
+                              }}
+                              className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                            >
+                              <Users className="w-4 h-4 text-menu-icon-secondary" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
+                            </button>
+                          )}
+                          {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
+                          {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onAIMatchDisabled) {
+                                  // Permission lock: tooltip only. Plan lock keeps its toast.
+                                  if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
+                                  return;
+                                }
+                                setActiveDropdown(null);
+                                onAIMatch(job);
+                              }}
+                              aria-disabled={onAIMatchDisabled}
+                              title={onAIMatchDisabled ? onAIMatchDisabledReason : ''}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                            >
+                              <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
+                            </button>
+                          )}
+                          {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onScoreResumesDisabled) {
+                                  // Permission lock: tooltip only. Plan lock keeps its toast.
+                                  if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
+                                  return;
+                                }
+                                onScoreResumes(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={onScoreResumesDisabled}
+                              title={onScoreResumesDisabled ? onScoreResumesDisabledReason : ''}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                            >
+                              <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
+                            </button>
+                          )}
+                          {/* Create / Send — Published and Republished jobs. */}
+                          {job.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                            const denied = createSendDenied(kind);
+                            return (
+                              <button
+                                key={kind}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (denied) {
+                                    // Permission lock: tooltip only. Plan lock keeps its toast.
+                                    if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                    return;
+                                  }
+                                  setActiveDropdown(null);
+                                  openCreateSend(job, kind);
+                                }}
+                                aria-disabled={!!denied}
+                                title={denied ?? ''}
+                                className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${denied ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
+                              >
+                                <Icon className={`w-4 h-4 ${denied ? 'text-gray-400' : tone}`} />
+                                <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                              </button>
+                            );
+                          })}
+                          {/* Disable Job for Published */}
+                          {job.status === 'Published' && onDisableJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canDisableJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                requestDisableJob(job);
+                              }}
+                              aria-disabled={!canDisableJd}
+                              title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDisableJd ? 'text-orange-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Ban className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
+                            </button>
+                          )}
+                          {/* Re-enable JD for Disabled */}
+                          {job.status === 'Disabled' && onRepublishJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canUpdateJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onRepublishJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canUpdateJd}
+                              title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canUpdateJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
+                            </button>
+                          )}
+                          {/* Archive Job — not offered on a Draft: there is
+                              nothing published to retire, Delete already
+                              covers removing a draft outright. */}
+                          {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canArchiveJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onArchiveJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canArchiveJd}
+                              title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Archive className={`w-4 h-4 ${canArchiveJd ? 'text-menu-icon-archive' : 'text-gray-400'}`} />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
+                            </button>
+                          )}
+                          {/* Unarchive Job */}
+                          {job.status === 'Archived' && onUnarchiveJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canArchiveJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onUnarchiveJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canArchiveJd}
+                              title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
+                            </button>
+                          )}
+                          {/* Delete Job */}
+                          {onDeleteJob && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canDeleteJd) {
+                                  // Locked: tooltip only (no toast).
+                                  return;
+                                }
+                                onDeleteJob(job);
+                                setActiveDropdown(null);
+                              }}
+                              aria-disabled={!canDeleteJd}
+                              title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
+                              className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDeleteJd ? 'text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+
                 return (
                   <div
                     key={job.id}
                     aria-disabled={draftLocked || undefined}
                     title={draftLocked ? 'You do not have permission to edit draft job descriptions' : undefined}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 ${draftLocked ? 'cursor-not-allowed' : 'cursor-pointer'} p-3 xs:p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => {
                       if (draftLocked) return;
                       if (job.status.toLowerCase() === 'draft' && onEditJob) onEditJob(job);
@@ -1773,7 +2240,113 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     {/* flex-wrap: checkbox + job info (+ the counts column from
                         md) share the first row, so the checkbox sits on the Job
                         ID / Job Name line; the footer wraps under at full width. */}
-                    <div className="flex flex-wrap items-start gap-3 md:gap-x-4">
+                    {/* ── Phones and tablets (below lg): the JD card ─────────────────────
+                        Dense flow, no column gaps:
+                        1. checkbox · JD ID · source · status
+                        2. job name (one line, "…") · version · Edit / View / ⋮ on the right
+                        3. experience · industry · type · work mode (flowing)
+                        4. Created | Posted / By | Last Updated — two aligned columns
+                        5. divider, then Scored / Assessed / Interviewed — three tiles */}
+                    <div className="lg:hidden">
+                      <div className="tf-jd-card-top">
+                        {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
+                        {(() => {
+                          const method = getCreationMethodConfig(job.creation_method);
+                          const shown = getDisplayStatus(job.status, job.currentVersion);
+                          const tone = getStatusConfig(shown);
+                          return (
+                            <>
+                              <span className={`tf-jd-card-pill ${method.bg} ${method.text}`}>
+                                <span className={`tf-jd-card-dot ${method.dot}`} />
+                                {method.label}
+                              </span>
+                              <span className={`tf-jd-card-pill ${tone.bg} ${tone.text}`}>
+                                <span className={`tf-jd-card-dot ${tone.dot}`} />
+                                {shown}
+                              </span>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      <div className="tf-jd-card-head">
+                        <div className="tf-jd-card-name">
+                          {/* Checkbox beside the name (same as every module's JD-style card). */}
+                          <div className="tf-jdv-name-line">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                              title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              className="tf-jdv-select"
+                            >
+                              {selectedJobs.has(job.id)
+                                ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                                : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
+                            </button>
+                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          </div>
+                          {job.versionNumber && job.versionNumber >= 1 ? (
+                            hasVersionHistory ? (
+                              /* Version dropdown: opens / closes this job's version history. */
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleVersions(versionKey, job.id); }}
+                                aria-expanded={versionsExpanded}
+                                title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                                className={`tf-jd-card-version tf-jd-card-version-btn ${versionsExpanded ? 'tf-jd-card-version-open' : ''}`}
+                              >
+                                <span className="tf-jd-card-dot bg-gray-400" />
+                                v{job.versionNumber}
+                                <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                              </button>
+                            ) : (
+                              <span className="tf-jd-card-version">
+                                <span className="tf-jd-card-dot bg-gray-400" />
+                                v{job.versionNumber}
+                              </span>
+                            )
+                          ) : null}
+                        </div>
+                        <div className="tf-jd-card-actions">{rowActions}</div>
+                      </div>
+
+                      <div className="tf-jd-card-meta">
+                        <div className="tf-jd-card-info">
+                          <JobOpeningPrimaryItems job={job} hideEmpty breakBeforeType />
+                        </div>
+                        <JobOpeningDatesGrid job={job} />
+                      </div>
+
+                      {hasCountBadges && (
+                        <div className="tf-jd-card-counts">
+                          {applicantsCount != null && (
+                            <span className="tf-count-tile bg-info-subtle text-info-strong">
+                              <Users className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{applicantsCount}</span>
+                              <span>Scored</span>
+                            </span>
+                          )}
+                          {assessedCount != null && (
+                            <span className="tf-count-tile bg-success-subtle text-success-strong">
+                              <ClipboardCheck className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{assessedCount}</span>
+                              <span>Assessed</span>
+                            </span>
+                          )}
+                          {interviewedCount != null && (
+                            <span className="tf-count-tile bg-warning-subtle text-warning-strong">
+                              <Video className="tf-count-tile-icon" />
+                              <span className="tf-count-tile-num">{interviewedCount}</span>
+                              <span>Interviewed</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                    </div>
+
+                    {/* ── Laptop / desktop (lg and up): the row layout, unchanged ── */}
+                    <div className="hidden lg:flex flex-wrap items-start gap-3 md:gap-x-4">
                       {/* Individual Select — just the checkbox (the Briefcase
                           job icon that used to sit beside it was removed).
                           h-5 / sm:h-6 give the checkbox the title row's own
@@ -1824,19 +2397,19 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       <div className="flex basis-full md:basis-auto flex-nowrap gap-1 md:flex-col md:items-stretch md:gap-1.5 flex-shrink-0">
                         {applicantsCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-info-subtle text-info-strong">
-                            <Users className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Users className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {applicantsCount} Scored
                           </span>
                         )}
                         {assessedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-success-subtle text-success-strong">
-                            <ClipboardCheck className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <ClipboardCheck className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {assessedCount} Assessed
                           </span>
                         )}
                         {interviewedCount != null && (
                           <span className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 py-0.5 rounded-md text-xs whitespace-nowrap bg-warning-subtle text-warning-strong">
-                            <Video className="max-[359px]:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
+                            <Video className="max-2xs:hidden w-3.5 h-3.5 md:w-4 md:h-4 flex-shrink-0" />
                             {interviewedCount} Interviewed
                           </span>
                         )}
@@ -1855,237 +2428,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                       {/* From lg (laptop / desktop) View Versions moves beside
                           Edit and takes over the ml-auto that pushes the pair
                           right; below lg the footer is unchanged. */}
-                      <div className={`order-last ml-auto flex flex-nowrap items-center gap-2 ${hasVersionHistory ? 'lg:ml-0' : ''}`}>
-                        {/* Edit Button - icon only. Shown on every row except
-                            Archived/Disabled ones — those are already retired,
-                            so there is nothing on them to edit in place.
-                            Greyed out (not hidden) once a lineage has reached
-                            5 versions — that is the cap on how many versions
-                            one JD can have. */}
-                        {onEditJob && job.status !== 'Archived' && job.status !== 'Disabled' && (() => {
-                          const atMaxVersions = (job.versionNumber ?? 1) >= 5;
-                          return (
-                            <Button
-                              variant="secondary"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (atMaxVersions) {
-                                  toast.error('This JD has reached the maximum of 5 versions and cannot be edited further.');
-                                  return;
-                                }
-                                if (!canUpdateJd) {
-                                  // Locked: tooltip only (no toast).
-                                  return;
-                                }
-                                onEditJob(job);
-                              }}
-                              aria-disabled={!canUpdateJd || atMaxVersions}
-                              className={`!h-7 !w-7 !p-0 rounded-md ${!canUpdateJd || atMaxVersions ? 'opacity-50 cursor-not-allowed' : ''}`}
-                              aria-label="Edit"
-                              title={
-                                atMaxVersions
-                                  ? 'Maximum of 5 versions reached'
-                                  : !canUpdateJd
-                                    ? 'You do not have permission to edit job descriptions'
-                                    : 'Edit'
-                              }
-                            >
-                              <Edit className="w-3.5 h-3.5" />
-                            </Button>
-                          );
-                        })()}
-
-                        {/* View Button - icon only. Shown on every row for a
-                            consistent action set. */}
-                        <Button
-                          variant="secondary"
-                          onClick={(e) => { e.stopPropagation(); if (!draftLocked) onViewJob(job); }}
-                          aria-disabled={draftLocked || undefined}
-                          className={`!h-7 !w-7 !p-0 rounded-md ${draftLocked ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
-                          aria-label="View" title={draftLocked ? 'You do not have permission to edit draft job descriptions' : 'View'}
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </Button>
-
-                        {/* Three-dot Menu */}
-                        <div className="relative">
-                          {/* Same Button (secondary, h-9 w-9) as Edit and View, so
-                              all three row actions share one border, background,
-                              icon color, hover state and shape. */}
-                          <Button
-                            variant="secondary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                            }}
-                            className="!h-7 !w-7 !p-0 rounded-md"
-                            aria-label="More actions"
-                            title="More actions"
-                          >
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          </Button>
-                          {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
-                              {/* View Applicants - Hide for Draft */}
-                              {job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    (onViewApplicants || onViewJob)(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
-                                >
-                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Scored</span>
-                                </button>
-                              )}
-                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
-                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onAIMatchDisabled) {
-                                      // Permission lock: tooltip only. Plan lock keeps its toast.
-                                      if (onAIMatchDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onAIMatchDisabledReason);
-                                      return;
-                                    }
-                                    setActiveDropdown(null);
-                                    onAIMatch(job);
-                                  }}
-                                  aria-disabled={onAIMatchDisabled}
-                                  title={onAIMatchDisabled ? onAIMatchDisabledReason : ''}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
-                                >
-                                  <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
-                                </button>
-                              )}
-                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (onScoreResumesDisabled) {
-                                      // Permission lock: tooltip only. Plan lock keeps its toast.
-                                      if (onScoreResumesDisabledReason === PLAN_LOCKED_MESSAGE) toast.error(onScoreResumesDisabledReason);
-                                      return;
-                                    }
-                                    onScoreResumes(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={onScoreResumesDisabled}
-                                  title={onScoreResumesDisabled ? onScoreResumesDisabledReason : ''}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
-                                >
-                                  <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-                                </button>
-                              )}
-                              {/* Disable Job for Published */}
-                              {job.status === 'Published' && onDisableJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDisableJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    requestDisableJob(job);
-                                  }}
-                                  aria-disabled={!canDisableJd}
-                                  title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDisableJd ? 'text-orange-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Ban className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
-                                </button>
-                              )}
-                              {/* Re-enable JD for Disabled */}
-                              {job.status === 'Disabled' && onRepublishJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canUpdateJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onRepublishJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canUpdateJd}
-                                  title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canUpdateJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
-                                </button>
-                              )}
-                              {/* Archive Job — not offered on a Draft: there is
-                                  nothing published to retire, Delete already
-                                  covers removing a draft outright. */}
-                              {job.status !== 'Archived' && job.status !== 'Draft' && onArchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canArchiveJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onArchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canArchiveJd}
-                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Archive className={`w-4 h-4 ${canArchiveJd ? 'text-menu-icon-archive' : 'text-gray-400'}`} />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
-                                </button>
-                              )}
-                              {/* Unarchive Job */}
-                              {job.status === 'Archived' && onUnarchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canArchiveJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onUnarchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canArchiveJd}
-                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
-                                </button>
-                              )}
-                              {/* Delete Job */}
-                              {onDeleteJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (!canDeleteJd) {
-                                      // Locked: tooltip only (no toast).
-                                      return;
-                                    }
-                                    onDeleteJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  aria-disabled={!canDeleteJd}
-                                  title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
-                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDeleteJd ? 'text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                      {rowActions}
                       </div>
                         {/* View Versions — first in the footer, i.e. the card's
                             bottom-left corner, level with the icons. Shown
@@ -2232,6 +2575,30 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}
+                                {/* Create / Send — same gates as the latest-version menu */}
+                                {versionJob.status === 'Published' && CREATE_SEND_ITEMS.map(({ kind, label, Icon, tone }) => {
+                                  const denied = createSendDenied(kind);
+                                  return (
+                                    <DropdownMenuItem
+                                      key={kind}
+                                      onSelect={(e) => {
+                                        if (denied) {
+                                          e.preventDefault();
+                                          // Permission lock: tooltip only. Plan lock keeps its toast.
+                                          if (denied === PLAN_LOCKED_MESSAGE) toast.error(denied);
+                                          return;
+                                        }
+                                        openCreateSend(versionJob, kind);
+                                      }}
+                                      aria-disabled={!!denied}
+                                      title={denied ?? undefined}
+                                      className={denied ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
+                                    >
+                                      <Icon className={`w-4 h-4 ${tone}`} />
+                                      <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
+                                    </DropdownMenuItem>
+                                  );
+                                })}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
                                   <DropdownMenuItem
@@ -2340,7 +2707,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
             </div>
         ) : (
           // Empty State
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+          <div className="tf-card-soft p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
               <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                 {searchQuery || activeFiltersCount > 0 ? (
@@ -2349,10 +2716,10 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                   <Briefcase className="w-5 h-5 text-brand-blue" />
                 )}
               </div>
-              <h3 className="tf-section-title mb-2">
+              <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">
                 {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
               </h3>
-              <p className="tf-card-desc mb-4 leading-relaxed">
+              <p className="tf-body-secondary mb-4 leading-relaxed">
                 {searchQuery || activeFiltersCount > 0
                   ? 'Try changing your search or filters'
                   : 'Create your first job opening to get started'
@@ -2364,7 +2731,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 </Button>
               ) : (
                 <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
-                  Create Job
+                  Create New Job
                 </Button>
               )}
             </div>
@@ -2372,13 +2739,13 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
         )}
 
         {/* Pagination Controls */}
-        {sortedJobs.length > 5 && (
-          <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mt-4">
+        {totalMatching > 5 && (
+          <div className="tf-card p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
-                  <span className="tf-card-desc">Show:</span>
+                  <span className="tf-body-secondary">Show:</span>
                   <FilterSelect
                     value={String(itemsPerPage)}
                     onChange={(v) => handleItemsPerPageChange(Number(v))}
@@ -2386,13 +2753,13 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     className="w-auto px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300"
                     options={[5, 10, 20, 40, 100].map((n) => ({ value: String(n), label: String(n) }))}
                   />
-                  <span className="tf-card-desc">per page</span>
+                  <span className="tf-body-secondary">per page</span>
                 </div>
 
                 <div className="hidden sm:block h-6 w-px bg-gray-300" />
 
-                <span className="tf-card-desc">
-                  Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, sortedJobs.length)}</span> of <span className="font-medium text-gray-900">{sortedJobs.length}</span> jobs
+                <span className="tf-body-secondary">
+                  Showing <span className="font-medium text-gray-900">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium text-gray-900">{Math.min(currentPage * itemsPerPage, totalMatching)}</span> of <span className="font-medium text-gray-900">{totalMatching}</span> jobs
                 </span>
               </div>
 
@@ -2400,7 +2767,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
               <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
                 {/* Go to page */}
                 <div className="flex items-center gap-1.5">
-                  <span className="tf-card-desc whitespace-nowrap">Go to</span>
+                  <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -2415,7 +2782,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                     }}
                     onBlur={commitGoToPage}
                     aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                    className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
                   />
                 </div>
 
@@ -2423,14 +2790,14 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
                 {/* Current / total */}
-                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
                 </span>
 
@@ -2438,7 +2805,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-8 h-8 sm:w-9 sm:h-9 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -2503,7 +2870,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full shadow-2xl shadow-brand-blue/10 max-h-[calc(100dvh-2rem)] flex flex-col">
             {/* Header */}
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between shrink-0">
-              <h3 className="tf-section-title">Insufficient Units</h3>
+              <h3 className="tf-section-title sm:text-lg tracking-tight">Insufficient Units</h3>
               <button
                 onClick={() => setShowQuotaModal(false)}
                 className="text-gray-400 hover:text-gray-600 p-1"
@@ -2519,7 +2886,7 @@ export default function JobsListing({ jobs, jobsFullyLoaded = true, onCreateNew,
                 <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                   <Briefcase className="w-5 h-5 text-destructive" />
                 </div>
-                <p className="tf-card-desc">
+                <p className="tf-body-secondary">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
                 </p>
               </div>

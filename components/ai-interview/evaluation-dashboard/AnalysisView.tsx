@@ -30,32 +30,32 @@ export function AnalysisView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-8">
       {/* Coverage summary cards */}
-      <div className="grid grid-cols-4 gap-6">
-        <div className="p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
+      <div className="tf-grid-stats lg:gap-6">
+        <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-br from-blue-50 to-blue-100/50 border border-blue-200">
           <div className="text-xs text-blue-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Questions Asked</div>
-          <div className="text-4xl text-blue-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{data.questionsAsked}</div>
+          <div className="text-3xl sm:text-4xl text-blue-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{data.questionsAsked}</div>
           <div className="text-xs text-blue-600">assessment coverage</div>
         </div>
-        <div className="p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
+        <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100/50 border border-emerald-200">
           <div className="text-xs text-emerald-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Skills Assessed</div>
-          <div className="text-4xl text-emerald-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{covered.length}/{allSkills.length}</div>
+          <div className="text-3xl sm:text-4xl text-emerald-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{covered.length}/{allSkills.length}</div>
           <div className="text-xs text-emerald-600">{Math.round(coveragePct)}% coverage</div>
         </div>
-        <div className="p-6 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
+        <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-br from-purple-50 to-purple-100/50 border border-purple-200">
           <div className="text-xs text-purple-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Avg Performance</div>
-          <div className="text-4xl text-purple-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(avgCovered)}</div>
+          <div className="text-3xl sm:text-4xl text-purple-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(avgCovered)}</div>
           <div className="text-xs text-purple-600">on assessed skills</div>
         </div>
-        <div className="p-6 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
+        <div className="p-4 sm:p-6 rounded-xl bg-gradient-to-br from-amber-50 to-amber-100/50 border border-amber-200">
           <div className="text-xs text-amber-700 uppercase tracking-wider mb-2 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>Final Score</div>
-          <div className="text-4xl text-amber-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.final)}</div>
+          <div className="text-3xl sm:text-4xl text-amber-900 mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(data.scores.final)}</div>
           <div className="text-xs text-amber-600">out of 100</div>
         </div>
       </div>
 
       {/* Category Coverage */}
-      <div className="grid grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+      <div className="tf-grid-2">
+        <div className="tf-card-soft p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center"><Target size={20} className="text-emerald-600" /></div>
             <div>
@@ -77,7 +77,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
           </div>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 shadow-sm">
+        <div className="tf-card-soft p-4 sm:p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center"><TrendingUp size={20} className="text-amber-600" /></div>
             <div>
@@ -104,7 +104,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
       {data.mustHaveClusters.length > 0 && (
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Must-Have Skills Analysis</h2>
+            <h2 className="text-lg sm:text-2xl font-bold">Must-Have Skills Analysis</h2>
             <p className="tf-body-muted">Core competencies • {Math.round(mthPct)}% assessed</p>
           </div>
           <div className="space-y-4">
@@ -118,7 +118,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
       {data.niceToHaveClusters.length > 0 && (
         <div>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl font-bold">Nice-to-Have Skills Analysis</h2>
+            <h2 className="text-lg sm:text-2xl font-bold">Nice-to-Have Skills Analysis</h2>
             <p className="tf-body-muted">Additional competencies • {Math.round(nthPct)}% assessed</p>
           </div>
           <div className="space-y-4">
@@ -146,7 +146,7 @@ export function AnalysisView({ data }: { data: DashboardData }) {
           <TimedEvaluationBreakdown data={data} />
         </>
       ) : allClusters.length > 0 && (
-        <div className="grid grid-cols-2 gap-8">
+        <div className="tf-grid-2 md:gap-8">
           <SkillRadarChart mustHaveClusters={data.mustHaveClusters} niceToHaveClusters={data.niceToHaveClusters} />
           <EvaluationBreakdown mustHaveScore={data.scores.mustHave} niceToHaveScore={data.scores.niceToHave} hrScore={data.scores.hr} finalScore={data.scores.final} mustHaveClusters={data.mustHaveClusters} niceToHaveClusters={data.niceToHaveClusters} weights={data.weights} sectionsPresent={data.sectionsPresent} />
         </div>
@@ -154,10 +154,10 @@ export function AnalysisView({ data }: { data: DashboardData }) {
 
       {/* Skills Coverage Status */}
       {allSkills.length > 0 && (
-        <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-          <h2 className="text-2xl font-bold mb-6">Skills Coverage Status</h2>
+        <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
+          <h2 className="text-lg sm:text-2xl font-bold mb-6">Skills Coverage Status</h2>
           <p className="tf-body-muted mb-6">Which skills were assessed during the interview</p>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="tf-grid-2">
             {allSkills.map((skill, idx) => {
               const isCovered = skill.score > 0 || coveredSkillNames.has(skill.name.toLowerCase());
               return (

@@ -71,7 +71,7 @@ export default function AITalentMatchConfirmModal({
           </div>
 
           {/* Description */}
-          <p className="text-center text-sm sm:text-base text-gray-600 dark:text-slate-400 leading-relaxed mb-5">
+          <p className="text-center tf-body-secondary sm:text-base leading-relaxed mb-5">
             <span className="font-semibold text-brand-blue">AI Talent Match</span> will scan your resume database
             against the job description and rank the closest candidates.
           </p>
@@ -84,17 +84,17 @@ export default function AITalentMatchConfirmModal({
             {job ? (
               <div className="flex flex-wrap items-center gap-2 min-w-0">
                 {job.job_id && <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>}
-                <span className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate min-w-0" title={job.title}>
+                <span className="tf-row-name truncate min-w-0" title={job.title}>
                   {job.title}
                 </span>
                 {/* The Job Openings card's version badge. */}
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+                <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
                   <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
                   v{job.versionNumber ?? 1}
                 </span>
               </div>
             ) : (
-              <span className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">{jobTitle}</span>
+              <span className="tf-row-name truncate">{jobTitle}</span>
             )}
           </div>
         </div>

@@ -222,14 +222,14 @@ export default function ExportFormatModal({
                   {allPicked ? 'Clear all' : 'Select all'}
                 </button>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+              <div className="tf-grid-2">
                 {columns!.map(col => (
                   <label key={col} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                     <input
                       type="checkbox"
                       checked={!!picks[col]}
                       onChange={() => updatePicks({ ...picks, [col]: !picks[col] })}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                      className="tf-checkbox focus:ring-blue-500"
                     />
                     <span className="truncate">{col}</span>
                   </label>
@@ -244,7 +244,7 @@ export default function ExportFormatModal({
           {!pickable && columns && columns.length > 0 && (
             <div className="mt-4 p-4 bg-blue-50/60 dark:bg-blue-500/10 rounded-xl flex items-start gap-3">
               <Info className="w-4 h-4 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-gray-600 dark:text-slate-300">
+              <p className="tf-body-secondary">
                 <span className="block font-bold text-blue-700 dark:text-blue-300 mb-0.5">Columns included</span>
                 {columns.join(', ')}
               </p>

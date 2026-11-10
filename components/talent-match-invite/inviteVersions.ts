@@ -95,7 +95,7 @@ export interface InviteVersion {
    *  `findLiveConfigForJd` maps it to (see `loadInterviewVersions`). */
   mapped?: boolean;
   jdId: string;
-  /** Assessments: the job version (V1, V2…) of `jdId`, as the API states it. */
+  /** The job version (V1, V2…) of `jdId`, as the API states it. */
   jobVersion?: number;
   /** Only Active versions can take an invite. */
   sendable: boolean;
@@ -225,6 +225,7 @@ export async function loadInterviewVersions(jdId: string): Promise<InviteVersion
         config: c,
         mapped: !!live && c.id === live.id,
         jdId: c.jd_id as string,
+        jobVersion: typeof c.jd_version === 'number' ? c.jd_version : undefined,
         sendable: status === 'active' && !jdActionLockReason(c.jd_status),
       };
     })

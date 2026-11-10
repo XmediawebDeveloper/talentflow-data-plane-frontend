@@ -231,6 +231,8 @@ export default function JobOpeningPickerList({
      The "View Versions" table below is untouched: it stays the place where a
      version is PICKED. This is the place a version is READ. */
   const [versionHistoryFor, setVersionHistoryFor] = useState<Job | null>(null);
+  /* Set by a version row's eye, so the popup opens on that version. */
+  const [versionHistoryVersion, setVersionHistoryVersion] = useState<number | null>(null);
 
   /* Every job is listed; the search narrows it. Matching only `job.title`
      meant a JD number typed in full returned nothing — the number lives on
@@ -387,7 +389,7 @@ export default function JobOpeningPickerList({
             // rounded-lg / brand-blue focus + hover that ListToolbar's search,
             // SearchableSelect and DateField use on the Job Openings page, so
             // this picker's search reads as the same control family.
-            className="w-full h-9 pl-10 pr-4 text-sm text-black dark:text-slate-100 placeholder:text-gray-400 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg transition-colors hover:border-brand-blue/40 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+            className="tf-input pl-10 pr-4"
           />
         </div>
       </div>
@@ -422,7 +424,7 @@ export default function JobOpeningPickerList({
                   shown as a count for the same reason every other selection
                   UI in the app states it as a number rather than just "a job
                   is selected". */}
-              <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-full whitespace-nowrap">
+              <span className="tf-badge text-brand-blue bg-brand-blue/10">
                 1 selected
               </span>
               <button
@@ -439,7 +441,7 @@ export default function JobOpeningPickerList({
             isn't on screen — otherwise a selected-but-elsewhere job reads as
             no selection at all. */}
         {selection && !selectionOnThisPage && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 text-xs text-gray-700 dark:text-slate-300">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/5 px-3 py-2 tf-meta">
             <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
             <span>
               Selected: <span className="font-medium">
@@ -556,7 +558,7 @@ export default function JobOpeningPickerList({
                   aria-disabled={!selectable}
                   className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
                     blockedByOtherPick || inactiveJob
-                      ? 'bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 opacity-60'
+                      ? `bg-gray-50 dark:bg-slate-800/40 border-gray-200 dark:border-slate-700 ${blockedByOtherPick ? 'opacity-60' : ''}`
                       : lineageSelected
                         ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
                         : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
@@ -565,6 +567,10 @@ export default function JobOpeningPickerList({
                   {/* flex-wrap below sm: radio + job info share the first row,
                       level with the Job ID / Job Name line; the buttons wrap
                       under them at full width. */}
+                  {/* An archived / disabled job fades only its radio and
+                      details, not the card: the eye and the expanded Version
+                      History (whose Published versions stay pickable) keep
+                      their normal colours. */}
                   <div className="flex flex-wrap sm:flex-nowrap items-start gap-3 sm:gap-4">
                     {/* A radio, because exactly one job is picked at a time.
                         Wrapped in its own label rather than the whole card:
@@ -572,7 +578,7 @@ export default function JobOpeningPickerList({
                         and a label around those would swallow their
                         clicks. */}
                     <label
-                      className={`flex items-center h-5 sm:h-auto sm:pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                      className={`flex items-center h-5 sm:h-auto sm:pt-1 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed'} ${inactiveJob && !blockedByOtherPick ? 'opacity-60' : ''}`}
                       title={selectable ? `Select the latest version (v${job.versionNumber ?? 1})` : reason}
                     >
                       <input
@@ -595,7 +601,7 @@ export default function JobOpeningPickerList({
                       <span className="sr-only">Select {job.title}</span>
                     </label>
 
-                    <div className="flex-1 min-w-0">
+                    <div className={`flex-1 min-w-0 ${inactiveJob && !blockedByOtherPick ? 'opacity-60' : ''}`}>
                       {/* The job opening exactly as the Job Openings list
                           renders it — same fields in the same places.
 
@@ -691,6 +697,7 @@ export default function JobOpeningPickerList({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
+                          setVersionHistoryVersion(null);
                           setVersionHistoryFor(job);
                         }}
                         className="h-9 w-9 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
@@ -731,11 +738,27 @@ export default function JobOpeningPickerList({
                          hover scale comes off — on a selectable row that
                          little movement reads as the control twitching. */
                       staticRows
-                      /* No renderAction, so the panel drops its Action
-                         column here — nothing here acts on a version. What
-                         it gets instead is a Select radio per row, sharing
-                         the job rows' radio group so picking a version
-                         releases whatever else was chosen. */
+                      /* Action column: the card's Eye on every version
+                         row, opening the popup on that row's version (as
+                         the AI Interview / Assessment pickers do). Plus a
+                         Select radio per row, sharing the job rows' radio
+                         group so picking a version releases whatever else
+                         was chosen. */
+                      renderAction={(versionJob) => (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setVersionHistoryVersion(versionJob.versionNumber ?? 1);
+                            setVersionHistoryFor(versionJob);
+                          }}
+                          className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                          aria-label={`View v${versionJob.versionNumber ?? 1} details`}
+                          title={`View v${versionJob.versionNumber ?? 1} details`}
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                       onSelectVersion={(versionJob) => pickVersion(versionJob, versionKey)}
                       selectedVersionId={selectedJobId}
                       /* A card that is inert because another job is picked
@@ -829,9 +852,10 @@ export default function JobOpeningPickerList({
     {versionHistoryFor && (
       <JDVersionHistoryModal
         isOpen
-        onClose={() => setVersionHistoryFor(null)}
+        onClose={() => { setVersionHistoryFor(null); setVersionHistoryVersion(null); }}
         jdId={versionHistoryFor.id}
         jdTitle={versionHistoryFor.title}
+        initialVersionNumber={versionHistoryVersion ?? undefined}
       />
     )}
     </>

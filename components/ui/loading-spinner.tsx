@@ -34,7 +34,7 @@ export function LoadingSpinnerWithText({ text = 'Loading...' }: { text?: string 
   return (
     <div className="flex items-center justify-center gap-3 py-8">
       <LoadingSpinner size="md" color="blue" />
-      <span className="text-sm text-gray-600">{text}</span>
+      <span className="tf-body-secondary">{text}</span>
     </div>
   );
 }
@@ -103,8 +103,8 @@ export function ProgressLoader({ progress = 0, label }: { progress?: number; lab
     <div className="w-full">
       {label && (
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-gray-600">{label}</span>
-          <span className="text-sm font-medium text-gray-900">{Math.round(progress)}%</span>
+          <span className="tf-body-secondary">{label}</span>
+          <span className="tf-row-name">{Math.round(progress)}%</span>
         </div>
       )}
       <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">

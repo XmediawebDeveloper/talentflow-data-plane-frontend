@@ -528,8 +528,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               whole of this block. */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
-              <h2 className="tf-section-title">Activity Log</h2>
-              <p className="tf-card-desc mt-0.5 sm:mt-1">
+              <h2 className="tf-section-title sm:text-lg tracking-tight">Activity Log</h2>
+              <p className="tf-body-secondary mt-0.5 sm:mt-1">
                 Complete activity log for assessments and candidates
               </p>
             </div>
@@ -588,7 +588,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             }
             filterPanel={
             <div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <div className="tf-grid-4">
                 <div>
                   <label htmlFor="audit-date-from" className="block tf-label mb-1.5">Date From</label>
                   <DateField
@@ -597,7 +597,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     value={search.draftFilters.dateFrom}
                     max={search.draftFilters.dateTo || undefined}
                     onChange={(v) => search.setDraftFilter('dateFrom', v)}
-                    className="min-w-0 h-[38px]"
+                    className="min-w-0 h-9"
                   />
                 </div>
                 <div>
@@ -608,7 +608,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     value={search.draftFilters.dateTo}
                     min={search.draftFilters.dateFrom || undefined}
                     onChange={(v) => search.setDraftFilter('dateTo', v)}
-                    className="min-w-0 h-[38px]"
+                    className="min-w-0 h-9"
                   />
                 </div>
               </div>
@@ -645,7 +645,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               {Array.from({ length: 6 }).map((_, i) => (
                 <div
                   key={i}
-                  className="relative flex items-start gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-lg border border-gray-100 bg-white"
+                  className="tf-panel relative flex items-start gap-2.5 sm:gap-4 p-3 sm:p-4"
                 >
                   {/* Icon */}
                   <Skeleton className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full" />
@@ -677,8 +677,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                rather than claiming the tenant has no activity. */
             <div className="py-10 sm:py-14 text-center">
               <AlertTriangle className="w-8 h-8 text-brand-orange-deep mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-900 mb-1">Could not load the activity log</p>
-              <p className="tf-card-desc mb-4">{loadError}</p>
+              <p className="tf-row-name mb-1">Could not load the activity log</p>
+              <p className="tf-body-secondary mb-4">{loadError}</p>
               <button
                 type="button"
                 onClick={() => loadAuditTrail()}
@@ -724,7 +724,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                 /* Card view — the AI Interviews Activity Logs card. Clicking a
                    card opens its Details inside it, the same toggle the
                    timeline row uses. */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 pt-2">
+                <div className="tf-grid-4 pt-2">
                   {activities.map((activity, index) => {
                     const colors = ACTIVITY_COLORS[activity.activity_type] || ACTIVITY_COLORS.assessment_created;
                     const icon = ACTIVITY_ICONS[activity.activity_type] || <Activity className="w-4 h-4" />;
@@ -771,7 +771,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                           </div>
                         </div>
 
-                        <p className="tf-meta-strong line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
+                        <p className="tf-meta line-clamp-3 [overflow-wrap:anywhere]" title={activity.description}>
                           {activity.description}
                         </p>
 
@@ -885,7 +885,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                                 </span>
                               )}
                             </div>
-                            <p className="tf-card-desc line-clamp-2">{activity.description}</p>
+                            <p className="tf-body-secondary line-clamp-2">{activity.description}</p>
                             <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 tf-meta">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
@@ -921,7 +921,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     {/* Expanded Details */}
                     {isExpanded && (
                       <div className="ml-0 sm:ml-14 p-3 sm:p-4 bg-slate-50 rounded-lg border border-gray-100 text-sm">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                        <div className="tf-grid-2">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
                             <span className="ml-1.5 sm:ml-2 text-gray-900">{activity.activity_type.replace(/_/g, ' ')}</span>
@@ -968,13 +968,13 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
 
         {/* Footer with Pagination */}
         <div className="p-3 sm:p-4 bg-slate-50 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
-          <div className="tf-card-desc">
+          <div className="tf-body-secondary">
             Showing {activities.length} of {total} entries
           </div>
           {total > pageSize && (
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline tf-card-desc whitespace-nowrap">Go to</span>
+                <span className="hidden sm:inline tf-body-secondary whitespace-nowrap">Go to</span>
                 <input
                   type="number"
                   min={1}
@@ -989,18 +989,18 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   }}
                   onBlur={commitGoToPage}
                   aria-label="Go to page"
-                  className="w-14 h-8 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  className="tf-input w-14 h-8 px-2 text-center"
                 />
               </div>
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                className="tf-btn tf-btn-secondary w-8 h-8 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                 aria-label="Previous page" title="Previous page"
               >
                 <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
-              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+              <span className="tf-label px-1 whitespace-nowrap">
                 <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
               </span>
               <button
@@ -1043,7 +1043,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             </div>
 
             <div className="p-4 sm:p-5">
-              <p className="tf-card-desc mb-3 sm:mb-4">Choose export format:</p>
+              <p className="tf-body-secondary mb-3 sm:mb-4">Choose export format:</p>
 
               <div className="space-y-2.5 sm:space-y-3">
                 <button
@@ -1054,7 +1054,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
+                    <div className="tf-row-name sm:text-base">CSV Format</div>
                     <div className="tf-body-muted">Compatible with Excel, Google Sheets</div>
                   </div>
                 </button>
@@ -1067,7 +1067,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                     <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                   </div>
                   <div className="text-left flex-1 min-w-0">
-                    <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
+                    <div className="tf-row-name sm:text-base">Excel Format (XLSX)</div>
                     <div className="tf-body-muted">Native Excel format with better formatting</div>
                   </div>
                 </button>

@@ -54,13 +54,13 @@ export default function DeleteJobModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 Delete Job Openings
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Are you sure you want to delete the following job opening{many ? 's' : ''}? This action cannot be undone.
               </p>
               {/* The house grey pill, so the selection reads as a chip and not as body copy. */}
               <span className="mt-3 inline-flex max-w-full items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 text-gray-500 dark:text-slate-400" />
-                <span className="truncate tf-cell-name">
+                <span className="truncate tf-row-title">
                   {jobLabel}
                 </span>
               </span>

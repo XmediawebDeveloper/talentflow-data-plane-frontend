@@ -56,6 +56,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { PageHeader } from '@/components/ui/page-header';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { exportRows } from '@/lib/utils/exportUtils';
 import { toast } from '@/components/ui/enhanced-toast';
 
@@ -108,6 +109,8 @@ interface AuditStats {
     user_email: string | null;
     action_count: number;
   }>;
+  // Distinct users with audit activity in the period.
+  active_users_count?: number;
 }
 
 const actionColors: Record<string, string> = {
@@ -238,6 +241,24 @@ const isCandidateActor = (log: Pick<AuditLog, 'actor_role' | 'user_display_id' |
 
 const formatRole = (role: string | null) => (role ? role.replace(/_/g, ' ').toLowerCase() : '');
 
+// Readable names for unit codes (RU → Resume Upload, …).
+const UNIT_TYPE_LABELS: Record<string, string> = {
+  RU: 'Resume Upload',
+  RS: 'Resume Scoring',
+  AS: 'Assessment',
+  AIU: 'AI Interview',
+  max_seats: 'Team Seats',
+  max_jobs: 'Job Postings',
+};
+
+// Friendly text for a few raw Event Details values.
+const formatDetailValue = (key: string, value: unknown): string => {
+  const s = String(value);
+  if (key === 'unit_type') return UNIT_TYPE_LABELS[s] || s;
+  if (key === 'source' && (s === 'control_plane' || s === 'super_admin')) return 'Super Admin';
+  return s;
+};
+
 /** 'YYYY-MM-DD' (local day) → that day's first / last instant, as ISO strings. */
 const dayStartISO = (day: string) => new Date(`${day}T00:00:00`).toISOString();
 const dayEndISO = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
@@ -297,6 +318,7 @@ export default function AuditTrailPage() {
   // Which stats card popup is open (Active Users / Action Types / Entity Types).
   const [statsPopup, setStatsPopup] = useState<'users' | 'actions' | 'entities' | null>(null);
   const statsPopupRef = useRef<HTMLDivElement>(null);
+  const knownUserNamesRef = useRef<Record<string, string>>({});
 
   // Pagination
   const [page, setPage] = useState(1);
@@ -514,7 +536,15 @@ export default function AuditTrailPage() {
       : dateRange;
     try {
       const token = localStorage.getItem('accessToken');
-      const response = await fetch(`${API_URL}/audits/stats?days=${statsDays}`, {
+      // Pass the active filters so each popup's counts are faceted by the
+      // OTHER filters (e.g. users counted for the selected action only) and
+      // match the record count you get after clicking an entry.
+      const statsParams = new URLSearchParams({ days: statsDays });
+      if (actionFilter) statsParams.append('action', actionFilter);
+      if (entityFilter) statsParams.append('entity_type', entityFilter);
+      if (userFilter) statsParams.append('user_id', userFilter);
+      if (errorOriginFilter) statsParams.append('error_origin', errorOriginFilter);
+      const response = await fetch(`${API_URL}/audits/stats?${statsParams}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -534,7 +564,7 @@ export default function AuditTrailPage() {
     } catch (err) {
       console.error('Error fetching stats:', err);
     }
-  }, [dateRange, customFrom, isCustomRange, customRangeReady]);
+  }, [dateRange, customFrom, isCustomRange, customRangeReady, actionFilter, entityFilter, userFilter, errorOriginFilter]);
 
   const fetchFilters = useCallback(async () => {
     try {
@@ -900,10 +930,19 @@ export default function AuditTrailPage() {
 
   // Get impact text (unit consumption impact)
   const getImpactText = (log: AuditLog): { text: string; negative: boolean; positive?: boolean } => {
-    const units = log.details?.units_consumed_actual ?? log.units_consumed;
-    // Addon/seat purchases add credits — show as positive (green)
-    const isPurchase = ['addon_purchase', 'seats_purchase'].includes(log.action);
+    // Units added by a Super Admin keep units_consumed = 0 (they are not usage);
+    // the amount added is in details.units_added.
+    const isAdminGrant = log.action === 'units_added_by_admin';
+    const units = isAdminGrant
+      ? Number(log.details?.units_added) || 0
+      : log.details?.units_consumed_actual ?? log.units_consumed;
+    // Addon/seat purchases and admin grants add credits — show as positive (green)
+    const isPurchase = isAdminGrant || ['addon_purchase', 'seats_purchase'].includes(log.action);
     if (units && units > 0 && log.unit_type) {
+      if (isAdminGrant) {
+        // e.g. "+2 Resume Upload" instead of "+2 RU"
+        return { text: `+${units} ${UNIT_TYPE_LABELS[log.unit_type] || log.unit_type}`, negative: false, positive: true };
+      }
       if (isPurchase) {
         return { text: `+${units} ${log.unit_type}`, negative: false, positive: true };
       }
@@ -921,7 +960,7 @@ export default function AuditTrailPage() {
   };
 
   const filteredLogs = auditLogs.filter(log => {
-    // Error origin filter (applied client-side; the list endpoint ignores it)
+    // Error origin is applied server-side now; this is just a safety net.
     if (errorOriginFilter && log.error_origin !== errorOriginFilter) return false;
 
     // Action / entity / user filters are applied server-side via fetchAuditLogs.
@@ -939,6 +978,10 @@ export default function AuditTrailPage() {
     );
   });
 
+  // Remember every user name we've seen: the faceted stats can drop the
+  // selected user from top_active_users (e.g. 0 actions of the chosen type).
+  stats?.top_active_users.forEach(u => { knownUserNamesRef.current[u.user_id] = u.user_name; });
+
   // One removable chip per active filter (the date range isn't one — it always has a value).
   const optionLabel = (list: Array<{ value: string; label: string }>, v: string) =>
     list.find(o => o.value === v)?.label ?? v.replace(/_/g, ' ');
@@ -948,16 +991,16 @@ export default function AuditTrailPage() {
     entityFilter && { key: 'entity', name: 'Entity', value: optionLabel(availableEntities, entityFilter), clear: () => { setEntityFilter(''); setPage(1); } },
     userFilter && {
       key: 'user', name: 'User',
-      value: stats?.top_active_users.find(u => u.user_id === userFilter)?.user_name || 'Selected user',
+      value: stats?.top_active_users.find(u => u.user_id === userFilter)?.user_name || knownUserNamesRef.current[userFilter] || 'Selected user',
       clear: () => { setUserFilter(''); setPage(1); },
     },
     errorOriginFilter && { key: 'origin', name: 'Origin', value: ORIGIN_FILTER_LABELS[errorOriginFilter] ?? errorOriginFilter, clear: () => { setErrorOriginFilter(''); setPage(1); } },
   ].filter(Boolean) as Array<{ key: string; name: string; value: string; clear: () => void }>;
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Audit Trail' }]} />
         <PageHeader
           icon={<ScrollText className="h-5 w-5" />}
@@ -984,7 +1027,7 @@ export default function AuditTrailPage() {
                   variant="primary"
                   onClick={() => setExportDropdownOpen(v => !v)}
                   icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                  className="rounded-xl shadow-md hover:-translate-y-0.5 hover:shadow-lg"
+                  className="rounded-xl hover:-translate-y-0.5"
                 >
                   <span className="font-medium hidden sm:inline">Export</span>
                   <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
@@ -1016,7 +1059,7 @@ export default function AuditTrailPage() {
             filter popup that lets the user drill into a specific user/action/entity. */}
         {stats && (
           <div ref={statsPopupRef} className="relative mb-4 sm:mb-6 lg:mb-8">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3 md:gap-5">
+            <div className="tf-grid-stats">
               <button
                 type="button"
                 onClick={() => { setStatsPopup(null); clearAllFilters(); openListView(); }}
@@ -1026,8 +1069,8 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
-                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
+                    <p className="truncate tf-label max-sm:text-xs">Total Actions</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
                     <p
                       className="tf-meta mt-1 sm:mt-2 flex items-center gap-1"
                       title={isCustomRange && customFrom ? `Summary counts cover ${customFrom} to today` : undefined}
@@ -1051,8 +1094,8 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Active Users</p>
-                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />}</p>
+                    <p className="truncate tf-label max-sm:text-xs">Active Users</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{stats.active_users_count ?? (totalUsers !== null ? totalUsers : totalUsersFailed ? '—' : <StatValuePlaceholder />)}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
@@ -1070,8 +1113,8 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Action Types</p>
-                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
+                    <p className="truncate tf-label max-sm:text-xs">Action Types</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
@@ -1089,8 +1132,8 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="truncate text-sm max-sm:text-xs font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
-                    <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
+                    <p className="truncate tf-label max-sm:text-xs">Entity Types</p>
+                    <p className="tf-section-title sm:text-2xl md:text-3xl mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
                     <p className="tf-meta mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
@@ -1107,7 +1150,7 @@ export default function AuditTrailPage() {
             {statsPopup && (
               <div className="absolute left-0 right-0 top-full mt-2 z-20 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/50">
-                  <p className="text-sm font-semibold text-gray-800 dark:text-slate-100">
+                  <p className="tf-row-title">
                     {statsPopup === 'users' ? 'Top Active Users' : statsPopup === 'actions' ? 'Action Types' : 'Entity Types'}
                   </p>
                   <div className="flex items-center gap-2">
@@ -1155,11 +1198,11 @@ export default function AuditTrailPage() {
                             <div className="flex items-center gap-3 min-w-0">
                               <NameAvatar name={u.user_name} fallback={u.user_email} userId={u.user_id} size="sm" />
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{u.user_name || 'Unknown'}</p>
+                                <p className="tf-row-name truncate">{u.user_name || 'Unknown'}</p>
                                 {u.user_email && <p className="tf-meta truncate">{u.user_email}</p>}
                               </div>
                             </div>
-                            <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{u.action_count}</span>
+                            <span className="tf-caption bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{u.action_count}</span>
                           </button>
                         );
                       })
@@ -1186,8 +1229,8 @@ export default function AuditTrailPage() {
                               }}
                               className={`w-full text-left px-4 max-sm:px-3 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
                             >
-                              <span className="text-sm text-gray-800 dark:text-slate-100 truncate">{label}</span>
-                              <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
+                              <span className="tf-body truncate">{label}</span>
+                              <span className="tf-caption bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
                             </button>
                           );
                         })
@@ -1214,8 +1257,8 @@ export default function AuditTrailPage() {
                               }}
                               className={`w-full text-left px-4 max-sm:px-3 py-2.5 flex items-center justify-between gap-3 transition-colors ${isActive ? 'bg-brand-blue/[0.06]' : 'hover:bg-gray-50 dark:hover:bg-slate-800/60'}`}
                             >
-                              <span className="text-sm text-gray-800 dark:text-slate-100 truncate">{label}</span>
-                              <span className="text-xs font-semibold text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
+                              <span className="tf-body truncate">{label}</span>
+                              <span className="tf-caption bg-gray-100 dark:bg-slate-800 px-2 py-0.5 rounded-full flex-shrink-0">{count}</span>
                             </button>
                           );
                         })
@@ -1231,12 +1274,12 @@ export default function AuditTrailPage() {
         <>
 
         {/* Combined Audit Log Card - Tabs, Filters & Table */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+        <div className="tf-card-soft overflow-hidden">
           {/* Record Count */}
           <div className="px-3 sm:px-4 md:px-5 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-gray-700 dark:text-slate-300">Audit Records</span>
-              <span className="text-sm text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
+              <span className="tf-label">Audit Records</span>
+              <span className="tf-label bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full">{total} records</span>
             </div>
           </div>
 
@@ -1357,7 +1400,7 @@ export default function AuditTrailPage() {
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-600 dark:text-slate-400" />
               </div>
-              <p className="text-gray-700 dark:text-slate-300 font-medium text-sm sm:text-base break-words px-4">{error}</p>
+              <p className="tf-label sm:text-base break-words px-4">{error}</p>
               <div className="mt-3 sm:mt-4 flex justify-center">
                 <Button variant="primary" size="sm" onClick={fetchAuditLogs}>
                   Retry
@@ -1373,66 +1416,73 @@ export default function AuditTrailPage() {
           ) : (
             <>
             {/* Mobile Card Layout */}
-            <div className="md:hidden divide-y divide-gray-100 dark:divide-slate-700/60">
+            <MobileRecordList className="p-3">
               {filteredLogs.map((log) => {
                 const actionStatus = getActionStatus(log.action, log.error_origin);
                 const impact = getImpactText(log);
                 const impactLevel = getImpactLevel(log);
                 return (
-                  <div key={log.id} className="p-3 sm:p-4 space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                  <MobileRecordCard
+                    key={log.id}
+                    title={
+                      <span className="flex min-w-0 items-center gap-2">
                         <NameAvatar name={log.user_name} fallback={log.user_email} userId={log.user_id} size="sm" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate" title={isCandidateActor(log) ? 'Candidate name is masked for privacy' : undefined}>{log.user_name || 'Unknown'}</p>
-                          {isCandidateActor(log) ? (
-                            <span className="inline-flex rounded px-1.5 py-px text-2xs font-semibold bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/25">Candidate</span>
-                          ) : (
-                            <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
-                          )}
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => setSelectedLog(log)}
-                        className="flex items-center gap-1 px-2 py-1 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md text-2xs font-medium flex-shrink-0"
-                      >
-                        <Eye className="w-3 h-3" />
-                        View
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${getActionColor(log.action)}`}>
-                        {log.action_label}
+                        <span className="min-w-0 truncate" title={isCandidateActor(log) ? 'Candidate name is masked for privacy' : undefined}>{log.user_name || 'Unknown'}</span>
                       </span>
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${actionStatus.color}`}>
-                        {actionStatus.label}
-                      </span>
-                      <span className={`text-2xs font-semibold ${impactLevel.color}`}>
-                        {impactLevel.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between text-2xs text-gray-500 dark:text-slate-500">
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-2.5 h-2.5 flex-shrink-0" />
-                        <span>{formatDate(log.created_at)}</span>
-                      </div>
-                      {impact.text !== '—' && (
-                        <span className={`font-semibold ${impact.negative ? 'text-destructive' : impact.positive ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
-                          {impact.text}
+                    }
+                    badges={
+                      <>
+                        {isCandidateActor(log) && (
+                          <span className="inline-flex rounded px-1.5 py-px text-2xs font-semibold bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/25">Candidate</span>
+                        )}
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${getActionColor(log.action)}`}>
+                          {log.action_label}
                         </span>
-                      )}
-                    </div>
-                  </div>
+                        <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${actionStatus.color}`}>
+                          {actionStatus.label}
+                        </span>
+                        <span className={`text-2xs font-semibold ${impactLevel.color}`}>
+                          {impactLevel.label}
+                        </span>
+                      </>
+                    }
+                    meta={[
+                      { label: isCandidateActor(log) ? '' : (log.user_email || '') },
+                      { icon: <Clock className="w-3.5 h-3.5" />, label: formatDate(log.created_at) },
+                    ]}
+                    footer={
+                      impact.text !== '—' ? (
+                        <MobileStatChip tone={impact.negative ? 'danger' : impact.positive ? 'success' : 'neutral'}>
+                          {impact.text}
+                        </MobileStatChip>
+                      ) : undefined
+                    }
+                    /* Phones / tablets: the 👁 View sits at the right end of the name line
+                       (as on the Support Tickets cards) instead of a "View" button alone on
+                       its own bottom row. Same handler; "View" stays as tooltip + label. */
+                    className="tf-jdv-actions-inline"
+                    actions={
+                      <button
+                        type="button"
+                        onClick={() => setSelectedLog(log)}
+                        title="View"
+                        aria-label="View"
+                        className="tf-icon-btn-outline"
+                      >
+                        <Eye />
+                      </button>
+                    }
+                  />
                 );
               })}
-            </div>
+            </MobileRecordList>
             {/* Desktop Table — sideways scroll only (many columns); the page
                 itself is the sole vertical scroller, so its scrollbar stays at
                 the true edge of the viewport instead of a second one drawn
                 around this table. See the `.tf-table-shell` note in
                 globals.css: giving a table its own vertical scroll cap here is
                 exactly the nested-scroller problem that class documents. */}
-            <div className="hidden md:block table-responsive">
+            <div className="hidden lg:block table-responsive">
               <table className="w-full">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-white dark:bg-slate-900 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
@@ -1460,18 +1510,18 @@ export default function AuditTrailPage() {
                         onClick={() => setSelectedLog(log)}
                         className="hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       >
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-2 tf-card-desc">
+                        <td className="tf-td whitespace-nowrap">
+                          <div className="flex items-center gap-2 tf-body-secondary">
                             <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                             <span>{formatDate(log.created_at)}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             <NameAvatar name={log.user_name} fallback={log.user_email} userId={log.user_id} size="md" />
                             <div className="min-w-0">
                               <p
-                                className="text-sm font-medium text-gray-900 dark:text-slate-50"
+                                className="tf-row-name"
                                 title={isCandidateActor(log) ? 'Candidate name is masked for privacy' : log.user_email || undefined}
                               >
                                 {log.user_name || 'Unknown'}
@@ -1497,17 +1547,17 @@ export default function AuditTrailPage() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <span className={`inline-flex px-3 py-1.5 rounded-lg text-xs font-semibold ${getActionColor(log.action)}`}>
                             {log.action_label}
                           </span>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="tf-td">
                           <span className="tf-body max-w-[180px] truncate block" title={getDetailsSummary(log)}>
                             {getDetailsSummary(log)}
                           </span>
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {(() => {
                             const impactLevel = getImpactLevel(log);
                             return (
@@ -1524,39 +1574,39 @@ export default function AuditTrailPage() {
                             );
                           })()}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {log.error_code ? (
                             <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[log.error_code] || 'bg-gray-50 text-gray-600'}`}>
                               {ERROR_CODE_LABELS[log.error_code] || log.error_code}
                             </span>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                            <span className="tf-body-muted">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {log.total_session_duration != null ? (
-                            <span className="text-sm text-gray-700 dark:text-slate-300 font-medium">
+                            <span className="tf-label">
                               {formatSessionDuration(log.total_session_duration)}
                             </span>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                            <span className="tf-body-muted">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[log.refund_flag]}`}>
                             {log.refund_flag}
                           </span>
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {impact.text !== '—' ? (
                             <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-destructive' : impact.positive ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                               {impact.text}
                             </span>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">—</span>
+                            <span className="tf-body-muted">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-center tf-sticky-col">
+                        <td className="tf-td whitespace-nowrap tf-sticky-col">
                           <button
                             onClick={(e) => { e.stopPropagation(); setSelectedLog(log); }}
                             aria-label="View details"
@@ -1578,8 +1628,8 @@ export default function AuditTrailPage() {
           {/* Pagination */}
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
-              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                <p className="tf-card-desc">
+              <div className="flex flex-col sm:flex-row sm:items-center max-sm:items-center max-sm:text-center gap-1 sm:gap-4">
+                <p className="tf-body-secondary">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
                 <div className="flex items-center gap-2">
@@ -1593,7 +1643,7 @@ export default function AuditTrailPage() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
+              <div className="flex items-center gap-1.5 sm:gap-2 self-end max-sm:self-center sm:self-auto">
                 <div className="flex items-center gap-1.5">
                   <span className="hidden sm:inline tf-body-muted whitespace-nowrap">Go to</span>
                   <input
@@ -1610,27 +1660,27 @@ export default function AuditTrailPage() {
                     }}
                     onBlur={jumpToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
+                    className="tf-input w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-center"
                   />
                 </div>
 
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-7 h-7 sm:w-8 sm:h-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Previous page" title="Previous page"
                 >
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
+                <span className="tf-label px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                 </span>
 
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  className="tf-btn tf-btn-secondary w-7 h-7 sm:w-8 sm:h-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors whitespace-normal gap-0 font-normal"
                   aria-label="Next page" title="Next page"
                 >
                   <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
@@ -1673,7 +1723,7 @@ export default function AuditTrailPage() {
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100 dark:border-slate-700/60">
                 <NameAvatar name={selectedLog.user_name} fallback={selectedLog.user_email} userId={selectedLog.user_id} size="lg" />
                 <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
+                  <p className="tf-section-title">{selectedLog.user_name || 'Unknown User'}</p>
                   {isCandidateActor(selectedLog) ? (
                     <p className="tf-body-muted">Candidate · name masked for privacy</p>
                   ) : selectedLog.actor_role && (
@@ -1689,23 +1739,23 @@ export default function AuditTrailPage() {
 
               {/* Log ID */}
               <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
-                <p className="text-xs font-mono text-gray-700 dark:text-slate-300 break-all">{selectedLog.id}</p>
+                <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
+                <p className="tf-meta font-mono break-all">{selectedLog.id}</p>
               </div>
 
               {/* Summary Info */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+              <div className="tf-grid-3">
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">When</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50">{formatDate(selectedLog.created_at)}</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">When</p>
+                  <p className="tf-row-name">{formatDate(selectedLog.created_at)}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity</p>
-                  <p className="text-sm font-medium text-gray-900 dark:text-slate-50 capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Entity</p>
+                  <p className="tf-row-name capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">IP Address</p>
-                  <p className="text-sm font-mono font-medium text-gray-900 dark:text-slate-50 break-all">{selectedLog.ip_address || '—'}</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">IP Address</p>
+                  <p className="tf-row-name font-mono break-all">{selectedLog.ip_address || '—'}</p>
                 </div>
               </div>
 
@@ -1719,9 +1769,9 @@ export default function AuditTrailPage() {
                 if (!hasUnits && !hasBalance) {
                   // Just show status alone
                   return (
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                    <div className="tf-grid-3">
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
+                        <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
                         {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                       </div>
                       <div className="hidden sm:block" /><div className="hidden sm:block" />
@@ -1729,10 +1779,10 @@ export default function AuditTrailPage() {
                   );
                 }
                 return (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
+                  <div className="tf-grid-3">
                     {hasUnits ? (
                       <div className="bg-gray-100 dark:bg-slate-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Impact</p>
+                        <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Impact</p>
                         <div className="flex items-baseline gap-1.5">
                           <span className={`text-lg font-bold ${modalImpact.negative ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>
                             {modalImpact.text}
@@ -1742,16 +1792,16 @@ export default function AuditTrailPage() {
                     ) : <div className="hidden sm:block" />}
                     {hasBalance ? (
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
+                        <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
                           <span className="tf-body-muted">{modalBalanceBefore}</span>
                           <span className="text-gray-300 dark:text-slate-500">→</span>
-                          <span className="text-lg font-bold text-gray-900 dark:text-slate-50">{modalBalanceAfter ?? 0}</span>
+                          <span className="tf-section-title">{modalBalanceAfter ?? 0}</span>
                         </div>
                       </div>
                     ) : <div className="hidden sm:block" />}
                     <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                      <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
+                      <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
                       {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                     </div>
                   </div>
@@ -1761,7 +1811,7 @@ export default function AuditTrailPage() {
               {/* Entity ID (if present) */}
               {selectedLog.entity_id && (
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
                   <p className="tf-body font-mono truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
                 </div>
               )}
@@ -1769,61 +1819,61 @@ export default function AuditTrailPage() {
               {/* Session Details (shown when session fields exist) */}
               {(selectedLog.session_start_time || selectedLog.error_origin || selectedLog.module_type) && (
                 <div>
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Session Details</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-1.5 sm:mb-2.5">Session Details</p>
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                     {selectedLog.module_type && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
-                        <span className="text-sm font-medium text-gray-900 dark:text-slate-50">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
+                        <span className="tf-row-name">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
                       </div>
                     )}
                     {selectedLog.session_start_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_start_time)}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
+                        <span className="tf-body">{formatDate(selectedLog.session_start_time)}</span>
                       </div>
                     )}
                     {selectedLog.interruption_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
                         <span className="text-sm text-destructive">{formatDate(selectedLog.interruption_time)}</span>
                       </div>
                     )}
                     {selectedLog.session_end_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_end_time)}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
+                        <span className="tf-body">{formatDate(selectedLog.session_end_time)}</span>
                       </div>
                     )}
                     {selectedLog.total_session_duration != null && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="tf-cell-name">{formatSessionDuration(selectedLog.total_session_duration)}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="tf-row-title">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
+                      <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
                       <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
                         {ERROR_ORIGIN_LABELS[selectedLog.error_origin]}
                       </span>
                     </div>
                     {selectedLog.error_code && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
                         <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
                           {ERROR_CODE_LABELS[selectedLog.error_code] || selectedLog.error_code}
                         </span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
+                      <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
                       <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
                         {selectedLog.refund_flag}
                       </span>
                     </div>
                     {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
                         <span className="tf-body break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
@@ -1840,7 +1890,7 @@ export default function AuditTrailPage() {
                 return true;
               }).length > 0 && (
                 <div>
-                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Event Details</p>
+                  <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-1.5 sm:mb-2.5">Event Details</p>
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                     {Object.entries(selectedLog.details)
                       .filter(([key, value]) => {
@@ -1852,10 +1902,10 @@ export default function AuditTrailPage() {
                       })
                       .map(([key, value]) => (
                       <div key={key} className="flex items-start px-4 py-3 gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 min-w-[140px] flex-shrink-0 pt-0.5 capitalize">
+                        <span className="tf-caption min-w-[140px] flex-shrink-0 pt-0.5 capitalize">
                           {(DETAIL_KEY_LABELS as Record<string, string>)[key] || key.replace(/_/g, ' ')}
                         </span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50 break-all">
+                        <span className="tf-body break-all">
                           {value === null || value === undefined
                             ? '—'
                             : typeof value === 'boolean'
@@ -1867,7 +1917,7 @@ export default function AuditTrailPage() {
                                 .filter(([, v]) => v !== null && v !== undefined)
                                 .map(([k, v]) => `${k.replace(/_/g, ' ')}: ${typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)}`)
                                 .join(' · ')
-                            : String(value)}
+                            : formatDetailValue(key, value)}
                         </span>
                       </div>
                     ))}
@@ -1890,14 +1940,14 @@ export default function AuditTrailPage() {
                 </div>
 
                 {/* Model Version + Generation Timestamp */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                <div className="tf-grid-2">
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
-                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
-                    <p className="tf-cell-name">{aiAuditData.ai_model_version || 'N/A'}</p>
+                    <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
+                    <p className="tf-row-title">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
-                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-50">
+                    <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
+                    <p className="tf-row-name">
                       {formatIST(aiAuditData.questions_generated_at)}
                     </p>
                   </div>
@@ -1906,29 +1956,29 @@ export default function AuditTrailPage() {
                 {/* Input Parameters Table */}
                 <div className="bg-gray-50 rounded-lg sm:rounded-xl divide-y divide-gray-100 overflow-hidden">
                   <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100/50 dark:bg-slate-800">
-                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Input Parameters</p>
+                    <p className="tf-micro-hint sm:text-2xs uppercase tracking-wider">Input Parameters</p>
                   </div>
                   {aiAuditData.generation_params ? (
                     <>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50 break-words">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
+                        <span className="tf-body break-words">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50 capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
+                        <span className="tf-body capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} min` : 'N/A'}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="tf-body">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} min` : 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
-                        <span className="text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
+                        <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
+                        <span className="tf-body">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
                       </div>
                       {aiAuditData.generation_params.rounds_config && aiAuditData.generation_params.rounds_config.length > 0 && (
                         <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                          <span className="text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
+                          <span className="tf-caption sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
                           <div className="flex flex-wrap gap-1 sm:gap-1.5">
                             {aiAuditData.generation_params.rounds_config.map((round: any, idx: number) => (
                               <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-xs font-medium capitalize">
@@ -1964,7 +2014,7 @@ export default function AuditTrailPage() {
                   <Download className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-gray-900 dark:text-slate-50">
+                  <h3 className="tf-section-title">
                     Export {exportFormat === 'csv' ? 'CSV' : 'Excel'}
                   </h3>
                   <p className="tf-meta">Configure date range and columns</p>
@@ -1989,7 +2039,7 @@ export default function AuditTrailPage() {
               )}
               {/* Date Range */}
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-3">Date Range</p>
+                <p className="tf-eyebrow mb-3">Date Range</p>
                 <div className={`flex gap-2 ${exportDateMode === 'custom' ? 'mb-3' : ''}`}>
                   <button
                     onClick={() => setExportDateMode('preset')}
@@ -2005,9 +2055,9 @@ export default function AuditTrailPage() {
                   </button>
                 </div>
                 {exportDateMode === 'custom' && (
-                  <div className="grid grid-cols-2 max-[400px]:grid-cols-1 gap-3">
+                  <div className="grid grid-cols-2 max-xs:grid-cols-1 gap-3">
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">Start Date</label>
+                      <label className="block tf-caption mb-1.5">Start Date</label>
                       <DateField
                         aria-label="Start Date"
                         value={exportStartDate}
@@ -2015,7 +2065,7 @@ export default function AuditTrailPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-500 dark:text-slate-500 mb-1.5">End Date</label>
+                      <label className="block tf-caption mb-1.5">End Date</label>
                       <DateField
                         aria-label="End Date"
                         value={exportEndDate}
@@ -2029,7 +2079,7 @@ export default function AuditTrailPage() {
               {/* Columns */}
               <div>
                 <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 mb-3">
-                  <p className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Columns</p>
+                  <p className="tf-eyebrow">Columns</p>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
                       onClick={() => setExportSelectedCols(Object.fromEntries(EXPORT_COLUMNS.map(c => [c.key, true])))}
@@ -2067,13 +2117,13 @@ export default function AuditTrailPage() {
                         type="checkbox"
                         checked={!!exportSelectedCols[col.key]}
                         onChange={e => setExportSelectedCols(prev => ({ ...prev, [col.key]: e.target.checked }))}
-                        className="w-4 h-4 rounded border-gray-200 dark:border-slate-700 accent-brand-blue focus:ring-brand-blue/40 cursor-pointer"
+                        className="tf-checkbox accent-brand-blue focus:ring-brand-blue/40"
                       />
                       <span className="tf-body max-sm:text-xs group-hover:text-gray-900 dark:group-hover:text-slate-50">{col.label}</span>
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 dark:text-slate-500 mt-2">
+                <p className="tf-hint mt-2">
                   {Object.values(exportSelectedCols).filter(Boolean).length} of {EXPORT_COLUMNS.length} columns selected
                 </p>
               </div>

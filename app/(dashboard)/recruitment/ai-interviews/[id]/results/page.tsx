@@ -3,7 +3,7 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AIInterviewResults, { type ResultsJobScopeEntry } from '@/components/ai-interview/AIInterviewResults';
-import { aiInterviewService, isJdDisabled, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, jdActionLockReason, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -34,9 +34,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // results table (~6 columns × 8 rows).
 function AIInterviewResultsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="mb-4 md:mb-6 flex items-center gap-2">
             <Skeleton className="h-3 w-16" />
@@ -56,9 +56,9 @@ function AIInterviewResultsSkeleton() {
           </div>
 
           {/* Stat cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+          <div className="tf-grid-stats mb-6">
             {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5">
+              <div key={i} className="tf-panel p-4 sm:p-5">
                 <Skeleton className="h-3.5 w-20 mb-3" />
                 <Skeleton className="h-7 w-16" />
               </div>
@@ -119,7 +119,8 @@ function AIInterviewResultsContent() {
   const [jdId, setJdId] = useState('');
   const [jdShortId, setJdShortId] = useState('');
   const [jdVersion, setJdVersion] = useState<number | undefined>(undefined);
-  const [jdDisabled, setJdDisabled] = useState(false);
+  // Disabled or Archived job — either greys the Invite button, with its own reason.
+  const [jobLockMessage, setJobLockMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -136,7 +137,7 @@ function AIInterviewResultsContent() {
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
           setJdVersion(response.jd_version ?? undefined);
-          setJdDisabled(isJdDisabled(response.jd_status));
+          setJobLockMessage(jdActionLockReason(response.jd_status));
           // Failing that lookup still shows this interview's own results.
           if (jobScoped) setJobScope(await loadJobScope(response).catch(() => null));
         } else {
@@ -159,7 +160,7 @@ function AIInterviewResultsContent() {
   const { user, isTenantAdmin } = useAuth();
   const canInvite = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
   const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
-    : jdDisabled ? 'This job description is disabled, so nothing can be sent for it.'
+    : jobLockMessage ? jobLockMessage
     : !jdId ? 'This AI interview is not linked to a job' : null;
   const inviteAction = (
     <Button
@@ -213,7 +214,7 @@ function AIInterviewResultsContent() {
         <div className="text-red-500 text-base">{error}</div>
         <button
           onClick={() => router.push('/recruitment/ai-interviews')}
-          className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          className="tf-btn tf-btn-primary px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
         >
           Back to AI Interviews
         </button>
@@ -229,7 +230,7 @@ function AIInterviewResultsContent() {
       jdShortId={jdShortId}
       hideVersionDetails={versionScoped}
       jobScope={jobScope}
-      readOnly={jdDisabled}
+      readOnly={!!jobLockMessage}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
       toolbarActions={inviteAction}

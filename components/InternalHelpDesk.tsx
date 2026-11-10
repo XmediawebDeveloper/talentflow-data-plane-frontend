@@ -16,6 +16,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
 
@@ -259,9 +260,9 @@ export default function InternalHelpDesk() {
   const totalTickets = statCount(stats?.total_tickets);
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Help Desk' }]} />
       {/* Header */}
       {/* No inner padding: the page panel already insets content 16/32px
@@ -275,7 +276,7 @@ export default function InternalHelpDesk() {
               </div>
               <div>
                 <h1 className="tf-page-title">Help Desk</h1>
-                <p className="tf-card-desc">Request help from your administrator</p>
+                <p className="tf-body-secondary">Request help from your administrator</p>
               </div>
             </div>
 
@@ -298,37 +299,37 @@ export default function InternalHelpDesk() {
         {view === 'overview' && (
           <div className="space-y-6">
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+            <div className="tf-grid-4">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="tf-card-desc">Open Requests</span>
+                  <span className="tf-body-secondary">Open Requests</span>
                   <Circle className="w-5 h-5 text-gray-800" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{openTickets}</div>
                 <div className="tf-meta">Awaiting response</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="tf-card-desc">In Progress</span>
+                  <span className="tf-body-secondary">In Progress</span>
                   <Clock3 className="w-5 h-5 text-yellow-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{inProgressTickets}</div>
                 <div className="tf-meta">Being reviewed</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="tf-card-desc">Resolved</span>
+                  <span className="tf-body-secondary">Resolved</span>
                   <CheckCircle2 className="w-5 h-5 text-green-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{resolvedTickets}</div>
                 <div className="tf-meta">Successfully handled</div>
               </div>
 
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="tf-card-desc">Total Requests</span>
+                  <span className="tf-body-secondary">Total Requests</span>
                   <Ticket className="w-5 h-5 text-gray-600" />
                 </div>
                 <div className="text-3xl font-semibold text-gray-900 mb-1">{totalTickets}</div>
@@ -337,7 +338,7 @@ export default function InternalHelpDesk() {
             </div>
 
             {/* Quick Actions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="tf-grid-2">
               <button
                 onClick={() => setView('submit')}
                 className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-xl shadow-lg p-8 text-left hover:from-indigo-600 hover:to-purple-700 transition-all"
@@ -355,14 +356,14 @@ export default function InternalHelpDesk() {
               >
                 <Ticket className="w-8 h-8 text-indigo-600 mb-4" />
                 <h3 className="tf-section-title mb-2">View My Requests</h3>
-                <p className="tf-card-desc">
+                <p className="tf-body-secondary">
                   Track the status of your help requests
                 </p>
               </button>
             </div>
 
             {/* Recent Tickets */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+            <div className="tf-card-soft p-6">
               <div className="flex items-center justify-between mb-6">
                 <h3 className="font-semibold text-gray-900">Recent Requests</h3>
                 <button
@@ -380,7 +381,7 @@ export default function InternalHelpDesk() {
               ) : tickets.length === 0 ? (
                 <div className="text-center py-12">
                   <Ticket className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="tf-card-desc">No requests yet</p>
+                  <p className="tf-body-secondary">No requests yet</p>
                   <button
                     onClick={() => setView('submit')}
                     className="mt-4 text-sm text-indigo-600 hover:text-indigo-700"
@@ -402,12 +403,12 @@ export default function InternalHelpDesk() {
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex-1">
-                          <span className="tf-meta-strong block mb-1">{ticket.ticket_number}</span>
-                          <h4 className="text-sm font-medium text-gray-900">{ticket.title}</h4>
+                          <span className="tf-meta block mb-1">{ticket.ticket_number}</span>
+                          <h4 className="tf-row-name">{ticket.title}</h4>
                         </div>
                         {getStatusBadge(ticket.status)}
                       </div>
-                      <div className="flex items-center gap-3 tf-meta-strong">
+                      <div className="flex items-center gap-3 tf-meta">
                         <span>{getCategoryLabel(ticket.category)}</span>
                         <span>-</span>
                         {getPriorityBadge(ticket.priority)}
@@ -423,14 +424,14 @@ export default function InternalHelpDesk() {
             {/* Help Info */}
             <div className="bg-gradient-to-r from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-6">
               <h3 className="font-semibold text-gray-900 mb-3">What can I request help with?</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="tf-grid-3">
                 {categories.slice(0, 3).map(cat => {
                   const Icon = cat.icon;
                   return (
                     <div key={cat.value} className="flex items-start gap-3">
                       <Icon className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{cat.label}</div>
+                        <div className="tf-row-name">{cat.label}</div>
                       </div>
                     </div>
                   );
@@ -451,7 +452,7 @@ export default function InternalHelpDesk() {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
+            <div className="tf-card-soft p-8">
               <h2 className="tf-section-title mb-6">Submit Help Request</h2>
 
               <div className="space-y-6">
@@ -464,11 +465,11 @@ export default function InternalHelpDesk() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Brief description of your request"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className="tf-input h-auto px-4 py-3"
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="tf-grid-2">
                   <div>
                     <label className="block tf-label mb-2">
                       Category <span className="text-red-500">*</span>
@@ -503,7 +504,7 @@ export default function InternalHelpDesk() {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Please provide detailed information about your request..."
                     rows={8}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    className="tf-textarea px-4 py-3 resize-none"
                   />
                 </div>
 
@@ -544,7 +545,7 @@ export default function InternalHelpDesk() {
               Back to Overview
             </button>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="tf-card-soft">
               {/* Filters */}
               <div className="p-6 border-b border-gray-200">
                 <div className="flex flex-col md:flex-row gap-4">
@@ -555,7 +556,7 @@ export default function InternalHelpDesk() {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="Search requests..."
-                      className="w-full pl-11 pr-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      className="tf-input h-auto pl-11 pr-4 py-3"
                     />
                   </div>
 
@@ -592,17 +593,18 @@ export default function InternalHelpDesk() {
                   <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
                 </div>
               ) : (
-                <div className="overflow-x-auto tf-table-shell">
+                <>
+                <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                   <table className="w-full">
                     <thead className="bg-white border-b border-gray-200">
                       <tr>
-                        <th className="px-6 py-4 text-left tf-th">Request #</th>
-                        <th className="px-6 py-4 text-left tf-th">Title</th>
-                        <th className="px-6 py-4 text-left tf-th">Category</th>
-                        <th className="px-6 py-4 text-left tf-th">Priority</th>
-                        <th className="px-6 py-4 text-left tf-th">Status</th>
-                        <th className="px-6 py-4 text-left tf-th">Updated</th>
-                        <th className="px-6 py-4 text-left tf-th tf-sticky-col">Actions</th>
+                        <th className="tf-th-cell text-left tf-th">Request #</th>
+                        <th className="tf-th-cell text-left tf-th">Title</th>
+                        <th className="tf-th-cell text-left tf-th">Category</th>
+                        <th className="tf-th-cell text-left tf-th">Priority</th>
+                        <th className="tf-th-cell text-left tf-th">Status</th>
+                        <th className="tf-th-cell text-left tf-th">Updated</th>
+                        <th className="tf-th-cell text-left tf-th tf-sticky-col">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200">
@@ -610,28 +612,28 @@ export default function InternalHelpDesk() {
                         const CategoryIcon = getCategoryIcon(ticket.category);
                         return (
                           <tr key={ticket.id} className="hover:bg-gray-50">
-                            <td className="px-6 py-4">
-                              <span className="text-sm font-medium text-gray-900">{ticket.ticket_number}</span>
+                            <td className="tf-td">
+                              <span className="tf-row-name">{ticket.ticket_number}</span>
                             </td>
-                            <td className="px-6 py-4">
-                              <div className="text-sm text-gray-900 max-w-md truncate">{ticket.title}</div>
+                            <td className="tf-td">
+                              <div className="tf-body max-w-md truncate">{ticket.title}</div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               <div className="flex items-center gap-2">
                                 <CategoryIcon className="w-4 h-4 text-gray-600" />
-                                <span className="tf-card-desc">{getCategoryLabel(ticket.category)}</span>
+                                <span className="tf-body-secondary">{getCategoryLabel(ticket.category)}</span>
                               </div>
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               {getPriorityBadge(ticket.priority)}
                             </td>
-                            <td className="px-6 py-4">
+                            <td className="tf-td">
                               {getStatusBadge(ticket.status)}
                             </td>
-                            <td className="px-6 py-4">
-                              <span className="tf-card-desc">{formatISTDate(ticket.updated_at)}</span>
+                            <td className="tf-td">
+                              <span className="tf-body-secondary">{formatISTDate(ticket.updated_at)}</span>
                             </td>
-                            <td className="px-6 py-4 tf-sticky-col">
+                            <td className="tf-td tf-sticky-col">
                               <button
                                 onClick={() => {
                                   setSelectedTicket(ticket);
@@ -652,10 +654,55 @@ export default function InternalHelpDesk() {
                   {filteredTickets.length === 0 && (
                     <div className="text-center py-12">
                       <Ticket className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                      <p className="tf-card-desc">No requests found</p>
+                      <p className="tf-body-secondary">No requests found</p>
                     </div>
                   )}
                 </div>
+                <MobileRecordList
+                  className="p-3"
+                  empty={
+                    <div className="text-center py-12">
+                      <Ticket className="w-16 h-16 mx-auto mb-4 text-gray-400" />
+                      <p className="tf-body-secondary">No requests found</p>
+                    </div>
+                  }
+                >
+                  {filteredTickets.map(ticket => {
+                    const CategoryIcon = getCategoryIcon(ticket.category);
+                    return (
+                      <MobileRecordCard
+                        key={ticket.id}
+                        idBadge={<span className="tf-meta">{ticket.ticket_number}</span>}
+                        badges={
+                          <>
+                            {getPriorityBadge(ticket.priority)}
+                            {getStatusBadge(ticket.status)}
+                          </>
+                        }
+                        title={ticket.title}
+                        meta={[
+                          { icon: <CategoryIcon className="w-3.5 h-3.5 text-gray-600" />, label: getCategoryLabel(ticket.category) },
+                        ]}
+                        fields={[
+                          { label: 'Updated', value: formatISTDate(ticket.updated_at) },
+                        ]}
+                        footer={
+                          <button
+                            onClick={() => {
+                              setSelectedTicket(ticket);
+                              fetchTicketDetail(ticket.id);
+                              setView('detail');
+                            }}
+                            className="text-sm text-indigo-600 hover:text-indigo-700"
+                          >
+                            View Details
+                          </button>
+                        }
+                      />
+                    );
+                  })}
+                </MobileRecordList>
+                </>
               )}
             </div>
           </div>
@@ -672,19 +719,19 @@ export default function InternalHelpDesk() {
               Back to My Requests
             </button>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="tf-grid-3">
               {/* Main Content */}
               <div className="lg:col-span-2 space-y-6">
                 {/* Ticket Header */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="tf-card-soft p-6">
                   <div className="flex items-start justify-between mb-4">
                     <div>
-                      <span className="tf-meta-strong block mb-2">{selectedTicket.ticket_number}</span>
+                      <span className="tf-meta block mb-2">{selectedTicket.ticket_number}</span>
                       <h2 className="tf-section-title mb-3">{selectedTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-3">
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="tf-meta-strong">
+                        <span className="tf-meta">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
                       </div>
@@ -693,7 +740,7 @@ export default function InternalHelpDesk() {
                 </div>
 
                 {/* Conversation */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="tf-card-soft p-6">
                   <h3 className="font-semibold text-gray-900 mb-6">Conversation</h3>
 
                   <div className="space-y-6">
@@ -718,7 +765,7 @@ export default function InternalHelpDesk() {
                           )}
                           <div className="flex-1">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-gray-900">
+                              <span className="tf-row-name">
                                 {response.user_role === 'user' ? (response.user_name || 'You') : 'Administrator'}
                               </span>
                               <span className="tf-meta">{formatIST(response.created_at)}</span>
@@ -739,7 +786,7 @@ export default function InternalHelpDesk() {
                         onChange={(e) => setReplyMessage(e.target.value)}
                         placeholder="Type your message..."
                         rows={4}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                        className="tf-textarea px-4 py-3 resize-none"
                       />
                       <div className="flex justify-end mt-3">
                         <button
@@ -759,43 +806,43 @@ export default function InternalHelpDesk() {
               {/* Sidebar */}
               <div className="space-y-6">
                 {/* Ticket Info */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                  <h4 className="tf-subsection-title mb-4">Request Information</h4>
+                <div className="tf-card-soft p-6">
+                  <h4 className="tf-row-title mb-4">Request Information</h4>
 
                   <div className="space-y-4">
                     <div>
-                      <div className="tf-meta-strong mb-1">Created</div>
-                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.created_at)}</div>
+                      <div className="tf-meta mb-1">Created</div>
+                      <div className="tf-body">{formatIST(selectedTicket.created_at)}</div>
                     </div>
 
                     <div>
-                      <div className="tf-meta-strong mb-1">Last Updated</div>
-                      <div className="text-sm text-gray-900">{formatIST(selectedTicket.updated_at)}</div>
+                      <div className="tf-meta mb-1">Last Updated</div>
+                      <div className="tf-body">{formatIST(selectedTicket.updated_at)}</div>
                     </div>
 
                     {selectedTicket.assigned_to && (
                       <div>
-                        <div className="tf-meta-strong mb-1">Assigned To</div>
+                        <div className="tf-meta mb-1">Assigned To</div>
                         <div className="flex items-center gap-2">
                           <div className="w-6 h-6 bg-indigo-600 rounded-full flex items-center justify-center text-white text-xs">
                             {selectedTicket.assigned_to.name.charAt(0)}
                           </div>
-                          <div className="text-sm text-gray-900">{selectedTicket.assigned_to.name}</div>
+                          <div className="tf-body">{selectedTicket.assigned_to.name}</div>
                         </div>
                       </div>
                     )}
 
                     <div>
-                      <div className="tf-meta-strong mb-1">Responses</div>
-                      <div className="text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
+                      <div className="tf-meta mb-1">Responses</div>
+                      <div className="tf-body">{selectedTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
                 </div>
 
                 {/* Status Info */}
                 <div className="bg-gradient-to-br from-indigo-50 to-purple-50 border border-indigo-100 rounded-xl p-6">
-                  <h4 className="tf-subsection-title mb-3">Status Information</h4>
-                  <p className="tf-card-desc">
+                  <h4 className="tf-row-title mb-3">Status Information</h4>
+                  <p className="tf-body-secondary">
                     {selectedTicket.status === 'open' && 'Your request is awaiting review by an administrator.'}
                     {selectedTicket.status === 'in-progress' && 'An administrator is currently working on your request.'}
                     {selectedTicket.status === 'resolved' && 'Your request has been resolved. If you need further assistance, please reply.'}

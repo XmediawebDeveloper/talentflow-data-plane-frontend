@@ -24,9 +24,9 @@ export default function ScoredResumeDetailLegacyRedirect() {
   // card shell → breadcrumb → header → content) instead of a bare "Redirecting…"
   // line, so the hand-off to resume-view reads as a smooth load.
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb */}
           <div className="flex items-center gap-3 h-[46px] px-4 mb-4 md:mb-6 rounded-lg border border-gray-200 bg-gray-50">
             <div className="h-4 w-64 max-w-full rounded bg-gray-200 animate-pulse" />

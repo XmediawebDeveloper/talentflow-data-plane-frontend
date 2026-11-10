@@ -309,9 +309,10 @@ export const userService = {
    * these from `listUsers()`'s response, which defaults to (and never
    * exceeds) `page_size=100` and would silently undercount past that.
    */
-  async getUserCounts(): Promise<{ active_users: number; inactive_users: number; total_users: number }> {
+  async getUserCounts(options?: { fresh?: boolean }): Promise<{ active_users: number; inactive_users: number; total_users: number }> {
     try {
-      const response = await api.get<{ active_users: number; inactive_users: number; total_users: number }>('/users/count');
+      const response = await api.get<{ active_users: number; inactive_users: number; total_users: number }>('/users/count',
+        options?.fresh ? { dedupe: false } : undefined);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -333,6 +334,57 @@ export const userService = {
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * One page of users WITH the matching total (`GET /users/paged`). Same rows
+   * as `listUsers`; `page_size` may go up to 1000. `fresh` skips the shared
+   * GET reuse window (use after a write made outside the api client).
+   */
+  async listUsersPaged(params?: {
+    role?: string;
+    search?: string;
+    is_active?: boolean;
+    page?: number;
+    page_size?: number;
+    sort_by?: string;
+    sort_dir?: 'asc' | 'desc';
+  }, options?: { fresh?: boolean }): Promise<{ items: ApiUser[]; total: number; page: number; page_size: number }> {
+    try {
+      const response = await api.get<{ items: ApiUser[]; total: number; page: number; page_size: number }>('/users/paged', {
+        params,
+        ...(options?.fresh ? { dedupe: false } : {}),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Active users, minimal walk: one `/users/paged` call at a large page size
+   * (follow-up pages only past 1000 users). Falls back to the legacy
+   * `GET /users` 100-per-page walk on an older backend without /users/paged.
+   */
+  async listAllActiveUsers(): Promise<ApiUser[]> {
+    const PAGE = 1000;
+    try {
+      const out: ApiUser[] = [];
+      for (let page = 1; page <= 20; page++) {
+        const res = await userService.listUsersPaged({ is_active: true, page, page_size: PAGE });
+        out.push(...(res.items || []));
+        if (out.length >= (res.total ?? 0) || (res.items || []).length < PAGE) break;
+      }
+      return out;
+    } catch {
+      const out: ApiUser[] = [];
+      for (let page = 1; page <= 50; page++) {
+        const batch = await userService.listUsers({ is_active: true, page, page_size: 100 });
+        out.push(...batch);
+        if (batch.length < 100) break;
+      }
+      return out;
     }
   },
 
@@ -421,7 +473,7 @@ export const userService = {
       // Return default roles as fallback
       return {
         roles: [
-          { id: null, code: 'tenant_admin', name: 'Admin', description: 'Full access', is_system: true, is_default: false },
+          { id: null, code: 'tenant_admin', name: 'Admin', description: 'Access to everything', is_system: true, is_default: false },
           { id: null, code: 'recruiter', name: 'Recruiter', description: 'Standard access', is_system: true, is_default: true },
           { id: null, code: 'viewer', name: 'Viewer', description: 'Read-only access', is_system: true, is_default: false },
         ],

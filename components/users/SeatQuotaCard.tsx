@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
 import AddSeatsModal from './AddSeatsModal';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 
 interface SeatQuotaData {
   limit: number;
@@ -42,6 +45,10 @@ interface SeatQuotaCardProps {
 
 
 export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
+  // Buying seats is a billing action (2026-11-10): Subscription & Billing
+  // Access (Upgrade Plan), same as the add-on API.
+  const { isTenantAdmin: isOwnerForSeats, hasPermission: hasPermissionForSeats } = useAuth();
+  const canBuySeats = isOwnerForSeats || hasPermissionForSeats('canUpgradePlan');
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
   const [loading, setLoading] = useState(true);
@@ -145,14 +152,14 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="tf-card-title max-sm:text-sm">User Limit Exceeded</h3>
+              <h3 className="tf-section-title max-sm:text-sm">User Limit Exceeded</h3>
               <Badge variant="destructive">Action required</Badge>
             </div>
-            <p className="tf-card-desc max-sm:text-[13px] mt-1">
+            <p className="tf-body-secondary mt-1">
               You have {seatData.used} active users, but your plan allows only {seatData.limit}.
               Please deactivate {usersToDeactivate} user{usersToDeactivate > 1 ? 's' : ''} or upgrade your plan.
             </p>
-            <p className="text-xs text-gray-400 mt-1.5 sm:mt-2">
+            <p className="tf-hint mt-1.5 sm:mt-2">
               This may have occurred due to a recent plan downgrade.
             </p>
             {onDeactivateExcess && (
@@ -192,7 +199,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="tf-card-title max-sm:text-sm">User Seats</h3>
+                <h3 className="tf-section-title max-sm:text-sm">User Seats</h3>
                 <Badge variant="destructive">At limit</Badge>
               </div>
               <p className="tf-meta mt-0.5">{planName}</p>
@@ -202,7 +209,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           <div className="text-right">
             <div className="text-xl max-sm:text-lg font-bold text-gray-900">
               {seatData.used}
-              <span className="text-sm max-sm:text-[13px] text-gray-400">/{seatData.limit === -1 ? '∞' : seatData.limit}</span>
+              <span className="tf-body-muted">/{seatData.limit === -1 ? '∞' : seatData.limit}</span>
             </div>
             <p className="tf-meta">
               {seatData.total_remaining === -1 ? 'Unlimited' : `${seatData.total_remaining} available`}
@@ -212,7 +219,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
 
         {/* Progress Bar */}
         <div className="mb-3 sm:mb-4">
-          <div className="flex items-center justify-between text-sm max-sm:text-[13px] mb-1.5">
+          <div className="flex items-center justify-between text-sm mb-1.5">
             <span className="text-gray-500">Usage</span>
             <span className="font-semibold text-destructive">100%</span>
           </div>
@@ -227,7 +234,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-brand-cyan to-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-cyan/25">
               <Plus className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="text-sm max-sm:text-[13px] text-brand-blue font-medium">
+            <span className="text-sm text-brand-blue font-medium">
               +{seatData.addon_remaining} addon seat{seatData.addon_remaining > 1 ? 's' : ''} available
             </span>
           </div>
@@ -240,8 +247,8 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-sm max-sm:text-[13px] font-semibold text-destructive-strong">Quota Exhausted</p>
-              <p className="text-sm max-sm:text-[13px] text-destructive mt-0.5">
+              <p className="text-sm font-semibold text-destructive-strong">Quota Exhausted</p>
+              <p className="text-sm text-destructive mt-0.5">
                 You have reached your user seat limit. Purchase additional seats to add more users.
               </p>
             </div>
@@ -256,14 +263,14 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm max-sm:text-[13px] font-semibold text-brand-orange-deep">Not available on Free Trial</p>
-              <p className="tf-card-desc max-sm:text-[13px] mt-0.5">
+              <p className="text-sm font-semibold text-brand-orange-deep">Not available on Free Trial</p>
+              <p className="tf-body-secondary mt-0.5">
                 Purchasing additional seats is only available for paid subscriptions.
               </p>
             </div>
             <button
               onClick={() => window.location.href = '/subscription/current-plan'}
-              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:bg-brand-orange-deep text-white text-sm max-sm:text-[13px] font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+              className="flex-shrink-0 inline-flex items-center gap-1 bg-brand-orange hover:bg-brand-orange-deep text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition-all shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
             >
               <TrendingUp className="w-3 h-3" />
               Upgrade
@@ -274,7 +281,10 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setShowAddonModal(true)}
+              aria-disabled={!canBuySeats}
+              title={canBuySeats ? undefined : SEATS_BLOCKED_MESSAGE}
+              style={!canBuySeats ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+              onClick={() => { if (!canBuySeats) return; setShowAddonModal(true); }}
               icon={<Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             >
               Add Seats

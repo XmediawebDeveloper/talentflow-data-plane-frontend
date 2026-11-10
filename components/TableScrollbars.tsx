@@ -761,6 +761,30 @@ export default function TableScrollbars() {
     // dialog body — repositions the overlay, not just the shell itself.
     document.addEventListener('scroll', scheduleSync, { capture: true, passive: true });
     window.addEventListener('resize', scheduleSync);
+    /* A CSS transition elsewhere on the page (a filter panel easing open above
+       the table) moves the shell without resizing or scrolling anything, so
+       none of the above fires and the bars stayed where the shell used to be.
+       While such a transition runs, follow it frame by frame. Transitions
+       inside a shell (row hover) never move it, so they are skipped. */
+    const moving = new Set<EventTarget>();
+    let followFrame = 0;
+    const follow = () => {
+      sync();
+      followFrame = moving.size ? requestAnimationFrame(follow) : 0;
+    };
+    const onTransitionRun = (e: TransitionEvent) => {
+      const target = e.target as Element | null;
+      if (!target || target.closest?.('.tf-table-shell')) return;
+      moving.add(target);
+      if (!followFrame) followFrame = requestAnimationFrame(follow);
+    };
+    const onTransitionDone = (e: TransitionEvent) => {
+      if (!moving.delete(e.target as EventTarget)) return;
+      if (!moving.size) scheduleSync();
+    };
+    document.addEventListener('transitionrun', onTransitionRun, true);
+    document.addEventListener('transitionend', onTransitionDone, true);
+    document.addEventListener('transitioncancel', onTransitionDone, true);
     const mutationObserver = new MutationObserver(scheduleScan);
     mutationObserver.observe(document.body, { childList: true, subtree: true });
 
@@ -768,6 +792,10 @@ export default function TableScrollbars() {
       document.removeEventListener('click', swallowClickAfterDrag, true);
       document.removeEventListener('scroll', scheduleSync, { capture: true });
       window.removeEventListener('resize', scheduleSync);
+      document.removeEventListener('transitionrun', onTransitionRun, true);
+      document.removeEventListener('transitionend', onTransitionDone, true);
+      document.removeEventListener('transitioncancel', onTransitionDone, true);
+      if (followFrame) cancelAnimationFrame(followFrame);
       mutationObserver.disconnect();
       resizeObserver.disconnect();
       if (syncFrame) cancelAnimationFrame(syncFrame);

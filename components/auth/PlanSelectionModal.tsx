@@ -533,7 +533,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                     </h3>
 
                     {/* Description */}
-                    <p className="text-xs md:text-[13px] mb-2 sm:mb-3" style={{ color: 'var(--tf-ink-subtle)', minHeight: '28px' }}>
+                    <p className="text-xs md:text-sm mb-2 sm:mb-3" style={{ color: 'var(--tf-ink-subtle)', minHeight: '28px' }}>
                       {String(plan.description || '')}
                     </p>
 
@@ -556,10 +556,10 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                           </div>
                           {isYearly && plan.monthlyPrice && plan.yearlyPrice && (plan.monthlyPrice * 12) > plan.yearlyPrice && plan.discountPercentage && (
                             <div className="flex items-center gap-1.5 sm:gap-2 mt-1 flex-wrap">
-                              <span className="text-[11px] sm:text-[13px]" style={{ color: 'var(--tf-ink-faint)', textDecoration: 'line-through' }}>
+                              <span className="text-xs sm:text-sm" style={{ color: 'var(--tf-ink-faint)', textDecoration: 'line-through' }}>
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
-                              <span className="text-[10px] sm:text-[11px]" style={{
+                              <span className="text-2xs sm:text-xs" style={{
                                 fontWeight: 600,
                                 color: 'var(--tf-success-ink)',
                                 backgroundColor: 'var(--tf-success-tint)',

@@ -3,6 +3,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { cn } from './utils';
+import { StickyBulkBar } from './sticky-bulk-bar';
 
 /**
  * One fixed place on a tabbed page for that page's `ListToolbar`.
@@ -47,6 +48,22 @@ export function ListToolbarSlotProvider({
   return (
     <ListToolbarSlotContext.Provider value={value}>{children}</ListToolbarSlotContext.Provider>
   );
+}
+
+/* A tabbed master list that places its toolbars itself (AI Interviews portals them
+   into its own slot) says so with this provider — same effect as the slot context. */
+const MasterListLayoutContext = React.createContext(false);
+export function MasterListLayout({ children }: { children: React.ReactNode }) {
+  return <MasterListLayoutContext.Provider value>{children}</MasterListLayoutContext.Provider>;
+}
+
+/** True inside a page's `ListToolbarSlotProvider` or `MasterListLayout` (a tabbed master
+ *  list such as AI Assessments / AI Interviews) — its toolbars use that page's list
+ *  layout (`.tf-jobs-toolbar`), not a tab card's. */
+export function useInListToolbarSlot(): boolean {
+  const slot = React.useContext(ListToolbarSlotContext);
+  const master = React.useContext(MasterListLayoutContext);
+  return slot !== null || master;
 }
 
 /**
@@ -131,6 +148,8 @@ export function ListBulkActions({ children }: { children: React.ReactNode }) {
   React.useLayoutEffect(() => {
     setSlot(document.querySelector<HTMLElement>('[data-list-bulk-slot]'));
   }, []);
-  if (slot) return createPortal(children, slot);
-  return <>{children}</>;
+  // Pinned to the top of the page while the list scrolls (StickyBulkBar).
+  const bar = <StickyBulkBar>{children}</StickyBulkBar>;
+  if (slot) return createPortal(bar, slot);
+  return bar;
 }

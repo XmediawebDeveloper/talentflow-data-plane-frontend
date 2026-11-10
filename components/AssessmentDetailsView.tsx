@@ -11,6 +11,7 @@ import type { AssessmentResponse, JDResponse } from '@/lib/services';
 import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
 import { isAssessmentArchived } from '@/lib/services/assessmentService';
 import { isJdDisabled, assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
+import { JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -25,7 +26,8 @@ import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import { currentResultReturnTo, isResultRestoreArrival, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import api from '@/lib/services/api';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -34,6 +36,8 @@ import InviteFilterBar, {
 } from '@/components/InviteFilterBar';
 import { RevokeInvitationDialog, EditInvitationModal } from '@/components/AssessmentInviteActions';
 import AssessmentInviteTable, {
+  isBulkActionable,
+  isBulkRevocable,
   isBulkResendable,
   isTrackedInviteCompleted,
   opensTrackedInviteDetails,
@@ -130,9 +134,9 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
     "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
 
   return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center max-sm:justify-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
-        <span className="tf-card-desc whitespace-nowrap">Go to</span>
+        <span className="tf-body-secondary whitespace-nowrap">Go to</span>
         <input
           type="number"
           min={1}
@@ -147,7 +151,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
           }}
           onBlur={commitGoToPage}
           aria-label="Go to page"
-          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+          className="tf-input w-14 h-8 sm:h-9 px-2 text-center"
         />
       </div>
 
@@ -160,7 +164,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
         <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
       </button>
 
-      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+      <span className="tf-label px-1 whitespace-nowrap">
         <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
       </span>
 
@@ -179,14 +183,14 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
 /* A tab's page heading — icon-tile + title, the same shape the AI Interview
    Details page's View JD tab opens with (`TabHeading` in
    AIInterviewDetailsView.tsx), so the two View JD tabs read as one screen. */
-function TabHeading({ icon: Icon, title }: { icon: (props: { className?: string }) => JSX.Element; title: string }) {
+function TabHeading({ icon: Icon, title }: { icon: React.ComponentType<{ className?: string }>; title: string }) {
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2.5">
         <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
           <Icon className="w-4 h-4 text-brand-blue" />
         </div>
-        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
+        <h2 className="tf-section-title tracking-tight">{title}</h2>
       </div>
     </div>
   );
@@ -344,7 +348,8 @@ export default function AssessmentDetailsView({
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   /* Edit / Continue Editing: the view's own create gate plus the host's edit
      permission (`canEdit`). Locked = greyed with a tooltip, never hidden. */
-  const canEditAssessment = canCreateAssessments && canEdit;
+  // Editing is Assessments "Edit" (assessments:update), not "Create" (2026-11-10).
+  const canEditAssessment = (isTenantAdmin || hasPermissionCode('assessments:update')) && canEdit;
   /* The All Assessments table's Unarchive gate (`canDeleteAssessments`), so the
      action is offered here to exactly who it is offered to there. */
   const canUnarchiveAssessments = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
@@ -432,7 +437,7 @@ export default function AssessmentDetailsView({
      download a report from that page can download it from this tab — the tab
      renders that page's own component, and a permission that disagreed between
      the two would put the same button on one and not the other. */
-  const canDownloadResultPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canDownloadResultPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const canBatchDownloadResults = isTenantAdmin || hasPermissionCode('assessments:batch_download');
   /* 'info' is gone from this union: Assessment Info is a horizontal view
      inside Assessment Details now (`DetailsSubTab`), not a destination the
@@ -475,7 +480,7 @@ export default function AssessmentDetailsView({
   /* WHICH of Assessment Details' two horizontal views is open. Configure
      Details — the rounds, Technical / Coding / HR — unless the reader asked
      for `?tab=info`, which is what keeps the old deep link working. */
-  type DetailsSubTab = 'configure' | 'info' | 'analytics';
+  type DetailsSubTab = 'configure' | 'info';
   const [detailsSubTab, setDetailsSubTab] = useState<DetailsSubTab>(
     requestedTab === 'info' ? 'info' : 'configure',
   );
@@ -939,7 +944,6 @@ export default function AssessmentDetailsView({
   const detailsSubTabs: { id: DetailsSubTab; label: string; icon: typeof FileText }[] = [
     { id: 'configure', label: 'Configure Details', icon: Sliders },
     { id: 'info', label: 'Assessment Info', icon: Info },
-    { id: 'analytics', label: 'Performance Analytics', icon: TrendingUp },
   ];
   /* The invitation timeline, held WITH the assessment it was built from —
      the shape the JD and the sibling list use, for the same reason. The view
@@ -1034,11 +1038,24 @@ export default function AssessmentDetailsView({
   const inviteInitialLoading = inviteLoading && inviteRows.length === 0;
   const inviteRefreshVeil = (inviteLoading || inviteRefreshing) && inviteRows.length > 0;
 
-  const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status))
+  /* This assessment's job version: Disabled OR Archived locks its invite
+     actions (was Disabled only), and names it in the banner. */
+  const thisJobVersion = jobVersions.find((v) => v.id === assessment?.jd_id);
+  const thisVersionLock = splitJobVersions(thisJobVersion ? [thisJobVersion] : []).locked[0] ?? null;
+  const thisVersionLocked = isJdDisabled(thisJobVersion?.status) || !!thisVersionLock;
+  const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || thisVersionLocked)
     ? []
-    : inviteRows.filter(isBulkResendable).map((inv: any) => inv.id);
+    : inviteRows.filter(isBulkActionable).map((inv: any) => inv.id);
   const allInvitesSelected =
     inviteSelectableIds.length > 0 && inviteSelectableIds.every((id: string) => inviteSelectedIds.has(id));
+  /* The bulk bar offers Resend/Revoke only when EVERY selected row is
+     uniformly that action-eligible — same rule as the Invite Tracking popup
+     (Assessments.tsx's allTrackingResendable/allTrackingRevocable): a mixed
+     selection (one Invited, one Expired) gets neither button, since there is
+     no single action that would apply to both rows at once. */
+  const inviteSelectedRows = inviteRows.filter((inv: any) => inviteSelectedIds.has(inv.id));
+  const allInviteSelectedResendable = inviteSelectedRows.length > 0 && inviteSelectedRows.every(isBulkResendable);
+  const allInviteSelectedRevocable = inviteSelectedRows.length > 0 && inviteSelectedRows.every(isBulkRevocable);
   const toggleInviteSelectAll = () =>
     setInviteSelectedIds(() => (allInvitesSelected ? new Set<string>() : new Set<string>(inviteSelectableIds)));
   const toggleInviteSelectOne = (id: string) =>
@@ -1120,7 +1137,7 @@ export default function AssessmentDetailsView({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setInviteSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(inviteRows.filter(isBulkResendable).map((inv: any) => inv.id));
+      const valid = new Set(inviteRows.filter(isBulkActionable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
@@ -1227,6 +1244,40 @@ export default function AssessmentDetailsView({
     if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
     setIsBulkResendingInvites(false);
     setShowInviteBulkResend(false);
+    setInviteSelectedIds(new Set());
+    await reloadInvites();
+  };
+
+  /* Bulk Revoke — mirrors Bulk Resend above (and the Track Invites popup's
+     handleTrackingBulkRevoke): sequential, re-derives eligibility at send
+     time since a row's status can have moved since it was ticked. */
+  const [showInviteBulkRevoke, setShowInviteBulkRevoke] = useState(false);
+  const [isBulkRevokingInvites, setIsBulkRevokingInvites] = useState(false);
+
+  const handleInviteBulkRevoke = async () => {
+    const targets = inviteRows.filter(
+      (inv: any) => inviteSelectedIds.has(inv.id) && isBulkRevocable(inv)
+    );
+    if (targets.length === 0) {
+      setShowInviteBulkRevoke(false);
+      return;
+    }
+    setIsBulkRevokingInvites(true);
+    let revoked = 0;
+    let failedCount = 0;
+    for (const invitation of targets) {
+      try {
+        await assessmentService.revokeInvitation(assessment.id, invitation.id);
+        revoked += 1;
+      } catch (error) {
+        console.error('Failed to revoke invitation:', invitation.id, error);
+        failedCount += 1;
+      }
+    }
+    if (revoked > 0) toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
+    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    setIsBulkRevokingInvites(false);
+    setShowInviteBulkRevoke(false);
     setInviteSelectedIds(new Set());
     await reloadInvites();
   };
@@ -1514,84 +1565,13 @@ export default function AssessmentDetailsView({
     return `${minutes} min`;
   }, [assessment.duration_minutes]);
 
-  // Analytics data derived from assessment - uses correct API field names
-  const formatTime = (seconds: number | null | undefined): string => {
-    if (seconds == null) return 'N/A';
-    const mins = Math.floor(seconds / 60);
-    if (mins >= 60) {
-      const hrs = Math.floor(mins / 60);
-      const remainingMins = mins % 60;
-      return `${hrs}h ${remainingMins}m`;
-    }
-    return `${mins} min`;
-  };
-
-  // Same single-bucket classifier as the Track Invites popup so the cards
-  // here stay in sync. recentActivity is now an expanded event list (one
-  // row per lifecycle moment), so we dedupe by invitation id before
-  // bucketing.
-  const _uniqueInvites: any[] = (() => {
-    const seen = new Map<string, any>();
-    for (const ev of recentActivity) {
-      if (ev?.id && !seen.has(ev.id)) seen.set(ev.id, ev);
-    }
-    return Array.from(seen.values());
-  })();
-  const _now = new Date();
-  const _bucket = (inv: any): 'completed' | 'failed' | 'terminated' | 'expired' | 'started' | 'sent' => {
-    const s = (inv.status || '').toLowerCase();
-    if (s === 'completed' || inv.completed_at) return 'completed';
-    // 'abandoned' = candidate left mid-assessment → its own "Terminated"
-    // bucket (AI Interview wording), not an invite-delivery failure.
-    if (s === 'abandoned') return 'terminated';
-    if (['failed', 'bounced'].includes(s)) return 'failed';
-    if (s === 'expired') return 'expired';
-    if (!inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < _now) {
-      return 'expired';
-    }
-    if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
-    return 'sent';
-  };
-  const _bucketCounts = {
-    completed: 0,
-    failed: 0,
-    terminated: 0,
-    expired: 0,
-    started: 0,
-    sent: 0,
-  };
-  for (const inv of _uniqueInvites) {
-    _bucketCounts[_bucket(inv)] += 1;
-  }
-  const _totalInvites = assessment.candidates || assessment.invitations_count || _uniqueInvites.length || 0;
-  const _completed = _bucketCounts.completed || assessment.completed_count || 0;
-  const analyticsData = {
-    totalInvites: _totalInvites,
-    expired: _bucketCounts.expired,
-    failed: _bucketCounts.failed,
-    terminated: _bucketCounts.terminated,
-    started: _bucketCounts.started || assessment.in_progress_count || 0,
-    completed: _completed,
-    inProgress: _bucketCounts.started || assessment.in_progress_count || 0,
-    notStarted: assessment.pending_count || 0,
-    completionRate: _totalInvites > 0 ? Math.round((_completed / _totalInvites) * 100) : 0,
-    averageScore: assessment.average_score as number | null,
-    averageTime: formatTime(assessment.average_time_seconds),
-    passRate: assessment.pass_rate !== null && assessment.pass_rate !== undefined
-      ? `${assessment.pass_rate}%`
-      : 'N/A',
-    hrScore: assessment.hr_score as number | null,
-    technicalScore: assessment.technical_score as number | null,
-    codingScore: assessment.coding_score as number | null,
-  };
-
   // Outer/inner chrome matches job-details: scrolling <main>, centred
   // max-w-[1400px] column, then one padded white card that owns ALL horizontal
   // padding. Sections below therefore carry no px-* of their own.
   return (
-    <main aria-busy={isReloading} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main aria-busy={isReloading} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
           card's full height to travel within. Nested inside a padding wrapper it
           was boxed to its own height and could never actually stick. */}
@@ -1643,6 +1623,13 @@ export default function AssessmentDetailsView({
           `sections`/`formattedDuration` this file derives. No new request, no
           new field, nothing hardcoded. A value the API did not return drops
           its item and its bullet rather than printing a blank. */}
+      {/* This assessment's job version is Disabled / Archived: say so, and
+          which versions invitation actions still work on. */}
+      {thisVersionLock && (
+        <div className="mb-4">
+          <JobVersionsLockBanner locked={[thisVersionLock]} active={splitJobVersions(jobVersions).active} />
+        </div>
+      )}
       <div className="mb-5">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -1663,7 +1650,7 @@ export default function AssessmentDetailsView({
                     does not touch the API value. */}
                 {/* Same size/weight as the Job Details title (and the app's
                     page-title standard, 18px phone / 20px tablet+). */}
-                <h1 className="min-w-0 max-w-full tf-page-title truncate">
+                <h1 className="tf-page-title min-w-0 max-w-full truncate">
                   {assessment.jd_title || stripVersionFromTitle(assessment.title)}
                 </h1>
                 {assessment.status && (
@@ -1769,10 +1756,10 @@ export default function AssessmentDetailsView({
                       >
                         {/* Header - what the list is, and how long it is. */}
                         <div className="flex items-baseline justify-between gap-2 px-3 py-2">
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">
+                          <span className="tf-caption tracking-tight">
                             Job Versions
                           </span>
-                          <span className="text-2xs text-gray-500 dark:text-slate-400">
+                          <span className="tf-micro-hint">
                             {sortedJobVersions.length} version{sortedJobVersions.length === 1 ? '' : 's'}
                           </span>
                         </div>
@@ -1840,7 +1827,7 @@ export default function AssessmentDetailsView({
                                       ) : null}
                                     </span>
                                     {/* The version number carries the row. */}
-                                    <span className="tf-cell-name tabular-nums flex-shrink-0">
+                                    <span className="tf-row-title tabular-nums flex-shrink-0">
                                       V{version.version_number ?? 1}
                                     </span>
                                     {/* CURRENT = the newest version of the job,
@@ -1851,7 +1838,7 @@ export default function AssessmentDetailsView({
                                         newest, and separate the moment you are
                                         not. */}
                                     {version.is_latest_version && (
-                                      <span className="flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
+                                      <span className="tf-badge flex-shrink-0 text-2xs bg-brand-blue/10 text-brand-blue">
                                         Current
                                       </span>
                                     )}
@@ -1885,7 +1872,7 @@ export default function AssessmentDetailsView({
                                       it, and the line goes entirely when
                                       neither is known. */}
                                   {(author || versionDate) && (
-                                    <div className="pl-6 mt-0.5 flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-400">
+                                    <div className="pl-6 mt-0.5 flex items-center gap-1.5 tf-micro-hint">
                                       {author && (
                                         <span className="truncate" title={author}>Created by {author}</span>
                                       )}
@@ -1915,7 +1902,7 @@ export default function AssessmentDetailsView({
                     <button
                       type="button"
                       onClick={toggleAssessmentVersionMenu}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium hover:bg-brand-blue-2 transition-colors whitespace-nowrap"
+                      className="tf-btn tf-btn-primary gap-1 px-2.5 py-1 bg-brand-blue rounded-full text-xs hover:bg-brand-blue-2 transition-colors shadow-none justify-start"
                       aria-label={`Select assessment version, currently V${assessment.version}`}
                       aria-haspopup="menu"
                       aria-expanded={showAssessmentVersionMenu}
@@ -1940,11 +1927,11 @@ export default function AssessmentDetailsView({
                             the selected job version's assessments and nothing
                             else. */}
                         <div className="flex items-baseline justify-between gap-2 px-3 py-2">
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">
+                          <span className="tf-caption tracking-tight">
                             Assessment Versions
                           </span>
                           {selectedJobVersionNumber != null && (
-                            <span className="text-2xs text-gray-500 dark:text-slate-400">
+                            <span className="tf-micro-hint">
                               Job V{selectedJobVersionNumber}
                             </span>
                           )}
@@ -1963,10 +1950,10 @@ export default function AssessmentDetailsView({
                              assessments are exactly what must not appear
                              here. */
                           <div className="px-3 py-3">
-                            <div className="text-xs font-medium text-gray-700 dark:text-slate-200">
+                            <div className="tf-caption">
                               No Assessment Version Available
                             </div>
-                            <div className="mt-0.5 text-2xs text-gray-500 dark:text-slate-400">
+                            <div className="mt-0.5 tf-micro-hint">
                               {selectedJobVersionNumber != null
                                 ? `No assessment version is currently associated with Job V${selectedJobVersionNumber}.`
                                 : 'This assessment is not linked to a job version.'}
@@ -1997,23 +1984,23 @@ export default function AssessmentDetailsView({
                                 } ${assessmentSwitchingTo && !isSwitching ? 'opacity-60' : ''}`}
                               >
                                 <div className="flex items-center justify-between gap-2">
-                                  <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                  <span className="tf-caption">
                                     V{version.version ?? 1}
                                   </span>
                                   <div className="flex items-center gap-1">
                                     {version.status && (
-                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                      <span className="tf-badge tf-micro-hint bg-gray-100 dark:bg-slate-800 capitalize">
                                         {version.status}
                                       </span>
                                     )}
                                     {isSwitching ? (
                                       <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
                                     ) : isCurrentVersion ? (
-                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
+                                      <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue">
                                         Selected
                                       </span>
                                     ) : (version.version ?? 0) === latestAssessmentVersion ? (
-                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success-subtle text-success">
+                                      <span className="tf-badge text-2xs bg-success-subtle text-success">
                                         Latest
                                       </span>
                                     ) : null}
@@ -2029,7 +2016,7 @@ export default function AssessmentDetailsView({
                                     version holds more than one assessment at
                                     the same version number. */}
                                 {(version.published_at || version.created_at) && (
-                                  <div className="text-2xs text-gray-500 dark:text-slate-400 truncate">
+                                  <div className="tf-micro-hint truncate">
                                     {formatIST(version.published_at || version.created_at)}
                                   </div>
                                 )}
@@ -2053,22 +2040,29 @@ export default function AssessmentDetailsView({
                   Share: a labelled primary "Continue Editing", the AI Interview
                   details page's draft button (`AIInterviewDetailsView`), in
                   place of the pencil. */}
-              {onEdit && draftLocked && (
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="sm"
-                  onClick={canEditAssessment ? onEdit : undefined}
-                  aria-disabled={!canEditAssessment}
-                  aria-label="Continue editing this draft assessment"
-                  title={!canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
-                  icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-sm flex-shrink-0 whitespace-nowrap ${canEditAssessment ? 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20' : 'opacity-50 cursor-not-allowed'}`}
-                >
-                  <span className="hidden sm:inline">Continue Editing</span>
-                  <span className="sm:hidden">Edit</span>
-                </Button>
-              )}
+              {onEdit && draftLocked && (() => {
+                // A disabled/archived JD locks edits the same way it locks
+                // Share below — a draft left pointing at a dead job version
+                // should not be editable just because it never sent an invite.
+                const editJdLockMessage = assessmentJobLockMessage(jobVersions.find((v) => v.id === assessment?.jd_id)?.status);
+                const editBlocked = !canEditAssessment || !!editJdLockMessage;
+                return (
+                  <Button
+                    type="button"
+                    variant="primary"
+                    size="sm"
+                    onClick={editBlocked ? undefined : onEdit}
+                    aria-disabled={editBlocked}
+                    aria-label="Continue editing this draft assessment"
+                    title={editJdLockMessage ? editJdLockMessage : !canEditAssessment ? 'You do not have permission to edit assessments' : 'Continue editing this draft assessment'}
+                    icon={<Edit2 className="w-3.5 h-3.5 flex-shrink-0" />}
+                    className={` px-3 sm:px-4 min-h-[40px] flex-shrink-0 whitespace-nowrap ${editBlocked ? 'opacity-50 cursor-not-allowed' : 'ring-2 ring-brand-blue/40 shadow-md shadow-brand-blue/20'}`}
+                  >
+                    <span className="hidden sm:inline">Continue Editing</span>
+                    <span className="sm:hidden">Edit</span>
+                  </Button>
+                );
+              })()}
               {onShare && (() => {
         // Share is blocked for Archived (out of circulation) AND
         // once invites have been revoked (assessment is sealed —
@@ -2103,7 +2097,7 @@ export default function AssessmentDetailsView({
             disabled={disabled}
             aria-disabled={disabled || shareDenied}
             title={shareDenied ? 'You do not have permission to share assessments' : blockedReason}
-            className={shareDenied && !disabled ? 'opacity-50 cursor-not-allowed' : ''}
+            className={`${(shareDenied && !disabled ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
             icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           >
             Invite
@@ -2126,7 +2120,7 @@ export default function AssessmentDetailsView({
                   aria-disabled={!canUnarchiveAssessments}
                   aria-label="Archive assessment"
                   title={canUnarchiveAssessments ? 'Archive assessment' : 'You do not have permission to archive assessments'}
-                  className={`h-8 w-8 px-0 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
+                  className={`h-8 w-8 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isArchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Archive className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
@@ -2141,7 +2135,7 @@ export default function AssessmentDetailsView({
                   aria-disabled={!canUnarchiveAssessments}
                   aria-label="Unarchive assessment"
                   title={canUnarchiveAssessments ? 'Unarchive assessment' : 'You do not have permission to unarchive assessments'}
-                  className={`h-8 w-8 px-0 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
+                  className={`h-8 w-8 flex-shrink-0 ${canUnarchiveAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
                 >
                   {isUnarchiving ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArchiveRestore className="w-4 h-4 text-menu-icon-archive" />}
                 </Button>
@@ -2150,22 +2144,38 @@ export default function AssessmentDetailsView({
                   action (there a labelled button; here the icon-only shape
                   every other action on this header already uses). Active only:
                   a draft has nothing published yet to duplicate, and an
-                  archived record is restored, not duplicated. */}
-              {assessment.status === 'Active' && (
+                  archived record is restored, not duplicated. Also mirrors the
+                  All Assessments table's own gate: nobody invited yet means
+                  this version is still editable, so it's edited, not duplicated. */}
+              {assessment.status === 'Active' && (() => {
+                const notInvited = (assessment.invitations_count ?? 0) === 0;
+                const jdStatus = jobVersions.find((v) => v.id === assessment?.jd_id)?.status;
+                const jdLockMessage = assessmentJobLockMessage(jdStatus);
+                const duplicateDisabled = !canCreateAssessments || notInvited || !!jdLockMessage;
+                return (
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
-                  onClick={canCreateAssessments ? handleDuplicate : undefined}
-                  disabled={isDuplicating}
-                  aria-disabled={!canCreateAssessments}
+                  onClick={duplicateDisabled ? undefined : handleDuplicate}
+                  disabled={isDuplicating || duplicateDisabled}
+                  aria-disabled={duplicateDisabled}
                   aria-label="Duplicate assessment"
-                  title={canCreateAssessments ? 'Duplicate as a new version' : 'You do not have permission to duplicate assessments'}
-                  className={`h-8 w-8 px-0 flex-shrink-0 ${canCreateAssessments ? '' : 'opacity-50 cursor-not-allowed'}`}
+                  title={
+                    !canCreateAssessments
+                      ? 'You do not have permission to duplicate assessments'
+                      : jdLockMessage
+                      ? jdLockMessage
+                      : notInvited
+                      ? 'No candidates invited yet — edit this version instead.'
+                      : 'Duplicate as a new version'
+                  }
+                  className={`h-8 w-8 flex-shrink-0 ${duplicateDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   {isDuplicating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Copy className="w-4 h-4 text-menu-icon-download" />}
                 </Button>
-              )}
+                );
+              })()}
               {onEdit && !isArchivedAssessment && (() => {
                 /* The Assessments page's own edit rule (`handleEditAssessment`):
                    an Active assessment that has gone out to even one candidate
@@ -2191,7 +2201,7 @@ export default function AssessmentDetailsView({
                     : editLocked
                     ? 'Cannot edit — this assessment has already been sent to candidates'
                     : 'Edit assessment'}
-                  className={`h-8 w-8 px-0 flex-shrink-0 ${!canEditAssessment && !editLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  className={`h-8 w-8 flex-shrink-0 ${!canEditAssessment && !editLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Edit2 className="w-4 h-4 text-menu-icon-edit" />
                 </Button>
@@ -2223,8 +2233,10 @@ export default function AssessmentDetailsView({
         {/* Desktop (lg+): a sticky vertical rail on the left, content on the
             right — the AI Interview / AI Assessment candidate result pages'
             layout. Tablet/mobile: the wrapping horizontal `tabPill` bar. */}
-        <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
+        <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
+          {/* Phones / tablets (globals.css, `.tf-detail-nav`): the Job Details page's
+              underlined tab strip, scrolling sideways. From lg the vertical rail. */}
+          <nav className="tf-detail-nav p-2 sm:p-3" aria-label="Assessment details sections">
             <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
@@ -2287,9 +2299,9 @@ export default function AssessmentDetailsView({
         {activeTab === 'overview' && (
           <div className="space-y-6">
             {/* Assessment Details Section */}
-            <div className="min-w-0 bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+            <div className="tf-card-soft min-w-0">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 flex flex-wrap items-center gap-2 tracking-tight">
+                <h3 className="tf-row-name sm:text-base flex flex-wrap items-center gap-2 tracking-tight">
                   <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                   </div>
@@ -2363,7 +2375,7 @@ export default function AssessmentDetailsView({
                           <Clock className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                          <div className="tf-meta-strong mb-1">Total Duration</div>
+                          <div className="tf-meta mb-1">Total Duration</div>
                           <div className="text-xl font-semibold text-gray-900 tracking-tight">{formattedDuration}</div>
                         </div>
                       </div>
@@ -2374,7 +2386,7 @@ export default function AssessmentDetailsView({
 
                     {/* Sections Details - Moved from Sections tab */}
                     <div className="mt-8 pt-6 border-t border-gray-200">
-                      <h4 className="text-sm font-medium text-gray-700 mb-4">Section Details</h4>
+                      <h4 className="tf-label mb-4">Section Details</h4>
                       <div className="space-y-3">
                         {sections.length > 0 ? (
                           sections.map((section, index) => {
@@ -2421,7 +2433,7 @@ export default function AssessmentDetailsView({
                                         score" sub-line and an "N points" pill — is
                                         deliberately absent; the split is reported
                                         by the Weightage card to the right. */}
-                                    <h5 className="text-sm text-gray-900 font-medium tracking-tight truncate">{section.name}</h5>
+                                    <h5 className="tf-row-name tracking-tight truncate">{section.name}</h5>
                                   </div>
 
                                   {/* Two tiles, always side by side — a plain
@@ -2441,15 +2453,15 @@ export default function AssessmentDetailsView({
                                       title by itself. */}
                                   {section.type !== 'hr' && (
                                     <div className="flex items-stretch gap-1.5 sm:gap-2 flex-shrink-0">
-                                      <div className="px-2.5 py-1.5 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
-                                        <div className="text-2xs text-gray-600 leading-none mb-1">Question Type</div>
-                                        <div className="text-xs text-gray-900 font-medium leading-none whitespace-nowrap">
+                                      <div className="tf-panel px-2.5 py-1.5">
+                                        <div className="tf-micro-hint leading-none mb-1">Question Type</div>
+                                        <div className="tf-caption leading-none whitespace-nowrap">
                                           {section.type === 'coding' ? 'Code Challenge' : 'Mixed Format'}
                                         </div>
                                       </div>
-                                      <div className="px-2.5 py-1.5 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
-                                        <div className="text-2xs text-gray-600 leading-none mb-1">Weightage</div>
-                                        <div className="text-xs text-gray-900 font-medium leading-none whitespace-nowrap">{section.percentage}%</div>
+                                      <div className="tf-panel px-2.5 py-1.5">
+                                        <div className="tf-micro-hint leading-none mb-1">Weightage</div>
+                                        <div className="tf-caption leading-none whitespace-nowrap">{section.percentage}%</div>
                                       </div>
                                     </div>
                                   )}
@@ -2465,7 +2477,7 @@ export default function AssessmentDetailsView({
                                   {/* One step down from the title in both size and
                                       ink, so the card has a hierarchy rather than
                                       two lines of equal weight. */}
-                                  <p className="tf-meta-strong leading-relaxed">
+                                  <p className="tf-meta leading-relaxed">
                                     {section.type === 'hr' && 'Evaluates communication skills, cultural fit, and behavioral competencies.'}
                                     {section.type === 'technical' && 'Tests domain knowledge, technical concepts, and problem-solving abilities.'}
                                     {section.type === 'coding' && 'Assesses programming skills through hands-on coding challenges.'}
@@ -2487,9 +2499,9 @@ export default function AssessmentDetailsView({
                                             <li key={i} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
                                               <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-2xs font-bold flex items-center justify-center mt-0.5 shadow-sm">{i + 1}</span>
                                               <div className="flex-1 min-w-0">
-                                                <p className="text-sm text-gray-800 [overflow-wrap:anywhere]">{text}</p>
+                                                <p className="tf-body [overflow-wrap:anywhere]">{text}</p>
                                                 {kind && (
-                                                  <p className="mt-1 text-2xs text-gray-500">{isYesNo ? 'Yes / No' : 'Text answer'}</p>
+                                                  <p className="mt-1 tf-micro-hint">{isYesNo ? 'Yes / No' : 'Text answer'}</p>
                                                 )}
                                               </div>
                                             </li>
@@ -2502,7 +2514,7 @@ export default function AssessmentDetailsView({
                                   {/* Topics */}
                                   {section.type !== 'hr' && section.topics.length > 0 && (
                                     <div>
-                                      <div className="text-xs text-gray-600 mb-1.5 font-medium">Topics Covered</div>
+                                      <div className="tf-caption mb-1.5">Topics Covered</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {section.topics.map((topic: any, i: number) => (
                                           <span key={i} className="max-w-full [overflow-wrap:anywhere] px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
@@ -2516,7 +2528,7 @@ export default function AssessmentDetailsView({
                                   {/* Coding Languages */}
                                   {section.type === 'coding' && section.languages && section.languages.length > 0 && (
                                     <div>
-                                      <div className="text-xs text-gray-600 mb-1.5 font-medium">Programming Languages</div>
+                                      <div className="tf-caption mb-1.5">Programming Languages</div>
                                       <div className="flex flex-wrap gap-1.5">
                                         {section.languages.map((lang, i) => (
                                           /* Each language's own mark, as on the
@@ -2539,7 +2551,7 @@ export default function AssessmentDetailsView({
                         ) : (
                           <div className="bg-slate-50 rounded-xl border-2 border-dashed border-brand-blue/20 p-6 text-center">
                             <FileText className="w-10 h-10 text-brand-blue/40 mx-auto mb-2" />
-                            <p className="tf-card-desc">No sections configured</p>
+                            <p className="tf-body-secondary">No sections configured</p>
                           </div>
                         )}
                       </div>
@@ -2588,15 +2600,15 @@ export default function AssessmentDetailsView({
                   const hasData = assessment.jd_complexity || assessment.jd_experience_level || assessment.jd_primary_domain || skillDepth.length > 0 || codingLanguages.length > 0;
 
                   return (
-                    <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div className="tf-card-soft">
                       <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                         <div className="flex items-center gap-2 mb-1">
                           <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                             <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                           </div>
-                          <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
+                          <h3 className="tf-row-name sm:text-base tracking-tight">Assessment Info</h3>
                         </div>
-                        <p className="tf-card-desc">Metadata extracted from the job description used to generate this assessment</p>
+                        <p className="tf-body-secondary">Metadata extracted from the job description used to generate this assessment</p>
                       </div>
 
                       {!hasData ? (
@@ -2612,61 +2624,61 @@ export default function AssessmentDetailsView({
                               viewport's. */}
                           <div className="grid grid-cols-1 @xl:grid-cols-2 @4xl:grid-cols-3 gap-4 sm:gap-5">
                             {/* Job Complexity Level */}
-                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+                            <div className="tf-card-soft min-w-0 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Layers className="w-4 h-4 text-brand-blue" />
                                 </div>
-                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
+                                <span className="min-w-0 tf-eyebrow tracking-wide">Job Complexity</span>
                               </div>
                               {assessment.jd_complexity ? (
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${complexityColor(assessment.jd_complexity)}`}>
                                   {complexityLabel(assessment.jd_complexity)}
                                 </span>
                               ) : (
-                                <span className="text-sm text-gray-400">Not available</span>
+                                <span className="tf-body-muted">Not available</span>
                               )}
                             </div>
 
                             {/* Experience Level */}
-                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+                            <div className="tf-card-soft min-w-0 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <TrendingUp className="w-4 h-4 text-brand-cyan" />
                                 </div>
-                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+                                <span className="min-w-0 tf-eyebrow tracking-wide">Experience Level</span>
                               </div>
                               {assessment.jd_experience_level ? (
                                 <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(assessment.jd_experience_level)}`}>
                                   {expLabel(assessment.jd_experience_level)}
                                 </span>
                               ) : (
-                                <span className="text-sm text-gray-400">Not available</span>
+                                <span className="tf-body-muted">Not available</span>
                               )}
                             </div>
 
                             {/* Primary Domain */}
-                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+                            <div className="tf-card-soft min-w-0 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Globe className="w-4 h-4 text-brand-blue" />
                                 </div>
-                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
+                                <span className="min-w-0 tf-eyebrow tracking-wide">Primary Domain</span>
                               </div>
                               {assessment.jd_primary_domain ? (
-                                <span className="text-sm font-medium text-gray-900 [overflow-wrap:anywhere]">{assessment.jd_primary_domain}</span>
+                                <span className="tf-row-name [overflow-wrap:anywhere]">{assessment.jd_primary_domain}</span>
                               ) : (
-                                <span className="text-sm text-gray-400">Not available</span>
+                                <span className="tf-body-muted">Not available</span>
                               )}
                             </div>
 
                             {/* Coding Requirement */}
-                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+                            <div className="tf-card-soft min-w-0 p-4 sm:p-5">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <Code className="w-4 h-4 text-brand-cyan" />
                                 </div>
-                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
+                                <span className="min-w-0 tf-eyebrow tracking-wide">Coding Requirement</span>
                               </div>
                               <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
                                 {assessment.coding_enabled ? 'Required' : 'Not Required'}
@@ -2674,12 +2686,12 @@ export default function AssessmentDetailsView({
                             </div>
 
                             {/* Eligible Programming Languages */}
-                            <div className="min-w-0 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:p-5 @xl:col-span-2">
+                            <div className="tf-card-soft min-w-0 p-4 sm:p-5 @xl:col-span-2">
                               <div className="flex items-center gap-2 mb-2">
                                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                                   <Zap className="w-4 h-4 text-brand-orange-deep" />
                                 </div>
-                                <span className="min-w-0 text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
+                                <span className="min-w-0 tf-eyebrow tracking-wide">Eligible Programming Languages</span>
                               </div>
                               {codingLanguages.length > 0 ? (
                                 <div className="flex flex-wrap gap-2">
@@ -2694,7 +2706,7 @@ export default function AssessmentDetailsView({
                                   ))}
                                 </div>
                               ) : (
-                                <span className="text-sm text-gray-400">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
+                                <span className="tf-body-muted">{assessment.coding_enabled ? 'No languages specified' : 'N/A — coding not required'}</span>
                               )}
                             </div>
                           </div>
@@ -2706,7 +2718,7 @@ export default function AssessmentDetailsView({
                             <div>
                               <div className="flex flex-wrap items-center gap-2 mb-3">
                                 <Star className="w-4 h-4 text-brand-blue" />
-                                <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
+                                <h4 className="tf-row-name tracking-tight">Must-Have Skills</h4>
                                 <span className="tf-meta">(Required skills extracted from JD)</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
@@ -2737,7 +2749,7 @@ export default function AssessmentDetailsView({
                           <div>
                             <div className="flex flex-wrap items-center gap-2 mb-3">
                               <Star className="w-4 h-4 text-brand-cyan" />
-                              <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
+                              <h4 className="tf-row-name tracking-tight">Nice-to-Have Skills</h4>
                               <span className="tf-meta">(Preferred skills extracted from JD)</span>
                             </div>
                             {niceToHaveSkills.length > 0 ? (
@@ -2759,7 +2771,7 @@ export default function AssessmentDetailsView({
                                 })}
                               </div>
                             ) : (
-                              <span className="inline-flex items-center px-3 py-1.5 rounded-lg text-sm text-gray-400 bg-gray-50 border border-gray-200">
+                              <span className="inline-flex items-center px-3 py-1.5 rounded-lg tf-body-muted bg-gray-50 border border-gray-200">
                                 None configured for this JD
                               </span>
                             )}
@@ -2770,162 +2782,15 @@ export default function AssessmentDetailsView({
                   );
                 })()}
 
-                {/* PERFORMANCE ANALYTICS — its own horizontal view.
-
-                    It used to sit at the foot of Configure Details, beneath the
-                    rounds, which ended a configuration panel with results. Same
-                    block and same data; only its parent changed — and the
-                    `mt-8 pt-6 border-t` that divided it from the rounds above
-                    went with the division, since a rule across the top of a tab
-                    panel separates it from nothing. */}
-                {detailsSubTab === 'analytics' && (
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-4">Performance Analytics</h4>
-
-                    {analyticsData.completed === 0 ? (
-                      <div className="text-center py-8 bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02]">
-                        <TrendingUp className="w-10 h-10 text-brand-blue/30 mx-auto mb-2" />
-                        <p className="tf-card-desc mb-1">No performance data available yet</p>
-                        <p className="tf-meta">Data will appear after candidates complete the assessment</p>
-                      </div>
-                    ) : (
-                      <div className={`grid grid-cols-1 ${assessment.technical_enabled && assessment.coding_enabled ? 'lg:grid-cols-2' : ''} gap-4 sm:gap-5`}>
-                        {/* Technical Performance */}
-                        {assessment.technical_enabled && (
-                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
-                            <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Technical Performance</h5>
-                            <div className="space-y-3">
-                              {(() => {
-                                const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
-                                const denom = completedInvites.length || analyticsData.completed || 0;
-                                const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
-                                const passed = completedInvites.filter((a: any) => (a.technical_score || 0) >= 70).length;
-                                const average = completedInvites.filter((a: any) => (a.technical_score || 0) >= 50 && (a.technical_score || 0) < 70).length;
-                                const below = completedInvites.filter((a: any) => (a.technical_score || 0) < 50).length;
-                                return (
-                                  <>
-                                    {/* Passed (≥70%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(passed)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Average (50-69%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Average (50-69%)</span>
-                                        <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-brand-orange h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(average)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Below Average (<50%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(below)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Coding Performance */}
-                        {assessment.coding_enabled && (
-                          <div className="min-w-0 bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4 sm:p-5">
-                            <h5 className="text-sm font-semibold text-gray-900 mb-4 tracking-tight">Coding Performance</h5>
-                            <div className="space-y-3">
-                              {(() => {
-                                const completedInvites = _uniqueInvites.filter((a: any) => _bucket(a) === 'completed');
-                                const denom = completedInvites.length || analyticsData.completed || 0;
-                                const pct = (count: number) => denom > 0 ? Math.min(100, Math.round((count / denom) * 100)) : 0;
-                                const passed = completedInvites.filter((a: any) => (a.coding_score || 0) >= 70).length;
-                                const average = completedInvites.filter((a: any) => (a.coding_score || 0) >= 50 && (a.coding_score || 0) < 70).length;
-                                const below = completedInvites.filter((a: any) => (a.coding_score || 0) < 50).length;
-                                return (
-                                  <>
-                                    {/* Passed (≥70%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-green-500 to-green-600 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(passed)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Average (50-69%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Average (50-69%)</span>
-                                        <span className="text-sm font-semibold text-brand-orange-deep">{pct(average)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-brand-orange h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(average)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-
-                                    {/* Below Average (<50%) */}
-                                    <div>
-                                      <div className="flex items-center justify-between gap-2 mb-2">
-                                        <span className="tf-body">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-100 rounded-full h-2">
-                                        <div
-                                          className="bg-gradient-to-r from-red-400 to-red-500 h-2 rounded-full transition-all"
-                                          style={{ width: `${pct(below)}%` }}
-                                        ></div>
-                                      </div>
-                                    </div>
-                                  </>
-                                );
-                              })()}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Assessment Guidance — mirrors the JD view's guidance section so
                 recruiters see it without switching to the View JD tab. */}
             {jdData?.assessment_guidance && (
-              <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="tf-card-soft">
                 <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-                  <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+                  <h3 className="tf-row-name sm:text-base flex items-center gap-2 tracking-tight">
                     <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                     </div>
@@ -2933,7 +2798,7 @@ export default function AssessmentDetailsView({
                   </h3>
                 </div>
                 <div className="p-3 sm:p-4 lg:p-6">
-                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 text-sm text-gray-800">
+                  <div className="px-3 sm:px-4 py-3 sm:py-4 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15 tf-body">
                     <div className="markdown-content leading-relaxed">
                       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
                         {jdData.assessment_guidance}
@@ -2959,12 +2824,12 @@ export default function AssessmentDetailsView({
             and the Close button in its footer. The results count and the pager
             stay, in the popup's footer treatment. */}
         {activeTab === 'invitations' && (
-          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 flex flex-col">
+          <div className="tf-card-soft flex flex-col">
             {/* Header — this page's card header, carrying the popup's Refresh
                 control. The popup's title block is its dialog's; the tab is
                 already labelled by the nav entry that opened it. */}
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-wrap items-center justify-between gap-2">
-              <h3 className="min-w-0 text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
+              <h3 className="min-w-0 tf-row-name sm:text-base flex items-center gap-2 tracking-tight">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
@@ -2994,10 +2859,10 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              /* Phone: one swipeable row with full labels — the Assessments
-                 page's Invite Status popup treatment; three to a row cut every
-                 label short. */
-              gridClassName="flex gap-2 overflow-x-auto scrollbar-hide [&>*]:shrink-0 [&>*]:min-w-[6.75rem] sm:grid sm:grid-cols-4 lg:grid-cols-7 sm:gap-3 sm:overflow-visible sm:[&>*]:min-w-0"
+              /* The Job Openings module's Track Invites stat grid (globals.css,
+                 `.tf-tracker-stats`): 2 per row on phones, so every label shows in
+                 full without a sideways-scrolling strip; 3 / 4 / 7 as it widens. */
+              gridClassName="tf-tracker-stats"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });
@@ -3051,7 +2916,11 @@ export default function AssessmentDetailsView({
                   </span>
                   Select All ({inviteSelectableIds.length})
                 </button>
-                {inviteSelectedIds.size > 0 && (
+                {/* Resend / Revoke — mutually exclusive, and only when EVERY
+                    selected row is uniformly that action's status (a mixed
+                    selection shows neither), matching the Track Invites
+                    popup's allTrackingResendable/allTrackingRevocable. */}
+                {allInviteSelectedResendable && (
                   <Button
                     type="button"
                     variant="primary"
@@ -3064,6 +2933,21 @@ export default function AssessmentDetailsView({
                       : <Mail className="w-3.5 h-3.5" />}
                   >
                     {isBulkResendingInvites ? 'Sending…' : `Resend (${inviteSelectedIds.size})`}
+                  </Button>
+                )}
+                {allInviteSelectedRevocable && (
+                  <Button
+                    type="button"
+                    variant="danger"
+                    size="sm"
+                    onClick={() => setShowInviteBulkRevoke(true)}
+                    disabled={isBulkRevokingInvites}
+                    className="whitespace-nowrap"
+                    icon={isBulkRevokingInvites
+                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      : <Ban className="w-3.5 h-3.5" />}
+                  >
+                    {isBulkRevokingInvites ? 'Revoking…' : `Revoke (${inviteSelectedIds.size})`}
                   </Button>
                 )}
               </div>
@@ -3083,7 +2967,7 @@ export default function AssessmentDetailsView({
                 selectedIds={inviteSelectedIds}
                 onToggleSelect={toggleInviteSelectOne}
                 archived={isAssessmentArchived(assessment?.status)}
-                jdDisabled={isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status)}
+                jdDisabled={thisVersionLocked}
                 canOpenResult={opensTrackedInviteDetails}
                 onOpenResult={openInviteResult}
                 onResend={setResendTarget}
@@ -3110,7 +2994,7 @@ export default function AssessmentDetailsView({
                   className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
                   aria-live="polite"
                 >
-                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                  <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 tf-body-secondary shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
                     <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
                     Refreshing invite statuses...
                   </span>
@@ -3193,9 +3077,9 @@ export default function AssessmentDetailsView({
 
         {/* Activity Tab */}
         {activeTab === 'activity' && (
-          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card-soft">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
-              <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
+              <h3 className="tf-body sm:text-base lg:text-lg tracking-tight flex items-center gap-2">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
@@ -3223,7 +3107,7 @@ export default function AssessmentDetailsView({
             ) : activityFeed.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Calendar className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="tf-card-desc mb-1">No activity recorded yet</p>
+                <p className="tf-body-secondary mb-1">No activity recorded yet</p>
                 <p className="tf-body-muted">Activity will appear here as candidates take the assessment</p>
               </div>
             ) : (() => {
@@ -3320,14 +3204,14 @@ export default function AssessmentDetailsView({
                                        not a candidate: the event leads, then
                                        who did it. */
                                     <>
-                                      <span className="font-medium text-gray-900 text-sm">{info.label}</span>
+                                      <span className="tf-row-name">{info.label}</span>
                                       {activity.actor_name && (
                                         <span className="tf-body-muted ml-1 sm:ml-2 [overflow-wrap:anywhere]">by {activity.actor_name}</span>
                                       )}
                                     </>
                                   ) : (
                                     <>
-                                      <span className="font-medium text-gray-900 text-sm [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
+                                      <span className="tf-row-name [overflow-wrap:anywhere]">{activity.candidate_name || 'Unknown'}</span>
                                       <span className="tf-body-muted ml-1 sm:ml-2">{info.label}</span>
                                     </>
                                   )}
@@ -3336,23 +3220,23 @@ export default function AssessmentDetailsView({
                               </div>
                               {activity._lifecycle ? (
                                 activity.actor_email && (
-                                  <p className="tf-card-desc mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
+                                  <p className="tf-body-secondary mt-0.5 truncate" title={activity.actor_email}>{activity.actor_email}</p>
                                 )
                               ) : (
-                                <p className="tf-card-desc mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
+                                <p className="tf-body-secondary mt-0.5 truncate" title={activity.candidate_email}>{activity.candidate_email}</p>
                               )}
                               {showScores && (
                                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                   {assessment.technical_enabled && activity.technical_score != null && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="tf-meta-strong">Tech:</span>
-                                      <span className="tf-cell-name">{formatScore(activity.technical_score)}%</span>
+                                      <span className="tf-meta">Tech:</span>
+                                      <span className="tf-row-title">{formatScore(activity.technical_score)}%</span>
                                     </div>
                                   )}
                                   {assessment.coding_enabled && activity.coding_score != null && (
                                     <div className="flex items-center gap-1.5">
-                                      <span className="tf-meta-strong">Coding:</span>
-                                      <span className="tf-cell-name">{formatScore(activity.coding_score)}%</span>
+                                      <span className="tf-meta">Coding:</span>
+                                      <span className="tf-row-title">{formatScore(activity.coding_score)}%</span>
                                     </div>
                                   )}
                                   {activity.passed != null && (
@@ -3371,7 +3255,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {activityFeed.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 tf-card-desc">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start max-sm:items-center max-sm:text-center sm:items-center justify-between gap-2 tf-body-secondary">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, activityFeed.length)} of {activityFeed.length}
                       </span>
@@ -3390,15 +3274,15 @@ export default function AssessmentDetailsView({
 
         {/* Version History Tab */}
         {activeTab === 'versions' && (
-          <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card-soft">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
+                <h3 className="tf-row-name sm:text-base tracking-tight">Version History</h3>
               </div>
-              <p className="tf-card-desc">Complete timeline of all changes made to this assessment</p>
+              <p className="tf-body-secondary">Complete timeline of all changes made to this assessment</p>
             </div>
 
             {versionsLoading ? (
@@ -3431,7 +3315,7 @@ export default function AssessmentDetailsView({
             ) : versionHistory.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Clock className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="tf-card-desc mb-1">No version history available</p>
+                <p className="tf-body-secondary mb-1">No version history available</p>
                 <p className="tf-body-muted">Version history will appear when the assessment is edited</p>
               </div>
             ) : (
@@ -3449,7 +3333,7 @@ export default function AssessmentDetailsView({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
-                            <h4 className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 tracking-tight">
+                            <h4 className="min-w-0 tf-row-title sm:text-base tracking-tight">
                               Version {version.version} {version.version === 1 ? 'Published' : 'Updated'}
                             </h4>
                             {isCurrentVersion && (
@@ -3458,7 +3342,7 @@ export default function AssessmentDetailsView({
                               </span>
                             )}
                           </div>
-                          <p className="tf-card-desc mb-2 sm:mb-3">
+                          <p className="tf-body-secondary mb-2 sm:mb-3">
                             {version.version === 1 ? 'Initial assessment created and published' : (version.change_summary || 'Assessment configuration updated')}
                           </p>
 
@@ -3470,14 +3354,14 @@ export default function AssessmentDetailsView({
                             <span className="text-gray-600">Lead Recruiter</span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 sm:gap-2 tf-card-desc mb-3 sm:mb-4 flex-wrap">
+                          <div className="flex items-center gap-1.5 sm:gap-2 tf-body-secondary mb-3 sm:mb-4 flex-wrap">
                             <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
                             <span>Published on {versionDate} IST (UTC+5:30)</span>
                           </div>
 
                           {/* Configuration Details */}
                           <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
-                            <div className="text-sm font-medium text-gray-900 mb-2 sm:mb-3 tracking-tight">
+                            <div className="tf-row-name mb-2 sm:mb-3 tracking-tight">
                               {version.version === 1 ? 'Initial Configuration:' : 'Updated Configuration:'}
                             </div>
                             <ul className="space-y-1.5 sm:space-y-2">
@@ -3520,7 +3404,7 @@ export default function AssessmentDetailsView({
             version the Manage Jobs badge states. Separate from the per-row
             edit history rendered by the Versions tab above. */}
         {activeTab === 'newversions' && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card-soft">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
               <div className="flex flex-wrap items-center gap-2 mb-1">
                 <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
@@ -3529,19 +3413,19 @@ export default function AssessmentDetailsView({
                 {/* The nav entry's own label, so the panel cannot be
                     headed one thing while the tab that opens it says
                     another. */}
-                <h3 className="min-w-0 truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">{siblingVersionsTabLabel}</h3>
+                <h3 className="min-w-0 truncate tf-row-name sm:text-base tracking-tight">{siblingVersionsTabLabel}</h3>
                 {/* Which job version these belong to, in the marker the
                     header's Assessment Versions popover already uses — the
                     list is that job version's assessments and nothing else,
                     so the panel says so rather than leaving the reader to
                     infer it. */}
                 {selectedJobVersionNumber != null && (
-                  <span className="text-2xs text-gray-500 dark:text-slate-400">
+                  <span className="tf-micro-hint">
                     Job V{selectedJobVersionNumber}
                   </span>
                 )}
               </div>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {selectedJobVersionNumber != null
                   ? `Every assessment version created for Job V${selectedJobVersionNumber} (V1 is the original; V2 onwards are duplicates, up to 5).`
                   : 'All versions of this assessment (V1 is the original; V2 onwards are duplicates, up to 5).'}
@@ -3551,7 +3435,7 @@ export default function AssessmentDetailsView({
             {siblingsLoading || siblingRows === null ? (
               <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-3 sm:p-4 ring-1 ring-black/[0.02]">
+                  <div key={i} className="tf-panel p-3 sm:p-4">
                     <div className="flex items-start gap-3 sm:gap-4">
                       <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex-shrink-0" />
                       <div className="flex-1 min-w-0">
@@ -3572,7 +3456,7 @@ export default function AssessmentDetailsView({
             ) : siblingRows.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
                 <Layers className="w-8 h-8 sm:w-12 sm:h-12 text-brand-blue/30 mx-auto mb-2 sm:mb-3" />
-                <p className="tf-card-desc mb-1">No additional versions yet</p>
+                <p className="tf-body-secondary mb-1">No additional versions yet</p>
                 <p className="tf-body-muted">Duplicate this assessment to create additional versions</p>
               </div>
             ) : (
@@ -3610,7 +3494,7 @@ export default function AssessmentDetailsView({
                         </div>
                         <div className="@container flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
-                            <h4 className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 tracking-tight truncate">
+                            <h4 className="min-w-0 tf-row-title sm:text-base tracking-tight truncate">
                               {stripVersionFromTitle(sibling.title || '') || sibling.short_id || 'Untitled assessment'}
                               {sibling.version ? ` - Version ${sibling.version}` : ''}
                             </h4>
@@ -3619,7 +3503,7 @@ export default function AssessmentDetailsView({
                                 {statusLabel}
                               </span>
                               {isThis && (
-                                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 text-xs font-medium rounded-full whitespace-nowrap">
+                                <span className="tf-badge bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
                                   Viewing
                                 </span>
                               )}
@@ -3683,7 +3567,7 @@ export default function AssessmentDetailsView({
                             onClick={() => setPreviewVersion(sibling)}
                             title="Preview configure settings"
                             aria-label={`Preview configure settings for Version ${sibling.version || 1}`}
-                            className="h-8 w-8 px-0 flex-shrink-0"
+                            className="h-8 w-8 flex-shrink-0"
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
@@ -3726,12 +3610,12 @@ export default function AssessmentDetailsView({
               panel announced the job had no description at all. That gap now
               reads as loading, which is what it is. */}
           {!assessment.jd_id ? (
-            <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
+            <div className="tf-card-soft px-3 sm:px-4 lg:px-6 py-8 text-center">
               <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
               <p className="tf-body-muted">No linked job description found</p>
             </div>
           ) : jdError ? (
-            <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
+            <div className="tf-card-soft px-3 sm:px-4 lg:px-6 py-8 text-center">
               <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
               <p className="text-sm text-destructive">{jdError}</p>
             </div>
@@ -3786,30 +3670,35 @@ export default function AssessmentDetailsView({
 
       {/* Resend confirmation — regenerates the token and invalidates the old
           link. Same wording, tone and variant as the Track Invites popup's. */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={!!resendTarget}
-        onClose={() => { if (!isResending) setResendTarget(null); }}
+        kind="assessment"
+        email={resendTarget?.candidate_email}
+        onCancel={() => { if (!isResending) setResendTarget(null); }}
         onConfirm={() => resendTarget && handleResendInvite(resendTarget)}
-        title="Invalidate old link & send new invitation?"
-        description={
-          resendTarget
-            ? `A fresh invitation will be emailed to ${resendTarget.candidate_email}. The previous link will stop working immediately.`
-            : ''
-        }
-        confirmText={isResending ? 'Sending…' : 'Yes, send new link'}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isResending}
       />
 
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={showInviteBulkResend}
-        onClose={() => { if (!isBulkResendingInvites) setShowInviteBulkResend(false); }}
+        kind="assessment"
+        bulk={{ count: inviteSelectedIds.size }}
+        targets={inviteRows.filter((inv) => inviteSelectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: assessment.jd_short_id, jobTitle: assessment.jd_title || stripVersionFromTitle(assessment.title), version: assessment.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkResendingInvites) setShowInviteBulkResend(false); }}
         onConfirm={handleInviteBulkResend}
-        title="Resend invitations to selected candidates?"
-        description={`A fresh invitation link will be emailed to ${inviteSelectedIds.size} selected candidate${inviteSelectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-        confirmText={isBulkResendingInvites ? 'Sending…' : `Yes, resend to ${inviteSelectedIds.size}`}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isBulkResendingInvites}
+      />
+
+      {/* Bulk revoke confirmation — selected Invited candidates only. Same
+          wording as the Track Invites popup's bulk revoke. */}
+      <RevokeLinkModal
+        isOpen={showInviteBulkRevoke}
+        kind="assessment"
+        bulk={{ scope: 'selected', count: inviteSelectedIds.size }}
+        targets={inviteRows.filter((inv) => inviteSelectedIds.has(inv.id) && isBulkRevocable(inv)).map((inv) => ({ jobCode: assessment.jd_short_id, jobTitle: assessment.jd_title || stripVersionFromTitle(assessment.title), version: assessment.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevokingInvites) setShowInviteBulkRevoke(false); }}
+        onConfirm={handleInviteBulkRevoke}
+        isLoading={isBulkRevokingInvites}
       />
 
       {/* Configure-settings preview for a New Versions card.

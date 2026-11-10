@@ -270,7 +270,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
             <Zap style={{ width: 16, height: 16 }} />
             Powerful Features
           </div>
-          <h1 style={titleStyle}>Everything you need to hire smarter</h1>
+          <h1 className="tf-page-title" style={titleStyle}>Everything you need to hire smarter</h1>
           <p style={subtitleStyle}>
             Our comprehensive suite of AI-powered tools helps you find, evaluate, and hire the best talent faster than ever.
           </p>

@@ -7,6 +7,7 @@ import {
   Activity, Award, Target, Zap, Sparkles, TrendingUp, RefreshCw,
 } from 'lucide-react';
 import { DetailedSkillsTable } from '../evaluation-dashboard/DetailedSkillsTable';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { buildDashboardData } from '../evaluation-dashboard/adapter';
 import { ExportMenu } from '../evaluation-dashboard/ExportMenu';
 import { COVERAGE_EXPORT_HEADERS, exportCoverage, flattenCoverageRows } from '../evaluation-dashboard/coverageExport';
@@ -236,7 +237,7 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
             </div>
             <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
               <LevelBadge level={entry.state} />
-              {entry.q_num > 0 && <span className="text-2xs font-mono text-gray-400">Q{entry.q_num}</span>}
+              {entry.q_num > 0 && <span className="tf-micro-hint font-mono">Q{entry.q_num}</span>}
               {(() => {
                 const intent = (entry.question_intent || '').toLowerCase();
                 const isDd = intent === 'deep_dive';
@@ -259,7 +260,7 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
 function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
   const [openRow, setOpenRow] = useState<Set<number>>(new Set());
   if (groups.length === 0) {
-    return <div className="text-xs text-gray-400 italic px-4 py-3">No questions recorded for this skill.</div>;
+    return <div className="tf-hint italic px-4 py-3">No questions recorded for this skill.</div>;
   }
   const toggle = (i: number) => {
     setOpenRow(p => {
@@ -269,14 +270,15 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
     });
   };
   return (
-    <div className="overflow-x-auto rounded-lg border border-gray-200 w-full tf-table-shell">
+    <>
+    <div className={`overflow-x-auto rounded-lg border border-gray-200 w-full tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
       <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-        <thead className="bg-white text-gray-600 text-xs">
+        <thead className="bg-white tf-meta">
           <tr>
-            <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
-            <th className="px-3 py-2 text-left font-semibold">Question</th>
-            <th className="px-3 py-2 text-left font-semibold">Candidate Response</th>
-            <th className="px-3 py-2 text-left font-semibold w-32 whitespace-nowrap">Coverage</th>
+            <th className="tf-th-cell text-left font-semibold w-12">Q #</th>
+            <th className="tf-th-cell text-left font-semibold">Question</th>
+            <th className="tf-th-cell text-left font-semibold">Candidate Response</th>
+            <th className="tf-th-cell text-left font-semibold w-32">Coverage</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100 bg-white">
@@ -287,13 +289,13 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
             const isOpen = openRow.has(i);
             return (
               <tr key={i} className="align-top">
-                <td className="px-3 py-2 align-top whitespace-nowrap">
+                <td className="tf-td align-top whitespace-nowrap">
                   <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                     Q{g.q_num}
                   </span>
                 </td>
-                <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
-                  <div className="text-xs font-medium text-gray-800 leading-snug break-words">
+                <td className="tf-td align-top" style={{ maxWidth: '28rem' }}>
+                  <div className="tf-caption leading-snug break-words">
                     <TruncatedText text={g.question || ''} limit={160} />
                   </div>
                   {hasFu && (
@@ -336,8 +338,8 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
-                  <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                <td className="tf-td align-top" style={{ maxWidth: '40rem' }}>
+                  <div className="tf-meta leading-snug whitespace-pre-wrap break-words">
                     <TruncatedText text={g.answer || ''} limit={220} />
                   </div>
                   {hasFu && isOpen && (
@@ -349,7 +351,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                           const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
                           const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
                           return (
-                            <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                            <div key={fi} className="tf-micro-hint leading-snug whitespace-pre-wrap break-words">
                               <span className={`text-2xs font-semibold ${tagColor} mr-1`}>{tag}:</span>
                               <TruncatedText text={fu.answer || ''} limit={180} />
                             </div>
@@ -359,7 +361,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-2 align-top whitespace-nowrap">
+                <td className="tf-td align-top whitespace-nowrap">
                   <CovBadge level={mainLevel} />
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
@@ -375,6 +377,82 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
         </tbody>
       </table>
     </div>
+    <MobileRecordList>
+      {groups.map((g, i) => {
+        const mainLevel = qCoverage(g.score);
+        const fus = g.follow_ups || [];
+        const hasFu = fus.length > 0;
+        const isOpen = openRow.has(i);
+        return (
+          <MobileRecordCard
+            key={i}
+            idBadge={
+              <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                Q{g.q_num}
+              </span>
+            }
+            badges={<CovBadge level={mainLevel} />}
+            wrapTitle
+            title={
+              <span className="block whitespace-normal tf-caption font-normal leading-snug break-words">
+                <TruncatedText text={g.question || ''} limit={160} />
+              </span>
+            }
+          >
+            <div className="mt-2.5 text-sm">
+              <span className="tf-record-field-label">Candidate Response: </span>
+              <span className="tf-meta leading-snug whitespace-pre-wrap break-words">
+                <TruncatedText text={g.answer || ''} limit={220} />
+              </span>
+            </div>
+            {hasFu && (
+              <div className="mt-2.5 pl-3 border-l-2 border-violet-200">
+                {!isOpen ? (
+                  <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                    <ChevronDown className="w-3 h-3" />
+                    {(() => {
+                      const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
+                      const fu2 = fus.length - dd;
+                      return [fu2 > 0 ? `${fu2} follow-up${fu2 > 1 ? 's' : ''}` : '', dd > 0 ? `${dd} deep dive${dd > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
+                    })()}
+                  </button>
+                ) : (
+                  <div className="space-y-2.5">
+                    <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                      <ChevronUp className="w-3 h-3" />
+                      Hide
+                    </button>
+                    {(() => {
+                      let fCtr = 0; let dCtr = 0;
+                      return fus.map((fu, fi) => {
+                        const isDd = (fu.question_intent || '').toLowerCase() === 'deep_dive';
+                        const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
+                        const tagCls = isDd ? 'text-teal-700 bg-teal-100' : 'text-violet-700 bg-violet-100';
+                        return (
+                          <div key={fi}>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={`text-2xs font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
+                              <CovBadge level={qCoverage(fu.score)} />
+                            </div>
+                            <div className="text-2xs font-medium text-gray-700 leading-snug break-words">
+                              <TruncatedText text={fu.question || ''} limit={140} />
+                            </div>
+                            <div className="tf-micro-hint leading-snug whitespace-pre-wrap break-words mt-0.5">
+                              <TruncatedText text={fu.answer || ''} limit={180} />
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+          </MobileRecordCard>
+        );
+      })}
+    </MobileRecordList>
+    </>
   );
 }
 
@@ -652,8 +730,8 @@ export default function CoverageTab({
     return (
       <div className="flex flex-col items-center justify-center py-24 text-gray-400">
         <Activity className="w-10 h-10 mb-3 opacity-40" />
-        <p className="text-sm font-medium text-gray-500">Interview not yet started</p>
-        <p className="text-xs text-gray-400 mt-1">Coverage will appear once the candidate begins the interview</p>
+        <p className="tf-label">Interview not yet started</p>
+        <p className="tf-hint mt-1">Coverage will appear once the candidate begins the interview</p>
       </div>
     );
   }
@@ -729,13 +807,13 @@ export default function CoverageTab({
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-semibold">Coverage</h2>
                 {isInProgress && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white text-2xs font-bold rounded-full">
+                  <span className="tf-badge bg-red-500 text-white text-2xs">
                     <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                     LIVE {liveWsConnected ? '· WS' : '· polling'}
                   </span>
                 )}
                 {isCompleted && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-200 text-2xs font-bold rounded-full border border-emerald-500/30">
+                  <span className="tf-badge bg-emerald-500/20 text-emerald-200 text-2xs border border-emerald-500/30">
                     <CheckCircle2 className="w-3 h-3" />
                     COMPLETED
                   </span>
@@ -775,7 +853,7 @@ export default function CoverageTab({
           ═══════════════════════════════════════════════════════════════════ */}
       {isCompleted && (
         <div className="flex justify-end">
-          <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-1 shadow-sm">
+          <div className="tf-card-soft inline-flex p-1">
             <button
               onClick={() => setCoverageView('overview')}
               className={`px-5 py-2 rounded-md flex items-center gap-2 text-sm font-medium transition-all ${
@@ -814,7 +892,7 @@ export default function CoverageTab({
         });
         if (data.mustHaveClusters.length === 0 && data.niceToHaveClusters.length === 0) {
           return (
-            <div className="bg-white dark:bg-gray-800 rounded-2xl p-12 border border-gray-200 dark:border-gray-700 text-center text-gray-500">
+            <div className="tf-panel p-12 text-center text-gray-500">
               No cluster data available for table view.
             </div>
           );
@@ -842,16 +920,16 @@ export default function CoverageTab({
           { label: 'Low',         count: counts.low,     dot: 'bg-orange-400',  text: 'text-orange-700',  sub: 'Surface level only' },
           { label: 'Not Covered', count: counts.skipped, dot: 'bg-gray-300',    text: 'text-gray-500',    sub: 'Skill not addressed' },
         ].map(item => (
-          <div key={item.label} className="bg-white border border-gray-200 rounded-xl p-3">
+          <div key={item.label} className="tf-panel p-3">
             <div className="flex items-center justify-between mb-1">
               <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
               <span className={`text-2xl font-bold ${item.text} leading-none`}>{item.count}</span>
             </div>
             <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">{item.label}</p>
-            <p className="text-2xs text-gray-400 mt-0.5">{item.sub}</p>
+            <p className="tf-micro-hint mt-0.5">{item.sub}</p>
           </div>
         ))}
-        <div className="bg-white border border-gray-200 rounded-xl p-3">
+        <div className="tf-panel p-3">
           <div className="flex items-center justify-between mb-1">
             <Layers className="w-3.5 h-3.5 text-indigo-500" />
             <span className="text-2xl font-bold text-indigo-700 leading-none">
@@ -859,15 +937,15 @@ export default function CoverageTab({
             </span>
           </div>
           <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">Clusters</p>
-          <p className="text-2xs text-gray-400 mt-0.5">Addressed / total</p>
+          <p className="tf-micro-hint mt-0.5">Addressed / total</p>
         </div>
-        <div className="bg-white border border-gray-200 rounded-xl p-3">
+        <div className="tf-panel p-3">
           <div className="flex items-center justify-between mb-1">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-2xl font-bold text-emerald-700 leading-none">{coveredPct}%</span>
           </div>
           <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">Medium+</p>
-          <p className="text-2xs text-gray-400 mt-0.5">{touchedPct}% touched total</p>
+          <p className="tf-micro-hint mt-0.5">{touchedPct}% touched total</p>
         </div>
       </div>
 
@@ -878,7 +956,7 @@ export default function CoverageTab({
           <div className="h-full bg-amber-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.medium / counts.total) * 100 : 0}%` }} />
           <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.low / counts.total) * 100 : 0}%` }} />
         </div>
-        <div className="flex justify-between text-2xs text-gray-400 mt-1.5">
+        <div className="flex justify-between tf-micro-hint mt-1.5">
           <span>0 skills</span>
           <span className="font-medium text-gray-500">{counts.total} total</span>
         </div>
@@ -897,11 +975,11 @@ export default function CoverageTab({
           {crossClusterEvents.slice(-3).map((ev, i) => (
             <div key={i} className="bg-white rounded-lg px-3 py-2 border border-blue-100">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-2xs text-gray-400">Q{ev.qNum}</span>
+                <span className="tf-micro-hint">Q{ev.qNum}</span>
                 {ev.clusters.map(cn => (
-                  <span key={cn} className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">{cn}</span>
+                  <span key={cn} className="tf-badge bg-blue-100 text-blue-700">{cn}</span>
                 ))}
-                <span className="text-2xs text-gray-400 ml-auto">
+                <span className="tf-micro-hint ml-auto">
                   {ev.skills.length} skill{ev.skills.length > 1 ? 's' : ''} newly covered
                 </span>
               </div>
@@ -994,7 +1072,7 @@ export default function CoverageTab({
                 {hrGroups.length > 0 ? (
                   <QuestionTable groups={hrGroups} />
                 ) : (
-                  <div className="text-xs text-gray-400 italic px-2 py-4">No HR questions recorded.</div>
+                  <div className="tf-hint italic px-2 py-4">No HR questions recorded.</div>
                 )}
               </div>
             ) : (
@@ -1039,11 +1117,11 @@ export default function CoverageTab({
                         {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400 flex-shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="tf-cell-name truncate">{cluster.name}</span>
+                            <span className="tf-row-title truncate">{cluster.name}</span>
                             <span className={`px-1.5 py-0.5 text-2xs rounded border ${priorityStyle(cluster.priority, pLabel)}`}>
                               {pLabel} Priority
                             </span>
-                            <span className="text-2xs text-gray-400">
+                            <span className="tf-micro-hint">
                               {skillsAsked.length}/{cluster.skills.length} asked
                               <span className="text-gray-300"> · </span>
                               {skillsDemonstrated.length} demonstrated
@@ -1072,7 +1150,7 @@ export default function CoverageTab({
                       {cOpen && (
                         <div className="bg-gray-50/30 border-t border-gray-100 divide-y divide-gray-100">
                           {cluster.skills.length === 0 ? (
-                            <div className="text-xs text-gray-400 italic px-8 py-3">No skills in this cluster.</div>
+                            <div className="tf-hint italic px-8 py-3">No skills in this cluster.</div>
                           ) : (
                             cluster.skills.map(skill => {
                               const level = resolveSkillLevel(skill);
@@ -1099,10 +1177,10 @@ export default function CoverageTab({
                                   >
                                     {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
                                     <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_STYLES[status].dot}`} />
-                                    <span className="text-sm font-medium text-gray-900 flex-1 min-w-0 truncate">{skill}</span>
+                                    <span className="tf-row-name flex-1 min-w-0 truncate">{skill}</span>
                                     <StatusBadge status={status} depth={depth} />
                                     {groups.length > 0 && (
-                                      <span className="inline-flex items-center gap-0.5 text-2xs text-gray-500">
+                                      <span className="inline-flex items-center gap-0.5 tf-micro-hint">
                                         <MessageSquare className="w-3 h-3" />
                                         {groups.length}
                                         {totalFollowUps > 0 && <span className="text-blue-500">+{totalFollowUps}</span>}
@@ -1155,7 +1233,7 @@ export default function CoverageTab({
                                         }
                                         if (trail.length === 0) {
                                           return (
-                                            <div className="text-xs text-gray-400 italic py-3 text-center">
+                                            <div className="tf-hint italic py-3 text-center">
                                               No questions recorded for this skill
                                             </div>
                                           );
@@ -1164,7 +1242,7 @@ export default function CoverageTab({
                                       })()}
                                       {/* Skill note (from cluster insights) */}
                                       {ciSkill?.note && (
-                                        <div className="text-2xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">
+                                        <div className="tf-micro-hint bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">
                                           <span className="font-semibold text-gray-700">Evaluator note: </span>
                                           {ciSkill.note}
                                         </div>
@@ -1176,7 +1254,7 @@ export default function CoverageTab({
                             })
                           )}
                           {ci_?.cluster_note && (
-                            <div className="text-2xs text-gray-600 bg-gray-50 border-t border-gray-200 px-6 py-2.5">
+                            <div className="tf-micro-hint bg-gray-50 border-t border-gray-200 px-6 py-2.5">
                               <span className="font-semibold text-gray-700">Cluster note: </span>
                               {ci_.cluster_note}
                             </div>
@@ -1187,7 +1265,7 @@ export default function CoverageTab({
                   );
                 })}
                 {section.clusters.length === 0 && (
-                  <div className="text-xs text-gray-400 italic px-5 py-4">No clusters configured for this section.</div>
+                  <div className="tf-hint italic px-5 py-4">No clusters configured for this section.</div>
                 )}
               </div>
             )}

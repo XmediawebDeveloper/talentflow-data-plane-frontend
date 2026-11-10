@@ -63,14 +63,14 @@ export default function DisableJobModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 Disable Job Description?
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Are you sure you want to disable the following job description?
               </p>
               {job ? (
                 /* Wraps on a phone: the version pill drops below a long name. */
                 <div className="mt-3 flex flex-wrap items-center gap-2 min-w-0">
                   {job.job_id && <JobIdBadge className="flex-shrink-0">{job.job_id}</JobIdBadge>}
-                  <span className="min-w-0 [overflow-wrap:anywhere] text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50">
+                  <span className="min-w-0 [overflow-wrap:anywhere] tf-row-name sm:text-base">
                     {job.title || 'Untitled'}
                   </span>
                   {job.versionNumber ? <VersionPill kind="job" version={job.versionNumber} /> : null}
@@ -80,7 +80,7 @@ export default function DisableJobModal({
               <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
                 {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
-                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-cell-name">
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-row-title">
                   {jobLabel}
                 </span>
               </span>

@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -258,7 +259,7 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
               Type + Work Mode + Posted On / By + Version */}
           {/* Phones: the "•" separators are hidden (a wrapped line began with
               one) and the items get an even gap instead. */}
-          <div className="flex flex-wrap items-center gap-x-1.5 max-sm:gap-x-2 gap-y-1 max-sm:gap-y-1.5 tf-meta-strong">
+          <div className="flex flex-wrap items-center gap-x-1.5 max-sm:gap-x-2 gap-y-1 max-sm:gap-y-1.5 tf-meta">
             {/* Location */}
             <span className="inline-flex items-center gap-1 min-w-0">
               <MapPin className="w-3 h-3 text-purple-600 shrink-0" />
@@ -278,22 +279,22 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
             </span>
 
             {version.department && (
-              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {version.department}
               </span>
             )}
             {version.industry_type && (
-              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {formatIndustryType(version.industry_type)}
               </span>
             )}
             {version.employment_type && (
-              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {formatEmploymentType(version.employment_type)}
               </span>
             )}
             {version.remote_type && (
-              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-md text-xs">
+              <span className="inline-flex items-center px-2 py-0.5 bg-gray-100 dark:bg-slate-800 tf-meta rounded-md">
                 {formatEmploymentType(version.remote_type)}
               </span>
             )}
@@ -312,7 +313,7 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
 
             {/* Version badge — the Job Details card's purple pill, static here:
                 this popup IS the version picker, so it has no menu to drop. */}
-            <span className="inline-flex items-center px-2 py-0.5 bg-purple-600 text-white rounded-full text-xs font-medium">
+            <span className="tf-badge bg-purple-600 text-white">
               v{version.version_number}.0
             </span>
           </div>
@@ -336,6 +337,9 @@ export default function JDVersionHistoryModal({
   goToJdTab,
   cancelInFooter = false,
 }: JDVersionHistoryModalProps) {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10): JD Export, same as the JD list.
+  const canDownloadJd = isTenantAdmin || hasPermissionCode('jd:export');
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [versions, setVersions] = useState<JDHistoryVersion[]>([]);
@@ -453,6 +457,7 @@ export default function JDVersionHistoryModal({
      it, so the library stays out of the bundle until someone actually
      downloads. */
   const handleDownload = async (version: JDHistoryVersion) => {
+    if (!canDownloadJd) return;
     const { Document, Packer, Paragraph, TextRun } = await import('docx');
 
     const lines = buildCompareText(version).split('\n');
@@ -496,8 +501,8 @@ export default function JDVersionHistoryModal({
      the tile from sm, and under the row on phones — one definition for both. */
   const renderVersionDetails = (version: JDHistoryVersion) => (
     <>
-      <p className="tf-card-desc [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
-      <div className="flex items-center gap-3 max-sm:gap-x-3 max-sm:gap-y-1 tf-card-desc max-sm:text-xs mt-1 flex-wrap">
+      <p className="tf-body-secondary [overflow-wrap:anywhere] sm:truncate">{version.title}</p>
+      <div className="flex items-center gap-3 max-sm:gap-x-3 max-sm:gap-y-1 tf-body-secondary max-sm:text-xs mt-1 flex-wrap">
         <span className="flex items-center gap-1 whitespace-nowrap">
           <Clock className="w-3.5 h-3.5" />
           {formatVersionDate(versionDate(version))}
@@ -529,7 +534,7 @@ export default function JDVersionHistoryModal({
                 variant="secondary"
                 size="sm"
                 onClick={() => setSelectedVersion(null)}
-                className="px-2"
+                className=""
                 aria-label="Back to version list"
               >
                 <ArrowLeft className="w-5 h-5" />
@@ -541,16 +546,16 @@ export default function JDVersionHistoryModal({
             )}
             <div className="min-w-0">
               <div className="flex items-center gap-2 min-w-0">
-                <h2 className="tf-section-title truncate min-w-0">
+                <h2 className="tf-section-title sm:text-lg tracking-tight truncate min-w-0">
                   {selectedVersion ? `Version ${selectedVersion.version_number}.0` : 'Version History'}
                 </h2>
                 {!selectedVersion && versions.length > 0 && (
-                  <span className="inline-flex flex-shrink-0 items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                  <span className="tf-badge flex-shrink-0 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                     {versions.length} version{versions.length !== 1 ? 's' : ''}
                   </span>
                 )}
               </div>
-              <p className="tf-card-desc truncate">
+              <p className="tf-body-secondary truncate">
                 {selectedVersion ? selectedVersion.title : jdTitle}
               </p>
             </div>
@@ -599,7 +604,7 @@ export default function JDVersionHistoryModal({
                 variant="secondary"
                 size="sm"
                 onClick={closeModal}
-                className="px-2"
+               
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -609,7 +614,7 @@ export default function JDVersionHistoryModal({
         </div>
 
         {!selectedVersion && versions.length > 0 && (
-          <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta-strong">
+          <div className="flex-shrink-0 flex items-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue/[0.04] border-b border-brand-blue/10 tf-meta">
             <History className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
             <span>
               All available JD versions are shown. Tick any two versions to compare them.
@@ -623,7 +628,7 @@ export default function JDVersionHistoryModal({
               {Array.from({ length: 5 }).map((_, i) => (
                 <div
                   key={i}
-                  className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-white dark:bg-slate-900"
+                  className="tf-panel p-4"
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3 min-w-0">
@@ -654,16 +659,17 @@ export default function JDVersionHistoryModal({
                     variant="secondary"
                     size="sm"
                     onClick={() => handleDownload(selectedVersion)}
-                    className="px-2"
+                    className={!canDownloadJd ? 'opacity-50 cursor-not-allowed' : ''}
+                    aria-disabled={!canDownloadJd}
                     aria-label="Download this version as a Word document"
-                    title="Download this version as a Word document"
+                    title={canDownloadJd ? 'Download this version as a Word document' : "You can view this job description, but your role doesn't allow downloading it"}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </Button>
                 }
               />
 
-              <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
+              <div className="tf-card-soft p-4 sm:p-6">
                 {/* Identity and metadata live in the header card above —
                     repeating them here put the same facts on screen twice.
                     This card is the description body. */}
@@ -703,7 +709,7 @@ export default function JDVersionHistoryModal({
                             type="checkbox"
                             checked={compareChecked.includes(version.id)}
                             onChange={() => toggleCompareCheck(version.id)}
-                            className="h-4 w-4 shrink-0 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
+                            className="tf-checkbox focus:ring-brand-blue/40"
                             aria-label={`Select version ${version.version_number} to compare`}
                           />
                         )}
@@ -751,14 +757,14 @@ export default function JDVersionHistoryModal({
                             <span className="hidden sm:inline">View Changes</span>
                           </Button>
                         ) : (
-                          <span className="hidden sm:inline text-xs italic text-gray-400 dark:text-slate-500">First version</span>
+                          <span className="hidden sm:inline tf-hint italic">First version</span>
                         )}
                         <Button
                           type="button"
                           variant="secondary"
                           size="sm"
                           onClick={() => setSelectedVersion(version)}
-                          className="px-2"
+                          className=""
                           aria-label={`View version ${version.version_number}`}
                           title="View JD"
                         >
@@ -788,7 +794,7 @@ export default function JDVersionHistoryModal({
 
         <div className="border-t border-gray-200 dark:border-slate-700 px-4 py-3 sm:px-6 sm:py-4 bg-gray-50 dark:bg-slate-800/50">
           <div className="flex justify-between items-center gap-3">
-            <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
+            <p className="tf-meta sm:text-sm min-w-0">
               {selectedVersion
                 ? `Viewing version ${selectedVersion.version_number}`
                 : compareChecked.length > 0

@@ -71,7 +71,7 @@ export default function ZipDownloadConfirmModal({
             <div>
               <p className="text-2xl font-bold text-brand-blue">
                 {count}
-                <span className="text-base font-semibold text-gray-900 dark:text-slate-100 ml-2">candidates selected</span>
+                <span className="tf-section-title ml-2">candidates selected</span>
               </p>
               <p className="tf-body-muted mt-1">
                 All selected {itemLabel} will be downloaded and packed in a ZIP file.
@@ -94,7 +94,7 @@ export default function ZipDownloadConfirmModal({
             <button
               onClick={onConfirm}
               disabled={busy}
-              className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
             >
               {busy ? (
                 <>

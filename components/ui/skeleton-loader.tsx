@@ -72,7 +72,7 @@ export function ListSkeleton({ rows = 5 }: { rows?: number }) {
 
 export function JobCardSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 animate-pulse">
+    <div className="tf-grid-3 animate-pulse">
       {Array.from({ length: count }).map((_, i) => (
         <div key={i} className="bg-card rounded-xl border border-border p-4 sm:p-5 shadow-sm">
           <div className="flex items-start justify-between mb-3 sm:mb-4">
@@ -131,7 +131,7 @@ export function DashboardSkeleton() {
         <CardSkeleton count={4} />
 
         {/* Charts Section */}
-        <div className="mt-4 sm:mt-6 grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+        <div className="tf-grid-split mt-4 sm:mt-6">
           <div className="bg-card rounded-xl border border-border p-4 sm:p-6 shadow-sm">
             <div className={`h-5 sm:h-6 ${block} rounded w-40 sm:w-48 mb-4`}></div>
             <div className={`h-48 sm:h-64 ${block} rounded`}></div>

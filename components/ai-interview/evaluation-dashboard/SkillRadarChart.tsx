@@ -22,16 +22,16 @@ export function SkillRadarChart({ mustHaveClusters, niceToHaveClusters }: Props)
 
   if (data.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-        <h2 className="text-2xl font-bold mb-2">Skill Coverage Analysis</h2>
+      <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
+        <h2 className="text-lg sm:text-2xl font-bold mb-2">Skill Coverage Analysis</h2>
         <p className="text-gray-500">No cluster data available.</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl p-8 border border-gray-200 dark:border-gray-700 shadow-sm">
-      <h2 className="text-2xl font-bold mb-2">Skill Coverage Analysis</h2>
+    <div className="tf-card-soft p-4 sm:p-6 lg:p-8">
+      <h2 className="text-lg sm:text-2xl font-bold mb-2">Skill Coverage Analysis</h2>
       <p className="text-gray-500 mb-6">Coverage % across all skill clusters</p>
 
       <ResponsiveContainer width="100%" height={360}>
@@ -44,7 +44,7 @@ export function SkillRadarChart({ mustHaveClusters, niceToHaveClusters }: Props)
         </RadarChart>
       </ResponsiveContainer>
 
-      <div className="grid grid-cols-3 gap-4 mt-6">
+      <div className="tf-grid-3 mt-6">
         <div className="p-4 rounded-lg bg-gradient-to-br from-emerald-50 to-emerald-100/30 border border-emerald-200">
           <div className="text-xs text-emerald-700 uppercase tracking-wider mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>High Level Skills</div>
           <div className="text-2xl text-emerald-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>

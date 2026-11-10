@@ -39,7 +39,6 @@ function readIsOrgLogin() {
   return subdomain || !!new URLSearchParams(window.location.search).get("org");
 }
 
-
 /**
  * Header for the redesigned landing and pricing pages. Same links, auth and
  * org-login rules as the classic header; new chrome: translucent until the
@@ -135,26 +134,34 @@ export function SiteHeader() {
   const sectionHref = (item: (typeof NAV_ITEMS)[number]) =>
     isLanding ? `#${item.section}` : `/#${item.section}`;
 
-  // Slide the marker to the current link (or hide it when there is none).
-  useIsoLayoutEffect(() => {
-    const nav = navRef.current;
+  // Slide the marker pill to a link (or hide it when there is none). The pill
+  // follows the pointer across the nav and settles back on the current item.
+  const moveMarker = (target: HTMLElement | null) => {
     const marker = markerRef.current;
-    if (!nav || !marker) return;
-    const active = nav.querySelector<HTMLElement>('[aria-current="true"]');
+    if (!marker) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (!active) {
-      gsap.to(marker, { autoAlpha: 0, duration: reduce ? 0 : 0.2 });
+    gsap.killTweensOf(marker);
+    if (!target) {
+      gsap.to(marker, { autoAlpha: 0, duration: reduce ? 0 : 0.2, ease: "power2.out" });
       return;
     }
     const wasHidden = gsap.getProperty(marker, "autoAlpha") === 0;
-    const target = { x: active.offsetLeft, width: active.offsetWidth };
+    const to = { x: target.offsetLeft, width: target.offsetWidth };
     if (wasHidden || reduce) {
-      gsap.set(marker, target);
-      gsap.to(marker, { autoAlpha: 1, duration: reduce ? 0 : 0.2 });
+      // Fade in where it is; no slide in from wherever it was last.
+      gsap.set(marker, to);
+      gsap.to(marker, { autoAlpha: 1, duration: reduce ? 0 : 0.2, ease: "power2.out" });
     } else {
-      gsap.to(marker, { ...target, autoAlpha: 1, duration: 0.45, ease: "power3.out" });
+      // Glide between items.
+      gsap.to(marker, { ...to, autoAlpha: 1, duration: 0.35, ease: "power3.out" });
     }
-  }, [activeSection, pathname, mounted]);
+  };
+
+  const activeLink = () => navRef.current?.querySelector<HTMLElement>('[aria-current="true"]') ?? null;
+
+  useIsoLayoutEffect(() => {
+    moveMarker(activeLink());
+  },[activeSection, pathname, mounted]);
 
   // Sheet links arrive in sequence so the menu reads top-down.
   useGSAP(
@@ -179,7 +186,9 @@ export function SiteHeader() {
       type="button"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
       className="grid h-9 w-9 place-items-center rounded-full text-slate-500 transition-colors hover:bg-slate-900/5 hover:text-mkt-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid dark:text-slate-400 dark:hover:bg-white/10"
-      aria-label={resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+      // Theme is only known in the browser; until mounted, render the same
+      // neutral label the server did so hydration matches (like the icon below).
+      aria-label={!mounted ? "Toggle theme" : resolvedTheme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
     >
       {mounted ? (
         resolvedTheme === "dark" ? <Sun className="h-[18px] w-[18px]" /> : <Moon className="h-[18px] w-[18px]" />
@@ -207,7 +216,12 @@ export function SiteHeader() {
           <img src="/logos/talent_flow_logo.png" alt="TalentFlow" className="h-7 w-auto sm:h-9" />
         </Link>
 
-        <nav ref={navRef} aria-label="Main" className="relative hidden items-center lg:flex">
+        <nav
+          ref={navRef}
+          aria-label="Main"
+          className="relative hidden items-center lg:flex"
+          onMouseLeave={() => moveMarker(activeLink())}
+        >
           <span
             ref={markerRef}
             aria-hidden="true"
@@ -221,7 +235,10 @@ export function SiteHeader() {
                 href={sectionHref(item)}
                 prefetch={false}
                 aria-current={active ? "true" : undefined}
-                className={`relative rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
+                onMouseEnter={(e) => moveMarker(e.currentTarget)}
+                onFocus={(e) => moveMarker(e.currentTarget)}
+                onBlur={() => moveMarker(activeLink())}
+                className={`relative rounded-full px-4 py-2 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mkt-accent-solid ${
                   active ? "text-mkt-ink" : "text-slate-500 hover:text-mkt-ink dark:text-slate-400"
                 }`}
               >

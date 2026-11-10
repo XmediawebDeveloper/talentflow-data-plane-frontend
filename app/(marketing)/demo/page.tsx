@@ -14,10 +14,10 @@ const FIELD =
 const LABEL = "mb-1.5 block text-sm font-medium text-mkt-ink";
 
 const POINTS = [
-  "Personalized walkthrough of all features",
-  "See how AI scoring and matching works",
-  "Learn about integrations with your tools",
-  "Get answers to all your questions",
+  "Meet Bina, our AI interviewer, and see a sample interview report",
+  "See proctored AI Assessments, coding round included",
+  "See Resume Scoring with a written reason for every score",
+  "Watch AI Talent Match rank your best-fit resumes in seconds",
 ];
 
 export default function DemoPage() {
@@ -53,8 +53,8 @@ export default function DemoPage() {
                 data-pre
                 className={`${PRE} mt-4 max-w-xl text-[15px] leading-relaxed text-slate-600 dark:text-slate-300 sm:mt-6 sm:text-xl`}
               >
-                Schedule a personalized demo with our team and discover how TalentFlow can transform
-                your hiring process.
+                See how TalentFlow takes you from job description to final interview on one
+                platform, with AI at every step.
               </p>
               <ul className="mt-6 space-y-3 sm:mt-9 sm:space-y-4">
                 {POINTS.map((point) => (
@@ -136,7 +136,7 @@ export default function DemoPage() {
                 <p className="text-center text-sm text-slate-500 dark:text-slate-400">
                   Or start your{" "}
                   <Link href="/signup" className="font-semibold text-mkt-accent underline-offset-4 hover:underline">
-                    14-day free trial
+                    free trial
                   </Link>{" "}
                   now
                 </p>

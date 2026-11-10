@@ -20,7 +20,7 @@ export default function PageHeader({ onUploadClick, onVersionClick }: PageHeader
       </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-        <h1 className="text-xl sm:text-2xl font-semibold text-foreground tracking-tight">My Resume Database</h1>
+        <h1 className="tf-page-title text-foreground">My Resume Database</h1>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
           {/* Version Button */}

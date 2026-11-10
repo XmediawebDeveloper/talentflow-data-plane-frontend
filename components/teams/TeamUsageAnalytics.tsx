@@ -2,7 +2,7 @@
 
 import {
   Users, BarChart3, ChevronDown, ChevronRight,
-  Download, FileText, Loader2, Search, Crown, Info,
+  Download, FileText, Loader2, Search, Crown, Info, Clock,
 } from 'lucide-react';
 import { createContext, useContext, useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import teamService, {
@@ -23,6 +23,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, exportRowsToCSV, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import NameAvatar from '@/components/ui/name-avatar';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import ListPagination from '@/components/ListPagination';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type TableSort } from '@/components/ui/sortable-header';
 import { UNIT_ICON, TOTAL_UNITS_ICON } from '@/lib/constants/unitColors';
@@ -97,7 +98,7 @@ function ReturnedNote({ member, k }: { member: TeamMemberUsage; k: 'RS' | 'AS' |
   const why = k === 'RU' ? ' — resumes deleted, so their upload units came back' : '';
   return (
     <p
-      className="text-[11px] font-medium text-success whitespace-nowrap"
+      className="text-xs font-medium text-success whitespace-nowrap"
       title={`${formatUnits(used)} used, ${formatUnits(returned)} returned${why}. Net ${formatUnits(net)}.`}
     >
       {/* The cell's number is already net (in Units mode), so show what was used. */}
@@ -130,7 +131,7 @@ function TeamReturnedNote({ team, k }: { team: TeamUsageSummary; k: UnitKey }) {
   const used = u?.total_consumed ?? 0;
   return (
     <p
-      className="mt-0.5 text-[11px] font-medium text-success"
+      className="mt-0.5 text-xs font-medium text-success"
       title={`${formatUnits(used)} used, ${formatUnits(returned)} returned. Net ${formatUnits(used - returned)}.`}
     >
       +{formatUnits(returned)} returned
@@ -317,9 +318,9 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
   const TH = 'bg-white px-3 py-2 text-left text-xs font-semibold text-gray-600 dark:bg-slate-900 dark:text-slate-300';
   return (
     <tr>
-      <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
+      <td colSpan={6} className="tf-td bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <p className="text-xs font-semibold text-gray-700 dark:text-slate-200">
+          <p className="tf-caption">
             Consumption history
             <span className="ml-1.5 font-normal text-gray-400 dark:text-slate-500">
               {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
@@ -327,9 +328,9 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
           </p>
           <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="ml-auto" />
         </div>
-        <div className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+        <div className="tf-panel overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm max-sm:text-[13px]">
+          <table className="w-full min-w-[560px] text-sm">
             <thead>
               <tr>
                 <th className={TH}>Date &amp; time</th>
@@ -341,7 +342,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {needMore && pageRows.length < pageSize ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                  <td colSpan={4} className="tf-td text-center tf-hint">
                     {loadingMore ? (
                       <><Loader2 className="mr-1.5 inline h-3.5 w-3.5 animate-spin" />Loading entries…</>
                     ) : (
@@ -354,14 +355,14 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                 </tr>
               ) : sorted.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-xs text-gray-400 dark:text-slate-500">
+                  <td colSpan={4} className="tf-td text-center tf-hint">
                     {entries.length === 0 ? 'No unit usage in this range.' : 'No entries match these filters.'}
                   </td>
                 </tr>
               ) : pageRows.map(e => (
                 <tr key={e.id} className="align-top hover:bg-brand-blue/[0.02]">
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs tabular-nums text-gray-500 dark:text-slate-400">{formatIST(e.created_at)}</td>
-                  <td className="max-w-[24rem] px-3 py-2.5">
+                  <td className="tf-td whitespace-nowrap tf-meta tabular-nums">{formatIST(e.created_at)}</td>
+                  <td className="tf-td max-w-[24rem]">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className={`shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
                         {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
@@ -371,7 +372,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                       )}
                     </div>
                     {(entryKind(e) || e.overall_score != null) && (
-                      <p className="mt-0.5 truncate text-xs capitalize text-gray-400 dark:text-slate-500">
+                      <p className="mt-0.5 truncate tf-hint capitalize">
                         {entryKind(e)}
                         {entryKind(e) && e.overall_score != null && ' · '}
                         {e.overall_score != null && <span className="normal-case">Score <span className="font-semibold text-gray-600 dark:text-slate-300">{e.overall_score}%</span></span>}
@@ -379,7 +380,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                     )}
                     {e.failure_reason && <p className="mt-0.5 tf-error">{e.failure_reason}</p>}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                  <td className="tf-td whitespace-nowrap text-right">
                     {/* Units charged only — the before → after balance was the whole
                         organisation's pool, which read as this member's. A negative
                         entry is a unit credited back (e.g. a deleted resume). */}
@@ -387,7 +388,7 @@ function MemberLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
                       {e.units_consumed > 0 ? e.units_consumed : e.units_consumed < 0 ? `+${Math.abs(e.units_consumed)}` : '0'}
                     </p>
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5">
+                  <td className="tf-td whitespace-nowrap">
                     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {entryStatus(e.status)}
                     </span>
@@ -558,14 +559,14 @@ function MemberListControls({ view, className = '' }: { view: MemberView; classN
           onChange={e => view.setQuery(e.target.value)}
           placeholder="Search members…"
           aria-label="Search members"
-          className="h-8 w-full rounded-md border border-gray-200 bg-white pl-8 pr-2 text-xs text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+          className="tf-input tf-input-sm pl-8 pr-2"
         />
       </div>
       <select
         aria-label="Sort members"
         value={view.sort}
         onChange={e => view.setSort(e.target.value as MemberSort)}
-        className="h-8 shrink-0 rounded-md border border-gray-200 bg-white px-2 text-xs text-gray-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+        className="h-8 shrink-0 rounded-md border border-gray-200 bg-white px-2 tf-meta dark:border-slate-700 dark:bg-slate-900"
       >
         <option value="usage">Most usage</option>
         <option value="name">Name (A–Z)</option>
@@ -584,7 +585,7 @@ function MemberBadges({ member, isTop }: { member: TeamMemberUsage; isTop: boole
       <Crown className="h-2.5 w-2.5" /> Top
     </span>
   ) : (
-    <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-px text-2xs font-medium text-gray-500 dark:bg-slate-800 dark:text-slate-400">
+    <span className="inline-flex shrink-0 items-center rounded-full bg-gray-100 px-1.5 py-px tf-micro-hint dark:bg-slate-800">
       No usage
     </span>
   );
@@ -601,7 +602,7 @@ function MemberLogTabs({ value, onChange }: { value: MemberLogView; onChange: (v
     { id: 'history', label: 'Consumption history', hint: 'Every metered action with its status, including failed ones' },
   ];
   return (
-    <div role="tablist" aria-label="Member log" className="mb-3 inline-flex rounded-lg border border-gray-200 bg-white p-0.5 dark:border-slate-700 dark:bg-slate-900">
+    <div role="tablist" aria-label="Member log" className="tf-panel mb-3 inline-flex p-0.5">
       {tabs.map(t => (
         <button
           key={t.id}
@@ -639,24 +640,24 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         className="cursor-pointer hover:bg-brand-blue/[0.04] dark:hover:bg-slate-800 transition-colors border-t border-gray-100 dark:border-slate-700/60 select-none"
       >
         {/* Member */}
-        <td className="px-4 py-3 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex items-center gap-2">
             <div className="text-gray-300 dark:text-slate-500 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
             </div>
             <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
             <div>
-              <p className="flex items-center gap-1.5 text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">
+              <p className="flex items-center gap-1.5 tf-row-name">
                 {member.user_name || '—'}
                 <MemberBadges member={member} isTop={isTop} />
               </p>
-              <p className="text-xs text-gray-400 dark:text-slate-500">{member.user_email}</p>
+              <p className="tf-hint">{member.user_email}</p>
             </div>
           </div>
         </td>
 
         {/* RU */}
-        <td className="px-3 py-3 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${ru > 0 ? 'bg-orange-100 text-orange-700 ring-1 ring-orange-200' : 'bg-gray-100 text-gray-400'}`}>
@@ -667,7 +668,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         </td>
 
         {/* RS */}
-        <td className="px-3 py-3 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${rs > 0 ? 'bg-blue-100 text-blue-700 ring-1 ring-blue-200' : 'bg-gray-100 text-gray-400'}`}>
@@ -678,7 +679,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         </td>
 
         {/* AS */}
-        <td className="px-3 py-3 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${as_ > 0 ? 'bg-brand-cyan/15 text-[color-mix(in_srgb,var(--brand-cyan)_80%,black)] dark:text-brand-cyan ring-1 ring-brand-cyan/30' : 'bg-gray-100 text-gray-400'}`}>
@@ -689,7 +690,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         </td>
 
         {/* AIU */}
-        <td className="px-3 py-3 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
               ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
@@ -700,7 +701,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
         </td>
 
         {/* Last active */}
-        <td className="px-3 py-3 whitespace-nowrap text-xs text-gray-500 dark:text-slate-500">
+        <td className="tf-td whitespace-nowrap tf-meta">
           {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
         </td>
       </tr>
@@ -728,11 +729,11 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
       {/* Loading — mirrors MemberLogEntries: label + entry rows */}
       {expanded && logView === 'history' && loading && (
         <tr>
-          <td colSpan={6} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
+          <td colSpan={6} className="tf-td bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
             <Skeleton className="h-3 w-56 mb-3" />
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
-                <div key={i} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3">
+                <div key={i} className="tf-panel px-4 py-3 flex items-start gap-3">
                   <Skeleton className="shrink-0 h-6 w-10 rounded-md" />
                   <div className="flex-1 min-w-0 space-y-1.5">
                     <Skeleton className="h-4 w-40" />
@@ -759,7 +760,7 @@ function MemberRow({ member, teamId, fromDate, toDate, isTop = false }: { member
       {/* Empty */}
       {expanded && logView === 'history' && !loading && entries !== null && entries.length === 0 && (
         <tr>
-          <td colSpan={6} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic border-b border-gray-100 dark:border-slate-700/60">
+          <td colSpan={6} className="tf-td bg-gray-50 dark:bg-slate-800/50 tf-body-muted italic border-b border-gray-100 dark:border-slate-700/60">
             No consumption entries for this member in the selected period.
           </td>
         </tr>
@@ -785,7 +786,7 @@ function ShareBar({ team, grandTotal, className = '' }: { team: TeamUsageSummary
       >
         <div className="h-full rounded-full bg-brand-blue" style={{ width: `${Math.max((total / grandTotal) * 100, 2)}%` }} />
       </div>
-      <span className="text-xs font-medium tabular-nums text-gray-600 dark:text-slate-300">{pct < 1 ? '<1' : pct}%</span>
+      <span className="tf-caption tabular-nums">{pct < 1 ? '<1' : pct}%</span>
     </div>
   );
 }
@@ -828,7 +829,7 @@ function TeamRow({
         onClick={canExpand ? onToggle : undefined}
         className={`transition-colors border-t border-gray-200 dark:border-slate-700 select-none ${canExpand ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800' : ''}`}
       >
-        <td className="px-4 py-4 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <div className="flex items-center gap-3">
             {/* The only expand affordance — the whole row toggles. */}
             {canExpand && (
@@ -837,24 +838,24 @@ function TeamRow({
               </div>
             )}
             <div>
-              <p className="tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</p>
+              <p className="tf-row-title">{team.team_name || 'Unnamed Team'}</p>
             </div>
           </div>
         </td>
         {([['RU', ru], ['RS', rs], ['AS', as_], ['AIU', aiu]] as ['RS' | 'AS' | 'AIU' | 'RU', number][]).map(([key, val]) => (
-          <td key={key} className="px-4 py-4 whitespace-nowrap">
+          <td key={key} className="tf-td whitespace-nowrap">
             {val > 0
               ? <span title={`${UNIT_FULL_NAME[key]}: ${formatMeasure(val, measure)} ${measure === 'units' ? 'net units' : measure}`} className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[key]}`}>{formatMeasure(val, measure)}</span>
-              : <span className="text-gray-300 dark:text-slate-500 text-sm max-sm:text-[13px]">—</span>}
+              : <span className="text-gray-300 dark:text-slate-500 text-sm">—</span>}
             <TeamReturnedNote team={team} k={key} />
           </td>
         ))}
-        <td className="px-4 py-4 whitespace-nowrap">
-          <span className={`text-sm max-sm:text-[13px] font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
+        <td className="tf-td whitespace-nowrap">
+          <span className={`text-sm font-bold ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
             {total > 0 ? formatMeasure(total, measure) : '—'}
           </span>
         </td>
-        <td className="px-4 py-4 whitespace-nowrap">
+        <td className="tf-td whitespace-nowrap">
           <ShareBar team={team} grandTotal={grandTotal} />
         </td>
       </tr>
@@ -868,15 +869,15 @@ function TeamRow({
                 <div className="px-4 py-3 space-y-3">
                   {/* Mirrors member rows: avatar + name/email, then unit stat columns */}
                   {Array.from({ length: 4 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 w-56 shrink-0">
+                    <div key={i} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+                      <div className="flex items-center gap-2 sm:w-56 shrink-0">
                         <Skeleton className="w-7 h-7 rounded-full" />
                         <div className="space-y-1.5">
                           <Skeleton className="h-4 w-28" />
                           <Skeleton className="h-3 w-36" />
                         </div>
                       </div>
-                      <div className="flex-1 grid grid-cols-5 gap-3">
+                      <div className="flex-1 grid grid-cols-3 sm:grid-cols-5 gap-3">
                         {Array.from({ length: 5 }).map((_, j) => (
                           <Skeleton key={j} className="h-6 w-full max-w-[3rem] mx-auto rounded-md" />
                         ))}
@@ -891,34 +892,34 @@ function TeamRow({
                     {/* Member table header — 9 cols */}
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
-                        <th className="px-4 py-2.5 text-left tf-th">
+                        <th className="tf-th-cell text-left tf-th">
                           Member
                         </th>
-                        <th className="px-3 py-2.5 text-center tf-th">
+                        <th className="tf-th-cell text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RU}`} />
                             <span className="text-gray-600 dark:text-slate-300">Resume Units</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center tf-th">
+                        <th className="tf-th-cell text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.RS}`} />
                             <span className="text-gray-600 dark:text-slate-300">Resume Scoring</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center tf-th">
+                        <th className="tf-th-cell text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AS}`} />
                             <span className="text-gray-600 dark:text-slate-300">AI Assessment</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-center tf-th">
+                        <th className="tf-th-cell text-center tf-th">
                           <span className="flex flex-col items-center gap-0.5">
                             <span className={`w-2 h-2 rounded-full ${UNIT_DOT.AIU}`} />
                             <span className="text-gray-600 dark:text-slate-300">AI Interview</span>
                           </span>
                         </th>
-                        <th className="px-3 py-2.5 text-left tf-th">
+                        <th className="tf-th-cell text-left tf-th">
                           Last Active
                         </th>
                       </tr>
@@ -929,14 +930,14 @@ function TeamRow({
                       ))}
                       {view.rows.length === 0 && (
                         <tr>
-                          <td colSpan={6} className="px-6 py-4 text-sm italic text-gray-400 dark:text-slate-500">No members match “{view.query}”.</td>
+                          <td colSpan={6} className="tf-td tf-body-muted italic">No members match “{view.query}”.</td>
                         </tr>
                       )}
                     </tbody>
                   </table>
                 </div>
               ) : (
-                <p className="px-6 py-4 text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500 italic">
+                <p className="px-6 py-4 tf-body-muted italic">
                   No members with usage in this period.
                 </p>
               )}
@@ -960,31 +961,32 @@ function MobileLogEntries({ entries: allEntries, total: serverTotal, onLoadMore,
         History · {historyCountLabel(entries.length, total)}{f.active && ` · ${sorted.length} matching`}
       </p>
       <HistoryToolbar f={f} onDownload={() => downloadHistory(sorted, memberName, fromDate, toDate)} className="mb-2" />
-      {sorted.length === 0 && <p className="text-xs italic text-gray-400 dark:text-slate-500">No entries match these filters.</p>}
-      <ul className="max-h-72 space-y-1.5 overflow-y-auto pr-0.5">
+      {sorted.length === 0 && <p className="tf-hint italic">No entries match these filters.</p>}
+      <div className="tf-record-list max-h-72 overflow-y-auto pr-0.5">
         {sorted.map(e => (
-          <li key={e.id} className="rounded-md bg-gray-50 px-2.5 py-2 dark:bg-slate-800/50">
-            <div className="flex items-center gap-2">
-              <span className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
-                {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
-              </span>
-              <p className="min-w-0 flex-1 truncate text-xs font-medium text-gray-800 dark:text-slate-100">{entryItem(e)}</p>
-              <span className="shrink-0 text-xs font-semibold tabular-nums text-gray-900 dark:text-slate-50">
-                {e.units_consumed > 0 ? `−${e.units_consumed}` : e.units_consumed < 0 ? `+${Math.abs(e.units_consumed)}` : '0'}
-              </span>
-            </div>
-            <div className="mt-1 flex items-center justify-between gap-2">
-              <span className={`rounded-full px-1.5 py-0.5 text-2xs font-medium capitalize ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                {entryStatus(e.status)}
-              </span>
-              <span className="truncate text-2xs text-gray-400 dark:text-slate-500">{formatIST(e.created_at)}</span>
-            </div>
-            {e.failure_reason && (
-              <p className="mt-1 text-2xs text-destructive">Reason: {e.failure_reason}</p>
-            )}
-          </li>
+          <MobileRecordCard
+            key={e.id}
+            title={entryItem(e)}
+            badges={
+              <>
+                <span className={`shrink-0 rounded px-1.5 py-0.5 text-2xs font-bold ${ENTRY_UNIT_BADGE_EXTENDED[e.unit_type] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {UNIT_TYPE_LABEL[e.unit_type] ?? e.unit_type}
+                </span>
+                <span className={`rounded-full px-1.5 py-0.5 text-2xs font-medium capitalize ${STATUS_STYLES[e.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                  {entryStatus(e.status)}
+                </span>
+              </>
+            }
+            meta={[{ icon: <Clock />, label: formatIST(e.created_at) }]}
+            fields={[{ label: 'Reason', value: e.failure_reason ? <span className="text-destructive">{e.failure_reason}</span> : null }]}
+            footer={
+              <MobileStatChip tone={e.units_consumed > 0 ? 'warning' : e.units_consumed < 0 ? 'success' : 'neutral'}>
+                {e.units_consumed > 0 ? `−${e.units_consumed}` : e.units_consumed < 0 ? `+${Math.abs(e.units_consumed)}` : '0'} units
+              </MobileStatChip>
+            }
+          />
         ))}
-      </ul>
+      </div>
       <LoadMoreHistory shown={allEntries.length} total={serverTotal} onLoadMore={onLoadMore} loadingMore={loadingMore} className="mt-2" />
     </div>
   );
@@ -999,41 +1001,44 @@ function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: {
   ];
 
   return (
-    <li className="overflow-hidden rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-      <button
-        type="button"
+    <li>
+      <MobileRecordCard
+        selected={expanded}
         onClick={toggle}
-        aria-expanded={expanded}
-        className="flex w-full items-center gap-2 px-2.5 py-2.5 text-left"
-      >
-        <span className={expanded ? 'text-brand-blue' : 'text-gray-300 dark:text-slate-500'}>
-          {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        </span>
-        <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
-        <span className="min-w-0 flex-1">
-          <span className="flex min-w-0 items-center gap-1.5 text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">
-            <span className="truncate">{member.user_name || '—'}</span>
-            <MemberBadges member={member} isTop={isTop} />
+        title={
+          <span className="flex min-w-0 items-center gap-2">
+            <NameAvatar name={member.user_name} fallback={member.user_email} size="sm" />
+            <span className="min-w-0 truncate">{member.user_name || '—'}</span>
           </span>
-          <span className="block truncate text-xs text-gray-400 dark:text-slate-500">{member.user_email}</span>
-        </span>
-      </button>
-      <div className="grid grid-cols-4 gap-1.5 px-2.5 pb-2.5">
-        {stats.map(([label, value, active]) => (
-          <div
-            key={label}
-            className={`rounded-md px-2 py-1 text-center ${active ? 'bg-brand-blue/5 ring-1 ring-brand-blue/10' : 'bg-gray-50 dark:bg-slate-800/50'}`}
+        }
+        badges={<MemberBadges member={member} isTop={isTop} />}
+        meta={[{ label: member.user_email }]}
+        fields={[{ label: 'Last active', value: member.last_activity ? formatISTDate(member.last_activity) : 'Never' }]}
+        footer={
+          <>
+            {stats.map(([label, value, active]) => (
+              <MobileStatChip key={label} tone={active ? 'info' : 'neutral'}>
+                {UNIT_FULL_NAME[label as UnitKey] ?? label} <span className="tabular-nums">{value}</span>
+              </MobileStatChip>
+            ))}
+          </>
+        }
+        actions={
+          <button
+            type="button"
+            onClick={toggle}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide usage logs' : 'Show usage logs'}
+            className="tf-icon-btn-outline"
           >
-            <p className={`text-sm max-sm:text-[13px] font-semibold tabular-nums ${active ? 'text-gray-900 dark:text-slate-50' : 'text-gray-400 dark:text-slate-500'}`}>{value}</p>
-            <p className="text-2xs leading-tight text-gray-500 dark:text-slate-500">{UNIT_FULL_NAME[label as UnitKey] ?? label}</p>
-          </div>
-        ))}
-      </div>
-      <p className="border-t border-gray-100 px-2.5 py-1.5 text-2xs text-gray-500 dark:border-slate-700/60 dark:text-slate-500">
-        Last active: {member.last_activity ? formatISTDate(member.last_activity) : 'Never'}
-      </p>
+            {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
+          </button>
+        }
+      />
       {expanded && (
-        <div className="border-t border-gray-100 px-2.5 pt-2.5 dark:border-slate-700/60">
+      <div className="tf-panel mt-1 overflow-hidden">
+      {expanded && (
+        <div className="px-2.5 pt-2.5">
           <MemberLogTabs value={logView} onChange={setLogView} />
           {logView === 'activity' && (
             <div className="pb-2.5">
@@ -1060,9 +1065,11 @@ function MobileMemberCard({ member, teamId, fromDate, toDate, isTop = false }: {
         <MobileLogEntries entries={entries} total={total} onLoadMore={loadMore} loadingMore={loadingMore} memberName={member.user_name || member.user_email} fromDate={fromDate} toDate={toDate} />
       )}
       {expanded && logView === 'history' && !loading && entries !== null && entries.length === 0 && (
-        <p className="border-t border-gray-100 px-2.5 py-2.5 text-xs italic text-gray-400 dark:border-slate-700/60 dark:text-slate-500">
+        <p className="border-t border-gray-100 px-2.5 py-2.5 tf-hint italic dark:border-slate-700/60">
           No consumption entries in the selected period.
         </p>
+      )}
+      </div>
       )}
     </li>
   );
@@ -1092,50 +1099,47 @@ function MobileTeamCard({
   const total = teamTotalBy(team, measure);
 
   return (
-    <li id={`team-usage-${team.team_id}`}>
-      <button
-        type="button"
+    <li id={`team-usage-${team.team_id}`} className="space-y-2">
+      <MobileRecordCard
+        selected={expanded}
         onClick={canExpand ? onToggle : undefined}
-        disabled={!canExpand}
-        aria-expanded={canExpand ? expanded : undefined}
-        className="flex w-full items-center gap-2.5 px-3 pb-2 pt-3 text-left disabled:cursor-default"
+        title={team.team_name || 'Unnamed Team'}
+        footer={
+          <>
+            <MobileStatChip tone={total > 0 ? 'info' : 'neutral'}>
+              <span className="tabular-nums">{total > 0 ? formatMeasure(total, measure) : '—'}</span> {measure === 'units' ? 'units' : 'total'}
+            </MobileStatChip>
+            {UNIT_KEYS.map(k => {
+              const val = teamValue(team, k, measure);
+              return (
+                <MobileStatChip key={k} tone={val > 0 ? 'info' : 'neutral'}>
+                  {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatMeasure(val, measure)}</span>
+                  {SHOWS_RETURNS(k) && (team.by_type[k]?.units_returned ?? 0) > 0 && (
+                    <span className="font-medium text-success" title="Units credited back this period (e.g. deleted resumes)">
+                      +{formatUnits(team.by_type[k]?.units_returned ?? 0)} returned
+                    </span>
+                  )}
+                </MobileStatChip>
+              );
+            })}
+          </>
+        }
+        actions={canExpand ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={expanded}
+            aria-label={expanded ? 'Hide team members' : 'Show team members'}
+            className="tf-icon-btn-outline"
+          >
+            {expanded ? <ChevronDown className="text-brand-blue" /> : <ChevronRight />}
+          </button>
+        ) : undefined}
       >
-        {canExpand && (
-          <span className={expanded ? 'text-brand-blue' : 'text-gray-400 dark:text-slate-500'}>
-            {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-          </span>
-        )}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate tf-cell-name max-sm:text-[13px]">{team.team_name || 'Unnamed Team'}</span>
-        </span>
-        <span className="shrink-0 text-right">
-          <span className={`block text-sm max-sm:text-[13px] font-bold tabular-nums ${total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
-            {total > 0 ? formatMeasure(total, measure) : '—'}
-          </span>
-          <span className="block text-2xs text-gray-400 dark:text-slate-500">{measure === 'units' ? 'units' : 'total'}</span>
-        </span>
-      </button>
-      <div className={`flex flex-wrap gap-1.5 px-3 pb-3 ${canExpand ? "pl-[2.375rem]" : ""}`}>
-        {UNIT_KEYS.map(k => {
-          const val = teamValue(team, k, measure);
-          return (
-            <span
-              key={k}
-              className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-semibold ${val > 0 ? UNIT_COLORS[k] : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'}`}
-            >
-              {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatMeasure(val, measure)}</span>
-              {SHOWS_RETURNS(k) && (team.by_type[k]?.units_returned ?? 0) > 0 && (
-                <span className="font-medium text-success" title="Units credited back this period (e.g. deleted resumes)">
-                  +{formatUnits(team.by_type[k]?.units_returned ?? 0)} returned
-                </span>
-              )}
-            </span>
-          );
-        })}
-      </div>
-      <ShareBar team={team} grandTotal={grandTotal} className={`px-3 pb-3 ${canExpand ? "pl-[2.375rem]" : ""}`} />
+        <ShareBar team={team} grandTotal={grandTotal} className="mt-2" />
+      </MobileRecordCard>
       {expanded && (
-        <div className="border-t border-gray-100 bg-gray-50 p-2 dark:border-slate-700/60 dark:bg-slate-800/50">
+        <div className="rounded-xl border border-gray-100 bg-gray-50 p-2 dark:border-slate-700/60 dark:bg-slate-800/50">
           {loadingMembers ? (
             <div className="space-y-2">
               {Array.from({ length: 3 }).map((_, i) => (
@@ -1150,10 +1154,10 @@ function MobileTeamCard({
                   <MobileMemberCard key={m.user_id} member={m} teamId={team.team_id} fromDate={fromDate} toDate={toDate} isTop={m.user_id === view.topId} />
                 ))}
               </ul>
-              {view.rows.length === 0 && <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members match “{view.query}”.</p>}
+              {view.rows.length === 0 && <p className="px-2 py-2 tf-hint italic">No members match “{view.query}”.</p>}
             </>
           ) : (
-            <p className="px-2 py-2 text-xs italic text-gray-400 dark:text-slate-500">No members with usage in this period.</p>
+            <p className="px-2 py-2 tf-hint italic">No members with usage in this period.</p>
           )}
         </div>
       )}
@@ -1255,13 +1259,13 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
       })
     : [...visible].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name));
 
-  const shell = 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden';
+  const shell = 'tf-card-soft overflow-hidden';
   const TH = 'px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-slate-300';
   const teamsText = (r: MemberUsageRow) => r.teams.join(', ');
   const empty = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
       <Users className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-      <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">
+      <p className="tf-body-muted">
         {rows.length === 0 ? 'No team members for the selected period.' : 'No members match your search.'}
       </p>
     </div>
@@ -1286,35 +1290,32 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
               ))}
             </ul>
           ) : sorted.length === 0 ? empty : (
-            <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+            <div className="tf-record-list p-3">
               {sorted.map((r) => (
-                <li key={r.id} className="px-3 py-3">
-                  <div className="flex items-center gap-2.5">
-                    <NameAvatar name={r.name} fallback={r.email} size="sm" />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-[13px] font-semibold text-gray-900 dark:text-slate-50">{r.name}</p>
-                      <p className="truncate text-2xs text-gray-500 dark:text-slate-400">{teamsText(r)}</p>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <p className={`text-sm font-bold tabular-nums ${r.total > 0 ? 'text-gray-900 dark:text-slate-50' : 'text-gray-300 dark:text-slate-500'}`}>
-                        {r.total > 0 ? formatUnits(r.total) : '—'}
-                      </p>
-                      <p className="text-2xs text-gray-400 dark:text-slate-500">units</p>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-1.5 pl-[2.6rem]">
-                    {UNIT_KEYS.map((k) => (
-                      <span
-                        key={k}
-                        className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-2xs font-semibold ${r.units[k] > 0 ? UNIT_COLORS[k] : 'border-gray-200 bg-gray-50 text-gray-400 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-500'}`}
-                      >
-                        {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatUnits(r.units[k])}</span>
-                      </span>
-                    ))}
-                  </div>
-                </li>
+                <MobileRecordCard
+                  key={r.id}
+                  title={
+                    <span className="flex min-w-0 items-center gap-2">
+                      <NameAvatar name={r.name} fallback={r.email} size="sm" />
+                      <span className="min-w-0 truncate">{r.name}</span>
+                    </span>
+                  }
+                  meta={[{ icon: <Users />, label: teamsText(r) }]}
+                  footer={
+                    <>
+                      <MobileStatChip tone={r.total > 0 ? 'info' : 'neutral'}>
+                        <span className="tabular-nums">{r.total > 0 ? formatUnits(r.total) : '—'}</span> units
+                      </MobileStatChip>
+                      {UNIT_KEYS.map((k) => (
+                        <MobileStatChip key={k} tone={r.units[k] > 0 ? 'info' : 'neutral'}>
+                          {UNIT_FULL_NAME[k]} <span className="tabular-nums">{formatUnits(r.units[k])}</span>
+                        </MobileStatChip>
+                      ))}
+                    </>
+                  }
+                />
               ))}
-            </ul>
+            </div>
           )}
         </div>
       ) : (
@@ -1343,7 +1344,7 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i}>
                     {Array.from({ length: 8 }).map((__, j) => (
-                      <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full max-w-[6rem]" /></td>
+                      <td key={j} className="tf-td"><Skeleton className="h-4 w-full max-w-[6rem]" /></td>
                     ))}
                   </tr>
                 ))
@@ -1352,27 +1353,27 @@ function MembersUsageView({ teams, fromDate, toDate, query, isMobile, sort }: {
               ) : (
                 sorted.map((r) => (
                   <tr key={r.id} className="hover:bg-brand-blue/[0.03]">
-                    <td className="px-4 py-3">
+                    <td className="tf-td">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <NameAvatar name={r.name} fallback={r.email} size="sm" />
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-900 dark:text-slate-50">{r.name}</p>
+                          <p className="truncate tf-row-name">{r.name}</p>
                           {r.email && <p className="truncate tf-meta">{r.email}</p>}
                         </div>
                       </div>
                     </td>
-                    <td className="max-w-[12rem] truncate px-4 py-3 text-sm text-gray-600 dark:text-slate-300" title={teamsText(r)}>
+                    <td className="tf-td max-w-[12rem] truncate tf-body-secondary" title={teamsText(r)}>
                       {teamsText(r)}
                     </td>
                     {UNIT_KEYS.map((k) => (
-                      <td key={k} className="px-4 py-3">
+                      <td key={k} className="tf-td">
                         {r.units[k] > 0
                           ? <span className={`inline-block text-xs font-semibold px-2.5 py-1 rounded-md border ${UNIT_COLORS[k]}`}>{formatUnits(r.units[k])}</span>
                           : <span className="text-sm text-gray-300 dark:text-slate-600">—</span>}
                       </td>
                     ))}
-                    <td className="px-4 py-3 text-sm font-bold tabular-nums text-gray-900 dark:text-slate-50">{r.total > 0 ? formatUnits(r.total) : '—'}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500 dark:text-slate-400">{r.lastActivity ? formatIST(r.lastActivity) : '—'}</td>
+                    <td className="tf-td text-sm font-bold tabular-nums text-gray-900 dark:text-slate-50">{r.total > 0 ? formatUnits(r.total) : '—'}</td>
+                    <td className="tf-td whitespace-nowrap tf-meta">{r.lastActivity ? formatIST(r.lastActivity) : '—'}</td>
                   </tr>
                 ))
               )}
@@ -1570,7 +1571,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
   const noMatchPanel = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
       <Search className="w-8 h-8 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-      <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No teams match your search.</p>
+      <p className="tf-body-muted">No teams match your search.</p>
       <button type="button" onClick={() => setTeamQuery('')} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
         Clear search
       </button>
@@ -1623,7 +1624,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
               onChange={(e) => setTeamQuery(e.target.value)}
               placeholder={showMembers ? 'Search members, emails or teams…' : 'Search teams…'}
               aria-label={showMembers ? 'Search members' : 'Search teams'}
-              className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm max-sm:text-[13px] text-gray-900 placeholder:text-gray-400 focus:border-brand-blue/30 focus:outline-none focus:ring-2 focus:ring-brand-blue/10 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-50"
+              className="tf-input pl-9 pr-3"
             />
           </div>
         )}
@@ -1637,7 +1638,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
               onChange={setFromDate}
               className="w-full lg:w-[150px] max-sm:px-2 max-sm:!text-xs"
             />
-            <span className="shrink-0 text-xs font-medium text-gray-400 dark:text-slate-500 self-start lg:self-auto max-sm:self-center">to</span>
+            <span className="shrink-0 tf-caption self-start lg:self-auto max-sm:self-center">to</span>
             <DateField
               aria-label="To date"
               value={toDate}
@@ -1668,7 +1669,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                 <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { setExportScope('team'); setShowExportMenu(false); }}
-                    className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                    className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                   >
                     <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <span className={MENU_ITEM_SCALE_CLASS}>Team Level</span>
@@ -1677,7 +1678,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   {isTenantAdmin && (
                     <button
                       onClick={() => { setExportScope('user'); setShowExportMenu(false); }}
-                      className="group w-full text-left px-4 py-2.5 text-sm max-sm:text-[13px] text-gray-700 dark:text-slate-300 flex items-center gap-2"
+                      className="group w-full text-left px-4 py-2.5 tf-body flex items-center gap-2"
                     >
                       <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                       <span className={MENU_ITEM_SCALE_CLASS}>User Level (drill-down)</span>
@@ -1707,7 +1708,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:gap-3">
           <RangePresets activeId={activePresetId} onPick={applyPreset} />
           {/* Same info note style as the Usage page. */}
-          <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta-strong ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 lg:self-auto">
+          <div className="flex items-start gap-2 self-start rounded-lg bg-brand-blue/[0.04] px-3 py-2 tf-meta ring-1 ring-brand-blue/10 dark:bg-slate-800/50 dark:ring-slate-700 lg:self-auto">
             <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-blue" />
             <span>
               Totals include <strong className="font-semibold text-gray-900 dark:text-slate-100">team members only</strong> — usage by users who aren’t in a team isn’t counted here.
@@ -1806,7 +1807,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
       {showMembers ? (
         <MembersUsageView teams={teams} fromDate={fromDate} toDate={toDate} query={teamQuery} isMobile={isMobile} sort={memberSort} />
       ) : isMobile ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
+        <div className="tf-card-soft overflow-hidden">
           {loading ? (
             <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 4 }).map((_, i) => (
@@ -1822,7 +1823,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           ) : teams.length === 0 ? (
             <div className={TABLE_EMPTY_PANEL_CLASS}>
               <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-              <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+              <p className="tf-body-muted">No team usage data for the selected period.</p>
               {canWidenRange && (
                 <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
                   Try the last 90 days
@@ -1832,7 +1833,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
           ) : sortedTeams.length === 0 ? (
             noMatchPanel
           ) : (
-            <ul className="divide-y divide-gray-100 dark:divide-slate-700/60">
+            <ul className="tf-record-list p-3">
               {sortedTeams.map(team => (
                 <MobileTeamCard
                   key={team.team_id}
@@ -1852,16 +1853,16 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
         </div>
       ) : (
       /* Outer team table — 7 cols (Team, 4 unit types, Total, % of total) */
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden tf-table-shell">
+      <div className="tf-card-soft overflow-hidden tf-table-shell">
         <table className="w-full">
           <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
             <tr>
-              <th className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, 'name')}>
+              <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(teamSort, 'name')}>
                 <SortableHeader label="Team" column="name" sort={teamSort} />
               </th>
               {UNIT_KEYS.map(k => (
                 // Colour moved from the inner span to the th so the sort button can turn it brand-blue.
-                <th key={k} className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, k)}>
+                <th key={k} className="tf-th-cell text-left tf-th" aria-sort={ariaSort(teamSort, k)}>
                   <SortableHeader
                     label={<><span aria-hidden className={`h-2 w-2 shrink-0 rounded-full ${UNIT_DOT[k]}`} /><span className="text-left leading-tight">{UNIT_FULL_NAME[k]}</span></>}
                     className="gap-1.5 sm:gap-2"
@@ -1870,10 +1871,10 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   />
                 </th>
               ))}
-              <th className="px-4 py-3 text-left tf-th" aria-sort={ariaSort(teamSort, 'total')}>
+              <th className="tf-th-cell text-left tf-th" aria-sort={ariaSort(teamSort, 'total')}>
                 <SortableHeader label="Total" column="total" sort={teamSort} />
               </th>
-              <th className="px-4 py-3 text-left tf-th">
+              <th className="tf-th-cell text-left tf-th">
                 <abbr title="This team's part of all units used by all teams in the range" className="no-underline">% of total</abbr>
               </th>
             </tr>
@@ -1883,7 +1884,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
               /* Skeleton rows mirror the 7-col team row: Team, 4 unit types, Total, % of total */
               Array.from({ length: 6 }).map((_, i) => (
                 <tr key={i} className="border-t border-gray-200 dark:border-slate-700">
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="tf-td whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <Skeleton className="w-4 h-4 rounded" />
                       <Skeleton className="w-9 h-9 rounded-lg" />
@@ -1891,14 +1892,14 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                     </div>
                   </td>
                   {Array.from({ length: 4 }).map((_, j) => (
-                    <td key={j} className="px-4 py-4 whitespace-nowrap">
+                    <td key={j} className="tf-td whitespace-nowrap">
                       <Skeleton className="h-6 w-10 rounded-md" />
                     </td>
                   ))}
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="tf-td whitespace-nowrap">
                     <Skeleton className="h-5 w-8" />
                   </td>
-                  <td className="px-4 py-4 whitespace-nowrap">
+                  <td className="tf-td whitespace-nowrap">
                     <Skeleton className="h-1.5 w-24 rounded-full" />
                   </td>
                 </tr>
@@ -1910,7 +1911,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
                     <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-                    <p className="text-sm max-sm:text-[13px] text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                    <p className="tf-body-muted">No team usage data for the selected period.</p>
                     {canWidenRange && (
                       <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
                         Try the last 90 days
@@ -1944,7 +1945,7 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
       </div>
       )}
 
-      <p className="text-xs text-gray-400 dark:text-slate-500 mt-3">
+      <p className="tf-hint mt-3">
         {!isTenantAdmin
           ? 'Member-level usage is visible to tenant admins.'
           : showMembers

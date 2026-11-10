@@ -524,14 +524,14 @@ function ClusterRow({
           return (
             <span
               title={`${aiCount} skill${aiCount !== 1 ? 's' : ''} merged or added by AI from your inputs`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
+              className="tf-badge text-2xs bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
             >
               <Sparkles className="w-2.5 h-2.5" />
               {aiCount}<span className="hidden sm:inline"> AI</span>
             </span>
           );
         })()}
-        <span className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
+        <span className="tf-badge flex-shrink-0 tf-micro-hint bg-gray-100 ring-1 ring-gray-200/60">
           {visibleClusterSkills.length}<span className="hidden sm:inline">&nbsp;skill{visibleClusterSkills.length !== 1 ? 's' : ''}</span>
         </span>
         {/* Rename and remove, on the row itself. Both used to live inside the
@@ -571,7 +571,7 @@ function ClusterRow({
       {expanded && (
         <div className="px-3 sm:px-4 pb-4 pt-2 space-y-3 border-t border-brand-blue/10 relative">
           {/* Cluster name + Priority side-by-side for compactness */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+          <div className="tf-grid-3">
             <div className="sm:col-span-2">
               <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
               <input
@@ -579,7 +579,7 @@ function ClusterRow({
                 value={cluster.name}
                 onChange={(e) => onUpdate(cluster.id, { name: e.target.value })}
                 disabled={isReadOnly}
-                className={`mt-1 w-full px-3 py-2 text-sm bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 focus:bg-white transition-all ${isReadOnly ? 'bg-gray-50/70 text-gray-500 cursor-not-allowed' : ''}`}
+                className={`mt-1 w-full px-3 h-9 text-sm bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 focus:bg-white transition-all ${isReadOnly ? 'bg-gray-50/70 text-gray-500 cursor-not-allowed' : ''}`}
                 placeholder="e.g. Core Backend Skills"
               />
             </div>
@@ -622,7 +622,7 @@ function ClusterRow({
                         Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
                       {commandCount > 0 && (
-                        <div className="flex flex-wrap items-center gap-2 text-2xs text-gray-400 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 tf-micro-hint min-w-0">
                           <span className="flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
                           </span>
@@ -657,7 +657,7 @@ function ClusterRow({
                 );
               })()
             ) : (
-              <p className="text-xs text-gray-400 mt-1">No skills assigned. Drag skills here from other clusters.</p>
+              <p className="tf-hint mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
             {!isReadOnly && <p className="text-2xs text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
@@ -843,7 +843,7 @@ function CategorySection({
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
+              <h2 className="tf-section-title tracking-tight leading-tight">{title}</h2>
               {maxClusters > 0 && (
                 <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium ${
                   atLimit
@@ -854,7 +854,7 @@ function CategorySection({
                 </span>
               )}
               {timeMin > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   <Clock className="w-2.5 h-2.5" />
                   {timeMin} min
                 </span>
@@ -949,17 +949,17 @@ function CategorySection({
           <div className="px-4 pt-4 pb-3 border-b border-gray-100/70">
             {totalCount === 0 ? (
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Skills</span>
-                <span className="text-xs text-gray-400">0</span>
+                <span className="tf-eyebrow tracking-wide">Skills</span>
+                <span className="tf-hint">0</span>
               </div>
             ) : (
               <div className="mb-3">
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <span className="tf-eyebrow tracking-wide">
                     Skills <span className="text-gray-400 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
                   </span>
                   {commandCount > 0 && (
-                    <div className="flex items-center gap-2.5 text-2xs text-gray-400">
+                    <div className="flex items-center gap-2.5 tf-micro-hint">
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
                       </span>
@@ -983,7 +983,7 @@ function CategorySection({
                       onChange={e => setSkillQuery(e.target.value)}
                       placeholder="Search skills…"
                       aria-label={`Search ${title}`}
-                      className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 transition-all"
+                      className="tf-input h-auto pl-8 pr-8 py-1.5 text-xs"
                     />
                     {skillQuery && (
                       <button
@@ -1001,7 +1001,7 @@ function CategorySection({
                       value={skillFilter}
                       onChange={v => setSkillFilter(v as typeof skillFilter)}
                       ariaLabel="Filter skills"
-                      className="w-full sm:w-auto pl-3 sm:pl-3 pr-2 sm:pr-2 py-1.5 sm:py-1.5 text-xs font-medium rounded-lg sm:rounded-lg text-gray-700"
+                      className="w-full sm:w-auto pl-3 sm:pl-3 pr-2 sm:pr-2 py-1.5 sm:py-1.5 tf-caption rounded-lg sm:rounded-lg"
                       options={[
                         { value: 'all', label: 'All' },
                         { value: 'skill', label: 'Skills only' },
@@ -1012,7 +1012,7 @@ function CategorySection({
                 </div>
 
                 {matches.length === 0 ? (
-                  <p className="text-xs text-gray-400 py-3 text-center">
+                  <p className="tf-hint py-3 text-center">
                     {filtering ? 'No skills match this search.' : 'No skills in this section.'}
                   </p>
                 ) : (
@@ -1021,7 +1021,7 @@ function CategorySection({
                       {matches.map(e => renderChip(e))}
                     </div>
                     {filtering && (
-                      <p className="mt-1.5 text-2xs text-gray-400">
+                      <p className="mt-1.5 tf-micro-hint">
                         Showing {matches.length} of {totalCount}
                       </p>
                     )}
@@ -1045,7 +1045,7 @@ function CategorySection({
             <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
               <Layers className="w-7 h-7 text-brand-blue" />
             </div>
-            <p className="tf-card-desc">
+            <p className="tf-body-secondary">
               No clusters yet. Click <strong className="text-brand-blue">&quot;Regenerate with AI&quot;</strong> or add manually.
             </p>
           </div>
@@ -1717,8 +1717,20 @@ export default function AIInterviewClusters() {
   const nthRemovalLocked = isSectionRemovalLocked('nth');
 
   /* ── AI Generate ── */
+  // One generation at a time. Each run makes the expand / generate / refine LLM
+  // requests; two triggers landing together (the Configure hand-off, the
+  // missing-clusters / auto-heal effects, a Regenerate click) used to start two
+  // overlapping runs and bill the whole pipeline twice (staging config f61a26cd,
+  // 2026-11-05: every call x2 within 5 s). A ref, not `generating`, because
+  // state is stale inside a closure created before the first run began.
+  const generationInFlightRef = useRef(false);
   const handleGenerateClusters = async (opts: { forceExpand?: boolean } = {}) => {
     const { forceExpand = false } = opts;
+    if (generationInFlightRef.current) {
+      console.log('[CLUSTER-DEBUG] Generation already running - ignoring the second request');
+      return;
+    }
+    generationInFlightRef.current = true;
     setGenerating(true);
     try {
       // Sort skills by importance weight so AI prioritizes them in clustering
@@ -2568,6 +2580,7 @@ export default function AIInterviewClusters() {
         : 'Failed to generate clusters. Please try again, or add skills manually.';
       toast.error(_reason, { duration: 9000 });
     } finally {
+      generationInFlightRef.current = false;
       setGenerating(false);
     }
   };
@@ -3064,9 +3077,9 @@ export default function AIInterviewClusters() {
     // section cards (Must-To-Have / Nice-To-Have), each with a skills pool row
     // and a couple of cluster rows.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             {/* Breadcrumb */}
             <div className="mb-4 md:mb-6 flex items-center gap-2">
               <Skeleton className="h-3 w-16" />
@@ -3098,7 +3111,7 @@ export default function AIInterviewClusters() {
             {/* Category section cards */}
             <div className="space-y-5">
               {Array.from({ length: 2 }).map((_, s) => (
-                <div key={s} className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+                <div key={s} className="tf-panel overflow-hidden">
                   {/* Section header */}
                   <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
                     <div className="flex items-center gap-3">
@@ -3157,9 +3170,9 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
+      <main className="tf-page" onPointerDownCapture={markEditStart} onKeyDownCapture={markEditStart}>
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             <PageBreadcrumb
               barRef={breadcrumbBarRef}
               /* Inside the wizard popup the popup's header names the flow. */
@@ -3605,10 +3618,10 @@ export default function AIInterviewClusters() {
                       <PopoverContent
                         side="bottom"
                         align="start"
-                        className="w-[440px] max-h-[70dvh] overflow-y-auto p-5 text-sm leading-relaxed"
+                        className="w-[440px] tf-fit-screen max-h-[70dvh] overflow-y-auto p-4 sm:p-5 text-sm leading-relaxed"
                       >
                         <div className="space-y-3 text-gray-700">
-                          <div className="tf-cell-name">Skill Distribution</div>
+                          <div className="tf-row-title">Skill Distribution</div>
                           <p className="italic text-gray-600">
                             Intelligently distribute refined skills across the allocated interview
                             questions so all important skills are evaluated efficiently within the
@@ -4025,7 +4038,7 @@ export default function AIInterviewClusters() {
                   Q{row.q}
                 </span>
                 <div className="min-w-0 flex flex-wrap items-center gap-1.5">
-                  <span className="text-sm font-medium text-gray-900">{row.primary}</span>
+                  <span className="tf-row-name">{row.primary}</span>
                   {row.secondaries.length > 0 && (
                     <>
                       <span className="text-gray-300">+</span>
@@ -4036,7 +4049,7 @@ export default function AIInterviewClusters() {
                       ))}
                     </>
                   )}
-                  <span className="text-2xs text-gray-400 ml-1 truncate max-w-[180px]">· {row.cluster}</span>
+                  <span className="tf-micro-hint ml-1 truncate max-w-[180px]">· {row.cluster}</span>
                 </div>
                 <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
                   {priorityLabel(row.priority)}
@@ -4051,15 +4064,15 @@ export default function AIInterviewClusters() {
                   <button
                     type="button"
                     onClick={() => setShowQuestionDistribution(true)}
-                    className="w-full bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-5 py-3 flex items-center justify-between hover:border-brand-blue/30 hover:shadow-brand-blue/10 transition-all"
+                    className="w-full tf-card-soft px-5 py-3 flex items-center justify-between hover:border-brand-blue/30 hover:shadow-brand-blue/10 transition-all"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                         <Layers className="w-3.5 h-3.5 text-brand-blue" />
                       </div>
                       <div className="text-left">
-                        <div className="tf-cell-name">Question Distribution</div>
-                        <div className="text-2xs text-gray-500">
+                        <div className="tf-row-title">Question Distribution</div>
+                        <div className="tf-micro-hint">
                           {totalQ} question{totalQ !== 1 ? 's' : ''} · {totalSkillsCovered} skill{totalSkillsCovered !== 1 ? 's' : ''} covered
                         </div>
                       </div>
@@ -4070,14 +4083,14 @@ export default function AIInterviewClusters() {
                     </div>
                   </button>
                 ) : (
-                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+                  <div className="tf-card-soft tf-round-edges">
                     <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
                       <div className="flex items-center gap-2.5">
                         <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                           <Layers className="w-4 h-4 text-brand-blue" />
                         </div>
                         <div>
-                          <h2 className="text-base font-semibold text-gray-900 tracking-tight">Question Distribution</h2>
+                          <h2 className="tf-section-title tracking-tight">Question Distribution</h2>
                           <p className="tf-meta mt-0.5">
                             {totalQ} planned questions · {totalSkillsCovered} skills covered (primary + secondary)
                           </p>
@@ -4097,7 +4110,7 @@ export default function AIInterviewClusters() {
                     <div className="p-5 space-y-5">
                       {mthDist.length > 0 && (
                         <div>
-                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                          <div className="tf-eyebrow tracking-wider mb-2">
                             Must-To-Have ({mthDist.length} questions)
                           </div>
                           <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
@@ -4108,7 +4121,7 @@ export default function AIInterviewClusters() {
 
                       {nthDist.length > 0 && (
                         <div>
-                          <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider mb-2">
+                          <div className="tf-eyebrow tracking-wider mb-2">
                             Nice-To-Have ({nthDist.length} questions)
                           </div>
                           <div className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
@@ -4123,7 +4136,7 @@ export default function AIInterviewClusters() {
                         </div>
                       )}
 
-                      <div className="text-2xs text-gray-400 italic">
+                      <div className="tf-micro-hint italic">
                         Each question evaluates a primary skill plus up to 2 secondary skills from the same cluster.
                       </div>
                     </div>
@@ -4139,7 +4152,7 @@ export default function AIInterviewClusters() {
 
           {/* ── Configuration Summary sidebar ── */}
           <div className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-6 max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-auto-hide">
+            <div className="tf-card-soft p-4 sticky top-6 max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-auto-hide">
               <div className="mb-4">
                 <SectionHeader
                   icon={ClipboardList}
@@ -4157,12 +4170,12 @@ export default function AIInterviewClusters() {
                   <div className="divide-y divide-gray-50">
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
                       <span className="tf-meta flex-shrink-0">Role Title</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_title || config.position || '—'}</span>
+                      <span className="tf-caption text-right">{config.jd_title || config.position || '—'}</span>
                     </div>
                     {clusterJdExperience && (
                       <div className="px-3 py-2 flex items-start justify-between gap-2">
                         <span className="tf-meta flex-shrink-0">Experience</span>
-                        <span className="text-xs font-semibold text-gray-900 text-right">{clusterJdExperience}</span>
+                        <span className="tf-caption text-right">{clusterJdExperience}</span>
                       </div>
                     )}
                     {config.jd_location && (
@@ -4174,19 +4187,19 @@ export default function AIInterviewClusters() {
                     {config.jd_version != null && (
                       <div className="px-3 py-2 flex items-start justify-between gap-2">
                         <span className="tf-meta flex-shrink-0">JD Version</span>
-                        <span className="text-xs font-semibold text-gray-900 text-right">v{config.jd_version}</span>
+                        <span className="tf-caption text-right">v{config.jd_version}</span>
                       </div>
                     )}
                     <div className="px-3 py-2 flex items-center justify-between gap-2">
                       <span className="tf-meta flex-shrink-0">Interview Mode</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">
+                      <span className="tf-caption text-right">
                         {isFixed ? 'Timed' : 'Conversational'}
                       </span>
                     </div>
                     {config.duration_minutes != null && (
                       <div className="px-3 py-2 flex items-center justify-between gap-2">
                         <span className="tf-meta flex-shrink-0">Total Duration</span>
-                        <span className="text-xs font-semibold text-gray-900 text-right">{config.duration_minutes} min</span>
+                        <span className="tf-caption text-right">{config.duration_minutes} min</span>
                       </div>
                     )}
                   </div>
@@ -4204,33 +4217,33 @@ export default function AIInterviewClusters() {
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-100">
-                          <th className="px-3 py-1.5 text-left tf-th">Round</th>
-                          <th className="px-3 py-1.5 text-right tf-th">Q</th>
-                          <th className="px-3 py-1.5 text-right tf-th">Clusters</th>
-                          <th className="px-3 py-1.5 text-right tf-th">Time</th>
+                          <th className="tf-th-cell text-left tf-th">Round</th>
+                          <th className="tf-th-cell text-right tf-th">Q</th>
+                          <th className="tf-th-cell text-right tf-th">Clusters</th>
+                          <th className="tf-th-cell text-right tf-th">Time</th>
                         </tr>
                       </thead>
                       <tbody>
                         <tr className="border-b border-gray-50">
-                          <td className="px-3 py-2 text-gray-600">Must-to-Have</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
-                          <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedMthMin}m</td>
+                          <td className="tf-td text-gray-600">Must-to-Have</td>
+                          <td className="tf-td text-right font-semibold text-gray-900">{timedAllocation.mthQuestions}</td>
+                          <td className="tf-td text-right font-semibold text-gray-900">{mthClusters.length > 0 ? mthClusters.length : mthMaxClusters}</td>
+                          <td className="tf-td text-right font-semibold text-gray-900">{fixedMthMin}m</td>
                         </tr>
                         {nthEnabled && (
                           <tr className="border-b border-gray-50">
-                            <td className="px-3 py-2 text-gray-600">Nice-to-Have</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedNthMin}m</td>
+                            <td className="tf-td text-gray-600">Nice-to-Have</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{timedAllocation.nthQuestions}</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{nthClusters.length > 0 ? nthClusters.length : nthMaxClusters}</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{fixedNthMin}m</td>
                           </tr>
                         )}
                         {hrEnabled && (
                           <tr>
-                            <td className="px-3 py-2 text-gray-600">HR Round</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{timedAllocation.hrQuestions}</td>
-                            <td className="px-3 py-2 text-right text-gray-400">—</td>
-                            <td className="px-3 py-2 text-right font-semibold text-gray-900">{fixedHrMin}m</td>
+                            <td className="tf-td text-gray-600">HR Round</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{timedAllocation.hrQuestions}</td>
+                            <td className="tf-td text-right text-gray-400">—</td>
+                            <td className="tf-td text-right font-semibold text-gray-900">{fixedHrMin}m</td>
                           </tr>
                         )}
                       </tbody>
@@ -4257,7 +4270,7 @@ export default function AIInterviewClusters() {
                       return (
                         <div key={row.label}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="tf-meta-strong">{row.label}</span>
+                            <span className="tf-meta">{row.label}</span>
                             <span className={`text-xs font-semibold ${
                               complete ? 'text-advice-positive' : row.done > 0 ? 'text-gray-900' : 'text-gray-400'
                             }`}>

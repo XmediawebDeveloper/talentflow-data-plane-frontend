@@ -5,8 +5,7 @@ export type UserRole =
   | 'tenant_admin'
   | 'recruiter'
   | 'viewer'
-  | 'billing_manager'   // RBAC03
-  | 'standard_user';    // RBAC04
+  | 'billing_manager'   // RBAC03;
 
 export interface Permission {
   // Job Descriptions - Granular CRUD
@@ -454,30 +453,6 @@ export const getPermissionsForRole = (role: UserRole): Permission => {
         canViewInvoices: true,
         canViewUsage: true,
       };
-    case 'standard_user':
-      // RBAC04: Standard User - ZERO implicit permissions, all must be explicitly granted
-      return {
-        canReadJD: false,
-        canCreateJD: false,
-        canUpdateJD: false,
-        canDeleteJD: false,
-        canManageJD: false,
-        canViewResumes: false,
-        canUploadResumes: false,
-        canUpdateResumes: false,
-        canDeleteResumes: false,
-        canAccessInternalDB: false,
-        canUpdateInternalDB: false,
-        canDeleteInternalDB: false,
-        canViewAssessments: false,
-        canCreateAssessments: false,
-        canUpdateAssessments: false,
-        canDeleteAssessments: false,
-        canViewAnalytics: false,
-        canManageSettings: false,
-        canManageUsers: false,
-        canViewBilling: false,
-      };
     default:
       // Default: no permissions
       return {
@@ -526,11 +501,6 @@ export const ROLE_METADATA: Record<UserRole, { name: string; description: string
   billing_manager: {
     name: 'Billing Manager',
     description: 'Read-only access to billing and subscription information',
-    isAdmin: false,
-  },
-  standard_user: {
-    name: 'Standard User',
-    description: 'Default role with no permissions. All access must be explicitly granted.',
     isAdmin: false,
   },
 };
