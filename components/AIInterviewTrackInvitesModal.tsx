@@ -7,11 +7,12 @@ import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import { interviewResendExpiry } from '@/lib/utils/resendExpiry';
 import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
@@ -27,8 +28,10 @@ import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useTrackerPoll } from '@/lib/hooks/useTrackerPoll';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
-import { formatIST } from '@/lib/utils/dateUtils';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
+import { JobLockBadge, JobLockBanner, JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
+import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
+import { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
 import AIInterviewInviteTable, {
   isExpiredForActions,
   isRevocableInvite,
@@ -173,7 +176,7 @@ export default function AIInterviewTrackInvitesModal({
   onChanged,
   refreshSignal,
   initialSearch,
-  pageSize = embedded ? PAGE_SIZE : POPUP_PAGE_SIZE,
+  pageSize: initialPageSize = embedded ? PAGE_SIZE : POPUP_PAGE_SIZE,
   paginationBelowTable = !embedded,
   guided = !embedded,
   scope,
@@ -186,20 +189,48 @@ export default function AIInterviewTrackInvitesModal({
 
   const [lookedUpJdDisabled, setLookedUpJdDisabled] = useState(false);
   const [lookedUpConfigArchived, setLookedUpConfigArchived] = useState(false);
+  /* The job's own status: a Disabled / Archived job gets its badge beside the
+     job name in the header (the lists' badge). Read from the config, so the
+     config is read on every open now, not only when the lock props are left out. */
+  const [jdStatus, setJdStatus] = useState<{ configId: string; status: string | null } | null>(null);
+  const [lineage, setLineage] = useState<{ configId: string; versions: JDLineageVersion[] } | null>(null);
   useEffect(() => {
-    if (!isOpen || !configId || (jdDisabledProp !== undefined && configArchivedProp !== undefined)) return;
+    if (!isOpen || !configId) return;
     let cancelled = false;
     aiInterviewService
       .get(configId)
       .then((cfg) => {
         if (cancelled) return;
+        setJdStatus({ configId, status: cfg?.jd_status ?? null });
+        /* Job-wide: every job version's own status (the job's lineage). */
+        if (jobScope && cfg?.jd_id) {
+          jdService.getLineageVersions(cfg.jd_id)
+            .then((versions) => { if (!cancelled) setLineage({ configId, versions: versions || [] }); })
+            .catch(() => { /* unknown — no banner, host's lock only */ });
+        }
         if (jdDisabledProp === undefined) setLookedUpJdDisabled(isJdDisabled(cfg?.jd_status));
         if (configArchivedProp === undefined) setLookedUpConfigArchived(isInterviewConfigArchived(cfg?.status));
       })
       .catch(() => { /* Unknown — the server still refuses actions on a disabled/archived config. */ });
     return () => { cancelled = true; };
-  }, [isOpen, jdDisabledProp, configArchivedProp, configId]);
-  const jdDisabled = jdDisabledProp ?? lookedUpJdDisabled;
+  }, [isOpen, jdDisabledProp, configArchivedProp, configId, jobScope]);
+  const jobBadge = jdStatus?.configId === configId ? jobStatusBadgeKind(jdStatus.status) : null;
+  /* Disabled / Archived: badge + banner, and the row actions and Invite More
+     turned off here too — whatever the host passed — so the banner is true.
+     Not on a job-wide tracker, where one version's status does not describe
+     the rest; there the host's lock stands alone. */
+  const jobLock = !jobScope && (jobBadge === 'disabled' || jobBadge === 'archived') ? jobBadge : null;
+  const jdDisabled = (jdDisabledProp ?? lookedUpJdDisabled) || !!jobLock;
+  const jobLockMessage = jobLock === 'archived' ? JD_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE;
+  /* Job-wide tracker: a Disabled / Archived job version is named in a banner,
+     and its rows carry that status so the table locks just those rows. */
+  const scopeJobVersions = new Set((jobScope ?? []).map((entry) => entry.jobVersion));
+  const scopeVersions = jobScope && lineage?.configId === configId
+    ? lineage.versions.filter((v) => scopeJobVersions.has(v.version_number))
+    : [];
+  const versionLocks = splitJobVersions(scopeVersions);
+  const lockedStatusByVersion = new Map(versionLocks.locked.map((v) => [v.version, v.status]));
+  const rowJdLocked = (inv: { _jd_version?: number }): boolean => inv._jd_version != null && lockedStatusByVersion.has(inv._jd_version);
   const configArchived = configArchivedProp ?? lookedUpConfigArchived;
 
   /* Job / interview version for the two version columns. Taken from the host
@@ -231,6 +262,8 @@ export default function AIInterviewTrackInvitesModal({
   const headerInterviewVersion = interviewVersionProp ?? lookedUpVersions?.interview;
   const [invitations, setInvitations] = useState<any[]>([]);
   const [page, setPage] = useState(1);
+  // Rows a page: the host's size to start, then the pager's 5 / 10 / 20 / 40 / 100.
+  const [pageSize, setPageSize] = useState(initialPageSize);
   // "Go to page" input for the footer — buffered locally so a partial edit
   // doesn't get clobbered by `page` until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState('1');
@@ -302,7 +335,10 @@ export default function AIInterviewTrackInvitesModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
-  const selectableIds = (jdDisabled || configArchived) ? [] : invitations.filter(isBulkActionable).map((inv: any) => inv.id);
+  const tableInvitations = lockedStatusByVersion.size === 0
+    ? invitations
+    : invitations.map((inv: { _jd_version?: number }) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv));
+  const selectableIds = (jdDisabled || configArchived) ? [] : invitations.filter((inv: any) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv: any) => inv.id);
   const selectedRows = invitations.filter((inv: any) => selectedIds.has(inv.id));
   const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvite);
   const allResendable = selectedRows.length > 0 && selectedRows.every(isBulkResendable);
@@ -594,6 +630,7 @@ export default function AIInterviewTrackInvitesModal({
                 <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
+                  {jobLock && <JobLockBadge kind={jobLock} title={jobLockMessage} />}
                   {jobScope && (
                     <span className="text-gray-400 dark:text-slate-600 whitespace-nowrap">
                       - all job versions ({jobScope.length} interview{jobScope.length === 1 ? '' : 's'})
@@ -638,6 +675,13 @@ export default function AIInterviewTrackInvitesModal({
             {/* No ✕: the footer's Cancel is the one close control. */}
           </div>
         </div>
+
+        {jobLock && <JobLockBanner kind={jobLock} />}
+        {versionLocks.locked.length > 0 && (
+          <div className="mx-2.5 sm:mx-6 mt-2.5 sm:mt-3 flex-shrink-0">
+            <JobVersionsLockBanner locked={versionLocks.locked} active={versionLocks.active} />
+          </div>
+        )}
 
         {isUnstarted ? (
           <div className="px-2.5 sm:px-6 py-2.5 sm:py-4">
@@ -790,7 +834,7 @@ export default function AIInterviewTrackInvitesModal({
         <div className={`relative px-2.5 sm:px-6 py-2.5 sm:py-4 flex flex-col ${paginationBelowTable ? 'flex-1' : 'overflow-hidden flex-1 min-h-0'}`}>
           {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
-            invitations={invitations}
+            invitations={tableInvitations}
             jdDisabled={jdDisabled}
             configArchived={configArchived}
             isLoading={initialLoading}
@@ -830,8 +874,7 @@ export default function AIInterviewTrackInvitesModal({
                 itemsPerPage={pageSize}
                 totalItems={filteredTotal}
                 onPageChange={setPage}
-                onItemsPerPageChange={() => setPage(1)}
-                pageSizeOptions={[pageSize]}
+                onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
                 itemLabel="invites"
                 minimalOnMobile
                 compact
@@ -857,9 +900,12 @@ export default function AIInterviewTrackInvitesModal({
         {/* Resend confirmation — regenerates the interview token, so the old
             link stops working the moment the new email goes out. Mirrors the
             AI Interviews page tracker's dialog and endpoint. */}
-        <ConfirmationDialog
+        <ResendLinkModal
           isOpen={!!resendTarget}
-          onClose={() => { if (resendingId !== resendTarget?.id) setResendTarget(null); }}
+          kind="interview"
+          email={resendTarget?.candidate_email}
+          expiry={resendTarget ? interviewResendExpiry(resendTarget) : null}
+          onCancel={() => { if (resendingId !== resendTarget?.id) setResendTarget(null); }}
           onConfirm={async () => {
             const inv = resendTarget;
             if (!inv) return;
@@ -883,18 +929,8 @@ export default function AIInterviewTrackInvitesModal({
               setResendTarget(null);
             }
           }}
-          title="Invalidate old link & send new invitation?"
-          description={
-            resendTarget
-              ? `A fresh interview link will be emailed to ${resendTarget.candidate_email}. The previous link will stop working immediately.`
-              : ''
-          }
-          confirmText={resendingId && resendingId === resendTarget?.id ? 'Sending…' : 'Yes, send new link'}
-          cancelText="Cancel"
-          variant="info"
-        >
-          {resendTarget && <NewLinkExpiry inv={resendTarget} />}
-        </ConfirmationDialog>
+          isLoading={!!(resendingId && resendingId === resendTarget?.id)}
+        />
 
         {/* Revoke — the old link stops working immediately. */}
         <RevokeLinkModal
@@ -923,27 +959,25 @@ export default function AIInterviewTrackInvitesModal({
         />
 
         {/* Bulk revoke — selected Invited candidates only. */}
-        <ConfirmationDialog
+        <RevokeLinkModal
           isOpen={showBulkRevokeConfirm}
-          onClose={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
+          kind="interview"
+          bulk={{ scope: 'selected', count: selectedRows.length }}
+          targets={selectedRows.filter(isRevocableInvite).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._interview_version ?? interviewVersionProp ?? lookedUpVersions?.interview, email: inv.candidate_email }))}
+          onCancel={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
           onConfirm={handleBulkRevoke}
-          title="Revoke invitations for selected candidates?"
-          description={`The interview link for ${selectedRows.length} selected candidate${selectedRows.length === 1 ? '' : 's'} will stop working immediately.`}
-          confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedRows.length}`}
-          cancelText="Cancel"
-          variant="danger"
+          isLoading={isBulkRevoking}
         />
 
         {/* Bulk resend confirmation — selected Expired candidates only. */}
-        <ConfirmationDialog
+        <ResendLinkModal
           isOpen={showBulkResendConfirm}
-          onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+          kind="interview"
+          bulk={{ count: selectedIds.size }}
+          targets={invitations.filter((inv) => selectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._interview_version ?? interviewVersionProp ?? lookedUpVersions?.interview, email: inv.candidate_email }))}
+          onCancel={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
           onConfirm={handleBulkResend}
-          title="Resend invitations to selected candidates?"
-          description={`A fresh interview link will be emailed to ${selectedIds.size} selected candidate${selectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-          confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${selectedIds.size}`}
-          cancelText="Cancel"
-          variant="info"
+          isLoading={isBulkResending}
         />
 
         {/* Footer — stacks on phones; First/Last drop out below sm. Nothing to
@@ -1000,7 +1034,7 @@ export default function AIInterviewTrackInvitesModal({
                 disabled={jdDisabled}
                 aria-disabled={!onInviteMore || undefined}
                 className={`${(!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
-                title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !onInviteMore ? inviteMoreDeniedReason : undefined}
+                title={jdDisabled ? (jobLock ? jobLockMessage : JD_DISABLED_ACTION_MESSAGE) : !onInviteMore ? inviteMoreDeniedReason : undefined}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More
@@ -1123,40 +1157,3 @@ export default function AIInterviewTrackInvitesModal({
     </div>
   );
 }
-
-/** Resend's "New link expiry" preview — same duration as the original
- *  invitation, anchored on the last send, as the AI Interviews tracker shows. */
-function NewLinkExpiry({ inv }: { inv: any }) {
-  const sentAnchor = inv.invitation_sent_at || inv.created_at;
-  const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
-  const expiresMs = inv.expires_at ? new Date(inv.expires_at).getTime() : NaN;
-  let durationMs = 24 * 60 * 60 * 1000;
-  if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
-    durationMs = expiresMs - createdMs;
-  }
-  const newExpiry = new Date(Date.now() + durationMs);
-  const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
-  let durationLabel: string;
-  if (totalMinutes >= 60 * 24) {
-    const days = Math.round(totalMinutes / (60 * 24));
-    durationLabel = days === 1 ? '1 day' : `${days} days`;
-  } else if (totalMinutes >= 60) {
-    const hours = Math.round(totalMinutes / 60);
-    durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
-  } else {
-    durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
-  }
-  return (
-    <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-xl p-3 text-sm">
-      <p className="text-brand-orange-deep font-medium mb-1">New link expiry</p>
-      <p className="text-brand-orange-deep">
-        Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
-        <strong>{formatIST(newExpiry.toISOString())}</strong>.
-      </p>
-      <p className="text-brand-orange-deep/80 text-xs mt-2">
-        Same duration as the original invitation.
-      </p>
-    </div>
-  );
-}
-

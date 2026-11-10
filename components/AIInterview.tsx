@@ -70,7 +70,8 @@ import {
 } from '@/components/ai-interview/ColumnFilterFields';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import { interviewResendExpiry } from '@/lib/utils/resendExpiry';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -366,6 +367,9 @@ export default function AIInterview() {
   // kebab-menu "Revoke pending invites" action.
   const [revokePendingTarget, setRevokePendingTarget] = useState<AIInterviewResponse | null>(null);
   const [revokePendingCount, setRevokePendingCount] = useState<number | null>(null);
+  /* The one pending candidate's email when only one link is pending — the
+     revoke popup then reads as that candidate's own (three-dot) revoke. */
+  const [revokePendingOneEmail, setRevokePendingOneEmail] = useState<string | null>(null);
   const [isRevokingPending, setIsRevokingPending] = useState(false);
   // Edit invitation modal target — only ever set for a REVOKED invitation
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
@@ -1787,15 +1791,25 @@ export default function AIInterview() {
   const handleOpenRevokePendingModal = async (config: AIInterviewResponse) => {
     if (blockIfJdDisabled(config)) return;
     setOpenMenuId(null);
-    setRevokePendingTarget(config);
-    setRevokePendingCount(null);
+    /* Count (and, for one link, whose it is) BEFORE opening: opening first
+       drew the many-links popup and then swapped it for the one-candidate
+       popup when the email landed — a visible flash. */
+    let count: number | null = null;
+    let oneEmail: string | null = null;
     try {
-      const count = await aiInterviewService.getRevokableInvitationsCount(config.id);
-      setRevokePendingCount(count);
+      count = await aiInterviewService.getRevokableInvitationsCount(config.id);
+      if (count === 1) {
+        /* Which candidate: the one invite the revoke would take — same rule. */
+        const res = await aiInterviewService.getConfigInvitations(config.id, { status: 'invited', page: 1, page_size: 50, compact: true }).catch(() => null);
+        oneEmail = res?.items?.find(isRevocableInvite)?.candidate_email || null;
+      }
     } catch (err) {
       console.error('Failed to fetch revokable invitations count:', err);
-      setRevokePendingCount(null);
+      count = null;
     }
+    setRevokePendingCount(count);
+    setRevokePendingOneEmail(oneEmail);
+    setRevokePendingTarget(config);
   };
 
   const confirmRevokePendingInvites = async () => {
@@ -4830,9 +4844,12 @@ export default function AIInterview() {
                         tab's ticked rows that can still be revoked. Each is
                         revoked on its own, so one link that already changed
                         state doesn't block the rest. */}
-                    <ConfirmationDialog
+                    <RevokeLinkModal
                       isOpen={statusBulkRevokeOpen}
-                      onClose={() => { if (!isBulkRevoking) setStatusBulkRevokeOpen(false); }}
+                      kind="interview"
+                      bulk={{ scope: 'selected', count: revocableSelectedRows.length, skippedCount: selectedStatusRows.length - revocableSelectedRows.length }}
+                      targets={revocableSelectedRows.map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._config_title, version: inv._interview_version, email: inv.candidate_email }))}
+                      onCancel={() => { if (!isBulkRevoking) setStatusBulkRevokeOpen(false); }}
                       onConfirm={async () => {
                         const targets = revocableSelectedRows;
                         if (targets.length === 0) { setStatusBulkRevokeOpen(false); return; }
@@ -4853,18 +4870,7 @@ export default function AIInterview() {
                           setStatusBulkRevokeOpen(false);
                         }
                       }}
-                      /* Same shape as the bulk Resend confirmation: a question,
-                         one sentence saying what happens, and the count on the
-                         confirm button — no per-candidate list. */
-                      title="Revoke invitations for selected candidates?"
-                      description={`The interview link for ${revocableSelectedRows.length} selected candidate${revocableSelectedRows.length === 1 ? '' : 's'} will stop working immediately.${
-                        revocableSelectedRows.length < selectedStatusRows.length
-                          ? ` ${selectedStatusRows.length - revocableSelectedRows.length} selected invitation${selectedStatusRows.length - revocableSelectedRows.length === 1 ? ' is' : 's are'} not Invited or In Progress and will be left as ${selectedStatusRows.length - revocableSelectedRows.length === 1 ? 'it is' : 'they are'}.`
-                          : ''
-                      }`}
-                      confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${revocableSelectedRows.length}`}
-                      cancelText="Cancel"
-                      variant="danger"
+                      isLoading={isBulkRevoking}
                     />
 
                     {/* Export — format, then the columns to include (all ticked
@@ -5257,33 +5263,15 @@ export default function AIInterview() {
       {/* One-click "Revoke pending invites" from the version row's menu —
           invalidates only INVITED / CONSENT_PENDING links. Candidates who
           have reached system check or further are deliberately not touched. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={!!revokePendingTarget}
-        onClose={() => { if (!isRevokingPending) setRevokePendingTarget(null); }}
+        kind="interview"
+        bulk={{ scope: 'pending', count: revokePendingCount, targetName: revokePendingTarget?.jd_title || revokePendingTarget?.position || undefined }}
+        targets={revokePendingTarget ? [{ jobCode: revokePendingTarget.jd_short_id, jobTitle: revokePendingTarget.jd_title || revokePendingTarget.position, version: interviewVersionOrdinal(revokePendingTarget, [...configs, ...archivedConfigs]), email: revokePendingOneEmail }] : undefined}
+        onCancel={() => { if (!isRevokingPending) setRevokePendingTarget(null); }}
         onConfirm={confirmRevokePendingInvites}
-        title="Revoke pending invite links?"
-        description={
-          revokePendingTarget
-            ? `Pending invite links for "${revokePendingTarget.jd_title || revokePendingTarget.position || 'this interview'}" will stop working immediately.`
-            : ''
-        }
-        confirmText={isRevokingPending ? 'Revoking…' : 'Revoke links'}
-        cancelText="Cancel"
-        variant="warning"
-      >
-        {revokePendingTarget && (
-          <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
-            <p className="text-warning-strong font-medium mb-1">
-              {revokePendingCount === null
-                ? 'Counting eligible invitations…'
-                : `${revokePendingCount} link${revokePendingCount === 1 ? '' : 's'} will be revoked.`}
-            </p>
-            <p className="text-warning-strong text-xs mt-1">
-              Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
-            </p>
-          </div>
-        )}
-      </ConfirmationDialog>
+        isLoading={isRevokingPending}
+      />
 
       {/* Version History's eye icon — read-only Review & Publish peek. */}
       <AIInterviewReviewPreviewModal
@@ -5349,9 +5337,12 @@ export default function AIInterview() {
       })()}
 
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={!!resendInviteTarget}
-        onClose={() => { if (resendingEmailFor !== resendInviteTarget?.id) setResendInviteTarget(null); }}
+        kind="interview"
+        email={resendInviteTarget?.candidate_email}
+        expiry={resendInviteTarget ? interviewResendExpiry(resendInviteTarget) : null}
+        onCancel={() => { if (resendingEmailFor !== resendInviteTarget?.id) setResendInviteTarget(null); }}
         onConfirm={async () => {
           const inv = resendInviteTarget;
           if (!inv) return;
@@ -5375,53 +5366,8 @@ export default function AIInterview() {
             setResendInviteTarget(null);
           }
         }}
-        title="Invalidate old link & send new invitation?"
-        description={
-          resendInviteTarget
-            ? `A fresh interview link will be emailed to ${resendInviteTarget.candidate_email}. The previous link will stop working immediately.`
-            : ''
-        }
-        confirmText={resendingEmailFor && resendingEmailFor === resendInviteTarget?.id ? 'Sending…' : 'Yes, send new link'}
-        cancelText="Cancel"
-        variant="info"
-      >
-        {resendInviteTarget && (() => {
-          /* Anchor on the last send, mirroring the backend: on a second resend
-             created_at would make the window "expiry minus creation" and the
-             preview would promise a longer validity than the server grants. */
-          const sentAnchor = resendInviteTarget.invitation_sent_at || resendInviteTarget.created_at;
-          const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
-          const expiresMs = resendInviteTarget.expires_at ? new Date(resendInviteTarget.expires_at).getTime() : NaN;
-          let durationMs = 24 * 60 * 60 * 1000;
-          if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
-            durationMs = expiresMs - createdMs;
-          }
-          const newExpiry = new Date(Date.now() + durationMs);
-          const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
-          let durationLabel: string;
-          if (totalMinutes >= 60 * 24) {
-            const days = Math.round(totalMinutes / (60 * 24));
-            durationLabel = days === 1 ? '1 day' : `${days} days`;
-          } else if (totalMinutes >= 60) {
-            const hours = Math.round(totalMinutes / 60);
-            durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
-          } else {
-            durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
-          }
-          return (
-            <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-xl p-3 text-sm">
-              <p className="text-brand-orange-deep font-medium mb-1">New link expiry</p>
-              <p className="text-brand-orange-deep">
-                Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
-                <strong>{formatIST(newExpiry.toISOString())}</strong>.
-              </p>
-              <p className="text-brand-orange-deep/80 text-xs mt-2">
-                Same duration as the original invitation.
-              </p>
-            </div>
-          );
-        })()}
-      </ConfirmationDialog>
+        isLoading={!!(resendingEmailFor && resendingEmailFor === resendInviteTarget?.id)}
+      />
 
       {/* Revoke confirmation — flips status to REVOKED; old link stops working immediately */}
       <RevokeLinkModal
@@ -5451,9 +5397,12 @@ export default function AIInterview() {
       {/* Bulk revoke confirmation — revokes every checked invitation. Each one is
           revoked independently via the same single-revoke endpoint, so one
           candidate's link having already changed state doesn't block the rest. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={bulkRevokeConfirmOpen}
-        onClose={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
+        kind="interview"
+        bulk={{ scope: 'selected', count: selectedInviteIds.size }}
+        targets={invitations.filter((inv) => selectedInviteIds.has(inv.id) && isRevocableInvite(inv)).map((inv) => ({ jobCode: viewInvitationsConfig?.jd_short_id, jobTitle: viewInvitationsConfig?.jd_title || viewInvitationsConfig?.position, version: (inv as AIInterviewResponse & { _interview_version?: number })._interview_version ?? (viewInvitationsConfig ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined), email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
         onConfirm={async () => {
           const targets = invitations.filter((inv) => selectedInviteIds.has(inv.id) && isRevocableInvite(inv));
           if (targets.length === 0) { setBulkRevokeConfirmOpen(false); return; }
@@ -5479,12 +5428,7 @@ export default function AIInterview() {
             setBulkRevokeConfirmOpen(false);
           }
         }}
-        /* Same shape as the bulk Resend confirmation — no per-candidate list. */
-        title="Revoke invitations for selected candidates?"
-        description={`The interview link for ${selectedInviteIds.size} selected candidate${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedInviteIds.size}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevoking}
       />
 
       {/* Edit invitation modal — only reachable while the invitation is REVOKED */}
