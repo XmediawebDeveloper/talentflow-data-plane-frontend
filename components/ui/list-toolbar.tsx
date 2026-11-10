@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Search, SlidersHorizontal, XCircle } from 'lucide-react';
 import { cn } from './utils';
 import { useMobileRecordCardVariant } from './mobile-record-card';
+import { useInListToolbarSlot } from './list-toolbar-slot';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
 /**
@@ -233,7 +234,11 @@ export default function ListToolbar({
   /* Job Openings module: phones get the module's toolbar layout (globals.css,
      `.tf-jdv-toolbar`): Select all + view switch, then search · filter icon ·
      primary action on one line, then Sort by. Elsewhere nothing changes. */
-  const moduleLayout = useMobileRecordCardVariant() === 'jd';
+  /* A toolbar portalled into a tabbed master page's slot (AI Assessments) is that
+     page's list toolbar — the Job Openings list layout (`.tf-jobs-toolbar`) — so it
+     skips the tab-card layout. */
+  const inPageSlot = useInListToolbarSlot();
+  const moduleLayout = useMobileRecordCardVariant() === 'jd' && !inPageSlot;
   const container = containerBreakpoint === '4xl'
     ? {
         row: 'flex flex-col @4xl/toolbar:flex-row @4xl/toolbar:items-center gap-3 mb-3',
@@ -411,8 +416,9 @@ export default function ListToolbar({
 
         {children}
 
-        {/* Always last — see `countBadge`. */}
-        {countBadge}
+        {/* Always last — see `countBadge`. `contents` wrapper: a hook for page
+            toolbars' phone layout (globals.css, `.tf-jobs-toolbar .tf-tb-count`). */}
+        {countBadge && <span className="tf-tb-count contents">{countBadge}</span>}
       </div>
 
       {/* Pinned right — see `trailing`. ml-auto takes the row's spare width. */}

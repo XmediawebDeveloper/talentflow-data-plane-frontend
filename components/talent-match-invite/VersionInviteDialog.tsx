@@ -979,6 +979,10 @@ export default function VersionInviteDialog({
         delivery: 'email',
         message: message.trim() || undefined,
         expiry_days: expiryDays,
+        // Kept on the send so the progress widget names it on any browser.
+        jd_code: job.jdCode || undefined,
+        job_version: selected.jobVersion ?? job.jobVersionNumber ?? undefined,
+        version_number: selected.version ?? undefined,
       });
       bulkReported.current = false;
       setBulkJob(started);

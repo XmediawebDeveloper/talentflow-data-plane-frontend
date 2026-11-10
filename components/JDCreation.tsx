@@ -2986,6 +2986,47 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // below used to read that as "a draft opened from the list" - so the leave prompt's
   // Discard only reverted fields and the never-wanted draft stayed under Draft.
   const createdInSessionIdRef = useRef<string | null>(null);
+  // Id reserved for a JD that has not been saved yet, so the LLM calls made before
+  // the first save (AI generation, Step 1 extraction) carry the SAME id the JD is
+  // then created under. Those calls' usage records use it as resource_id, which is
+  // how the Control Plane ties a JD's LLM calls and tokens to that one JD. Without
+  // it every AI generation call was reported with no resource_id at all.
+  const reservedJdIdRef = useRef<string | null>(null);
+  // The id this mount's new JD will be created under - made the first time ANYONE
+  // needs it (the autosave create or an LLM call), so both always agree.
+  const reserveJdId = (): string => {
+    if (!reservedJdIdRef.current) {
+      reservedJdIdRef.current = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+        ? crypto.randomUUID()
+        : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+            const r = (Math.random() * 16) | 0;
+            return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+          });
+    }
+    return reservedJdIdRef.current;
+  };
+  const usageJdId = (): string => editingId || reserveJdId();
+  // Every create of THIS mount's JD is made under the reserved id. It is kept after a
+  // successful create (it is then the row's own id, and editingId takes over), so a
+  // generation started while that create was still in flight is tagged with the
+  // same id. It is released only when a create fails, so a retry can never be stuck
+  // on an id the server may already hold.
+  //
+  // The create RESERVES the id itself when nothing has yet. It used to send only an
+  // id an LLM call had already reserved: when the autosave created the draft before
+  // Generate was clicked, the row got a server-made id, generation then reserved a
+  // different one, and the Control Plane counted one JD as two operations (staging,
+  // tenant 88d2a1b2, JD-1: generation on 763f5c63, the JD and its extraction on
+  // bc4b64f9).
+  const createWorkingCopy = async (jdData: JDCreate) => {
+    const pre_generated_id = reserveJdId();
+    try {
+      return await jdService.create({ ...jdData, as_working_copy: true, pre_generated_id });
+    } catch (err) {
+      reservedJdIdRef.current = null;
+      throw err;
+    }
+  };
   // A draft version forked from a published JD for this visit (see below).
   const freshForkIdRef = useRef<string | null>(null);
   // A NEW JD's working copy created in this visit and not yet saved: it has no JD
@@ -3380,6 +3421,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // Snapshot of extractedData when entering step 2 — used to detect actual changes via data comparison
   const step2DataSnapshot = useRef<string>('');
+  // Apply an AUTOMATIC Step-2 default (not a recruiter edit) without it reading as an
+  // edit. The Job Hopping and Allow Overqualified effects below rewrite their field
+  // whenever Experience changes - which a fresh extraction does - and the change
+  // detection on Next compares the whole Step-2 object against the snapshot taken at
+  // extraction. So the defaults applied right after extraction made `dataChanged` true
+  // on a JD nobody had touched, and Step 2 -> 3 paid for an LLM reformat for nothing.
+  // When the snapshot is in sync with the data being replaced, it moves with the
+  // automatic change; when it is not (the recruiter already edited something), it is
+  // left alone so that edit is still detected.
+  const applyAutomaticStep2Default = (
+    update: (prev: ExtractedData) => ExtractedData,
+    title: string,
+  ) => {
+    setExtractedData(prev => {
+      const next = update(prev);
+      if (
+        next !== prev
+        && step2DataSnapshot.current !== ''
+        && step2DataSnapshot.current === step2Fingerprint(prev, title)
+      ) {
+        step2DataSnapshot.current = step2Fingerprint(next, title);
+      }
+      return next;
+    });
+  };
 
   /**
    * Step 3's formatted output is stale because Step 2 was RE-EXTRACTED under it.
@@ -4492,10 +4558,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   })();
 
   useEffect(() => {
-    setExtractedData(prev =>
+    applyAutomaticStep2Default(prev =>
       prev.jobHoppingEnabled === jobHoppingAutoDefault
         ? prev
-        : { ...prev, jobHoppingEnabled: jobHoppingAutoDefault }
+        : { ...prev, jobHoppingEnabled: jobHoppingAutoDefault },
+      jobTitle,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extractedData.experience]);
@@ -4518,8 +4585,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   useEffect(() => {
     if (experienceHasCeiling) return;
-    setExtractedData(prev =>
-      prev.allowOverqualified === true ? prev : { ...prev, allowOverqualified: true }
+    applyAutomaticStep2Default(prev =>
+      prev.allowOverqualified === true ? prev : { ...prev, allowOverqualified: true },
+      jobTitle,
     );
     setValidationErrors(prev => (prev.allowOverqualified ? { ...prev, allowOverqualified: undefined } : prev));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -4981,7 +5049,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
         } else {
           // Create new draft
-          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
+          savedJd = await createWorkingCopy(jdData);
           if (discardedRef.current) {
             // Discarded while this create was in flight — remove it again.
             await jdService.delete(savedJd.id).catch(() => undefined);
@@ -5351,6 +5419,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const generationInput = {
       jobTitle: trimmedJobTitle,
       aiPrompt: aiPrompt.trim(),
+      // The JD this generation belongs to - see usageJdId().
+      preGeneratedId: usageJdId(),
     };
 
     // Helper function to process extracted params from generation response
@@ -5952,7 +6022,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         jdText,
         trimmedJobTitle,
         mode === 'ai' ? 'ai_generated' : 'manual',
-        editingId,
+        usageJdId(),
       );
 
       // Debug: Log API response to see what's being extracted
@@ -6267,6 +6337,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         industrySuggestedReason: suggestedIndustryReason || undefined,
         industryConfidence: params.industry_confidence ?? undefined,
         industryIsCustom: false,
+        // The role-family CODE extraction picked from the canonical list. It was left
+        // out of this object (only the raw label was kept), so the save below sent
+        // role_family: undefined - dropped by JSON - and every JD reached publish with
+        // role_family NULL. Publish then could not reuse extraction's answer and asked
+        // the LLM again (JDAnalyzer.classify_and_persist -> classify_role_family): one
+        // avoidable OpenAI request on every JD. Same mapping as the generation path.
+        roleFamily: params.role_family || undefined,
+        roleFamilyConfidence: params.role_family_confidence ?? undefined,
         roleFamilyRaw: params.role_family_raw || undefined,
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
@@ -6547,7 +6625,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           savedJd = await jdService.update(editingId, jdData);
           console.log('[TalentFlow] JD updated with extract stage, id:', editingId);
         } else {
-          savedJd = await jdService.create({ ...jdData, as_working_copy: true });
+          savedJd = await createWorkingCopy(jdData);
           jdId = savedJd.id;
           createdInSessionIdRef.current = savedJd.id;
           setUnsavedNewCopyId(savedJd.id);
@@ -7647,6 +7725,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Detect changes via data comparison (bulletproof fallback - works even if a handler misses the flag)
     const dataChanged = step2DataSnapshot.current !== '' && step2Fingerprint(extractedData, jobTitle) !== step2DataSnapshot.current;
+    if (dataChanged) {
+      // Name the fields behind "changed", so a reformat that nobody asked for can be
+      // traced to its cause from the console instead of inferred.
+      try {
+        const before = JSON.parse(step2DataSnapshot.current) as { jobTitle?: string; data?: Record<string, unknown> };
+        const after = JSON.parse(step2Fingerprint(extractedData, jobTitle)) as { jobTitle?: string; data?: Record<string, unknown> };
+        const keys = new Set([...Object.keys(before.data || {}), ...Object.keys(after.data || {})]);
+        const changedFields = [...keys].filter(k => JSON.stringify((before.data || {})[k]) !== JSON.stringify((after.data || {})[k]));
+        if (before.jobTitle !== after.jobTitle) changedFields.unshift('jobTitle');
+        console.log('[DEBUG] Step 2 fields changed since extraction / last format:', changedFields);
+      } catch { /* diagnostics only */ }
+    }
 
     // For manual JD mode: detect if the description lacks markdown formatting
     // (no headers, no line breaks, no bullets, no bold) → force reformat so the
@@ -7918,7 +8008,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         savedJd = await jdService.update(editingId, jdData);
         console.log('[TalentFlow] JD updated with review stage, id:', editingId);
       } else {
-        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
+        savedJd = await createWorkingCopy(jdData);
         jdId = savedJd.id;
         createdInSessionIdRef.current = savedJd.id;
         setUnsavedNewCopyId(savedJd.id);
@@ -8238,6 +8328,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const response = await jdService.generate({
         jobTitle: trimmedJobTitle,
         aiPrompt: regenerateDetailsPrompt,
+        preGeneratedId: usageJdId(),
       });
 
       if (response?.description) {
@@ -8434,7 +8525,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // New JD or creating from published - create new
         console.log('[DEBUG] Creating new JD');
-        jdToPublish = await jdService.create({ ...jdData, as_working_copy: true });
+        jdToPublish = await createWorkingCopy(jdData);
         console.log('[DEBUG] JD created successfully:', jdToPublish.id);
       }
 
@@ -8869,7 +8960,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       } else {
         // No editingId at all — genuinely a new JD.
         console.log('[DEBUG] Creating new draft (no editingId)');
-        savedJd = await jdService.create({ ...jdData, as_working_copy: true });
+        savedJd = await createWorkingCopy(jdData);
         createdInSessionIdRef.current = savedJd.id;
         setEditingId(savedJd.id);  // Track the new ID in case we save again
         console.log('[DEBUG] JD created as draft:', savedJd.id);
@@ -9292,7 +9383,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // on: open a colleague's draft, edit Step 1, and Step 3 never re-formatted.
   useEffect(() => {
     if (step2DataSnapshot.current !== '') return;
-    const loadedJDHasData = Boolean(effectiveEditingJD) && hasExtractedRequirementData();
+    // A JD created in THIS session is not a "loaded" JD: its draft comes back as
+    // effectiveEditingJD only because autosave put its id in the URL. Step 3 has never
+    // been built for it, so there is nothing a fresh extraction could make stale -
+    // seeding here (from the data AI generation pre-filled at Step 1) made the FIRST
+    // extraction read as "Step 2 changed" and forced an LLM reformat on every AI JD.
+    const isOwnNewJD = Boolean(effectiveEditingJD) && effectiveEditingJD?.id === createdInSessionIdRef.current;
+    const loadedJDHasData = Boolean(effectiveEditingJD) && !isOwnNewJD && hasExtractedRequirementData();
     if (step === 'extract' || loadedJDHasData) {
       step2DataSnapshot.current = step2Fingerprint(extractedData, jobTitle);
     }

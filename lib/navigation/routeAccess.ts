@@ -85,7 +85,8 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
   { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
   { prefix: '/organization/usage-history', adminOnly: true },
-  { prefix: '/organization/role-management', adminOnly: true },
+  // Roles: Permissions & Roles View/Manage, or User Management (it assigns roles). Editing still needs Manage.
+  { prefix: '/organization/role-management', permissions: ['canViewRoles', 'canManagePermissionsRoles', 'canManageUsers'] },
   { prefix: '/organization/usage', permissions: ['canViewUsage'] },
 
   // SUBSCRIPTION & BILLING

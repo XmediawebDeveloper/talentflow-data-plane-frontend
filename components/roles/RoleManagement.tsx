@@ -11,7 +11,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import authService from '@/lib/services/authService';
 import rbacService from '@/lib/services/rbacService';
-import { accessCounts } from '@/lib/permissions/moduleLevels';
+import { accessCounts, copyBlockedReason, LEVEL_NAMES } from '@/lib/permissions/moduleLevels';
 import type { AuditLogEntry, RoleListItem } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -119,7 +119,11 @@ export default function RoleManagement() {
     const checkPermission = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
-        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
+        // Same rule as lib/navigation/routeAccess.ts: Permissions & Roles View or
+        // Manage, or User Management (it assigns roles). Editing needs Manage.
+        const p = currentUser.permissions as Record<string, boolean | undefined> | undefined;
+        const hasPermission = currentUser.role === 'tenant_admin'
+          || !!(p?.can_view_roles || p?.can_manage_permissions_roles || p?.can_manage_users);
 
         if (!hasPermission) {
           toast.error('You do not have permission to access Role Management');
@@ -471,7 +475,7 @@ export default function RoleManagement() {
                           <CardAction
                             label={`Duplicate ${role.name}`}
                             icon={<Copy />}
-                            disabledReason={duplicateReason()}
+                            disabledReason={duplicateReason() || copyBlockedReason(role)}
                             onClick={() => setEditor({ mode: 'dup', role })}
                           />
                           <CardAction
@@ -508,8 +512,7 @@ export default function RoleManagement() {
                         )}
                         <span className="truncate">{n ? plural(n, 'user') : 'No users yet'}</span>
                         <span className="ml-auto flex shrink-0 gap-3">
-                          <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{counts.full} full</span>
-                          <span className="inline-flex items-center gap-1.5"><AccessDot tone="view" />{counts.view} view</span>
+                          <span className="inline-flex items-center gap-1.5"><AccessDot tone="full" />{counts.full} {LEVEL_NAMES.full}</span>
                         </span>
                       </div>
                     </article>
@@ -623,6 +626,7 @@ export default function RoleManagement() {
           setEditor(null);
           loadData();
         }}
+        onPeopleChanged={() => loadData()}
       />
 
       <AppModal

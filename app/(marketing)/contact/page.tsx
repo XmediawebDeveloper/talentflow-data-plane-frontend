@@ -194,13 +194,14 @@ export default function ContactPage() {
           <RevealGroup y={30}>
             <div
               data-reveal
-              className="relative overflow-hidden rounded-[24px] border border-slate-900/[0.08] bg-mkt-surface p-5 shadow-[0_40px_80px_-50px_rgba(15,60,153,0.45)] dark:border-white/10 sm:p-8 lg:p-10"
+              // Phones: no card frame — the form sits on the page at full width.
+              className="relative overflow-hidden rounded-[24px] border border-slate-900/[0.08] bg-mkt-surface p-5 shadow-[0_40px_80px_-50px_rgba(15,60,153,0.45)] dark:border-white/10 max-sm:overflow-visible max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:shadow-none sm:p-8 lg:p-10"
             >
-              {/* brand hairline + corner glow */}
-              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mkt-accent-solid via-mkt-accent to-mkt-cyan" />
+              {/* brand hairline + corner glow (part of the card, so not on phones) */}
+              <span aria-hidden="true" className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-mkt-accent-solid via-mkt-accent to-mkt-cyan max-sm:hidden" />
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)]"
+                className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full bg-[radial-gradient(closest-side,rgba(7,156,196,0.14),transparent)] max-sm:hidden"
               />
 
               {sentTo ? (

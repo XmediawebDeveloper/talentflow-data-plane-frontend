@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
+import { ResumeHeadline, ResumeLine } from '@/components/resumes/ResumeDocLine';
 import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
@@ -382,45 +383,44 @@ export default function ResumeTextPreviewModal({
 
   const lines = content.split('\n');
   const firstNonEmpty = lines.findIndex(l => l.trim().length > 0);
+  // The line under the name — usually the candidate's headline / title.
+  const headlineIdx = lines.findIndex((l, i) => i > firstNonEmpty && l.trim().length > 0);
 
   return (
-    <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 ${zIndexClassName}`}>
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
+    /* Design: globals.css, `.tf-preview-*` / `.tf-resume-*` — a full-screen sheet on phones,
+       the centred panel from sm; the resume as a paper page on a light mat. */
+    <div className={`tf-preview-overlay ${zIndexClassName}`}>
+      <div className="tf-preview-panel">
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <Eye className="w-5 h-5 text-white" />
-            </div>
-            <div className="min-w-0">
-              <h2 className="tf-section-title sm:text-lg tracking-tight truncate">{title}</h2>
-              {subtitle && <p className="tf-body-muted truncate">{subtitle}</p>}
-            </div>
+        <div className="tf-preview-head">
+          <div className="tf-preview-icon">
+            <Eye className="w-5 h-5" />
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Nothing to download when there is neither a stored record nor a
-                caller-supplied handler — an inert button would just lie. */}
-            {(resumeId || onDownload) && (
-              <button
-                onClick={handleDownload}
-                className="tf-btn tf-btn-secondary flex px-3 py-2 bg-white border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm whitespace-normal justify-start font-normal"
-              >
-                <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download</span>
-              </button>
+          <div className="min-w-0 flex-1">
+            <h2 className="tf-section-title sm:text-lg tracking-tight truncate">{title}</h2>
+            {subtitle && (
+              <p className="tf-preview-file tf-body-muted" title={typeof subtitle === 'string' ? subtitle : undefined}>
+                <FileText />
+                <span className="truncate">{subtitle}</span>
+              </p>
             )}
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Close"
-            >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
           </div>
+          {/* Nothing to download when there is neither a stored record nor a
+              caller-supplied handler — an inert button would just lie. */}
+          {(resumeId || onDownload) && (
+            <button type="button" onClick={handleDownload} className="tf-preview-btn" aria-label="Download" title="Download">
+              <Download className="w-4 h-4" />
+              <span className="hidden sm:inline">Download</span>
+            </button>
+          )}
+          <button type="button" onClick={onClose} className="tf-preview-btn" aria-label="Close" title="Close">
+            <X className="w-4 h-4" />
+          </button>
         </div>
 
         {/* Document */}
-        <div className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-100 p-4 sm:p-6">
+        {/* Document — a paper page on a light mat */}
+        <div className="tf-preview-mat">
           {documentMode ? (
             effectiveDocumentUrl ? (
               /* Two things made this read as a raw file viewer rather than the
@@ -431,7 +431,7 @@ export default function ResumeTextPreviewModal({
                    the card fills the mat exactly and the PDF scrolls inside it.
                  - the browser's own PDF chrome (grey bar, page thumbnails, zoom
                    controls), hidden with #toolbar=0&navpanes=0. */
-              <div className="relative bg-white rounded-lg shadow-sm border border-gray-200 max-w-2xl mx-auto h-full overflow-hidden">
+              <div className="relative bg-white rounded-xl shadow-sm ring-1 ring-black/5 max-w-2xl mx-auto h-full overflow-hidden">
                 {!pdfFrameLoaded && (
                   <div className="absolute inset-0 flex items-center justify-center bg-white">
                     <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
@@ -460,12 +460,12 @@ export default function ResumeTextPreviewModal({
                 )}
                 <div
                   ref={docxContainerRef}
-                  className={`tf-docx-preview bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 min-h-full ${docxReady ? '' : 'invisible'}`}
+                  className={`tf-docx-preview bg-white rounded-xl shadow-sm ring-1 ring-black/5 p-5 sm:p-8 min-h-full ${docxReady ? '' : 'invisible'}`}
                 />
               </div>
             )
           ) : loading ? (
-            <div className="tf-card-soft p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">
+            <div className="tf-resume-doc space-y-4">
               <Skeleton className="h-6 w-1/2" />
               <Skeleton className="h-4 w-1/3" />
               <Skeleton className="h-4 w-full" />
@@ -476,7 +476,7 @@ export default function ResumeTextPreviewModal({
               <Skeleton className="h-4 w-4/5" />
             </div>
           ) : content ? (
-            <div className="tf-card-soft p-6 sm:p-8 max-w-2xl mx-auto min-h-full min-w-0 overflow-x-hidden">
+            <div className="tf-resume-doc">
               {lines.map((line, idx) => {
                 const trimmed = line.trim();
                 if (!trimmed) return <div key={idx} className="h-3" />;
@@ -488,7 +488,7 @@ export default function ResumeTextPreviewModal({
 
                 if (isHeader) {
                   return (
-                    <h3 key={idx} className="tf-section-title mt-5 mb-2 pb-1 border-b border-gray-300 uppercase tracking-wide break-words [overflow-wrap:anywhere]">
+                    <h3 key={idx} className="tf-section-title tf-resume-section">
                       {trimmed}
                     </h3>
                   );
@@ -496,18 +496,17 @@ export default function ResumeTextPreviewModal({
 
                 // The first line of a résumé is almost always the name.
                 if (idx === firstNonEmpty) {
-                  return <h2 key={idx} className="text-xl font-bold text-gray-900 mb-1 break-words [overflow-wrap:anywhere]">{trimmed}</h2>;
+                  return <h2 key={idx} className="tf-resume-name">{trimmed}</h2>;
                 }
-
-                if (trimmed.startsWith('•') || trimmed.startsWith('-') || trimmed.startsWith('*')) {
-                  return <p key={idx} className="tf-body leading-relaxed pl-4 mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
+                // …and the line under it the candidate's headline.
+                if (idx === headlineIdx) {
+                  return <ResumeHeadline key={idx} text={trimmed} />;
                 }
-
-                return <p key={idx} className="tf-body leading-relaxed mb-0.5 break-words [overflow-wrap:anywhere]">{trimmed}</p>;
+                return <ResumeLine key={idx} text={trimmed} />;
               })}
             </div>
           ) : (
-            <div className="tf-card-soft p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center text-center">
+            <div className="tf-resume-doc flex flex-col items-center justify-center text-center">
               <FileText className="w-10 h-10 text-gray-400 mb-3" />
               <p className="tf-row-name">Preview not available</p>
               <p className="tf-body-muted mt-1">Download the resume to view the original file.</p>

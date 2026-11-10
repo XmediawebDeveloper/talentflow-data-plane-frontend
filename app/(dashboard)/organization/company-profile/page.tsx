@@ -524,9 +524,9 @@ export default function CompanyProfilePage() {
   const yearsActive = foundedYear !== null ? new Date().getFullYear() - foundedYear : null;
 
   return (
-    <main className="tf-page">
+    <main className="tf-page max-xl:bg-white max-xl:dark:bg-slate-900">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-none xl:rounded-2xl my-0 xl:my-5 shadow-none xl:shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Company Profile' }]} />
 
         {/* Title row */}

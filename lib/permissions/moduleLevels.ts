@@ -26,7 +26,29 @@ import {
 } from '@/lib/constants/permissionCategories';
 import { planTurnOff, withRequired } from '@/lib/permissions/permissionRules';
 
+/** Two levels only (user decision 2026-11-06): an area is either on (Full
+ *  access) or off (No access). Read-only people use the Viewer system role.
+ *  Anything less than Full (e.g. Viewer, or something ticked off in Advanced)
+ *  shows as "Full access · N turned off". */
 export type AccessLevel = 'none' | 'view' | 'full';
+
+/** Levels an admin can pick in the role editor. "View only" is NOT one of
+ *  them: it only appears on an area that is exactly view-only (the system
+ *  Viewer role). Such an area shows neither button selected; picking one
+ *  changes it, leaving it keeps it View only. */
+export const PICKABLE_LEVELS: AccessLevel[] = ['none', 'full'];
+
+/** The Viewer role can't be copied (user decision 2026-11-06): custom roles
+ *  are Full access / No access only, and a View-only copy contradicts that.
+ *  Returns why a role can't be copied, or undefined when it can. */
+export const copyBlockedReason = (role: { code?: string | null; name?: string }): string | undefined =>
+  role.code?.toLowerCase() === 'viewer'
+    ? `${role.name ?? 'Viewer'} can't be copied. Custom roles give Access or No access to each area.`
+    : undefined;
+
+/** The ONE name of each level, used on every screen (buttons, key, labels,
+ *  totals, legend) so the wording never differs between places. */
+export const LEVEL_NAMES: Record<AccessLevel, string> = { full: 'Access', view: 'View only', none: 'No access' };
 export type ModuleGroup = 'Hiring' | 'Candidates' | 'Administration';
 
 export interface ModuleEntry {
@@ -49,23 +71,29 @@ export interface AccessModule {
   entries: ModuleEntry[];
   /** What each level lets people do (UI copy). */
   can: { view: string; full: string };
+  /** One plain line: what this area is for. */
+  about: string;
 }
 
-const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: boolean; can: { view: string; full: string } }> = {
-  job_description: { name: 'Job Descriptions', group: 'Hiring', can: { view: 'See job descriptions and their versions', full: 'Create, edit, archive, disable, delete and export job descriptions' } },
-  resume_scoring: { name: 'Resume Scoring', group: 'Hiring', can: { view: 'See scoring results and scorecards', full: 'Score resumes, export results and download scorecards' } },
-  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and export results' } },
-  assessments: { name: 'Assessments', group: 'Hiring', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
-  ai_interviews: { name: 'AI Interviews', group: 'Hiring', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
-  my_resumes: { name: 'My Resumes', group: 'Candidates', can: { view: 'See their own uploaded resumes', full: 'Upload, share, archive and delete resumes' } },
-  internal_database: { name: 'Shared Database', group: 'Candidates', can: { view: 'Browse the company-wide resume database', full: 'Share, archive and delete resumes in the shared database' } },
-  hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
-  user_management: { name: 'User Management', group: 'Administration', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
-  teams: { name: 'Teams', group: 'Administration', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
-  subscription_billing: { name: 'Subscription & Billing', group: 'Administration', can: { view: 'See the plan, usage, payment methods and billing history', full: 'Upgrade the plan, manage payment methods and export usage' } },
-  settings: { name: 'Settings', group: 'Administration', can: { view: 'See general, roles, API and branding settings', full: 'Change general, roles, API and branding settings' } },
-  analytics: { name: 'Analytics', group: 'Administration', always: true, can: { view: 'See the dashboard (always on for everyone)', full: 'Export analytics and build custom reports' } },
-  support: { name: 'Support', group: 'Administration', always: true, can: { view: 'Raise support tickets (always on for everyone)', full: 'Also manage security settings' } },
+const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: boolean; about: string; can: { view: string; full: string } }> = {
+  job_description: { name: 'Job Descriptions', group: 'Hiring', about: 'Create and manage job descriptions', can: { view: 'See job descriptions and their versions', full: 'Create, edit, archive, disable, delete and export job descriptions' } },
+  resume_scoring: { name: 'Resume Scoring', group: 'Hiring', about: 'Score resumes against a job description', can: { view: 'See scoring results and scorecards', full: 'Score resumes, export results and download scorecards' } },
+  ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job from all company resumes, and work with the ones it finds', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and open, score, invite and export the resumes it finds' } },
+  assessments: { name: 'Assessments', group: 'Hiring', about: 'Create assessments and invite candidates to take them', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
+  ai_interviews: { name: 'AI Interviews', group: 'Hiring', about: 'Set up AI interviews and invite candidates', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
+  // Everyone can always see My Resumes (my_resumes:read is always on, 2026-11-06);
+  // this area adds uploading and managing them.
+  my_resumes: { name: 'Resume Upload', group: 'Candidates', about: 'Upload resumes and manage them in My Resumes (everyone can always see My Resumes)', can: { view: 'See their own resumes in My Resumes', full: 'Upload, share, archive and delete resumes in My Resumes' } },
+  internal_database: { name: 'Shared Database', group: 'Candidates', about: "Everyone's uploaded resumes in one place. Only people with Access can see it", can: { view: 'Browse and use resumes uploaded by anyone in the company', full: "Also share, archive and delete anyone's resumes" } },
+  hr_question_bank: { name: 'HR Question Bank', group: 'Candidates', about: 'Keep a set of reusable HR questions', can: { view: 'See the reusable HR questions', full: 'Add, edit and delete HR questions' } },
+  user_management: { name: 'User Management', group: 'Administration', about: 'Add people and give them a role', can: { view: 'See users and their access', full: 'Add, edit, disable and delete users, assign roles, reset passwords' } },
+  teams: { name: 'Teams', group: 'Administration', about: 'Group people into teams', can: { view: 'See teams', full: 'Create, edit and delete teams, view and export team reports' } },
+  subscription_billing: { name: 'Subscription & Billing', group: 'Administration', about: 'Plan, usage, payments and invoices', can: { view: 'See the plan, usage, payment methods and billing history', full: 'Upgrade the plan, manage payment methods and export usage' } },
+  settings: { name: 'Settings', group: 'Administration', about: 'Company settings, roles, API keys and branding', can: { view: 'See general, roles, API and branding settings', full: 'Change general, roles, API and branding settings' } },
+  analytics: { name: 'Analytics', group: 'Administration', always: true, about: 'Dashboard (everyone always has it)', can: { view: 'See the dashboard (always on for everyone)', full: 'See the dashboard (always on for everyone)' } },
+  // Always on, like Analytics (user decision 2026-11-06): everyone can raise
+  // support tickets and manage their OWN security settings (password, 2FA, sessions).
+  support: { name: 'Support', group: 'Administration', always: true, about: 'Support tickets and your own security settings (everyone always has it)', can: { view: 'Raise support tickets and manage their own security settings', full: 'Raise support tickets and manage their own security settings' } },
 };
 
 const MODULE_ORDER = [
@@ -85,7 +113,7 @@ const sectionOfCode = (code: string): CustomPermissionCategory | undefined =>
 const buildModules = (): AccessModule[] => {
   const byId = new Map<string, AccessModule>();
   for (const cat of CUSTOM_PERMISSION_CATEGORIES) {
-    const copy = MODULE_COPY[cat.id] ?? { name: cat.name, group: 'Administration' as ModuleGroup, can: { view: `See ${cat.name}`, full: `Manage ${cat.name}` } };
+    const copy = MODULE_COPY[cat.id] ?? { name: cat.name, group: 'Administration' as ModuleGroup, about: cat.name, can: { view: `See ${cat.name}`, full: `Manage ${cat.name}` } };
     const view: string[] = [];
     const full: string[] = [];
     if (cat.viewCode) view.push(cat.viewCode);
@@ -115,6 +143,9 @@ const buildModules = (): AccessModule[] => {
 };
 
 export const ACCESS_MODULES: AccessModule[] = buildModules();
+/** Areas shown on role screens. Always-on areas (Analytics, Support) are the
+ *  same for every role, so they are hidden (user decision 2026-11-06). */
+export const SHOWN_MODULES: AccessModule[] = ACCESS_MODULES.filter((m) => !m.always);
 export const MODULE_BY_ID: Record<string, AccessModule> = Object.fromEntries(ACCESS_MODULES.map((m) => [m.id, m]));
 export const MODULE_GROUPS: ModuleGroup[] = ['Hiring', 'Candidates', 'Administration'];
 
@@ -159,30 +190,26 @@ export const setModuleLevel = (codes: Set<string>, m: AccessModule, level: Acces
 // ---------------------------------------------------------------------------
 
 export interface ModuleDescription {
-  /** Nearest clean level. */
+  /** On (full) when the role has anything in the area, else none. */
   base: AccessLevel;
-  /** Codes of `base` that are off (named exceptions). */
+  /** Full-access codes that are off (shown as "turned off"). */
   missing: string[];
-  /** Codes on beyond `base`. */
+  /** Kept for callers; always empty now that there is no View level. */
   extra: string[];
-  /** missing + extra: 0 means exactly `base`. */
+  /** missing.length: 0 means exactly Full access. */
   distance: number;
 }
 
-/** Nearest clean level + exactly what differs from it. Never a vague "Custom". */
+/** Full access (minus whatever is turned off) when the role has anything in
+ *  the area; otherwise No access. Never a vague "Custom". */
 export const describeModule = (codes: Set<string>, m: AccessModule): ModuleDescription => {
-  const on = moduleCodes(m).filter((c) => codes.has(c) && !ALWAYS_ON.has(c));
-  const pools: Record<AccessLevel, string[]> = { full: fullPool(codes, m), view: [...m.view], none: [] };
-  let best: ModuleDescription | null = null;
-  for (const base of ['full', 'view', 'none'] as AccessLevel[]) {
-    if (m.always && base === 'none') continue;
-    const pool = pools[base].filter((c) => !ALWAYS_ON.has(c));
-    const missing = pool.filter((c) => !codes.has(c));
-    const extra = on.filter((c) => !pool.includes(c));
-    const distance = missing.length + extra.length;
-    if (!best || distance < best.distance) best = { base, missing, extra, distance };
-  }
-  return best!;
+  const on = moduleCodes(m).some((c) => codes.has(c) && !ALWAYS_ON.has(c));
+  if (!on && !m.always) return { base: 'none', missing: [], extra: [], distance: 0 };
+  // Exactly view-only (a Viewer copy): every View code on, nothing else.
+  const acting = [...m.full, ...m.entries.map((e) => e.code)].some((c) => codes.has(c) && !ALWAYS_ON.has(c));
+  if (!m.always && !acting && m.view.every((c) => codes.has(c))) return { base: 'view', missing: [], extra: [], distance: 0 };
+  const missing = fullPool(codes, m).filter((c) => !ALWAYS_ON.has(c) && !codes.has(c));
+  return { base: 'full', missing, extra: [], distance: missing.length };
 };
 
 export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => describeModule(codes, m).base;
@@ -190,13 +217,14 @@ export const levelOf = (codes: Set<string>, m: AccessModule): AccessLevel => des
 export type LevelTone = 'full' | 'view' | 'exc' | 'none';
 
 export const levelText = (d: ModuleDescription): { tone: LevelTone; text: string } => {
-  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `Full access · ${d.distance} turned off` } : { tone: 'full', text: 'Full access' };
-  if (d.base === 'view') return d.distance ? { tone: 'exc', text: `View · ${d.extra.length} more` } : { tone: 'view', text: 'View only' };
-  return { tone: 'none', text: 'No access' };
+  if (d.base === 'full') return d.distance ? { tone: 'exc', text: `${LEVEL_NAMES.full} · ${d.distance} turned off` } : { tone: 'full', text: LEVEL_NAMES.full };
+  if (d.base === 'view') return { tone: 'view', text: LEVEL_NAMES.view };
+  return { tone: 'none', text: LEVEL_NAMES.none };
 };
 
 export const accessCounts = (codes: Set<string>) => {
-  const ds = ACCESS_MODULES.filter((m) => !m.always).map((m) => describeModule(codes, m));
+  // Always-on areas (Analytics, Support) are hidden on role screens, so not counted.
+  const ds = SHOWN_MODULES.map((m) => describeModule(codes, m));
   return {
     full: ds.filter((d) => d.base === 'full').length,
     view: ds.filter((d) => d.base === 'view').length,
@@ -220,11 +248,37 @@ const RANK: Record<AccessLevel, number> = { none: 0, view: 1, full: 2 };
 export const isUpgrade = (c: LevelChange) => RANK[c.to] > RANK[c.from];
 
 /**
- * Set module `m` to `level`, then tidy the modules it affected:
- *   - a module that was exactly Full stays Full (new screens that just turned on
- *     get its buttons too) or drops to a clean View / No access;
- *   - a module that was exactly View and now has extras drops back to clean.
- * Returns the new codes and every OTHER module whose level changed.
+ * Areas that need ANOTHER area at Access to be useful (user decision
+ * 2026-11-05): scoring works on the person's own resumes, and a new user's My
+ * Resumes is empty unless they can upload. Assessments and AI Interviews no
+ * longer need Resume Upload (user decision 2026-11-06).
+ */
+export const NEEDS_FULL: Record<string, string[]> = {
+  resume_scoring: ['my_resumes'],
+};
+
+const isCleanFull = (d: ModuleDescription) => d.base === 'full' && d.distance === 0;
+
+/** Areas `m` needs at Full access that are not exactly Full in `codes` (for a warning). */
+export const missingFullNeeds = (codes: Set<string>, m: AccessModule): AccessModule[] =>
+  levelOf(codes, m) !== 'full'
+    ? []
+    : (NEEDS_FULL[m.id] ?? [])
+        .map((id) => MODULE_BY_ID[id])
+        .filter((o): o is AccessModule => !!o && !isCleanFull(describeModule(codes, o)));
+
+/**
+ * Set module `m` to `level`, then keep the others clean (user decision
+ * 2026-11-06, no View level):
+ *   - Full: everything it switches on in other areas is set to Full access too
+ *     (any Hiring area gives Job Descriptions Full access; AI Talent Match gives
+ *     Shared Database Full access; managing roles gives User Management Full
+ *     access), plus NEEDS_FULL. Areas that were Full pick up their buttons on
+ *     pages that just became available.
+ *   - No access: an area that was Full and lost something it needs goes to No
+ *     access (there is no View level to fall back to).
+ * Areas already partly set in Advanced and not touched by this change are left
+ * as they are. Returns the new codes and every OTHER area whose level changed.
  */
 export const applyQuickSetup = (
   codes: Set<string>,
@@ -233,23 +287,36 @@ export const applyQuickSetup = (
 ): { codes: Set<string>; changed: LevelChange[] } => {
   const before = Object.fromEntries(ACCESS_MODULES.map((o) => [o.id, describeModule(codes, o)]));
   let next = setModuleLevel(codes, m, level);
-  for (let pass = 0; pass < 3; pass++) {
+  const keepFull = new Set<string>(ACCESS_MODULES.filter((o) => isCleanFull(before[o.id])).map((o) => o.id));
+  if (level === 'full') {
+    keepFull.add(m.id);
+    (NEEDS_FULL[m.id] ?? []).forEach((id) => keepFull.add(id));
+    moduleNeeds(m).forEach((o) => keepFull.add(o.id));
+  } else {
+    keepFull.delete(m.id);
+  }
+  for (let pass = 0; pass < 6; pass++) {
+    let changedThisPass = false;
     for (const o of ACCESS_MODULES) {
-      if (o.id === m.id) continue;
-      const b = before[o.id];
+      if (o.always) continue;
       const a = describeModule(next, o);
-      if (b.base === 'full' && b.distance === 0 && (a.base !== 'full' || a.distance)) {
-        const viewOn = o.view.every((c) => next.has(c));
-        next = viewOn && o.full.every((c) => next.has(c)) ? setModuleLevel(next, o, 'full') : next;
-        const again = describeModule(next, o);
-        if (again.base !== 'full' || again.distance) next = setModuleLevel(next, o, o.view.every((c) => next.has(c)) ? 'view' : 'none');
-      } else if (b.base === 'view' && b.distance === 0 && a.distance) {
-        next = setModuleLevel(next, o, o.view.every((c) => next.has(c)) ? 'view' : 'none');
+      // Newly switched on by a dependency (was off): make it Full access.
+      if (level === 'full' && before[o.id].base === 'none' && a.base !== 'none') keepFull.add(o.id);
+      if (!keepFull.has(o.id) || isCleanFull(a)) continue;
+      if (level === 'none') {
+        // Lost something it needs. Putting it back to Full would switch the
+        // removed area on again, so it goes to No access too.
+        next = setModuleLevel(next, o, 'none');
+        keepFull.delete(o.id);
+      } else {
+        next = setModuleLevel(next, o, 'full');
       }
+      changedThisPass = true;
     }
+    if (!changedThisPass) break;
   }
   const changed = ACCESS_MODULES
-    .filter((o) => o.id !== m.id)
+    .filter((o) => o.id !== m.id && !o.always)
     .map((o) => ({ module: o, from: before[o.id].base, to: levelOf(next, o) }))
     .filter((c) => c.from !== c.to);
   return { codes: next, changed };
@@ -261,5 +328,6 @@ export const shortLabel = (code: string): string => getPermissionParts(code).lab
 /** Modules a module needs (any code it owns requires a View of theirs). */
 export const moduleNeeds = (m: AccessModule): AccessModule[] => {
   const required = withRequired([...m.view, ...m.full]);
-  return ACCESS_MODULES.filter((o) => o.id !== m.id && !o.always && o.view.some((v) => required.has(v)));
+  // A need met by an always-on code (My Resumes view) is not a need for that area.
+  return ACCESS_MODULES.filter((o) => o.id !== m.id && !o.always && o.view.some((v) => required.has(v) && !ALWAYS_ON.has(v)));
 };

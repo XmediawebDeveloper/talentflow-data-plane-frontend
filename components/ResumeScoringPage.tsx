@@ -46,7 +46,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTargetItems, resolveSelectionJobLock, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -323,6 +323,15 @@ const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
   { value: 'partial', label: 'Partial Match' },
   { value: 'none', label: 'No Match' },
 ];
+
+/** The two orders of a job-list sort, worded for the field (the phone Sort menu):
+ *  dates newest / oldest, counts highest / lowest, text A → Z / Z → A. */
+const jobSortOrderLabels = (field: JobSortKey): { desc: string; asc: string } =>
+  field === 'scored'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'title' || field === 'jdId'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
 
 const TOOLBAR_BUTTON_CLASS =
   'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
@@ -3442,7 +3451,7 @@ export default function ResumeScoringPage({
     return (
       <main ref={rootRef} className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
+        <div className={`tf-page-sheet ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header — shared PageHeader (User Management uniform) */}
         <PageHeader
@@ -3450,7 +3459,9 @@ export default function ResumeScoringPage({
           title="Resume Scoring"
           description="View and manage previously scored resumes"
           actions={
-            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-nowrap sm:w-auto sm:justify-end [&>[role=status]]:flex-shrink-0">
+              {/* Phones / tablets: units left and Score Resumes on ONE line — the badge at its
+                  own width, the button taking the rest. */}
               {onBack && (
                 <Button
                   variant="secondary"
@@ -3484,7 +3495,7 @@ export default function ResumeScoringPage({
                   requestJobPickerScroll();
                 }}
                 aria-disabled={!canRunScoring}
-                className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 min-w-0 sm:flex-none ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 icon={<ClipboardList className="w-4 h-4" />}
               >
@@ -3591,9 +3602,12 @@ export default function ResumeScoringPage({
         /* Rendered inside each view's second toolbar row (Job Openings
            layout): verdict pills, then the view switch as one segmented
            toggle — the active side lifts to a white chip. */
+        /* Phones (globals.css, `.tf-jobs-toolbar`): the verdict pills become the Job
+           Openings list's underlined status tabs and View by its full-width
+           segmented row; from sm unchanged. */
         const viewPills = (
-        <div className="flex items-center gap-2 flex-wrap">
-          <div role="group" aria-label="Filter by match" className="flex items-center gap-2 flex-wrap">
+        <div className="tf-jobs-contents flex items-center gap-2 flex-wrap">
+          <div role="group" aria-label="Filter by match" className="tf-jobs-status-tabs flex items-center gap-2 flex-wrap">
             {verdictFilters.map(f => {
               const active = matchFilter === f.id;
               return (
@@ -3618,7 +3632,7 @@ export default function ResumeScoringPage({
 
           {/* "View by" once, then a sliding tile toggle: two equal halves on
               one track, and a white tile that slides under the active one. */}
-          <div className="flex w-full sm:w-auto items-center gap-2">
+          <div className="tf-jobs-method flex w-full sm:w-auto items-center gap-2">
             <span className="tf-label whitespace-nowrap">View by</span>
             <div
               role="radiogroup"
@@ -3737,9 +3751,19 @@ export default function ResumeScoringPage({
            framed the job cards card-in-card. */
         <div>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
+        {/* Toolbar — search, filters, Select All, verdict tabs, View by and the
+            selection's Actions. Phones / tablets: the Job Openings list's toolbar
+            card; phones also get its line layout (globals.css, `.tf-jobs-toolbar`):
+              ( search ............ ) (⚙) [≡ ⊞]
+              [ All Locations ▾ ][ All Industries ▾ ]
+              All 12  Exact Match 4  Partial Match 5  No …   ← underlined tabs
+              View by [ Job | Candidates ]
+              [☐ Select All ▾]          [⇅ Sort ▾] [⇕]
+            From lg the toolbar is unchanged. */}
+        <div className="tf-jobs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
-          <div className="mb-3">
+          <div className="tf-jobs-contents mb-3">
             {/* No "Job List (N)" heading, and no count badge — the same bare
                 toolbar as View by Candidates; the pagination below carries
                 the totals. */}
@@ -3767,7 +3791,7 @@ export default function ResumeScoringPage({
                 const locations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))] as string[];
                 const industries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))] as string[];
                 return (
-                  <>
+                  <div className="tf-jobs-filter-pills contents">
                     <SearchableSelect
                       className="w-full sm:w-48"
                       value={historyLocation}
@@ -3788,14 +3812,16 @@ export default function ResumeScoringPage({
                       searchPlaceholder="Search industry..."
                       ariaLabel="Filter by industry"
                     />
-                  </>
+                  </div>
                 );
               })()}
               className="mb-0"
             >
               {/* Sort by, then List / Grid — where Export used to be (Export
                   is now in the Actions menu, shown once jobs are ticked). */}
+              {/* Phones sort from the Sort menu in the row below (PhoneSortMenu). */}
               {displayHistory.length > 0 && (
+                <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={jobSortBy}
                   order={jobSortOrder}
@@ -3803,11 +3829,12 @@ export default function ResumeScoringPage({
                   onChange={(v) => { setJobSortBy(v); setHistoryCurrentPage(1); }}
                   onToggleOrder={() => { setJobSortOrder(o => (o === 'asc' ? 'desc' : 'asc')); setHistoryCurrentPage(1); }}
                 />
+                </div>
               )}
               <ListViewToggle
                 value={jobListDisplayMode}
                 onChange={setJobListDisplayMode}
-                className="h-9 !border-brand-blue/10"
+                className="tf-jobs-viewtoggle h-9 !border-brand-blue/10"
               />
             </ListToolbar>
 
@@ -3822,7 +3849,7 @@ export default function ResumeScoringPage({
               return (
                 /* Same boxed panel, and the same gap under the toolbar, as
                    View by Candidates' More Filters (ScoredResumesTable). */
-                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
+                <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
                   <div className="tf-grid-3 [&>div]:min-w-0">
                     <div>
                       <label className={labelCls}>Created By</label>
@@ -3897,8 +3924,9 @@ export default function ResumeScoringPage({
 
         {/* Row 2: Select All, the verdict pills and View by toggle (Actions
             and Clear get their own row below once jobs are ticked). */}
-        <div className={`${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 flex flex-wrap items-center gap-2`}>
+        <div className={`tf-jobs-row2 ${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 max-lg:mb-0 flex flex-wrap items-center gap-2`}>
           {selectableJobKeys.length > 0 && (
+            <div className="tf-jobs-select">
             <SelectAllMenu
               selectedCount={selectedJobCount}
               pageCount={pageJobKeys.length}
@@ -3919,11 +3947,23 @@ export default function ResumeScoringPage({
               }}
               onClear={clearJobSelection}
             />
+            </div>
           )}
           {selectableJobKeys.length > 0 && (
             <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
           )}
           {viewPills}
+          {/* Phones: the Job Openings list's Sort menu (the inline Sort by above hides). */}
+          {displayHistory.length > 0 && (
+            <PhoneSortMenu<JobSortKey>
+              value={jobSortBy}
+              order={jobSortOrder}
+              options={JOB_SORT_OPTIONS}
+              orderLabels={jobSortOrderLabels}
+              onChange={(v) => { setJobSortBy(v); setHistoryCurrentPage(1); }}
+              onOrderChange={(o) => { setJobSortOrder(o); setHistoryCurrentPage(1); }}
+            />
+          )}
           {/* Expand all / Collapse all — every job on this page, the same
               control View by Candidates has. */}
           {pageJobKeys.length > 0 && (() => {
@@ -3939,10 +3979,12 @@ export default function ResumeScoringPage({
                   })
                 }
                 aria-pressed={allOpen}
-                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                title={allOpen ? 'Collapse all' : 'Expand all'}
+                /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
               >
                 {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                {allOpen ? 'Collapse all' : 'Expand all'}
+                <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
               </button>
             );
           })()}
@@ -3951,7 +3993,7 @@ export default function ResumeScoringPage({
         {/* Row 3 — only while jobs are ticked: Actions and Clear, on a line
             of their own under Select All. */}
         {selectedJobCount > 0 && (
-          <StickyBulkBar className="-mt-1 mb-4 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="-mt-1 mb-4 max-lg:mt-3 max-lg:mb-0 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
           {/* Actions — the same menu as View by Candidates', on the ticked
                 jobs' candidates. Fades in with a blinking dot. */}
             {(
@@ -4111,6 +4153,7 @@ export default function ResumeScoringPage({
             )}
           </StickyBulkBar>
         )}
+        </div>
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (() => {
@@ -4715,8 +4758,8 @@ export default function ResumeScoringPage({
                         ]).map(({ id, count, Icon, tone }) => {
                           const muted = !!matchFilter && id !== matchFilter;
                           return (
-                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={muted ? 'opacity-60' : undefined}>
-                              <span className="tabular-nums">{count}</span> {id}
+                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={`tf-verdict-chip${muted ? ' opacity-60' : ''}`}>
+                              <span className="tabular-nums">{count}</span> <span>{id}</span>
                             </MobileStatChip>
                           );
                         })}
@@ -5540,7 +5583,8 @@ export default function ResumeScoringPage({
                   picker on the right, stretched to the left column's height. */}
               <div className="tf-grid-3 px-4 sm:px-6 py-4 items-stretch">
                 <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
-                <div className="flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                {/* Bordered box from lg only (around the table); phones show the cards bare. */}
+                <div className="flex flex-col lg:rounded-lg lg:border lg:border-gray-100 lg:dark:border-slate-700/60 lg:overflow-hidden">
                   {groups.length === 0 ? (
                     <div className="flex-1 flex items-center justify-center py-10 text-center tf-body-muted">
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
@@ -5560,7 +5604,8 @@ export default function ResumeScoringPage({
                     <>
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
-                    <div className="lg:hidden tf-record-list p-2 rounded-lg border border-gray-200 dark:border-slate-700 max-h-[320px] overflow-y-auto overscroll-contain">
+                    {/* No outer border or padding — just the cards, as the JD Version History. */}
+                    <div className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto overscroll-contain">
                       {groups.map((g) => (
                         <MobileRecordCard
                           key={`${g.version}||${g.scoredBy}||${g.date}`}

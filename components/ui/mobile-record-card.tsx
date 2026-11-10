@@ -122,10 +122,14 @@ export function MobileRecordCard({
   tooltip,
   selected = false,
   wrapTitle = false,
+  actionsBelow = false,
   onClick,
   className,
   ...rest
 }: {
+  /** `jd` layout: put the actions on the bottom row even when they are icon-only (too many
+   *  controls for the name row — e.g. a status toggle plus four icons). */
+  actionsBelow?: boolean;
   /** Expanded content (history, inline lists, details) — rendered at the very bottom, under the buttons. */
   expanded?: React.ReactNode;
   /** Hover tooltip for the whole card (the HTML title attribute; `title` is the card's heading). */
@@ -178,6 +182,7 @@ export function MobileRecordCard({
         tooltip={tooltip}
         selected={selected}
         wrapTitle={wrapTitle}
+        forceActionsBelow={actionsBelow}
         onClick={onClick}
         className={className}
       >
@@ -307,10 +312,12 @@ function JdRecordCard({
   tooltip,
   selected,
   wrapTitle,
+  forceActionsBelow = false,
   onClick,
   className,
   ...rest
 }: {
+  forceActionsBelow?: boolean;
   select?: React.ReactNode;
   idBadge?: React.ReactNode;
   badges?: React.ReactNode;
@@ -330,13 +337,17 @@ function JdRecordCard({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'onClick' | 'title'>) {
   // Icon-only actions sit on the name row; any text button moves them all to the bottom row.
   const actionsRef = React.useRef<HTMLDivElement>(null);
-  const [actionsBelow, setActionsBelow] = React.useState(false);
+  const [textActionsBelow, setActionsBelow] = React.useState(false);
   React.useLayoutEffect(() => {
     if (actionsRef.current) {
       const below = hasTextAction(actionsRef.current);
       setActionsBelow((prev) => (prev === below ? prev : below));
     }
   });
+  const actionsBelow = forceActionsBelow || textActionsBelow;
+  /* No version chip (titleAddon) to sit beside: icon buttons ride the footer line, right
+     after its chips (e.g. "Score 7.5/10 · ⋮"), rather than a line of their own. */
+  const actionsInFooter = !actionsBelow && !titleAddon && !!footer;
 
   const hasTop = !!(idBadge || badges);
   const actionsEl = actions ? (
@@ -371,22 +382,29 @@ function JdRecordCard({
         className,
       )}
     >
+      {/* The checkbox sits beside the name (its own line), not up with the ID / badges. */}
       {hasTop && (
         <div className="tf-jdv-top">
-          {select && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
+          {select && !title && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
           {idBadge}
           {badges}
         </div>
       )}
 
-      {(title || titleAddon || (!hasTop && select) || (actionsEl && !actionsBelow)) && (
+      {(title || titleAddon || (!hasTop && select) || (actionsEl && !actionsBelow && !actionsInFooter)) && (
         <div className={cn('tf-jd-card-head', !hasTop && 'mt-0')}>
           <div className="tf-jd-card-name">
-            {!hasTop && select && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
-            {title && <div className={wrapTitle ? 'tf-jdv-title-wrap' : 'tf-jdv-title'}>{title}</div>}
+            {title ? (
+              <div className="tf-jdv-name-line">
+                {select && <span className="tf-jdv-select" onClick={stop}>{select}</span>}
+                <div className={wrapTitle ? 'tf-jdv-title-wrap' : 'tf-jdv-title'}>{title}</div>
+              </div>
+            ) : (
+              !hasTop && select && <span className="tf-jdv-select" onClick={stop}>{select}</span>
+            )}
             {titleAddon && <span className="inline-flex shrink-0" onClick={stop}>{titleAddon}</span>}
           </div>
-          {!actionsBelow && actionsEl}
+          {!actionsBelow && !actionsInFooter && actionsEl}
         </div>
       )}
 
@@ -419,6 +437,7 @@ function JdRecordCard({
       {footer && (
         <div className="tf-jdv-footer" onClick={stop}>
           {footer}
+          {actionsInFooter && actionsEl}
         </div>
       )}
 

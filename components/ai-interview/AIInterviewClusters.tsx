@@ -1717,8 +1717,20 @@ export default function AIInterviewClusters() {
   const nthRemovalLocked = isSectionRemovalLocked('nth');
 
   /* ── AI Generate ── */
+  // One generation at a time. Each run makes the expand / generate / refine LLM
+  // requests; two triggers landing together (the Configure hand-off, the
+  // missing-clusters / auto-heal effects, a Regenerate click) used to start two
+  // overlapping runs and bill the whole pipeline twice (staging config f61a26cd,
+  // 2026-11-05: every call x2 within 5 s). A ref, not `generating`, because
+  // state is stale inside a closure created before the first run began.
+  const generationInFlightRef = useRef(false);
   const handleGenerateClusters = async (opts: { forceExpand?: boolean } = {}) => {
     const { forceExpand = false } = opts;
+    if (generationInFlightRef.current) {
+      console.log('[CLUSTER-DEBUG] Generation already running - ignoring the second request');
+      return;
+    }
+    generationInFlightRef.current = true;
     setGenerating(true);
     try {
       // Sort skills by importance weight so AI prioritizes them in clustering
@@ -2568,6 +2580,7 @@ export default function AIInterviewClusters() {
         : 'Failed to generate clusters. Please try again, or add skills manually.';
       toast.error(_reason, { duration: 9000 });
     } finally {
+      generationInFlightRef.current = false;
       setGenerating(false);
     }
   };

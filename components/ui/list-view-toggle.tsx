@@ -25,6 +25,8 @@ export default function ListViewToggle({
 }) {
   return (
     <div
+      /* Hook for page toolbars' phone layout (globals.css, `.tf-jobs-toolbar`). */
+      data-list-view-toggle=""
       className={`inline-flex items-center gap-0.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-0.5 shrink-0 ${className}`}
     >
       <button

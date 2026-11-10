@@ -25,7 +25,7 @@ import {
   mapJDStatus,
   type JobSortBy,
 } from '@/lib/utils/jobOpeningDisplay';
-import { jdService, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
+import { jdService, type JDLineageVersion, type JobOpeningsFilters, type JobOpeningsStats, type JobOpeningsTab } from '@/lib/services/jdService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { Button } from '@/components/ui/button';
@@ -702,6 +702,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
   const clearSelection = () => {
     setVersionPicks(new Map());
     setSelectedJobs(new Set());
+    setBulkVersionScope('selected');
   };
   const selectAllVersions = async () => {
     if (selectingAll) return;
@@ -780,11 +781,65 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     }
     setVersionPicks(prev => new Map(prev).set(versionJob.id, !checkedVersionIds.has(versionJob.id)));
   };
-  const bulkDisableJobs = selectedVisibleJobs.filter(job => job.status === 'Published');
-  const bulkReenableJobs = selectedVisibleJobs.filter(job => job.status === 'Disabled');
-  const bulkArchiveJobs = selectedVisibleJobs.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
-  const bulkUnarchiveJobs = selectedVisibleJobs.filter(job => job.status === 'Archived');
-  const bulkSelectionLabel = (count: number) => `${count} Job Description${count === 1 ? '' : 's'} Selected`;
+  /* What Disable / Re-enable / Archive / Unarchive act on, picked at the top
+     of the Actions menu: the ticked versions only, or every version of the
+     ticked jobs. "All versions" reads each job's lineage (GET /jd/lineages,
+     one request for every job not loaded yet); a job whose lineage fails
+     falls back to its ticked versions rather than silently doing nothing. */
+  const [bulkVersionScope, setBulkVersionScope] = useState<'selected' | 'all'>('selected');
+  const [scopeLineages, setScopeLineages] = useState<Record<string, JDLineageVersion[]>>({});
+  const scopeLineagesInFlight = useRef(new Set<string>());
+  const selectedByLineage = new Map<string, Job[]>();
+  selectedVisibleJobs.forEach(job => {
+    const key = lineageKey(job);
+    selectedByLineage.set(key, [...(selectedByLineage.get(key) ?? []), job]);
+  });
+  const missingScopeKeys = bulkVersionScope === 'all'
+    ? Array.from(selectedByLineage.keys()).filter(key => !scopeLineages[key])
+    : [];
+  const scopeLoading = missingScopeKeys.length > 0;
+  const missingScopeSignature = missingScopeKeys.join('|');
+  useEffect(() => {
+    const wanted = missingScopeSignature
+      ? missingScopeSignature.split('|').filter(key => !scopeLineagesInFlight.current.has(key))
+      : [];
+    if (wanted.length === 0) return;
+    wanted.forEach(key => scopeLineagesInFlight.current.add(key));
+    const idOf = (key: string) => selectedByLineage.get(key)?.[0]?.id ?? key;
+    jdService
+      .getLineagesBatch(wanted.map(idOf), { fresh: true })
+      .then(byId => setScopeLineages(prev => {
+        const next = { ...prev };
+        wanted.forEach(key => { next[key] = byId[idOf(key)] ?? []; });
+        return next;
+      }))
+      .catch(() => setScopeLineages(prev => {
+        const next = { ...prev };
+        wanted.forEach(key => { next[key] = []; });
+        return next;
+      }))
+      .finally(() => wanted.forEach(key => scopeLineagesInFlight.current.delete(key)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the missing lineages only
+  }, [missingScopeSignature]);
+  const bulkTargets: Job[] = bulkVersionScope === 'all'
+    ? Array.from(selectedByLineage.entries()).flatMap(([key, picked]) => {
+        const lineage = (scopeLineages[key] ?? []).filter(version => !deletedVersionIds?.has(version.id));
+        if (lineage.length === 0) return picked;
+        /* The lineage's status is the fresh one; a change made here since
+           (withOverride) still wins. */
+        return lineage.map(version => withOverride({
+          ...(picked.find(job => job.id === version.id) ?? { ...picked[0], id: version.id, title: version.title || picked[0].title, versionNumber: version.version_number }),
+          status: mapJDStatus(version.status),
+        }));
+      })
+    : selectedVisibleJobs;
+  const bulkDisableJobs = bulkTargets.filter(job => job.status === 'Published');
+  const bulkReenableJobs = bulkTargets.filter(job => job.status === 'Disabled');
+  const bulkArchiveJobs = bulkTargets.filter(job => job.status !== 'Draft' && job.status !== 'Archived');
+  const bulkUnarchiveJobs = bulkTargets.filter(job => job.status === 'Archived');
+  const bulkSelectionLabel = (count: number) => bulkVersionScope === 'all'
+    ? `${count} Job Description Version${count === 1 ? '' : 's'} Selected`
+    : `${count} Job Description${count === 1 ? '' : 's'} Selected`;
 
   const [bulkStatusBusy, setBulkStatusBusy] = useState(false);
   const runBulkStatus = async (targets: Job[], action: BulkStatusAction) => {
@@ -793,6 +848,8 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     try {
       await onBulkStatusChange(targets, action);
       clearSelection();
+      setBulkVersionScope('selected');
+      setScopeLineages({});
     } finally {
       setBulkStatusBusy(false);
     }
@@ -1094,17 +1151,18 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     noneEligibleMessage: string;
     onSelect: () => void;
   }) => {
-    const unavailable = !allowed || eligible === 0 || bulkStatusBusy;
-    const countSuffix = isAllJobsTab ? ` (${eligible} of ${selectedVisibleJobs.length})` : '';
+    const unavailable = !allowed || eligible === 0 || bulkStatusBusy || scopeLoading;
+    const countSuffix = scopeLoading ? '' : isAllJobsTab || bulkVersionScope === 'all' ? ` (${eligible} of ${bulkTargets.length})` : '';
     /* Why the count is short — behind an ⓘ at the row's end, on hover.
        Nothing when every selected job takes the action. */
-    const skipped = selectedVisibleJobs.length - eligible;
-    const reason = !allowed
+    const skipped = bulkTargets.length - eligible;
+    const noun = bulkVersionScope === 'all' ? 'versions' : 'selected jobs';
+    const reason = !allowed || scopeLoading
       ? null
       : eligible === 0
         ? noneEligibleMessage
         : skipped > 0
-          ? `Applies to ${eligible} of ${selectedVisibleJobs.length} selected jobs. ${noneEligibleMessage}; the other ${skipped} will be skipped.`
+          ? `Applies to ${eligible} of ${bulkTargets.length} ${noun}. ${noneEligibleMessage}; the other ${skipped} will be skipped.`
           : null;
     return (
       <div key={label} className={`flex items-center pr-3 ${unavailable ? '' : 'hover:bg-gray-50'}`}>
@@ -1604,7 +1662,39 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                       // row, so the menu opens rightward (left-0) and width is
                       // clamped to the viewport, keeping it on-screen on every
                       // size instead of running off the left edge.
-                      <div className="absolute top-full left-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      <div className="absolute top-full left-0 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                        {/* Which versions the status actions below change. */}
+                        {hasStatusActions && (
+                          <div className="px-3 pt-1 pb-3 mb-2 border-b border-gray-200">
+                            <div className="text-xs font-medium text-gray-500 mb-1.5">Apply status changes to</div>
+                            <div role="radiogroup" aria-label="Apply status changes to" className={`${SEGMENT_TOGGLE} w-full`}>
+                              {([['selected', 'Selected version'], ['all', 'All versions']] as const).map(([scope, label]) => (
+                                <button
+                                  key={scope}
+                                  type="button"
+                                  role="radio"
+                                  aria-checked={bulkVersionScope === scope}
+                                  onClick={() => setBulkVersionScope(scope)}
+                                  className={`${segmentBtn(bulkVersionScope === scope)} flex-1 justify-center whitespace-nowrap !px-2 !text-xs`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                            <p className="mt-1.5 text-xs text-gray-500 tabular-nums" aria-live="polite">
+                              {bulkVersionScope === 'selected'
+                                ? `Only the ${selectedVisibleJobs.length === 1 ? 'version' : `${selectedVisibleJobs.length} versions`} you ticked.`
+                                : scopeLoading
+                                  ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <Loader2 className="w-3 h-3 animate-spin" aria-hidden="true" />
+                                      Loading versions…
+                                    </span>
+                                  )
+                                  : `Every version of the ${selectedByLineage.size === 1 ? 'selected job' : `${selectedByLineage.size} selected jobs`} — ${bulkTargets.length} version${bulkTargets.length === 1 ? '' : 's'}.`}
+                            </p>
+                          </div>
+                        )}
                         {showDisableAction && renderBulkStatusItem({
                           label: 'Disable Selected',
                           icon: Ban,
@@ -2157,16 +2247,6 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                         5. divider, then Scored / Assessed / Interviewed — three tiles */}
                     <div className="lg:hidden">
                       <div className="tf-jd-card-top">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                          title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          className="flex-shrink-0"
-                        >
-                          {selectedJobs.has(job.id)
-                            ? <CheckSquare className="w-5 h-5 text-brand-blue" />
-                            : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
-                        </button>
                         {job.job_id && <JobIdBadge className={JOB_ID_BADGE_FIT} title={job.job_id}>{job.job_id}</JobIdBadge>}
                         {(() => {
                           const method = getCreationMethodConfig(job.creation_method);
@@ -2189,7 +2269,20 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
 
                       <div className="tf-jd-card-head">
                         <div className="tf-jd-card-name">
-                          <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          {/* Checkbox beside the name (same as every module's JD-style card). */}
+                          <div className="tf-jdv-name-line">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
+                              title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              aria-label={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
+                              className="tf-jdv-select"
+                            >
+                              {selectedJobs.has(job.id)
+                                ? <CheckSquare className="w-5 h-5 text-brand-blue" />
+                                : <Square className="w-5 h-5 text-gray-400 hover:text-brand-blue" />}
+                            </button>
+                            <h3 className="tf-jd-card-title" title={job.title}>{job.title}</h3>
+                          </div>
                           {job.versionNumber && job.versionNumber >= 1 ? (
                             hasVersionHistory ? (
                               /* Version dropdown: opens / closes this job's version history. */

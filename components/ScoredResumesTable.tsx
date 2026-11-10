@@ -54,7 +54,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -91,6 +91,15 @@ const FLAT_SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: 'jobTitle', label: 'Job Title' },
   { value: 'score', label: 'Score' },
 ];
+
+/** The two orders of a sort, worded for the field (the phone Sort menu):
+ *  dates newest / oldest, names A → Z / Z → A, counts and scores highest / lowest. */
+const sortOrderLabels = (field: SortKey): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'name' || field === 'jobTitle'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
 
 const TOOLBAR_BUTTON_CLASS =
   'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
@@ -2300,7 +2309,10 @@ Best regards`);
         /* In Job Details (portaled) the AI Talent Match tab's spacing: no gap
            under the block — the row's own `mb-3` and the panel's `pb-4` give
            it, exactly as there. */
-        <div className={toolbarPortal ? undefined : 'mb-4 space-y-3'}>
+        /* Standalone (Resume Scoring's View by Candidates and job page): the Job
+           Openings list's toolbar card below lg, and its phone line layout
+           (globals.css, `.tf-jobs-toolbar`) — the same toolbar as View by Job. */
+        <div className={toolbarPortal ? undefined : embedded ? 'mb-4 space-y-3' : 'tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3'}>
         {/* Canonical search + filters row (same component as job-openings). The
             previous hand-rolled version used grey focus rings, rounded-md and a
             `palaceholder-gray-500` typo, so it matched no other list in the app. */}
@@ -2369,6 +2381,7 @@ Best regards`);
               {/* Standalone only. Embedded in Job Details the same filter is
                   More Filters' "Scored By" field instead. */}
               {!embedded && (
+                <div className="tf-jobs-filter-pills contents">
                 <SearchableSelect
                   className="w-full sm:w-48"
                   variant="bordered"
@@ -2380,6 +2393,7 @@ Best regards`);
                   searchPlaceholder="Search recruiter..."
                   ariaLabel="Filter by recruiter"
                 />
+                </div>
               )}
               {/* Sort by — embedded: ahead of More Filters, matching the AI
                   Talent Match reference's control order. Standalone: after
@@ -2424,7 +2438,9 @@ Best regards`);
         >
           {/* Standalone: Sort by, then List / Grid, after More Filters — the
               same order and sizes as View by Job's toolbar row. */}
+          {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
           {!embedded && filteredResumes.length > 0 && (
+            <div className="tf-jobs-sort contents">
             <SortByControl<SortKey>
               value={sortBy}
               order={sortOrder}
@@ -2432,9 +2448,10 @@ Best regards`);
               onChange={setSortBy}
               onToggleOrder={() => setSortOrder((o) => (o === 'asc' ? 'desc' : 'asc'))}
             />
+            </div>
           )}
           {!embedded && (
-            <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 !border-brand-blue/10" />
+            <ListViewToggle value={displayMode} onChange={setDisplayMode} className="tf-jobs-viewtoggle h-9 !border-brand-blue/10" />
           )}
         </ListToolbar>
 
@@ -2456,7 +2473,7 @@ Best regards`);
              Embedded in Job Details this drops the tinted/bordered card for
              the AI Talent Match reference's plain top-divider, so the panel
              reads as part of the same tab card the toolbar sits in. */
-          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10' : 'mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4'}>
+          <div className={embedded ? 'mt-4 sm:mt-5 pt-4 sm:pt-5 pb-4 border-t border-brand-blue/10' : 'tf-jobs-filter-panel mt-3 bg-gray-50 border border-gray-200 rounded-lg p-3 sm:p-4'}>
             {/* Flex-wrap, not the stretching 2/3-column grid this used to be:
                 a grid cell is a third of the panel wide and every control in it
                 stretched to fill that, so a "v2" dropdown was as wide as a job
@@ -2603,7 +2620,7 @@ Best regards`);
             rides the toolbar row above (beforeSearch), matching the AI Talent
             Match reference; this row renders only when it still has content. */}
         {(viewPillsSlot || (isGrouped && paginatedGroups.length > 0) || (!embedded && filteredResumes.length > 0)) && (
-        <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+        <div className={`${embedded ? '' : 'tf-jobs-row2 '}mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2`}>
           {/* Standalone: Select All leads this row, then a divider and the
               verdict pills — exactly View by Job's row 2. */}
           {!embedded && filteredResumes.length > 0 && (() => {
@@ -2613,6 +2630,7 @@ Best regards`);
               : effectiveSelectedRows.length;
             return (
               <>
+                <div className="tf-jobs-select">
                 <SelectAllMenu
                   selectedCount={selectedCount}
                   pageCount={isGrouped ? paginatedGroups.length : paginatedResumes.length}
@@ -2631,6 +2649,7 @@ Best regards`);
                   onSelectAll={() => selectExactly(filteredResumes.map((r) => r.id))}
                   onClear={clearSelection}
                 />
+                </div>
                 {viewPillsSlot && (
                   <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                 )}
@@ -2638,6 +2657,17 @@ Best regards`);
             );
           })()}
           {viewPillsSlot}
+          {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+          {!embedded && filteredResumes.length > 0 && (
+            <PhoneSortMenu<SortKey>
+              value={sortBy}
+              order={sortOrder}
+              options={isGrouped ? GROUPED_SORT_OPTIONS : FLAT_SORT_OPTIONS}
+              orderLabels={sortOrderLabels}
+              onChange={setSortBy}
+              onOrderChange={setSortOrder}
+            />
+          )}
           {/* Expand all / Collapse all — every candidate on this page. */}
           {isGrouped && paginatedGroups.length > 0 && (() => {
             const allOpen = paginatedGroups.every((g) => expandedGroupKeys.has(g.key));
@@ -2652,10 +2682,12 @@ Best regards`);
                   })
                 }
                 aria-pressed={allOpen}
-                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                title={allOpen ? 'Collapse all' : 'Expand all'}
+                /* Phones (standalone): an icon square beside Sort, like the Job Openings list's Refresh. */
+                className={`${embedded ? '' : 'tf-jobs-refresh '}${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
               >
                 {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                {allOpen ? 'Collapse all' : 'Expand all'}
+                <span className={embedded ? undefined : 'max-sm:sr-only'}>{allOpen ? 'Collapse all' : 'Expand all'}</span>
               </button>
             );
           })()}
@@ -2667,7 +2699,7 @@ Best regards`);
             on a line of its own under Select All once rows are ticked, as
             View by Job shows it. */}
         {!embedded && selectionActions && (
-          <StickyBulkBar className="mt-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
             {selectionActions}
           </StickyBulkBar>
         )}

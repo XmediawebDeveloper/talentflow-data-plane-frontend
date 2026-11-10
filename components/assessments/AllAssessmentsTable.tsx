@@ -1621,9 +1621,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         selectionActive={selectedIds.size > 0}
                       />
                       <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1 flex items-center gap-1.5">
+                        {/* Phones / tablets: the name in full (wraps), as the Job Openings card; "…" from lg. */}
+                        <div className="min-w-0 flex-1 flex flex-wrap lg:flex-nowrap items-center gap-1.5">
                           <span
-                            className="min-w-0 truncate font-medium text-gray-900 dark:text-slate-50"
+                            className="min-w-0 break-words lg:truncate font-medium text-gray-900 dark:text-slate-50"
                             title={row.jobName}
                           >
                             {row.jobName}

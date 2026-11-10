@@ -116,12 +116,7 @@ export default function PermissionTilesEditor({ selected, onToggleCode, onToggle
             >
               <div className="flex items-center gap-3">
                 <GroupCheckbox state={state} label={category.name} />
-                <div>
-                  <h4 className="tf-section-title max-sm:text-sm">{category.name}</h4>
-                  <p className="tf-meta">
-                    {allCodes.length} permission{allCodes.length !== 1 ? 's' : ''}
-                  </p>
-                </div>
+                <h4 className="tf-section-title max-sm:text-sm">{category.name}</h4>
                 {category.isMenuToggle && selectedCount > 0 && (
                   <span className="tf-badge text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20">
                     Menu

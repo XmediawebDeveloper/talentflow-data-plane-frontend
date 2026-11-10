@@ -356,7 +356,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
   const validateCompanyName = (value: string): string => {
     const trimmed = value.trim();
     if (!trimmed) return 'Company name is required';
-    if (trimmed.length < 2) return 'Company name must be at least 2 characters';
+    if (trimmed.length < 3) return 'Company name must be at least 3 characters';
     if (trimmed.length > 100) return 'Company name must be 100 characters or less';
     if (!/^[a-zA-Z0-9 &.\-'()]+$/.test(trimmed))
       return "Only letters, numbers, spaces and & . - ' ( ) are allowed";
@@ -488,7 +488,7 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
 
   const isFormComplete =
     (freeTrialAcknowledged || !!selectedPlanDetails) &&
-    form.companyName.trim().length >= 2 &&
+    form.companyName.trim().length >= 3 &&
     !companyNameError &&
     !!form.companyType &&
     !emailError &&
@@ -2272,11 +2272,12 @@ export default function SignUp({ onBackToPublic }: SignUpProps) {
             {(step === 'payment' || step === 'success') && checkoutPanel}
             </div>
           </div>
-
-          <div className="tf-auth-legal">© 2026 TalentFlow. All rights reserved.</div>
         </main>
 
         {orderSummary}
+
+        {/* After the summary, so on stacked (phone/tablet) layouts it is the last line. */}
+        <div className="tf-auth-legal">© 2026 TalentFlow. All rights reserved.</div>
       </div>
     </div>
   );
@@ -2332,14 +2333,15 @@ const SIGNUP_FLOW_CSS = `
 .tf-su-email-group .tf-su-email-btn:hover:not(:disabled) { box-shadow: none; }
 .tf-su-email-group .tf-su-email-btn:disabled { border-color: transparent; }
 /* Contact: name | email (+ Get code, a little wider) | phone on one row; stacks on phones. */
-@media (min-width: 641px) {
+/* One row only where the form column is wide enough for all three. */
+@media (min-width: 1280px) {
   .tf-su-sec-body.is-contact { grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr) minmax(0, 1fr); column-gap: 12px; }
 }
-/* Narrower screens: keep the one row by compacting it — email gets the most
-   room, smaller text/icons, tighter Get code, the label note drops (the
-   field's placeholder already says "work email"). */
+/* Tablets and small laptops: the two-column grid every other section uses
+   (Name | Email, then Phone), with compact text and a tighter Get code; the
+   label note drops (the field's placeholder already says "work email"). */
 @media (min-width: 641px) and (max-width: 1279px) {
-  .tf-su-sec-body.is-contact { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.6fr) minmax(0, 0.9fr); column-gap: 8px; }
+  .tf-su-sec-body.is-contact { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr); }
   .tf-su-sec-body.is-contact .tf-auth-label-note { display: none; }
   .tf-su-sec-body.is-contact .tf-auth-input { font-size: 13.5px; padding-left: 34px; padding-right: 8px; }
   .tf-su-sec-body.is-contact .tf-auth-control-icon { left: 11px; }
@@ -2379,6 +2381,16 @@ const SIGNUP_FLOW_CSS = `
 @media (max-width: 640px) {
   .tf-su-otp-links { flex-direction: row; gap: 14px; }
   .tf-su-pw-reqs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  /* Let a long label wrap inside its column instead of running into the next. */
+  .tf-su-pw-reqs li { white-space: normal; min-width: 0; }
+}
+/* Narrow phones: two columns are too tight for "Special character", one per line. */
+@media (max-width: 420px) {
+  .tf-su-pw-reqs { grid-template-columns: 1fr; }
+  /* "Password strength" + rating on one line, the bar full width beneath. */
+  .tf-su-pw-head { flex-wrap: wrap; row-gap: 6px; white-space: nowrap; }
+  .tf-su-pw-head strong { margin-left: auto; }
+  .tf-su-pw-bar { order: 3; flex-basis: 100%; }
 }
 .tf-su-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .tf-su-cancel { display: inline-flex; align-items: center; justify-content: center; gap: 7px; width: auto; height: 46px; padding: 0 18px; border-radius: var(--tf-radius-md); border: 1px solid var(--tf-border-strong); background: transparent; color: var(--tf-ink-subtle); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: color .2s ease, background-color .2s ease, border-color .2s ease; }
@@ -2549,7 +2561,7 @@ const SIGNUP_FLOW_CSS = `
   .tf-su-card > .tf-signup-panel { flex: 1; min-height: 0; overflow-y: auto; margin-right: -10px; padding-right: 10px; scrollbar-width: thin; }
   .tf-su-card .tf-auth-subtitle { margin-bottom: 16px; }
   .tf-su-card .tf-auth-field { margin-bottom: 12px; }
-  .tf-su-main > .tf-auth-legal { display: none; }
+  .tf-su-shell > .tf-auth-legal { display: none; }
   /* Same height as the left card, and never scrolls: the price block sits at
      the bottom, and short-screen rules below keep the content inside. */
   .tf-su-summary { position: static; align-self: stretch; height: 100%; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
@@ -2624,5 +2636,14 @@ const SIGNUP_FLOW_CSS = `
   .tf-su-steps-row, .tf-su-step { gap: 8px; }
   .tf-su-btnrow > * { flex: 1 1 auto; }
   .tf-su-backlink { font-size: 13px; }
+  .tf-su-summary { padding: 20px 16px; }
+  /* Phones: no outer card around the form — the section boxes, stepper and
+     buttons sit straight on the page and use its full width. */
+  .tf-su-shell { padding-left: 12px; padding-right: 12px; padding-top: 16px; gap: 20px; }
+  .tf-signup-page .tf-su-card { padding: 0; background: none; border: 0; border-radius: 0; box-shadow: none; }
+}
+/* Narrow phones: the Monthly/Yearly toggle drops under the plan name. */
+@media (max-width: 480px) {
+  .tf-su-plan-top { flex-wrap: wrap; }
 }
 `;

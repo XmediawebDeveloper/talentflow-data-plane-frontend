@@ -111,17 +111,17 @@ export function useAdvancedToggles(selected: Set<string>, setSelected: (next: Se
     }
     const parts: string[] = [];
     if (plan.entryPointsOff.length) {
-      parts.push(`${plan.entryPointsOff.length} permission${plan.entryPointsOff.length === 1 ? '' : 's'} from other modules`);
+      parts.push(`${plan.entryPointsOff.length === 1 ? 'a button' : `${plan.entryPointsOff.length} buttons`} on other pages`);
     }
     if (plan.dependentsOff.length) {
-      parts.push(`${plan.dependentsOff.length} permission${plan.dependentsOff.length === 1 ? '' : 's'} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
+      parts.push(`${plan.dependentsOff.length === 1 ? 'one thing' : `${plan.dependentsOff.length} things`} that need${plan.dependentsOff.length === 1 ? 's' : ''} it`);
     }
     const choice = await ask({
       title: `Turn off "${label}"?`,
       tone: 'off',
       summary: `This will also turn off ${parts.join(' and ')}.`,
       details: [
-        { heading: 'Permissions from other modules', codes: plan.entryPointsOff },
+        { heading: 'On other pages', codes: plan.entryPointsOff },
         { heading: 'Also turned off (they need it)', codes: plan.dependentsOff },
       ],
       actions: [{ id: 'off', label: 'Turn off', variant: 'destructive' }],

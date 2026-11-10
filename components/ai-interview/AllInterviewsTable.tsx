@@ -358,6 +358,7 @@ function bulkSkipReason(kind: BulkActionKind, row: InterviewRow, cfg: BulkAction
   const locked = !!jdActionLockReason(row.config.jd_status);
   if (kind === 'archive') {
     if (!cfg.canArchive) return 'no permission to archive';
+    if (row.rawStatus === 'draft') return 'draft has no archive state — delete instead';
     if (row.rawStatus === 'archived') return 'already archived';
     if (locked) return 'job is disabled or archived';
     return null;
@@ -615,16 +616,20 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
   /* ── Bulk actions on the ticked rows ── Actions (N) + Clear, the Candidate
      Results pattern. Items per tab: All → Export / Archive / Unarchive /
-     Delete; Active and Draft drop Unarchive; Archived drops Archive. */
+     Delete; Active drops Unarchive; Archived drops Archive; Draft drops both
+     Archive and Unarchive — a draft has nothing to archive (the row ⋮ menu's
+     rule, see renderInterviewVersionActions), only Edit/Delete apply. */
   const selectedRows = useMemo(
     () => [...selectedIds].map((id) => knownRows[id]).filter((row): row is InterviewRow => !!row),
     [selectedIds, knownRows],
   );
   const bulkKinds: BulkActionKind[] = fixedStatus === 'archived'
     ? ['unarchive', 'delete']
-    : fixedStatus
-      ? ['archive', 'delete']
-      : ['archive', 'unarchive', 'delete'];
+    : fixedStatus === 'draft'
+      ? ['delete']
+      : fixedStatus
+        ? ['archive', 'delete']
+        : ['archive', 'unarchive', 'delete'];
   const BULK_META: Record<BulkActionKind, { label: string; Icon: typeof Archive; className: string }> = {
     archive: { label: 'Archive', Icon: Archive, className: 'text-menu-icon-archive' },
     unarchive: { label: 'Unarchive', Icon: ArchiveRestore, className: 'text-menu-icon-archive' },
@@ -1062,8 +1067,10 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
           card, it takes no card of its own — Total Jobs' toolbar sits in that
           slot bare, so a second border here drew a box inside the box. */}
       <div className={toolbarSlot ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4'}>
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-          <div className="relative flex-1 min-w-0">
+        {/* Phones in the page's toolbar card (globals.css, `.tf-jobs-toolbar`): search ·
+            filter icon · List / Grid on one line, as the Job Openings list. */}
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
+          <div className="tf-tb-search relative flex-1 min-w-0">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               value={search}
@@ -1088,6 +1095,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
             aria-expanded={filtersOpen}
+            data-tb-filters=""
+            aria-label="More Filters"
             className={`h-9 px-3 inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${
               activeFilterCount > 0
                 ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
@@ -1185,7 +1194,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             </ListBulkActions>
           )}
           {onDisplayModeChange && (
-            <ListViewToggle value={displayMode} onChange={onDisplayModeChange} className="self-start sm:self-auto" />
+            <ListViewToggle value={displayMode} onChange={onDisplayModeChange} className="tf-jobs-viewtoggle self-start sm:self-auto" />
           )}
         </div>
 
@@ -1329,7 +1338,9 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     selectionActive={selectedIds.size > 0}
                   />
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">{cellContent(row, 'jobName')}</div>
+                    {/* Phones / tablets: the name in full (wraps), as the Job Openings card; the table
+                        cell's fixed width and "…" from lg. */}
+                    <div className="min-w-0 flex-1 max-lg:[&>div]:!w-auto max-lg:[&>div]:flex-wrap max-lg:[&_.truncate]:!whitespace-normal max-lg:[&_.truncate]:break-words">{cellContent(row, 'jobName')}</div>
                     <div className="shrink-0 -mt-1 -mr-1" onClick={(e) => e.stopPropagation()}>
                       {actionsCell(row)}
                     </div>

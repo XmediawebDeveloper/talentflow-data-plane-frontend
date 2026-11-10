@@ -37,6 +37,9 @@ interface InviteFilterBarProps {
   /** Extra dropdowns after Status. Clear Filters resets them via onClearExtras. */
   extraSelects?: InviteFilterExtraSelect[];
   onClearExtras?: () => void;
+  /** One line: search, Status, every extra dropdown, the invite date range
+   *  and Clear — wrapping only where the popup is too narrow for it. */
+  moreFilters?: boolean;
 }
 
 /**
@@ -103,6 +106,7 @@ export default function InviteFilterBar({
   searchPlaceholder = 'Search by candidate name or email...',
   extraSelects = [],
   onClearExtras,
+  moreFilters = false,
 }: InviteFilterBarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -140,6 +144,88 @@ export default function InviteFilterBar({
       ? 'lg:grid-cols-[minmax(0,1fr)_160px_140px_150px_150px_auto]'
       : 'lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto]';
   const selectClass = 'w-full sm:w-full min-w-0 data-[size=default]:h-[38px] sm:data-[size=default]:h-[38px] py-0 sm:py-0 px-3 sm:pl-3 sm:pr-3 rounded-lg sm:rounded-lg dark:text-slate-100';
+
+  if (moreFilters) {
+    const selectFor = (select: InviteFilterExtraSelect, className: string) => (
+      <FilterSelect
+        key={select.key}
+        value={select.value}
+        onChange={(v) => select.onChange(v)}
+        ariaLabel={select.ariaLabel}
+        options={[
+          { value: '', label: select.anyLabel },
+          ...select.options.map((option) => ({ value: option.value, label: option.label })),
+        ]}
+        className={className}
+      />
+    );
+    /* On the line: a fixed width from sm (the shared select class is full
+       width), two to a row on phones. */
+    const onLineClass = `${selectClass} max-sm:basis-[calc(50%-0.25rem)] max-sm:grow sm:!w-32`;
+    return (
+      <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative flex-1 min-w-[9rem] max-sm:basis-full">
+            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="text"
+              value={localSearch}
+              onChange={(e) => setLocalSearch(e.target.value)}
+              placeholder={searchPlaceholder}
+              className="tf-input pl-9 pr-9"
+            />
+            {localSearch && (
+              <button
+                type="button"
+                onClick={() => {
+                  setLocalSearch('');
+                  onChange({ ...filters, search: '' });
+                }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+          <FilterSelect
+            value={filters.status}
+            onChange={(v) => onChange({ ...filters, status: v })}
+            ariaLabel="Status"
+            options={statusOptions.map((option) => ({ value: option.value, label: option.label }))}
+            className={onLineClass}
+          />
+          {extraSelects.map((select) => selectFor(select, onLineClass))}
+          <div className="flex items-center gap-2 shrink-0 max-sm:basis-full max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <span className="tf-body-secondary whitespace-nowrap">Invited</span>
+            <DateField
+              value={filters.dateFrom}
+              onChange={(v) => onChange({ ...filters, dateFrom: v })}
+              className="min-w-0 h-9 px-2 sm:px-3 text-sm max-sm:w-full sm:w-32"
+              aria-label="Invite date from"
+            />
+            <span className="tf-body-secondary" aria-hidden="true">–</span>
+            <DateField
+              value={filters.dateTo}
+              min={filters.dateFrom || undefined}
+              onChange={(v) => onChange({ ...filters, dateTo: v })}
+              className="min-w-0 h-9 px-2 sm:px-3 text-sm max-sm:w-full sm:w-32"
+              aria-label="Invite date to"
+            />
+          </div>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="tf-btn tf-btn-secondary h-[38px] px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors gap-1.5 whitespace-nowrap max-sm:flex-1"
+            >
+              <X className="w-3.5 h-3.5" /> Clear
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">

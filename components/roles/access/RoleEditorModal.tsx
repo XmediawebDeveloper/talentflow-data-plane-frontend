@@ -9,10 +9,13 @@ import FilterSelect from '@/components/ui/filter-select';
 import rbacService from '@/lib/services/rbacService';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { withRequired, withoutOrphanEntryPoints, getAllCatalogCodes } from '@/lib/permissions/permissionRules';
-import { ALWAYS_ON } from '@/lib/permissions/moduleLevels';
+import { ALWAYS_ON, copyBlockedReason } from '@/lib/permissions/moduleLevels';
 import type { Role, RoleListItem } from '@/lib/types/rbac';
 import RoleAccessEditor from './RoleAccessEditor';
 import RoleAccessSummary from './RoleAccessSummary';
+import RoleUserPicker, { type PickedUser } from './RoleUserPicker';
+import RoleMembers from './RoleMembers';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 export type RoleEditorMode = 'new' | 'edit' | 'dup' | 'view';
 
@@ -30,6 +33,7 @@ export const roleCodes = (role: RoleListItem | null | undefined): Set<string> =>
 
 const sameSet = (a: Set<string>, b: Set<string>) => a.size === b.size && Array.from(a).every((x) => b.has(x));
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const peopleCount = (n: number) => (n === 1 ? '1 person' : `${n} people`);
 const slug = (name: string) =>
   `${name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'role'}_${Date.now().toString(36)}`;
 
@@ -59,6 +63,8 @@ export interface RoleEditorModalProps {
   zIndexClass?: string;
   /** The caller shows its own success message (e.g. "Save to assign it"). */
   quietSuccess?: boolean;
+  /** View: people were given this role from the popup; refresh counts. */
+  onPeopleChanged?: () => void;
 }
 
 /**
@@ -67,7 +73,7 @@ export interface RoleEditorModalProps {
  * everyone who has it, so a role with holders asks "Update access for N users?"
  * first, naming them.
  */
-export default function RoleEditorModal({ open, mode, role, roles, onClose, onSaved, onEdit, canEdit = true, onDuplicate, duplicateDisabledReason, zIndexClass, quietSuccess = false }: RoleEditorModalProps) {
+export default function RoleEditorModal({ open, mode, role, roles, onClose, onSaved, onEdit, canEdit = true, onDuplicate, duplicateDisabledReason, zIndexClass, quietSuccess = false, onPeopleChanged }: RoleEditorModalProps) {
   const startCodes = useMemo(() => (role ? roleCodes(role) : new Set<string>(ALWAYS_ON)), [role]);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -76,6 +82,12 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
   const [nameTouched, setNameTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Optional: people who get the new role straight away (Create / Duplicate).
+  const [assignees, setAssignees] = useState<PickedUser[]>([]);
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canAssign = isTenantAdmin || hasPermissionCode('users:assign_role');
+  const showAssign = (mode === 'new' || mode === 'dup') && !quietSuccess;
+  const roleNames = useMemo(() => Object.fromEntries(roles.map((r) => [r.code.toLowerCase(), r.name])), [roles]);
 
   useEffect(() => {
     if (!open) return;
@@ -85,6 +97,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
     setStartFrom('');
     setNameTouched(false);
     setConfirmOpen(false);
+    setAssignees([]);
   }, [open, mode, role, startCodes]);
 
   const holders = mode === 'edit' && role ? role.user_count : 0;
@@ -93,7 +106,6 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
   const nameError = !trimmed ? 'Enter a role name' : duplicateName ? 'A role with this name already exists' : '';
 
   if (mode === 'view' && role) {
-    const people = role.holders ?? [];
     return (
       <AppModal
         open={open}
@@ -102,15 +114,15 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
         icon={<Shield className="h-5 w-5" />}
         title={role.name}
         subtitle={role.is_system ? 'System role · read only' : 'Read only'}
-        closeButton
+        mobileSheet
         zIndexClass={zIndexClass}
         actions={[
           ...(onDuplicate ? [{
             label: 'Duplicate',
             variant: 'secondary' as const,
             onClick: () => onDuplicate(),
-            locked: !!duplicateDisabledReason,
-            title: duplicateDisabledReason,
+            locked: !!(duplicateDisabledReason || copyBlockedReason(role)),
+            title: duplicateDisabledReason || copyBlockedReason(role),
           }] : []),
           ...(!role.is_system ? [{
             label: 'Edit Role',
@@ -121,17 +133,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
         ]}
       >
         <RoleAccessSummary codes={roleCodes(role)} roleName={role.name} description={role.description} eyebrow={role.is_system ? 'System role' : 'Role'} />
-        <div className="mt-5 border-t border-gray-100 pt-4 dark:border-slate-800">
-          <div className="text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">People with this role · {role.user_count}</div>
-          {people.length ? (
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-2 text-[13px] text-gray-800 dark:text-slate-200">
-              {people.map((p) => <span key={p.id}>{p.name}</span>)}
-              {role.user_count > people.length && <span className="text-gray-500">+{role.user_count - people.length} more</span>}
-            </div>
-          ) : (
-            <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-400">Nobody has this role yet.</p>
-          )}
-        </div>
+        <RoleMembers role={role} roleNames={roleNames} onChanged={onPeopleChanged} />
       </AppModal>
     );
   }
@@ -154,7 +156,19 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
           description: description.trim() || undefined,
           permission_ids,
         });
-        if (!quietSuccess) toast.success(`Role "${created.name}" created`);
+        // Give the new role to the people picked (one role per user, so this
+        // replaces their current role). The role exists either way.
+        const picked = showAssign && canAssign ? assignees : [];
+        const results = await Promise.allSettled(
+          picked.map((u) => rbacService.assignUserRoles(u.id, { role_ids: [created.id] })),
+        );
+        const failed = picked.filter((_, i) => results[i].status === 'rejected');
+        const given = picked.length - failed.length;
+        if (failed.length) {
+          toast.warning(`Role "${created.name}" created${given ? ` and given to ${peopleCount(given)}` : ''}. Couldn't give it to ${failed.map((u) => u.name).join(', ')}; try again from User Management.`);
+        } else if (!quietSuccess) {
+          toast.success(given ? `Role "${created.name}" created and given to ${given === 1 ? picked[0].name : peopleCount(given)}` : `Role "${created.name}" created`);
+        }
         onSaved(created);
       }
     } catch (error) {
@@ -222,7 +236,9 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                   const src = roles.find((r) => String(r.id) === v);
                   setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
                 }}
-                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.map((r) => ({ value: String(r.id), label: r.name }))]}
+                options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.filter((r) => !copyBlockedReason(r)).map((r) => ({ value: String(r.id), label: r.name }))]}
+                ariaLabel="Copy permissions from"
+                className="w-full sm:w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-1 sm:py-1 px-3 sm:px-3 rounded-md sm:rounded-md border-input"
               />
             </div>
           ) : (
@@ -235,6 +251,24 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
             <label className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100" htmlFor="role-desc">Description</label>
             <Input id="role-desc" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What is this role for?" />
           </div>
+          {showAssign && (
+            <div className="mb-4 sm:col-span-2">
+              <label className="mb-1.5 block text-[13px] font-medium text-gray-900 dark:text-slate-100">
+                Give this role to <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <RoleUserPicker
+                value={assignees}
+                onChange={setAssignees}
+                roleNames={roleNames}
+                lockedReason={canAssign ? undefined : 'You do not have permission to assign roles'}
+              />
+              <p className="mt-1.5 text-xs text-gray-500 dark:text-slate-400">
+                {assignees.length
+                  ? `When you create the role, ${assignees.length === 1 ? 'this person moves' : 'these people move'} to it from their current role.`
+                  : 'You can also give it to people later in User Management.'}
+              </p>
+            </div>
+          )}
         </div>
         <RoleAccessEditor codes={codes} onChange={setCodes} />
       </AppModal>

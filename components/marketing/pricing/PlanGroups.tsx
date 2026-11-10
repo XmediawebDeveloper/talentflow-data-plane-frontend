@@ -5,6 +5,7 @@ import { Building2, Gift, LayoutGrid, Rocket, TrendingUp, type LucideIcon } from
 import { gsap, ScrollTrigger, useGSAP } from "@/lib/gsap";
 import { DISPLAY } from "../fonts";
 import { PLAN_RAIL, PLAN_RAIL_ITEM, PlanCard, SwipeHint } from "../PlanCard";
+import { SWIPE_ITEM, SWIPE_RAIL, SwipeDots, useSwipeDeck } from "../SwipeDeck";
 import type { MarketingPlan } from "../plans";
 
 /* ------------------------------------------------------------------ *
@@ -94,18 +95,23 @@ function GroupHeader({ meta, count }: { meta: GroupMeta; count: number }) {
   );
 }
 
+/** Phone: centred accordion swipe deck (see SwipeDeck); sm+: plain grid. */
 function CardGrid({ plans, isYearly }: { plans: MarketingPlan[]; isYearly: boolean }) {
+  const { wrapRef, current, goTo } = useSwipeDeck(plans.length);
   return (
-    <>
-      <div className={`mt-5 sm:mt-7 ${PLAN_RAIL} ${GRID_COLS}`}>
+    <div ref={wrapRef}>
+      <div data-swipe-rail className={`mt-5 sm:mt-7 ${PLAN_RAIL} ${GRID_COLS} ${SWIPE_RAIL}`}>
         {plans.map((plan) => (
-          <div key={plan.id} data-plan-card className={`${PLAN_RAIL_ITEM} [transform-style:preserve-3d]`}>
-            <PlanCard plan={plan} isYearly={isYearly} />
+          <div key={plan.id} data-plan-card className={`${PLAN_RAIL_ITEM} [transform-style:preserve-3d] ${SWIPE_ITEM}`}>
+            <div data-swipe-face className="h-full will-change-transform">
+              <PlanCard plan={plan} isYearly={isYearly} />
+            </div>
           </div>
         ))}
       </div>
+      <SwipeDots labels={plans.map((p) => p.name)} current={current} goTo={goTo} />
       <SwipeHint count={plans.length} />
-    </>
+    </div>
   );
 }
 

@@ -15,3 +15,18 @@ export function formatCandidateFirstName<T extends string | null | undefined>(na
   const [, lead, first, rest] = match;
   return `${lead}${first.charAt(0).toLocaleUpperCase()}${first.slice(1).toLocaleLowerCase()}${rest}` as T;
 }
+
+/**
+ * A person's name in Capitalized Case, whatever case it was stored in —
+ * "PRIYA SHARMA" / "arun KUMAR" → "Priya Sharma" / "Arun Kumar". A letter is
+ * capitalised after a space, dot, apostrophe or hyphen ("O'Brien",
+ * "Jean-Luc"). What the invite trackers and results tables show. Display only,
+ * as above; empty / missing names come back as they were.
+ */
+export function capitalizedCase(raw: string | null | undefined): string {
+  if (!raw) return raw ?? '';
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/(^|[\s.'-])(\p{L})/gu, (_, sep: string, ch: string) => sep + ch.toUpperCase());
+}
