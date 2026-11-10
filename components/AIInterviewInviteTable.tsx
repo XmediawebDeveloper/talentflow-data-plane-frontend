@@ -33,6 +33,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -684,6 +685,10 @@ export default function AIInterviewInviteTable({
   expandableRows = false,
   displayMode = 'list',
 }: AIInterviewInviteTableProps) {
+  // Resend / Edit / Revoke need AI Interviews "Invite" (2026-11-10): a
+  // view-only role (Viewer) could resend expired links.
+  const { isTenantAdmin: isOwnerForInvites, hasPermissionCode: hasCodeForInvites } = useAuth();
+  const canInviteRows = isOwnerForInvites || hasCodeForInvites('ai_interview:invite');
   const selectable = !!onToggleSelect;
   /* Row height: tighter when the table grows to its rows (autoHeight). */
   const cellY = autoHeight ? 'py-2' : 'py-3';
@@ -735,6 +740,7 @@ export default function AIInterviewInviteTable({
     const lockedProps = locked
       ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
       : {};
+    const noInviteProps = !canInviteRows ? { disabled: true, title: "You can view invitations, but your role can't resend, edit or revoke them" } : {};
 
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
@@ -756,6 +762,7 @@ export default function AIInterviewInviteTable({
         disabled: resendingId === inv.id,
         iconClassName: 'text-menu-icon-share',
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     if (onEdit && canEdit(inv)) {
@@ -767,6 +774,7 @@ export default function AIInterviewInviteTable({
         title: 'Edit candidate details and send',
         iconClassName: 'text-menu-icon-edit',
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     if (onRevoke && isRevocableInvite(inv)) {
@@ -780,6 +788,7 @@ export default function AIInterviewInviteTable({
         destructive: true,
         busy: revokingId === inv.id,
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     return actions;

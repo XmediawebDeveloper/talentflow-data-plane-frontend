@@ -280,11 +280,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     !tenant?.features || (tenant.features as Record<string, unknown>)[f] === true;
   const createSendDenied = (kind: InviteKind): string | null => {
     if (kind === 'assessment') {
-      if (!(isTenantAdmin || hasPermission('canCreateAssessments'))) return 'You do not have permission to create or send assessments';
+      // The JD's own "Invite to Assessment" plus the module's Create or Invite
+      // (same rule as the job page, JobDetailView canInviteJdAssessment; 2026-11-10).
+      if (!(isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && (hasPermission('canCreateAssessments') || hasPermissionCode('assessments:invite'))))) return 'You do not have permission to create or send assessments';
       if (!featureOn('assessment')) return 'Assessments not enabled';
       return hasPlanFeature('assessment') ? null : PLAN_LOCKED_MESSAGE;
     }
-    if (!(isTenantAdmin || hasPermission('canCreateAIInterviews') || hasPermission('canInviteAIInterviews'))) return 'You do not have permission to create or send AI interviews';
+    if (!(isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && (hasPermission('canCreateAIInterviews') || hasPermissionCode('ai_interview:invite'))))) return 'You do not have permission to create or send AI interviews';
     if (!featureOn('ai_interview')) return 'AI Interviews not enabled';
     return hasPlanFeature('ai_interview') ? null : PLAN_LOCKED_MESSAGE;
   };

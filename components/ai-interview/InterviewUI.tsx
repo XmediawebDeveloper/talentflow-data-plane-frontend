@@ -6614,12 +6614,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           commitPendingRoleIntro(false);
           break;
         }
-        console.warn(`[WS ${timestamp}] tts_failed — suppressing silent question text`);
+        // Same for a question: the mic still opens for an answer, so hiding the
+        // text left the candidate answering a question they never saw or heard
+        // (staging 2026-11-10 Q14, OpenAI credit exhausted). Show it in full now
+        // — there is no voice to pace the reveal — and finalize commits it.
+        console.warn(`[WS ${timestamp}] tts_failed — no voice; showing the text in full`);
         if (revealTimerRef.current) { clearInterval(revealTimerRef.current); revealTimerRef.current = null; }
-        tokenBufferRef.current = "";
-        currentAiTextRef.current = "";
-        revealedCharsRef.current = 0;
-        setCurrentAiText("");
+        {
+          const fullText = tokenBufferRef.current;
+          currentAiTextRef.current = fullText;
+          revealedCharsRef.current = fullText.length;
+          setCurrentAiText(fullText);
+        }
         break;
       case "llm_correction":
         // Backend replaced the streamed response (validation retry/fallback OR a

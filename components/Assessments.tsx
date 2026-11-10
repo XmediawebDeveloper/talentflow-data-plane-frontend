@@ -528,7 +528,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
-  const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download');
   /* Download Report on an invitation row — gated on its own permission code only
      (a generic canDownloadAssessmentPDF/canExport fallback would default this on
@@ -3821,7 +3821,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   // Update proctoring setting
   const updateProctoringSettings = async (updates: Partial<ProctoringSettings>) => {
-    if (!proctoringSettings) return;
+    // Proctoring is an assessment setting: Assessments "Edit" (2026-11-10;
+    // the toggles were open to every role, Viewer included).
+    if (!proctoringSettings || !canUpdateAssessment) return;
 
     const keys = Object.keys(updates);
     setSavingProctoringKeys(prev => new Set([...prev, ...keys]));
@@ -8442,6 +8444,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 // added here alongside it.
                 const jdDisabled = isJdDisabled(jobVersionStatusById[inv._jd_id || '']);
                 const actions = buildInvitationRowActions(inv, {
+                  canInvite: canInviteFromStatusTab,
                   onResend: (target) => setResendTargetInvitation(target),
                   resendingId: isResending ? resendTargetInvitation?.id : null,
                   onEdit: (target) => setEditInviteTarget(target),
@@ -9815,7 +9818,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </span>
                             <button
                               onClick={() => updateProctoringSettings({ proctoring_enabled: !proctoringSettings.proctoring_enabled })}
-                              disabled={savingProctoringKeys.has('proctoring_enabled')}
+                              disabled={savingProctoringKeys.has('proctoring_enabled') || !canUpdateAssessment}
+                              title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : undefined}
                               className={`relative w-10 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                 proctoringSettings.proctoring_enabled
                                   ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
@@ -9877,7 +9881,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <button
                                 onClick={() => updateProctoringSettings({ [feature.key]: !isEnabled })}
-                                disabled={savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled}
+                                disabled={savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : undefined}
                                 className={`relative w-9 sm:w-11 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
                                   isEnabled && proctoringSettings.proctoring_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
@@ -9912,7 +9917,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <div className="flex flex-col items-center gap-1 shrink-0">
                           <button
                             onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
-                            disabled={savingProctoringKeys.has('email_masking_enabled')}
+                            disabled={savingProctoringKeys.has('email_masking_enabled') || !canUpdateAssessment}
+                            title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : undefined}
                             className={`relative w-14 h-7 rounded-full transition-colors ${
                               proctoringSettings.email_masking_enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
                             } ${savingProctoringKeys.has('email_masking_enabled') ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -9938,7 +9944,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             type="number"
                             value={proctoringSettings.max_tab_switches}
                             onChange={(e) => updateProctoringSettings({ max_tab_switches: parseInt(e.target.value) || 3 })}
-                            disabled={savingProctoringKeys.has('max_tab_switches') || !proctoringSettings.proctoring_enabled}
+                            disabled={savingProctoringKeys.has('max_tab_switches') || !proctoringSettings.proctoring_enabled || !canUpdateAssessment}
+                            title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : undefined}
                             className="tf-input disabled:bg-slate-100"
                             min="1"
                             max="10"
@@ -9950,7 +9957,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             type="number"
                             value={proctoringSettings.max_violations_before_flag}
                             onChange={(e) => updateProctoringSettings({ max_violations_before_flag: parseInt(e.target.value) || 5 })}
-                            disabled={savingProctoringKeys.has('max_violations_before_flag') || !proctoringSettings.proctoring_enabled}
+                            disabled={savingProctoringKeys.has('max_violations_before_flag') || !proctoringSettings.proctoring_enabled || !canUpdateAssessment}
+                            title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : undefined}
                             className="tf-input disabled:bg-slate-100"
                             min="1"
                             max="20"

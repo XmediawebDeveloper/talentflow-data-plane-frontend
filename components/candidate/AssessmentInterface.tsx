@@ -2378,7 +2378,7 @@ export function AssessmentInterface({
             {/* What happens to each status on submit. Three across from `sm`;
                 stacked single-line rows on phones, where three columns would
                 split "12 Unanswered" over two lines. */}
-            <div className="tf-grid-3 mb-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 sm:gap-2 mb-3">
               {statCards.map(({ key, label, count, Icon, tile, icon, num }) => (
                 <div key={key} className={`rounded-lg border bg-white px-3 py-2 min-w-0 ${tile}`}>
                   <p className="flex items-center gap-1.5 tf-row-title leading-snug whitespace-nowrap">

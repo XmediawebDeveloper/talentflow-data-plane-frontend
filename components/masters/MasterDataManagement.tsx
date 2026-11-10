@@ -81,9 +81,12 @@ const typeConfig = {
 
 export default function MasterDataManagement({ type, embedded = false }: MasterDataManagementProps) {
   // Everyone who can open Job Descriptions can SEE these lists; changing them
-  // needs Manage Settings, the same permission the backend checks (2026-11-10).
-  const { isTenantAdmin, hasPermission } = useAuth();
-  const canEdit = isTenantAdmin || hasPermission('canManageSettings');
+  // needs Job Descriptions Access (edit JDs) or Manage Settings — the same rule
+  // the backend checks (user decision 2026-11-10). Viewer stays read-only.
+  // Exact codes, not the canManageSettings flag: that one is also on for
+  // anyone who can merely SEE Settings (Viewer), so it made Viewer editable.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canEdit = isTenantAdmin || hasPermissionCode('jd:update') || hasPermissionCode('settings:general');
   const lock = canEdit ? {} : { 'aria-disabled': true, title: "You can view this list, but your role can't change it", style: { opacity: 0.5, cursor: 'not-allowed' } };
   const [items, setItems] = useState<(ExperienceLevel | EducationLevel | IndustryType)[]>([]);
   const [loading, setLoading] = useState(true);

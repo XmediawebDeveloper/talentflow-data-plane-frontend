@@ -3609,7 +3609,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => setQaExportMenuOpen(v => !v)}
+                        // Q&A export (PDF / DOCX) is a report download (2026-11-10).
+                        onClick={() => { if (canDownloadReports) setQaExportMenuOpen(v => !v); }}
+                        aria-disabled={!canDownloadReports}
+                        title={canDownloadReports ? undefined : "You can view this interview, but your role can't download reports"}
+                        className={!canDownloadReports ? 'opacity-50 cursor-not-allowed' : undefined}
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -4199,8 +4203,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => setChatDownloadOpen(true)}
-                            title="Download full chat transcript"
+                            // Chat transcript download is a report download (2026-11-10).
+                            onClick={() => { if (canDownloadReports) setChatDownloadOpen(true); }}
+                            aria-disabled={!canDownloadReports}
+                            title={canDownloadReports ? 'Download full chat transcript' : "You can view this interview, but your role can't download reports"}
+                            className={!canDownloadReports ? 'opacity-50 cursor-not-allowed' : undefined}
                           >
                             <Download className="w-3.5 h-3.5" />
                             Chat Download

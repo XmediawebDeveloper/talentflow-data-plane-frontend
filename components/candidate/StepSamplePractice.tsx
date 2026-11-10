@@ -2219,7 +2219,7 @@ export default function StepSamplePractice({
         {/* In panel fullscreen the grid takes the rest of the height and the
             chat scrolls inside it ([:fullscreen_&] = inside the fullscreen
             panel). */}
-        <div className="tf-grid-stats-5 [:fullscreen_&]:flex-1 [:fullscreen_&]:min-h-0">
+        <div className="grid grid-cols-1 md:grid-cols-5 lg:grid-cols-3 gap-0 [:fullscreen_&]:flex-1 [:fullscreen_&]:min-h-0">
         {/* ── Left: Bina avatar (top) + your webcam (bottom) ── */}
         <div className="md:col-span-2 lg:col-span-1 flex flex-col bg-[var(--raw-0a1020)] [:fullscreen_&]:min-h-0 [:fullscreen_&]:overflow-y-auto">
           {/* Bina avatar */}

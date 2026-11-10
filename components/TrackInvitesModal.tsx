@@ -45,6 +45,7 @@ import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-
 import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
 import ListPagination from '@/components/ListPagination';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 /* Per-row actions: Resend / Copy Link always, plus Revoke (while an invite is
    still unopened) and Edit (name + email, revoked-only, then Save & Send) when
@@ -153,6 +154,9 @@ const cardBucketOf = (inv: any): CardBucket => {
 };
 
 export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true, assessments: scopedAssessments }: TrackInvitesModalProps) {
+  // Resend / Edit / Revoke need Assessments "Invite" (2026-11-10).
+  const { isTenantAdmin: isOwnerForInvites, hasPermissionCode: hasCodeForInvites } = useAuth();
+  const canInviteRows = isOwnerForInvites || hasCodeForInvites('assessments:invite');
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -869,6 +873,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           )}
                           <InvitationActionButtons
                             actions={buildInvitationRowActions(invitation, {
+                              canInvite: canInviteRows,
                               ...rowActionOptions,
                               archived: isAssessmentArchived(invitation.assessment_status),
                               jdDisabled,
@@ -1118,6 +1123,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col`}>
                             {(() => {
                               const rowActs = buildInvitationRowActions(invitation, {
+                                canInvite: canInviteRows,
                                 ...rowActionOptions,
                                 onViewResult: openResult,
                                 archived: isAssessmentArchived(invitation.assessment_status),

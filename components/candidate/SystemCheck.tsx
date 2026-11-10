@@ -1441,7 +1441,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
                 {!checksRan && (
                 <Button
                   size="sm"
-                  className={`!bg-success hover:!bg-success-strong text-white ${checksNotStarted ? 'tf-attention-pulse-success' : ''}`}
+                  className={`!bg-success hover:!bg-success-strong text-white font-bold shadow-lg ${checksNotStarted ? 'tf-attention-pulse-success' : ''}`}
                   onClick={runAllChecks}
                   disabled={isChecking}
                 >
