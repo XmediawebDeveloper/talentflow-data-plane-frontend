@@ -1116,12 +1116,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     console.log('[DEBUG] handleBeginClick - marking flow as active');
 
     try {
-      // Trigger question generation in background BEFORE system check.
-      // For multi-language coding rounds the backend defers actual
-      // generation until POST /choose-language fires — we just need to
-      // know whether a pick is owed so we can show the modal AFTER the
+      // Create the attempt only — NO question generation (LLM) here. Generation
+      // is dispatched at the start gate (handleFullscreenReady). We just need
+      // to know whether a pick is owed so we can show the modal AFTER the
       // candidate completes system check (per product flow change).
-      console.log('[PORTAL] Triggering background question generation...');
+      console.log('[PORTAL] Preparing attempt (no question generation yet)...');
       const prepareResponse = await candidateService.prepareAssessment(token);
       console.log('[PORTAL] Prepare response:', prepareResponse);
 
@@ -1984,7 +1983,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 console.log('[PORTAL] Generation failed, triggering auto-retry...');
                 hasRetriedGeneration = true;
                 try {
-                  await candidateService.prepareAssessment(token);
+                  await candidateService.prepareAssessment(token, { startGeneration: true });
                   console.log('[PORTAL] Auto-retry triggered, continuing to poll...');
                   // Continue polling - don't exit loop
                   continue;
@@ -2044,18 +2043,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
         pollForReady();
       } else {
-        // Not started or failed - trigger generation now (fallback flow)
+        // Not started or failed - the candidate is starting now, so dispatch generation (the ONLY place it is triggered)
         console.log('[PORTAL] Generation not started, triggering prepare now...');
         setStepSafe('generating_questions');
 
         try {
           // Call prepare to trigger background generation
           console.log('[PORTAL] Calling prepareAssessment as fallback...');
-          const prepareResponse = await candidateService.prepareAssessment(token);
+          const prepareResponse = await candidateService.prepareAssessment(token, { startGeneration: true });
           if (prepareResponse?.status === 'pending_lang_choice') {
             console.log('[PORTAL] Fallback prepare requires coding language selection');
             setNeedsLanguagePick(true);
             setStepSafe('choose_coding_language');
+            return;
+          }
+          if (prepareResponse?.status === 'pending_system_check') {
+            // Backend refused to generate: the system check is not recorded as
+            // passed. Polling would never succeed, so say so instead of spinning.
+            console.log('[PORTAL] Start gate prepare: system check not passed - not generating');
+            setError('Your system check did not pass. Please refresh the page and complete the system check again.');
+            setStepSafe('error');
             return;
           }
           console.log('[PORTAL] Prepare called, waiting for generation...');
@@ -2063,8 +2070,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           // Wait for generation to complete
           await new Promise(resolve => setTimeout(resolve, 2000)); // Give it 2 seconds to start
 
-          // Now poll for ready
-          for (let i = 0; i < 45; i++) {
+          // Now poll for ready - up to 3 min: generation starts only now (it no longer
+          // overlaps system check / HR), so allow the full background retry budget.
+          for (let i = 0; i < 90; i++) {
             if (!isMountedRef.current) return;
 
             await new Promise(resolve => setTimeout(resolve, 2000));
