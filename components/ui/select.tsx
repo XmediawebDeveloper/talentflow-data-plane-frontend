@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "./utils";
+import { useMobileRecordCardVariant } from "./mobile-record-card";
+import { phoneCentredLeft, phoneContentBox } from "@/lib/hooks/useCenteredMenuOnPhone";
 
 function Select({
   ...props
@@ -54,20 +56,79 @@ function SelectTrigger({
   );
 }
 
+/** Phones: below the `sm` breakpoint (640px). */
+const PHONE_MAX_WIDTH = 640;
+
 function SelectContent({
   className,
   children,
   position = "popper",
   collisionPadding = 8,
+  align,
+  alignOffset,
+  ref,
+  style,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
+  /* Job Openings module, phones only: the list opens centred on the screen (still
+     just below / above its field), like the module's dropdown menus
+     (dropdown-menu.tsx). Everywhere else, and from `sm` up, unchanged. */
+  const opensVertically = !props.side || props.side === "bottom" || props.side === "top";
+  const centerOnPhone = useMobileRecordCardVariant() === "jd" && position === "popper" && opensVertically;
+  const [phoneOffset, setPhoneOffset] = React.useState<number | null>(null);
+  const [phoneMaxWidth, setPhoneMaxWidth] = React.useState<number | null>(null);
+  const [contentEl, setContentEl] = React.useState<HTMLDivElement | null>(null);
+  const setRefs = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      setContentEl(node);
+      if (typeof ref === "function") ref(node);
+      else if (ref) (ref as React.RefObject<HTMLDivElement | null>).current = node;
+    },
+    [ref],
+  );
+  React.useLayoutEffect(() => {
+    if (!centerOnPhone || !contentEl) return;
+    const measure = () => {
+      if (window.innerWidth >= PHONE_MAX_WIDTH) {
+        setPhoneOffset(null);
+        setPhoneMaxWidth(null);
+        return;
+      }
+      const trigger = contentEl.id ? document.querySelector<HTMLElement>(`[aria-controls="${contentEl.id}"]`) : null;
+      if (!trigger) return;
+      // align="start" + this offset puts the list's left edge where a centred list starts.
+      // Centred on the visible page content (scrollbar excluded), so it lines up with the field,
+      // and never wider than that content (less an 8px gutter each side).
+      const t = trigger.getBoundingClientRect();
+      const maxW = Math.max(160, Math.round(phoneContentBox(trigger).width - 16));
+      setPhoneMaxWidth(maxW);
+      setPhoneOffset(Math.round(phoneCentredLeft(trigger, Math.min(contentEl.offsetWidth, maxW)) - t.left));
+    };
+    measure();
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    observer?.observe(contentEl);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [centerOnPhone, contentEl]);
+  const phoneCentered = centerOnPhone && phoneOffset !== null;
+
+  // z-[300]: an open list must sit above every popup (AppModal is z-[60]+,
+  // stacked ones up to z-[90], interview overlays z-[200]); at z-50 it opened
+  // hidden behind them.
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
+        ref={setRefs}
         data-slot="select-content"
         collisionPadding={collisionPadding}
+        align={phoneCentered ? "start" : align}
+        alignOffset={phoneCentered ? phoneOffset : alignOffset}
+        style={phoneCentered && phoneMaxWidth ? { ...style, maxWidth: phoneMaxWidth } : style}
         className={cn(
-          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-50 max-h-(--radix-select-content-available-height) min-w-[8rem] max-w-[calc(100vw-1rem)] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md",
+          "bg-popover text-popover-foreground data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 relative z-[300] max-h-(--radix-select-content-available-height) min-w-[8rem] max-w-[calc(100vw-1rem)] origin-(--radix-select-content-transform-origin) overflow-x-hidden overflow-y-auto rounded-md border shadow-md",
           position === "popper" &&
             "data-[side=bottom]:translate-y-1 data-[side=left]:-translate-x-1 data-[side=right]:translate-x-1 data-[side=top]:-translate-y-1",
           className,

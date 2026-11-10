@@ -83,14 +83,14 @@ export default function ArchiveJobModal({
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 {many ? `Archive ${count} Job Descriptions?` : 'Archive Job Description?'}
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Are you sure you want to archive the following job description{many ? 's' : ''}?
               </p>
               {/* The house grey pill, so the JD reads as a chip and not as body copy. */}
               <span className="mt-3 inline-flex max-w-full items-start sm:items-center gap-2 rounded-lg bg-gray-100 dark:bg-slate-800 px-3 py-1.5 ring-1 ring-gray-200 dark:ring-slate-700">
                 <Briefcase className="w-4 h-4 shrink-0 mt-0.5 sm:mt-0 text-gray-500 dark:text-slate-400" />
                 {/* Wraps on a phone: truncating there cut even "1 Job Description Selected" short. */}
-                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-cell-name">
+                <span className="min-w-0 [overflow-wrap:anywhere] sm:truncate tf-row-title">
                   {jobLabel}
                 </span>
               </span>
@@ -113,7 +113,7 @@ export default function ArchiveJobModal({
 
           {/* What stops, and what does not */}
           <div className="mt-4">
-            <p className="tf-cell-name">
+            <p className="tf-row-title">
               While archived, {subject} will:
             </p>
             <ul className="mt-3 space-y-2.5">

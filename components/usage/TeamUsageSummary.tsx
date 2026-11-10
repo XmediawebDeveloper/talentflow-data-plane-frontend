@@ -5,7 +5,7 @@
  *
  * Displays team usage summaries with role-based access:
  * - Owner: View all teams' usage + expandable member-level usage
- * - Standard User/Viewer: View only their team's usage
+ * - Viewer and other non-admin users: View only their team's usage
  * - Billing Manager: No access (shows message)
  */
 
@@ -85,7 +85,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         const data = await teamService.getAllTeamsUsage(selectedDays as unknown as string);
         setAllTeamsUsage(data);
       } else if (!isBillingManager) {
-        // Standard User/Viewer: Fetch my teams
+        // Viewer and other non-admin users: Fetch my teams
         // NOTE: selectedDays is a NUMBER of days (30/60/...), but this service takes
         // (fromDate?: string, toDate?: string) and puts it in `start_date`. So the
         // request currently sends start_date=30 rather than days=30, and the range
@@ -138,7 +138,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         {/* Teams list */}
         <div className="space-y-6">
           {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div key={i} className="tf-card-soft overflow-hidden">
               {/* Team header bar */}
               <div className="bg-white border-b border-gray-100 px-6 py-4">
                 <div className="flex items-center justify-between">
@@ -151,7 +151,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
               </div>
               {/* Usage stats grid */}
               <div className="p-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="tf-grid-2">
                   {Array.from({ length: 4 }).map((_, j) => (
                     <div key={j} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
@@ -184,7 +184,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
         <p className="text-red-700">{error}</p>
         <button
           onClick={fetchUsageData}
-          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          className="tf-btn tf-btn-destructive mt-4 px-4 py-2 bg-red-600 hover:bg-red-700 transition-colors whitespace-normal shadow-none gap-0 font-normal"
         >
           Retry
         </button>
@@ -206,7 +206,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
               <h3 className="tf-section-title">
                 {singleTeamUsage.team_name || 'Team'} Usage
               </h3>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {singleTeamUsage.reporting_scope} - Last {selectedDays} days
               </p>
             </div>
@@ -242,7 +242,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
             <h3 className="tf-section-title">
               {isTenantAdmin ? 'All Teams Usage' : 'My Teams Usage'}
             </h3>
-            <p className="tf-card-desc">
+            <p className="tf-body-secondary">
               {reportingScope === 'all_teams' ? 'Tenant-wide team usage' : 'Your team usage summary'} - Last {selectedDays} days
             </p>
           </div>
@@ -323,7 +323,7 @@ function TeamUsageCard({
   };
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+    <div className="tf-card-soft overflow-hidden">
       {/* Team Header */}
       <div className="bg-gray-800 px-6 py-4 text-white">
         <div className="flex items-center justify-between">
@@ -355,7 +355,7 @@ function TeamUsageCard({
           <div className="space-y-4">
             {/* Unit Consumption */}
             {hasData && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="tf-grid-2">
                 {Object.entries(team.by_type).map(([unitType, usage]) => {
                   const typeInfo = UNIT_TYPE_LABELS[unitType] || {
                     label: unitType,
@@ -370,7 +370,7 @@ function TeamUsageCard({
                           {typeInfo.icon}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{typeInfo.label}</p>
+                          <p className="tf-row-name">{typeInfo.label}</p>
                           <p className="tf-meta">{usage?.consumption_count || 0} actions</p>
                         </div>
                       </div>
@@ -388,16 +388,16 @@ function TeamUsageCard({
             {hasCreationData && (
               <>
                 <div className="border-t border-gray-200 pt-3">
-                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-3">Creation Activity</p>
+                  <p className="tf-eyebrow tracking-wider mb-3">Creation Activity</p>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="tf-grid-2">
                   {(team.jds_created || 0) > 0 && (
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white">
                           <Briefcase className="w-4 h-4" />
                         </div>
-                        <p className="text-sm font-medium text-gray-900">JDs Created</p>
+                        <p className="tf-row-name">JDs Created</p>
                       </div>
                       <p className="text-xl font-bold text-gray-900">{team.jds_created}</p>
                     </div>
@@ -408,7 +408,7 @@ function TeamUsageCard({
                         <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center text-white">
                           <ClipboardCheck className="w-4 h-4" />
                         </div>
-                        <p className="text-sm font-medium text-gray-900">Assessments Created</p>
+                        <p className="tf-row-name">Assessments Created</p>
                       </div>
                       <p className="text-xl font-bold text-gray-900">{team.assessments_created}</p>
                     </div>

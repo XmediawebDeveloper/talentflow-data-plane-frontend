@@ -11,10 +11,10 @@ import {
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
   BarChart3, Brain, FileText, Layers,
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
-  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
+  Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check,
-  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase,
+  Download, Loader2, Sparkles, SkipForward, Play, X, Timer, Check, FileType2, ScrollText,
+  ArrowUpRight, ChevronsUpDown, ChevronsDownUp, ScanQrCode, Briefcase, AudioLines,
 } from 'lucide-react';
 import { jdService, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import NameAvatar from '@/components/ui/name-avatar';
 import { tabPill } from '@/components/ui/filter-pills';
 import ExportFormatModal from '@/components/ExportFormatModal';
+import ExportColumnsModal, { type ExportFormatOption } from '@/components/ExportColumnsModal';
 import { exportRows, exportTextFile, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import EvaluationTab from './tabs/EvaluationTab';
 import EvaluationDashboardTab from './tabs/EvaluationDashboardTab';
@@ -39,6 +40,7 @@ import { EvalReportCombined, MHS_THRESHOLD } from './evaluation-dashboard/EvalRe
 // EvaluationDashboardV2 default export no longer used; sub-views are mounted as their own tabs.
 // import { EvaluationDashboardV2 } from './evaluation-dashboard/EvaluationDashboardV2';
 import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/EvaluationDashboardV2';
+import EnvVerificationStudio from './tabs/EnvVerificationStudio';
 import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
@@ -66,6 +68,7 @@ import TruncatedTextCell from './TruncatedTextCell';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import { formatScore1, truncate1 } from '@/lib/utils/matchStatus';
 import { useBreadcrumbOffset } from './AIInterviewStepIndicator';
+import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -247,7 +250,7 @@ function VideoPane({
           <VideoOff className="w-6 h-6 text-destructive" />
         </div>
         <p className="tf-body-muted">Could not load {label.toLowerCase()}</p>
-        <p className="text-xs text-gray-400 mt-1">The file may have been moved or deleted</p>
+        <p className="tf-hint mt-1">The file may have been moved or deleted</p>
       </div>
     );
   }
@@ -304,12 +307,12 @@ function RecordingInfoPanel({
   const Row = ({ label, value }: { label: string; value: React.ReactNode }) => (
     <div className="flex items-center justify-between py-2.5 border-b border-gray-100 last:border-0">
       <span className="tf-meta">{label}</span>
-      <span className="text-sm font-medium text-gray-900">{value}</span>
+      <span className="tf-row-name">{value}</span>
     </div>
   );
   return (
-    <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-2 tracking-tight">Recording Information</h3>
+    <div className="tf-card-soft p-4">
+      <h3 className="tf-row-title mb-2 tracking-tight">Recording Information</h3>
       <Row label="Status" value={<Badge variant="success">{status}</Badge>} />
       <Row label="File Size" value={formatBytes(size)} />
       <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />
@@ -423,7 +426,7 @@ function RecordingTabContent({
       </div>
 
       {/* Split layout: video left, info right */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="tf-grid-3">
         {/* Keyed on the view so the incoming recording fades in. */}
         <div key={recView} className="lg:col-span-2 space-y-2 animate-in fade-in duration-300 motion-reduce:animate-none">
           {isCandidate ? (
@@ -487,7 +490,7 @@ function RecordingTabContent({
           {/* Shortcut hint for the question timeline (VideoWithDuration). */}
           {(markers ?? []).some(m => m.kind !== 'violation') && (
             <div className="flex items-center justify-center gap-1 whitespace-nowrap tf-meta">
-              <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-[10px] font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
+              <kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">Ctrl</kbd>+<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">←</kbd>/<kbd className="rounded border border-gray-300 bg-white px-1 py-px font-sans text-2xs font-semibold text-gray-600 shadow-[0_1px_0_#e5e7eb]">→</kbd>
               <span>jump between questions</span>
             </div>
           )}
@@ -593,6 +596,12 @@ function DiffText({ parts, tone }: { parts: DiffPart[]; tone: 'raw' | 'corrected
   );
 }
 
+/* The chat transcript's two files, in the Export popups' card style. */
+const CHAT_DOWNLOAD_FORMATS: ExportFormatOption<'pdf' | 'txt'>[] = [
+  { key: 'pdf', title: 'PDF Format', description: 'Print-ready document, easy to share or attach.', Icon: FileType2, iconWrap: 'bg-red-100', iconColor: 'text-red-600' },
+  { key: 'txt', title: 'Text Format (.txt)', description: 'Plain text that opens anywhere — Notepad, email, any editor.', Icon: ScrollText, iconWrap: 'bg-gray-100', iconColor: 'text-gray-600' },
+];
+
 export default function CandidateResultsView({ interview, onBack, tabInUrl = true, currentIndex, totalCount, onPrev, onNext, onNavigateToList, breadcrumbTrail, breadcrumbItems }: CandidateResultsViewProps) {
   // Measured height of the sticky breadcrumb, published as --crumb-h so a
   // second sticky layer (Question Analysis' All / Sections bar) pins just below
@@ -622,6 +631,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const [transcriptView, setTranscriptView] = useState<'chat' | 'table'>('chat');
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const [chatDownloadOpen, setChatDownloadOpen] = useState(false);
+  const [chatDownloadFormat, setChatDownloadFormat] = useState<'pdf' | 'txt'>('pdf');
+  const [chatDownloading, setChatDownloading] = useState(false);
   // Transcript table's Question / Raw Transcript columns: 4-word pills
   // (default) or full text, toggled together from the toolbar — same pill
   // as Resume Scoring's AI Reasoning.
@@ -1422,7 +1433,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     status: string;
     analysis_status: string | null;
     triggered_at: string | null;
+    // When the phone first opened the QR link (null = never scanned) and
+    // when the QR window closed/closes. Optional — older backends omit them.
+    opened_at?: string | null;
+    expires_at?: string | null;
     submitted_at: string | null;
+    video_duration_seconds?: number | null;
     video_uploaded: boolean;
     video_url: string | null;
     download_url: string | null;
@@ -1449,13 +1465,6 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   // blob fetch since a plain <video src> can't carry the Authorization
   // header that endpoint requires.
   const [envVideoBlobUrls, setEnvVideoBlobUrls] = useState<Record<string, string>>({});
-  // Rounded playback duration per verification_id, read directly from the
-  // browser's own <video>.duration once metadata loads. The native <video
-  // controls> time display FLOORS duration (a genuine ~10.0s recording can
-  // measure ~9.98s in its WebM container from ordinary encoder overhead,
-  // showing "0:09") — this shows the correctly ROUNDED whole-second value
-  // alongside it instead, without touching the actual recording/upload.
-  const [envVideoDurations, setEnvVideoDurations] = useState<Record<string, number>>({});
   // One <video> element ref per verification card, keyed by verification_id —
   // lets a flagged item's timestamp jump straight to that point in THIS clip
   // (as opposed to the header's jump-to-recording link, which seeks the main
@@ -1464,8 +1473,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
   const envVideoRefs = useRef<Record<string, HTMLVideoElement | null>>({});
   const envVideoBlobRequestedRef = useRef<Set<string>>(new Set());
 
+  // Per-verification "Retry analysis" in-flight flag + last error message.
+  const [envReanalyzing, setEnvReanalyzing] = useState<Record<string, boolean>>({});
+  const [envReanalyzeError, setEnvReanalyzeError] = useState<Record<string, string>>({});
+
+  // Initial load — runs once per interview on mount (not only when the tab
+  // is opened) so the tab badge can show the count and turn red for a
+  // flagged result before the recruiter even clicks into the tab.
   useEffect(() => {
-    if (activeTab !== 'verification' || envVerifications !== null) return;
+    if (envVerifications !== null) return;
     let cancelled = false;
     setEnvVerificationsLoading(true);
     console.info(`[ENV-VERIFY] Fetching verification for interview=${liveSession.id}`);
@@ -1483,7 +1499,69 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       })
       .finally(() => { if (!cancelled) setEnvVerificationsLoading(false); });
     return () => { cancelled = true; };
-  }, [activeTab, liveSession.id, envVerifications]);
+  }, [liveSession.id, envVerifications]);
+
+  // Auto-refresh while anything is still in flight — analysis queued/running,
+  // or the QR still waiting on the phone (pending/opened). Silent re-fetch
+  // (no skeleton) every 5s; stops by itself once every attempt is final.
+  // Frames for an attempt whose analysis_status changed are dropped so the
+  // frames effect below re-fetches them (they only exist once analysis ends).
+  const envHasInFlight = useMemo(
+    () => (envVerifications ?? []).some(v =>
+      v.analysis_status === 'pending' || v.analysis_status === 'running'
+      // pending/opened only count while the interview is live — after it
+      // ends, a row stuck there is final (candidate never finished), and
+      // polling it would never stop.
+      || (isInProgress && (v.status === 'pending' || v.status === 'opened'))
+    ),
+    [envVerifications, isInProgress],
+  );
+  useEffect(() => {
+    if (!envHasInFlight) return;
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      api.get(`/ai-interview/${liveSession.id}/environment-verifications`)
+        .then(res => {
+          if (cancelled) return;
+          const list: EnvVerificationRecord[] = Array.isArray(res?.data?.verifications) ? res.data.verifications : [];
+          setEnvVerifications(prev => {
+            const prevById = new Map((prev ?? []).map(p => [p.verification_id, p]));
+            const changed = list
+              .filter(n => prevById.get(n.verification_id)?.analysis_status !== n.analysis_status)
+              .map(n => n.verification_id);
+            if (changed.length > 0) {
+              const drop = <T,>(rec: Record<string, T>) => {
+                const next = { ...rec };
+                changed.forEach(id => { delete next[id]; });
+                return next;
+              };
+              setEnvFrames(drop);
+              setEnvFramesError(drop);
+              setEnvFramesLoading(drop);
+            }
+            return list;
+          });
+        })
+        .catch(() => { /* keep showing last good data; next tick retries */ });
+    }, 5000);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [envHasInFlight, envVerifications, liveSession.id]);
+
+  const retryEnvAnalysis = (verificationId: string) => {
+    setEnvReanalyzing(prev => ({ ...prev, [verificationId]: true }));
+    setEnvReanalyzeError(prev => { const n = { ...prev }; delete n[verificationId]; return n; });
+    api.post(`/ai-interview/environment-verification/${verificationId}/reanalyze`)
+      .then(() => {
+        setEnvVerifications(prev => (prev ?? []).map(v =>
+          v.verification_id === verificationId ? { ...v, analysis_status: 'pending' } : v
+        ));
+      })
+      .catch((err) => {
+        const msg = err?.response?.data?.detail;
+        setEnvReanalyzeError(prev => ({ ...prev, [verificationId]: typeof msg === 'string' ? msg : 'Could not restart analysis. Please try again.' }));
+      })
+      .finally(() => setEnvReanalyzing(prev => ({ ...prev, [verificationId]: false })));
+  };
 
   // Verification Frames tab — the ~20 individual frames the vision LLM
   // actually analyzed, one fetch per verification record (frames are
@@ -1773,7 +1851,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     { key: 'recording',        label: 'Recording',        icon: <Video className="w-4 h-4" /> },
     { key: 'transcript',       label: 'Transcript',       icon: <FileText className="w-4 h-4" /> },
     { key: 'violations',       label: 'Violations',  icon: <ShieldAlert className="w-4 h-4" />, badge: (violationSummary.serious > 0 ? violationSummary.serious : violationSummary.counted) || undefined, badgeTone: violationSummary.serious > 0 ? 'critical' : 'neutral' },
-    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: 'neutral' },
+    { key: 'verification',     label: 'QR Verification',  icon: <ScanQrCode className="w-4 h-4" />, badge: (envVerifications?.length || undefined), badgeTone: (envVerifications ?? []).some(v => v.result_severity === 'flagged' || v.id_match === false) ? 'critical' : 'neutral' },
   ];
 
   const renderPlaceholder = (message: string) => (
@@ -1800,7 +1878,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       <div className="w-16 h-16 rounded-full bg-brand-blue/5 ring-1 ring-brand-blue/10 flex items-center justify-center mx-auto mb-6">
         <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
       </div>
-      <h3 className="text-base font-semibold text-gray-900 mb-1 tracking-tight">Generating Evaluation Results</h3>
+      <h3 className="tf-section-title mb-1 tracking-tight">Generating Evaluation Results</h3>
       <p className="tf-body-muted max-w-xs text-center">
         Please wait while the AI analyzes responses and verifies the results.
         The page will refresh automatically when ready.
@@ -1854,7 +1932,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
       )}
       {(evalElapsedSec >= 180 || !!evalTriggerError) && (
         <div className="mt-6 flex flex-col items-center gap-2">
-          <p className="text-xs text-gray-400 text-center max-w-xs">
+          <p className="tf-hint text-center max-w-xs">
             {evalTriggerError
               ? 'You can retry the evaluation — it re-scores from the saved transcript.'
               : 'Taking longer than usual. You can retry the evaluation — it re-scores from the saved transcript.'}
@@ -2060,10 +2138,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
     // div did the real scrolling — the breadcrumb visibly scrolled away.
     // `clip` doesn't establish a scroll container at all, so sticky resolves
     // against the app's one real scroller, same as the working list pages.
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
         <div
-          className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl"
+          className="tf-page-sheet min-h-[calc(100dvh-7rem)]"
           style={breadcrumbHeight ? ({ '--crumb-h': `${breadcrumbHeight}px` } as React.CSSProperties) : undefined}
         >
           {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with
@@ -2518,7 +2596,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               wrapping onto further rows; alert tabs flip to solid red when
               active). Desktop (lg+): a sticky vertical rail on the left with the
               content on the right. top-12 clears the sticky breadcrumb. */}
-          <div className="lg:sticky lg:top-12 lg:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="lg:sticky lg:top-12 lg:self-start tf-card-soft">
             <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
               <div className="flex flex-wrap items-center gap-2 lg:flex-col lg:flex-nowrap lg:items-stretch lg:gap-1.5">
                 {tabs.map(tab => {
@@ -2549,7 +2627,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4">{tab.icon}</span>
                       <span className="leading-snug lg:min-w-0 lg:flex-1">{tab.label}</span>
                       {tab.live && (
-                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ring-1 ring-destructive-line">
+                        <span className="tf-badge flex bg-destructive text-white text-2xs ring-1 ring-destructive-line">
                           <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                           LIVE
                         </span>
@@ -2596,7 +2674,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
             box instead of stretching the grid column. p-4 below sm: the
             standard card inset — p-6 stacked on the cards inside each tab. */}
-        <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+        <div className="min-w-0 tf-card-soft">
           <div className="p-4 sm:p-6">
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval
                 runs, except View JD, which does not depend on the evaluation. */}
@@ -2738,7 +2816,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {sentimentTimeline.length > 0 ? (
                     <>
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Sentiment Timeline</h3>
+                        <h3 className="tf-row-title mb-3 tracking-tight">Sentiment Timeline</h3>
                         <div className="bg-brand-blue/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 p-4" style={{ height: 300 }}>
                           <ResponsiveContainer width="100%" height="100%">
                             <LineChart data={sentimentTimeline} margin={{ left: 0, right: 20, top: 5, bottom: 5 }}>
@@ -2757,12 +2835,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                       {/* Emotion per turn */}
                       <div>
-                        <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Emotion per Turn</h3>
+                        <h3 className="tf-row-title mb-3 tracking-tight">Emotion per Turn</h3>
                         <div className="flex flex-wrap gap-2">
                           {sentimentTimeline.map((t, i) => (
-                            <div key={i} className="px-3 py-2 bg-white rounded-lg border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 text-center">
-                              <div className="text-2xs text-gray-400 mb-0.5">{t.turn}</div>
-                              <div className="text-xs font-medium text-gray-700 capitalize">
+                            <div key={i} className="tf-card-soft px-3 py-2 text-center">
+                              <div className="tf-micro-hint mb-0.5">{t.turn}</div>
+                              <div className="tf-caption capitalize">
                                 {t.dominant_emotion || 'neutral'}
                               </div>
                             </div>
@@ -2773,28 +2851,28 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       {/* Summary stats */}
                       {sentimentSummary.total_turns_analyzed != null && (
                         <div>
-                          <h3 className="text-sm font-semibold text-gray-900 mb-3 tracking-tight">Summary Statistics</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                          <h3 className="tf-row-title mb-3 tracking-tight">Summary Statistics</h3>
+                          <div className="tf-grid-stats">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-success">
                                 {(sentimentSummary.avg_confidence || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Confidence</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-destructive">
                                 {(sentimentSummary.avg_nervousness || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Nervousness</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
+                            <div className="tf-card-soft p-3 text-center">
                               <div className="text-lg font-semibold text-brand-blue">
                                 {(sentimentSummary.avg_engagement || 0).toFixed(1)}
                               </div>
                               <div className="tf-meta">Avg Engagement</div>
                             </div>
-                            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 text-center">
-                              <div className="text-lg font-semibold text-gray-900">
+                            <div className="tf-card-soft p-3 text-center">
+                              <div className="tf-section-title">
                                 {sentimentSummary.total_turns_analyzed}
                               </div>
                               <div className="tf-meta">Turns Analyzed</div>
@@ -2988,7 +3066,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   const html2pdf = (await import('html2pdf.js')).default;
                   const root = document.createElement('div');
                   root.style.cssText = 'padding:24px;font-family:Arial,sans-serif;color:var(--raw-111111);max-width:720px;';
-                  let inner = `<h1 style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
+                  let inner = `<h1 className="tf-page-title" style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
                     <div style="font-size:12px;color:var(--raw-666666);margin-bottom:16px">${candidateNameLabel} · ${groups.length} questions</div>`;
                   groups.forEach((g: any, i: number) => {
                     const it = g.main;
@@ -3214,11 +3292,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             <span className={`flex-shrink-0 text-2xs font-semibold rounded px-1.5 py-0.5 mt-0.5 ${badgeCls}`}>{badge}</span>
                             <div className="flex-1 min-w-0">
                               {fuSkipped && (
-                                <span className="inline-block px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full mb-1">
+                                <span className="tf-badge inline-block bg-slate-100 text-slate-500 ring-1 ring-slate-200 mb-1">
                                   Skipped{fu.skip_source === 'user' ? ' by candidate' : ''}
                                 </span>
                               )}
-                              <p className="text-sm font-medium text-gray-800 leading-snug">{fu.question}</p>
+                              <p className="tf-label leading-snug">{fu.question}</p>
                               {renderAnswer(fu, `${parentKey}-f-${fIdx}`)}
                             </div>
                           </div>
@@ -3240,7 +3318,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               CL{cl.clarification_number ?? cIdx + 1}
                             </span>
                             <div className="flex-1 min-w-0">
-                              <p className="text-sm font-medium text-gray-800 leading-snug">{cl.question}</p>
+                              <p className="tf-label leading-snug">{cl.question}</p>
                               {renderAnswer({ answer: cl.answer, response_type: 'answered' }, clKey)}
                             </div>
                           </div>
@@ -3319,16 +3397,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 </span>
                               )}
                               {isSkipped && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                <span className="tf-badge bg-slate-100 text-slate-500 ring-1 ring-slate-200">
                                   {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-900 leading-snug mb-2">{item.question}</p>
+                            <p className="tf-row-name leading-snug mb-2">{item.question}</p>
                             {skillsForQ.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
                                 {skillsForQ.map((s, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-slate-100 text-slate-700 ring-1 ring-slate-200">
+                                  <span key={i} className="tf-badge bg-slate-100 text-slate-700 ring-1 ring-slate-200">
                                     {s.skill}
                                     {s.priority > 0 && (
                                       <span className="text-2xs text-slate-500">(P{s.priority})</span>
@@ -3342,7 +3420,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                             {!isSkipped && (
                               <div className="text-right">
                                 <div className={`text-2xl font-bold ${finalScoreColor}`}>{formatScore1(finalScore)}</div>
-                                <div className="text-2xs text-gray-500 uppercase tracking-wider">Final Score</div>
+                                <div className="tf-micro-hint uppercase tracking-wider">Final Score</div>
                               </div>
                             )}
                             {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 mt-1" /> : <ChevronDown className="w-5 h-5 text-gray-400 mt-1" />}
@@ -3355,7 +3433,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {/* Candidate Answer */}
                           <div className="pt-4">
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
@@ -3377,7 +3455,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {/* Skill Scoring Breakdown */}
                           {skillsForQ.length > 0 && !isSkipped && (
                             <div>
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
+                              <div className="tf-caption uppercase tracking-wider mb-2">Skill Scoring Breakdown</div>
                               <div className="space-y-2">
                                 {skillsForQ.map((s, i) => {
                                   const w = priorityWeight(s.priority);
@@ -3387,7 +3465,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     <div key={i} className="bg-slate-50 rounded-lg p-3">
                                       <div className="flex flex-wrap items-center justify-between gap-y-1 mb-1.5">
                                         <div className="flex items-center gap-1.5 min-w-0">
-                                          <span className="text-sm font-medium text-gray-900 truncate">{s.skill}</span>
+                                          <span className="tf-row-name truncate">{s.skill}</span>
                                           {s.priority > 0 && (
                                             <span className="text-2xs text-slate-500 bg-white px-1.5 py-0.5 rounded ring-1 ring-slate-200 flex-shrink-0">P{s.priority}</span>
                                           )}
@@ -3412,7 +3490,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           {skillsForQ.length > 0 && !isSkipped && totalW > 0 && (
                             <div className="bg-brand-blue/5 ring-1 ring-dashed ring-brand-blue/30 rounded-lg p-3">
                               <div className="text-xs font-semibold text-brand-blue mb-1.5">Weighted Calculation Formula</div>
-                              <div className="font-mono text-xs text-gray-700 space-y-0.5 break-words">
+                              <div className="font-mono tf-meta space-y-0.5 break-words">
                                 <div>Question Score = Σ(Skill Score × Weight) / ΣWeights</div>
                                 <div>= ({skillsForQ.map(s => `${formatScore1(s.score)}×${priorityWeight(s.priority)}`).join(' + ')}) / {totalW} = {formatScore1(finalScore)}</div>
                               </div>
@@ -3449,7 +3527,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   const duration = item.duration_seconds;
 
                   return (
-                    <div key={cardKey} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+                    <div key={cardKey} className="tf-card-soft">
                       <button
                         onClick={() => toggleQuestion(cardKey)}
                         className="w-full text-left p-4 hover:bg-gray-50/50 rounded-xl transition-colors"
@@ -3477,16 +3555,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 const t = String(item.topic || '').trim();
                                 const label = HR_TOPICS.has(t.toLowerCase()) ? t : 'HR';
                                 return (
-                                  <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-xs rounded-full">{label}</span>
+                                  <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{label}</span>
                                 );
                               })()}
                               {isSkipped && (
-                                <span className="px-2 py-0.5 bg-slate-100 text-slate-500 ring-1 ring-slate-200 text-xs rounded-full">
+                                <span className="tf-badge bg-slate-100 text-slate-500 ring-1 ring-slate-200">
                                   {isNotAsked ? 'Not Asked' : `Skipped${item.skip_source === 'user' ? ' by candidate' : ''}`}
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm font-medium text-gray-900 leading-snug">{item.question}</p>
+                            <p className="tf-row-name leading-snug">{item.question}</p>
                           </div>
                           <div className="flex-shrink-0">
                             {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400" /> : <ChevronDown className="w-5 h-5 text-gray-400" />}
@@ -3497,7 +3575,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <div className="px-4 pb-4 border-t border-gray-100 pt-4 space-y-3">
                           <div>
                             <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                              <div className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Candidate Answer</div>
+                              <div className="tf-caption uppercase tracking-wider">Candidate Answer</div>
                               {item.response_type !== 'not_asked' && watchQuestion(item.question, item.timestamp)}
                             </div>
                             <div className={`text-sm leading-relaxed ${isSkipped ? 'text-gray-400 italic' : 'text-gray-700'}`}>
@@ -3514,7 +3592,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                 const SectionHeader = ({ title, badge, badgeCls }: { title: string; badge: string; badgeCls: string }) => (
                   <div className="flex items-center gap-3 mb-3">
-                    <h3 className="tf-card-title">{title}</h3>
+                    <h3 className="tf-section-title">{title}</h3>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${badgeCls}`}>{badge}</span>
                   </div>
                 );
@@ -3531,7 +3609,11 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                       <Button
                         variant="primary"
                         size="sm"
-                        onClick={() => setQaExportMenuOpen(v => !v)}
+                        // Q&A export (PDF / DOCX) is a report download (2026-11-10).
+                        onClick={() => { if (canDownloadReports) setQaExportMenuOpen(v => !v); }}
+                        aria-disabled={!canDownloadReports}
+                        title={canDownloadReports ? undefined : "You can view this interview, but your role can't download reports"}
+                        className={!canDownloadReports ? 'opacity-50 cursor-not-allowed' : undefined}
                       >
                         <Download className="w-3.5 h-3.5" />
                         Export
@@ -3628,7 +3710,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
               envVerificationsLoading && envVerifications === null ? (
                 <div className="space-y-4">
                   {Array.from({ length: 2 }).map((_, i) => (
-                    <div key={i} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                    <div key={i} className="tf-card-soft overflow-hidden">
                       <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
                         <div className="flex items-center gap-2">
                           <Skeleton className="w-4 h-4 rounded" />
@@ -3654,416 +3736,37 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     ? 'Could not load QR verification data — please refresh and try again.'
                     : liveSession.environment_verification_enabled
                     ? 'No QR verification was triggered during this interview.'
-                    : 'Mobile Environment Verification was not enabled for this interview.'
+                    : 'QR Verification was not enabled for this interview.'
                 )
               ) : (
                 <div className="space-y-4">
-                  {envVerifications.map((v) => {
+                  {envVerifications.map((v, attemptIdx) => {
                     const videoSrc = v.video_url || envVideoBlobUrls[v.verification_id] || null;
                     const videoStillLoading = v.video_uploaded && !videoSrc && !envVideoBlobUrls[v.verification_id] && !v.video_url;
-                    const envFramesForVerification = envFrames[v.verification_id];
-                    const envAvailableFrames = envFramesForVerification ? envFramesForVerification.filter(f => f.url) : [];
-                    const openAllFramesViewer = () => {
-                      if (envAvailableFrames.length === 0) return;
-                      setEnvFrameViewer({ urls: envAvailableFrames.map(f => f.url as string), index: 0 });
-                    };
                     return (
-                      <div key={v.verification_id} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
-                        <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <ShieldAlert className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                            <span className="tf-cell-name">Environment Verification</span>
-                            <button
-                              type="button"
-                              disabled={envAvailableFrames.length === 0}
-                              onClick={openAllFramesViewer}
-                              title={envAvailableFrames.length > 0 ? `View ${envAvailableFrames.length} analyzed frames` : 'No stored frames for this attempt'}
-                              className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:underline underline-offset-2 disabled:text-gray-300 disabled:no-underline disabled:cursor-not-allowed"
-                            >
-                              <Camera className="w-3.5 h-3.5" />
-                              Analyzed Frames{envAvailableFrames.length > 0 ? ` (${envAvailableFrames.length})` : ''}
-                            </button>
-                            {(v.submitted_at || v.triggered_at) && (
-                              <span className="text-2xs text-gray-400 font-mono">{formatTs(v.submitted_at || v.triggered_at || undefined)}</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            {v.color_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.color_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                Color {v.color_match ? 'matched' : 'mismatch'}
-                              </span>
-                            )}
-                            {v.id_match !== null && (
-                              <span className={`text-2xs font-medium px-2 py-0.5 rounded-full ring-1 ${v.id_match ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
-                                ID {v.id_match ? 'matched' : 'mismatch'}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="p-4 sm:p-5 space-y-4">
-                          <div>
-                            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">Candidate Verification Video</p>
-                            {!v.video_uploaded ? (
-                              <p className="text-sm text-destructive italic">Video upload failed.</p>
-                            ) : videoStillLoading ? (
-                              <p className="text-sm text-gray-400 italic">Loading video…</p>
-                            ) : !videoSrc ? (
-                              <p className="text-sm text-destructive italic">Video unavailable.</p>
-                            ) : (
-                              <>
-                                <video
-                                  ref={(el) => { envVideoRefs.current[v.verification_id] = el; }}
-                                  controls
-                                  preload="metadata"
-                                  className="w-full max-w-lg rounded-lg bg-black"
-                                  onLoadedMetadata={(e) => {
-                                    const d = e.currentTarget.duration;
-                                    if (Number.isFinite(d) && d > 0) {
-                                      setEnvVideoDurations(prev => ({ ...prev, [v.verification_id]: Math.round(d) }));
-                                    }
-                                  }}
-                                >
-                                  <source src={videoSrc} type={v.video_mime_type || 'video/webm'} />
-                                </video>
-                                <p className="text-xs text-success font-medium mt-1.5">
-                                  Status: {v.status === 'completed' ? 'Uploaded' : v.status === 'submitted' ? 'Uploaded' : v.status}
-                                  {envVideoDurations[v.verification_id] ? ` · ${envVideoDurations[v.verification_id]}s` : ''}
-                                  {v.analysis_status === 'pending' || v.analysis_status === 'running' ? ' · Analysis pending' : ''}
-                                </p>
-                                {v.download_url && (
-                                  <a
-                                    href={v.download_url}
-                                    download
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 mt-1.5 text-xs font-medium text-brand-blue hover:underline underline-offset-2"
-                                  >
-                                    <Download className="w-3.5 h-3.5" /> Download verification video
-                                  </a>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          {v.rgb_sequence_results && v.rgb_sequence_results.length > 0 && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1.5">
-                                RGB Challenge Sequence — deterministic per-second check
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                {v.rgb_sequence_results.map((r) => (
-                                  <div
-                                    key={r.second}
-                                    className={`flex items-center gap-1.5 pl-1 pr-2 py-1 rounded-lg ring-1 text-xs font-medium ${r.match ? 'bg-success-subtle ring-success-line text-success' : 'bg-destructive-subtle ring-destructive-line text-destructive'}`}
-                                    title={r.detected_rgb ? `Expected ${r.expected_rgb}, detected ${r.detected_rgb} (distance ${r.distance ?? '—'})` : `Expected ${r.expected_rgb} — no frame detected`}
-                                  >
-                                    <span
-                                      className="w-4 h-4 rounded ring-1 ring-black/10 flex-shrink-0"
-                                      style={{ backgroundColor: r.expected_rgb }}
-                                    />
-                                    Sec {r.second}: {r.match ? 'MATCH' : 'MISMATCH'}
-                                  </div>
-                                ))}
-                              </div>
-                              <p className="text-2xs text-gray-400 mt-1.5">
-                                Overall RGB_CHALLENGE = {v.rgb_sequence_results.every(r => r.match) ? 'PASS' : 'REVIEW_REQUIRED'}
-                              </p>
-                            </div>
-                          )}
-                          {/* AI Analysis status banner — the explicit "did the LLM find anything"
-                              verdict (result_severity), separate from the color/ID anti-replay
-                              check above. Matches the spec's "LLM compares frames... records a
-                              violation with a summary... added to the interview report." */}
-                          {v.analysis_status === 'pending' || v.analysis_status === 'running' ? (
-                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2 flex items-center gap-2">
-                              <span className="w-2 h-2 rounded-full bg-gray-400 animate-pulse flex-shrink-0" />
-                              <p className="tf-meta-strong">AI analysis in progress — frames are being extracted and reviewed. This updates automatically once complete.</p>
-                            </div>
-                          ) : v.analysis_status === 'error' ? (
-                            <div className="rounded-lg bg-gray-50 ring-1 ring-gray-200 px-3 py-2">
-                              <p className="tf-meta-strong">AI analysis could not be completed for this recording — the video itself is still available above.</p>
-                            </div>
-                          ) : v.analysis_status === 'done' ? (
-                            <div className={`rounded-lg px-3 py-2 ring-1 ${v.result_severity === 'flagged' ? 'bg-destructive-subtle ring-destructive-line' : 'bg-success-subtle ring-success-line'}`}>
-                              <p className={`text-xs font-semibold ${v.result_severity === 'flagged' ? 'text-destructive' : 'text-success'}`}>
-                                {v.result_severity === 'flagged' ? '⚠ Suspicious activity detected' : '✓ No suspicious activity detected'}
-                              </p>
-                            </div>
-                          ) : null}
-                          {v.ai_summary && (
-                            <div>
-                              <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">AI Summary</p>
-                              <p className="tf-body leading-relaxed">{v.ai_summary}</p>
-                            </div>
-                          )}
-                          {((v.flagged_items && v.flagged_items.length > 0) || (v.voice_activity_offsets_ms && v.voice_activity_offsets_ms.length > 0)) && (() => {
-                            // Voice-activity offsets are a deterministic client-side VAD signal
-                            // (energy + zero-crossing-rate, not vision-LLM judged). The backend now
-                            // writes these into the row's own `flagged_items` (and factors them into
-                            // result_severity) at analysis time — see
-                            // `_voice_activity_to_flagged_items` in environment_verification_tasks.py.
-                            // This client-side synthesis is now only a FALLBACK for verifications
-                            // analyzed before that backend change shipped (their stored flagged_items
-                            // has no voice entries even though voice_activity_offsets_ms is present) —
-                            // skip it whenever the backend has already included a voice entry, to avoid
-                            // rendering the same detected speech as two separate rows.
-                            const backendAlreadyHasVoiceItems = (v.flagged_items || []).some(
-                              (it) => typeof it?.label === 'string' && it.label.toLowerCase().includes('voice')
-                            );
-                            const voiceItems = backendAlreadyHasVoiceItems ? [] : (v.voice_activity_offsets_ms || []).map((ms) => ({
-                              label: 'Voice/speech detected',
-                              confidence: 'medium',
-                              location: null,
-                              approx_timestamp: `~${(ms / 1000).toFixed(1)}s`,
-                              phase: ms < 5000 ? 'display' : 'pan',
-                              reason: null,
-                            }));
-                            const items = [...(v.flagged_items || []), ...voiceItems];
-                            // Parse the first number out of approx_timestamp (e.g. "~6.2s-8.1s",
-                            // "frame 12 only") — same regex approach as the backend's own
-                            // phase-derivation fallback — to make it clickable.
-                            const parseApproxSeconds = (ts: string | null): number | null => {
-                              if (!ts) return null;
-                              const match = ts.match(/(\d+(?:\.\d+)?)/);
-                              return match ? parseFloat(match[1]) : null;
-                            };
-                            const seekEnvVideo = (seconds: number) => {
-                              const el = envVideoRefs.current[v.verification_id];
-                              if (el) {
-                                el.currentTime = seconds;
-                                el.play().catch(() => { /* autoplay may be blocked; seek still applies */ });
-                              }
-                            };
-                            // Parse BOTH numbers out of a range like "~6.2s-8.1s" (start+end); a
-                            // single-point timestamp like "frame 12 only" or "~2.0s" yields the
-                            // same number twice, widened below by _FRAME_MATCH_PAD.
-                            const parseApproxRange = (ts: string | null): [number, number] | null => {
-                              if (!ts) return null;
-                              const nums = ts.match(/\d+(?:\.\d+)?/g);
-                              if (!nums || nums.length === 0) return null;
-                              const a = parseFloat(nums[0]);
-                              const b = nums.length > 1 ? parseFloat(nums[1]) : a;
-                              return [Math.min(a, b), Math.max(a, b)];
-                            };
-                            const _FRAME_MATCH_PAD = 0.4; // seconds — frames are ~0.5s apart at 2fps
-                            // Which stored frames (2fps, index*0.5s ≈ that frame's timestamp) fall
-                            // inside this flagged item's approx_timestamp range — lets a recruiter
-                            // click straight to the exact evidence frame(s) instead of just seeking
-                            // the video and hunting for it themselves.
-                            const framesForRange = (range: [number, number] | null) => {
-                              const frames = envFrames[v.verification_id];
-                              if (!frames || frames.length === 0 || !range) return [];
-                              const [start, end] = range;
-                              const inRange = frames.filter(f => {
-                                const t = f.index * 0.5;
-                                return t >= start - _FRAME_MATCH_PAD && t <= end + _FRAME_MATCH_PAD;
-                              });
-                              return inRange.length > 0 ? inRange : frames.filter(f => Math.abs(f.index * 0.5 - start) < 0.5);
-                            };
-                            const openFrameViewer = (frames: EnvFrame[], startIndex: number) => {
-                              const urls = frames.filter(f => f.url).map(f => f.url as string);
-                              if (urls.length === 0) return;
-                              setEnvFrameViewer({ urls, index: Math.min(startIndex, urls.length - 1) });
-                            };
-                            // Legacy rows analyzed before the 2-column merge may still carry
-                            // "pan_left_to_right"/"pan_right_to_left" — both fold into "pan" here.
-                            const normalizedPhase = (item: Record<string, unknown>): string => {
-                              const p = String(item.phase ?? '');
-                              return p === 'pan_left_to_right' || p === 'pan_right_to_left' ? 'pan' : p;
-                            };
-                            const segmentLabel = (phase: string) =>
-                              phase === 'display' ? 'Display' : phase === 'pan' ? 'Pan' : '—';
-                            const iconForLabel = (label: string) => {
-                              const l = label.toLowerCase();
-                              if (l.includes('voice') || l.includes('speech')) return <Mic className="w-3.5 h-3.5" />;
-                              if (l.includes('person')) return <Users className="w-3.5 h-3.5" />;
-                              if (l.includes('phone') || l.includes('tablet')) return <Smartphone className="w-3.5 h-3.5" />;
-                              if (l.includes('laptop') || l.includes('monitor') || l.includes('screen') || l.includes('display')) return <Monitor className="w-3.5 h-3.5" />;
-                              return <AlertTriangle className="w-3.5 h-3.5" />;
-                            };
-                            const severityForConfidence = (confidence: string) => {
-                              if (confidence === 'high') return { label: 'Serious', cls: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' };
-                              if (confidence === 'medium') return { label: 'Moderate', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
-                              return { label: 'Minor', cls: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
-                            };
-                            const rows = items.map((item, i) => {
-                              const label = String(item.label ?? 'Unknown');
-                              const confidence = typeof item.confidence === 'string' ? item.confidence : 'low';
-                              const location = typeof item.location === 'string' ? item.location : null;
-                              const approxTimestamp = typeof item.approx_timestamp === 'string' ? item.approx_timestamp : null;
-                              const phase = normalizedPhase(item);
-                              const seekSeconds = parseApproxSeconds(approxTimestamp);
-                              // Best-effort absolute wall-clock moment: this verification's own
-                              // trigger/submit time + the parsed offset into the 10s clip — same
-                              // "offset + absolute clock underneath" convention used everywhere
-                              // else in this file (Integrity Check, Question Analysis, the card
-                              // header above).
-                              const baseTs = v.submitted_at || v.triggered_at || '';
-                              const absoluteTs = baseTs && seekSeconds != null
-                                ? new Date(new Date(baseTs).getTime() + seekSeconds * 1000).toISOString()
-                                : null;
-                              const phaseDescription = phase === 'display'
-                                ? 'during the display phase (first 5s)'
-                                : phase === 'pan'
-                                ? 'during the panning phase (5s-10s)'
-                                : '';
-                              // Prefer the AI's own per-item reason (added so each violation
-                              // carries its own specific explanation, not just the one shared
-                              // overall ai_summary) — fall back to a synthesized sentence for
-                              // records analyzed before this field existed, or for the
-                              // synthetic voice/corner-check entries that don't set it.
-                              const reason = typeof item.reason === 'string' && item.reason.trim()
-                                ? item.reason.trim()
-                                : null;
-                              const description = reason
-                                ?? `Detected${location ? ` in the ${location}` : ''}${phaseDescription ? ` ${phaseDescription}` : ''}.`;
-                              const severity = severityForConfidence(confidence);
-                              const matchedFrames = framesForRange(parseApproxRange(approxTimestamp));
-                              return { item, i, label, confidence, location, approxTimestamp, phase, seekSeconds, absoluteTs, description, severity, matchedFrames };
-                            });
-                            return (
-                              <div>
-                                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Flagged Items</p>
-                                <div className="overflow-x-auto rounded-lg ring-1 ring-gray-100">
-                                  <table className="min-w-full text-left">
-                                    <thead>
-                                      <tr className="bg-white border-b border-gray-100">
-                                        <th className="px-3 py-2 tf-th">What happened</th>
-                                        <th className="px-3 py-2 tf-th">What we saw</th>
-                                        <th className="px-3 py-2 tf-th">Segment</th>
-                                        <th className="px-3 py-2 tf-th">When</th>
-                                        <th className="px-3 py-2 tf-th">Frame</th>
-                                        <th className="px-3 py-2 tf-th">Severity</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                      {rows.map((r) => (
-                                        <tr key={r.i} className="align-top">
-                                          <td className="px-3 py-2.5">
-                                            <div className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line/60">
-                                              {iconForLabel(r.label)}
-                                              {r.label}
-                                            </div>
-                                            <div className="mt-1">
-                                              {r.confidence === 'high' ? (
-                                                <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
-                                              ) : (
-                                                <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
-                                              )}
-                                            </div>
-                                          </td>
-                                          <td className="px-3 py-2.5 text-xs text-gray-500 max-w-[34ch] whitespace-normal break-words">
-                                            {r.description}
-                                          </td>
-                                          <td className="px-3 py-2.5 text-xs text-gray-600">{segmentLabel(r.phase)}</td>
-                                          <td className="px-3 py-2.5">
-                                            {r.seekSeconds != null ? (
-                                              <button
-                                                type="button"
-                                                onClick={() => seekEnvVideo(r.seekSeconds as number)}
-                                                title="Jump to this moment in the verification video"
-                                                className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-xs font-mono"
-                                              >
-                                                <Play className="w-3 h-3" />{r.approxTimestamp}
-                                              </button>
-                                            ) : (
-                                              <span className="text-xs font-mono text-gray-400">{r.approxTimestamp ?? '—'}</span>
-                                            )}
-                                            {r.absoluteTs && (
-                                              <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatTs(r.absoluteTs)}</div>
-                                            )}
-                                          </td>
-                                          <td className="px-3 py-2.5">
-                                            {r.matchedFrames.length > 0 ? (
-                                              <button
-                                                type="button"
-                                                onClick={() => openFrameViewer(r.matchedFrames, 0)}
-                                                title={`View ${r.matchedFrames.length} matching frame${r.matchedFrames.length > 1 ? 's' : ''}`}
-                                                className="relative w-14 h-9 rounded overflow-hidden ring-1 ring-gray-200 bg-gray-100 group flex-shrink-0"
-                                              >
-                                                {r.matchedFrames[0].url ? (
-                                                  <img src={r.matchedFrames[0].url} alt="" className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                                ) : (
-                                                  <span className="absolute inset-0 flex items-center justify-center text-2xs text-gray-400">N/A</span>
-                                                )}
-                                                {r.matchedFrames.length > 1 && (
-                                                  <span className="absolute bottom-0 right-0 text-2xs font-mono text-white bg-black/60 px-1">
-                                                    {r.matchedFrames.length}
-                                                  </span>
-                                                )}
-                                              </button>
-                                            ) : (
-                                              <span className="text-xs text-gray-300">—</span>
-                                            )}
-                                          </td>
-                                          <td className="px-3 py-2.5">
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${r.severity.cls}`}>
-                                              {r.severity.label}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              </div>
-                            );
-                          })()}
-                          {(() => {
-                            const frames = envFrames[v.verification_id];
-                            const loading = envFramesLoading[v.verification_id];
-                            const error = envFramesError[v.verification_id];
-                            if (!frames || frames.length === 0) {
-                              if (!loading && !error) return null;
-                            }
-                            return (
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <p className="text-xs font-medium text-gray-500 uppercase tracking-wide flex items-center gap-1.5">
-                                    <Camera className="w-3.5 h-3.5" /> Analyzed Frames
-                                  </p>
-                                  {frames && frames.length > 0 && (
-                                    <span className="tf-meta">{frames.length} frames</span>
-                                  )}
-                                </div>
-                                {loading || (!frames && !error) ? (
-                                  <p className="text-sm text-gray-400 italic">Loading frames…</p>
-                                ) : error ? (
-                                  <p className="text-sm text-destructive italic">Could not load frames.</p>
-                                ) : !frames || frames.length === 0 ? (
-                                  <p className="text-sm text-gray-400 italic">
-                                    No stored frames for this attempt (analyzed before this feature was added, or local-disk storage).
-                                  </p>
-                                ) : (
-                                  <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-                                    {frames.map((f) => (
-                                      <button
-                                        key={f.index}
-                                        type="button"
-                                        disabled={!f.url}
-                                        onClick={() => {
-                                          const available = frames.filter(fr => fr.url);
-                                          const startIndex = available.findIndex(fr => fr.index === f.index);
-                                          if (startIndex >= 0) setEnvFrameViewer({ urls: available.map(fr => fr.url as string), index: startIndex });
-                                        }}
-                                        className="relative aspect-video rounded-lg overflow-hidden bg-gray-100 ring-1 ring-gray-200 disabled:cursor-not-allowed group"
-                                      >
-                                        {f.url ? (
-                                          <img src={f.url} alt={`Frame ${f.index + 1}`} className="w-full h-full object-cover group-hover:opacity-80 transition-opacity" />
-                                        ) : (
-                                          <span className="absolute inset-0 flex items-center justify-center text-2xs text-gray-400">unavailable</span>
-                                        )}
-                                        <span className="absolute bottom-0.5 right-1 text-2xs font-mono text-white bg-black/50 px-1 rounded">
-                                          {f.index + 1}
-                                        </span>
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
+                      <EnvVerificationStudio
+                        key={v.verification_id}
+                        v={v}
+                        videoSrc={videoSrc}
+                        videoStillLoading={videoStillLoading}
+                        frames={envFrames[v.verification_id]}
+                        framesLoading={!!envFramesLoading[v.verification_id]}
+                        framesError={!!envFramesError[v.verification_id]}
+                        openViewer={(urls, index) => setEnvFrameViewer({ urls, index })}
+                        registerVideo={(el) => { envVideoRefs.current[v.verification_id] = el; }}
+                        formatTs={formatTs}
+                        isInProgress={isInProgress}
+                        attemptLabel={envVerifications.length > 1 ? `Attempt ${attemptIdx + 1}` : undefined}
+                        onRetryAnalysis={() => retryEnvAnalysis(v.verification_id)}
+                        reanalyzing={!!envReanalyzing[v.verification_id]}
+                        reanalyzeError={envReanalyzeError[v.verification_id]}
+                        watchInRecording={renderWatchInRecording(v.triggered_at)}
+                        interviewRef={{
+                          candidate: interview.candidate_name || liveSession.candidate_name || 'Candidate',
+                          role: (interview as any).job_title || (interview as any).role || interview.position || '',
+                          sessionId: liveSession.id,
+                        }}
+                      />
                     );
                   })}
                 </div>
@@ -4485,7 +4188,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs text-gray-400">{messages.length} messages</span>
+                        <span className="tf-hint">{messages.length} messages</span>
                         <div className="relative inline-grid grid-cols-2 bg-slate-100 rounded-lg p-0.5 ring-1 ring-slate-200">
                           <span
                             aria-hidden
@@ -4500,22 +4203,42 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => setChatDownloadOpen(true)}
-                            title="Download full chat transcript"
+                            // Chat transcript download is a report download (2026-11-10).
+                            onClick={() => { if (canDownloadReports) setChatDownloadOpen(true); }}
+                            aria-disabled={!canDownloadReports}
+                            title={canDownloadReports ? 'Download full chat transcript' : "You can view this interview, but your role can't download reports"}
+                            className={!canDownloadReports ? 'opacity-50 cursor-not-allowed' : undefined}
                           >
                             <Download className="w-3.5 h-3.5" />
-                            Download
+                            Chat Download
                           </Button>
                         )}
-                        <ExportFormatModal
-                          open={chatDownloadOpen}
-                          onClose={() => setChatDownloadOpen(false)}
-                          title="Download Chat Transcript"
-                          recordCount={labeled.length}
-                          formats={['pdf', 'txt']}
-                          defaultFormat="pdf"
-                          onExport={downloadChat}
-                        />
+                        {/* The AI Interview Results Export popup's look (white
+                            header, format cards), with no columns to pick. */}
+                        {chatDownloadOpen && (
+                          <ExportColumnsModal<'pdf' | 'txt'>
+                            title="Download Chat Transcript"
+                            recordCount={labeled.length}
+                            recordNoun={['message', 'messages']}
+                            formats={CHAT_DOWNLOAD_FORMATS}
+                            format={chatDownloadFormat}
+                            onFormatChange={setChatDownloadFormat}
+                            exporting={chatDownloading}
+                            onExport={async () => {
+                              setChatDownloading(true);
+                              try {
+                                await downloadChat(chatDownloadFormat);
+                                setChatDownloadOpen(false);
+                              } catch (error) {
+                                console.error('Chat download failed:', error);
+                                toast.error(`Failed to download the chat as ${chatDownloadFormat === 'pdf' ? 'PDF' : 'text'}`);
+                              } finally {
+                                setChatDownloading(false);
+                              }
+                            }}
+                            onClose={() => setChatDownloadOpen(false)}
+                          />
+                        )}
                       </div>
                     </div>
 
@@ -4578,8 +4301,10 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     {/* Original (raw ASR) — ALWAYS shown, even when the
                                         enhancer made no change, so the recruiter can always
                                         see exactly what the ASR engine produced. */}
-                                    <div className="px-3.5 py-2.5 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-100/60 text-sky-900">
-                                      <div className="text-2xs font-semibold text-sky-700 mb-1 uppercase tracking-wide">Original (ASR)</div>
+                                    <div className="px-4 py-3 rounded-2xl rounded-tr-sm text-sm leading-relaxed bg-sky-50 border border-sky-200 text-gray-800">
+                                      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-sky-700 uppercase tracking-wide">
+                                        <AudioLines className="w-4 h-4" /> Original (ASR)
+                                      </div>
                                       {hasCorrection && diff && diff.mode === 'word'
                                         ? <DiffText parts={diff.raw} tone="raw" />
                                         : <span>{rawContent || content}</span>}
@@ -4588,8 +4313,13 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                         raw ASR it simply repeats the same text (no correction).
                                         For a non-English discard there is no scorable English,
                                         so it shows a muted "not scored" marker instead of text. */}
-                                    <div className="mt-1.5 px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed bg-success-subtle/60 text-success-strong">
-                                      <div className="text-2xs font-semibold text-success mb-1 uppercase tracking-wide">Corrected</div>
+                                    <div className="mt-2 px-4 py-3 rounded-2xl text-sm leading-relaxed bg-success-subtle/70 border border-success-line text-gray-800">
+                                      <div className="flex items-center gap-1.5 mb-1.5 text-xs font-bold text-success uppercase tracking-wide">
+                                        <span className="grid place-items-center w-4 h-4 rounded-full bg-success text-white">
+                                          <Check className="w-2.5 h-2.5" strokeWidth={3.5} />
+                                        </span>
+                                        Corrected
+                                      </div>
                                       {noScorableEnglish
                                         ? <span className="italic text-gray-500">— no scorable English (not scored)</span>
                                         : hasCorrection && diff && diff.mode === 'word'
@@ -4904,21 +4634,21 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                           {/* Scrolls on its own (max 70vh) so the header row can
                               stay pinned to the top while the rows scroll. */}
-                          <div className="overflow-auto max-h-[70vh] rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white tf-table-shell">
+                          <div className={`overflow-auto max-h-[70vh] tf-card-soft tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                             <table className="w-full text-sm">
-                              <thead className="bg-white text-gray-600 text-xs">
+                              <thead className="bg-white tf-meta">
                                 <tr>
                                   {/* Every header cell sticks to the top. Question ID (left)
                                       and Timestamp (right) also stay pinned sideways, so
                                       they sit above the rest (z-30). The inset shadows
                                       draw the borders, which sticky cells don't keep. */}
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 whitespace-nowrap sticky top-0 left-0 z-30 bg-white shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-24 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold whitespace-nowrap sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
-                                  <th className="px-3 py-2.5 text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-white shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 left-0 z-30 bg-white shadow-[inset_-1px_-1px_0_#e5e7eb]">Question ID</th>
+                                  <th className="tf-th-cell text-left font-semibold w-24 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Type</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Question</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Raw Transcript</th>
+                                  <th className="tf-th-cell text-left font-semibold sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Corrected Transcript</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 z-20 bg-white shadow-[inset_0_-1px_0_#e5e7eb]">Language</th>
+                                  <th className="tf-th-cell text-left font-semibold w-20 sticky top-0 right-0 z-30 bg-white shadow-[inset_1px_-1px_0_#e5e7eb]">Timestamp</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-100">
@@ -4944,7 +4674,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                           {r.questionId}
                                         </span>
                                       </td>
-                                      <td className="px-3 py-3 align-top">
+                                      <td className="tf-td align-top">
                                         <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${
                                           isDd ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFu ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-slate-100 text-slate-600 ring-slate-200'
                                         }`}>
@@ -4971,7 +4701,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                             </TruncatedTextCell>
                                           )}
                                       </td>
-                                      <td className="px-3 py-3 align-top text-gray-800 leading-snug">
+                                      <td className="tf-td align-top text-gray-800 leading-snug">
                                         {diff && diff.mode === 'word'
                                           ? <DiffText parts={diff.corrected} tone="corrected" />
                                           : rowSkip
@@ -4980,17 +4710,78 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                               </span>
                                             : <span>{r.corrected || '—'}</span>}
                                       </td>
-                                      <td className="px-3 py-3 align-top text-xs text-gray-500">{r.language || 'English'}</td>
+                                      <td className="tf-td align-top tf-meta">{r.language || 'English'}</td>
                                       <td className={`px-3 py-3 align-top text-xs text-gray-500 whitespace-nowrap sticky right-0 z-10 ${stickyBg} shadow-[inset_1px_0_0_#e5e7eb]`}>{formatTs(r.timestamp)}</td>
                                     </tr>
                                   );
                                 })}
                                 {flatRows.length === 0 && (
-                                  <tr><td colSpan={7} className="px-4 py-6 text-center text-xs text-gray-400">No candidate responses recorded.</td></tr>
+                                  <tr><td colSpan={7} className="tf-td text-center tf-hint">No candidate responses recorded.</td></tr>
                                 )}
                               </tbody>
                             </table>
                           </div>
+                          <MobileRecordList empty={<p className="tf-td text-center tf-hint">No candidate responses recorded.</p>}>
+                            {flatRows.map((r, idx) => {
+                              const diff = r.raw && r.corrected ? diffWords(r.raw, r.corrected) : null;
+                              const isFu = r.type === 'Followup';
+                              const isDd = r.type === 'Deep Dive';
+                              const _rowAnswered = !!(r.raw?.trim() || r.corrected?.trim());
+                              const rowSkip = _skipReason(r.question, _rowAnswered);
+                              return (
+                                <MobileRecordCard
+                                  key={idx}
+                                  className={isDd ? 'bg-brand-teal/5' : isFu ? 'bg-brand-cyan/5' : undefined}
+                                  idBadge={
+                                    <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                                      {r.questionId}
+                                    </span>
+                                  }
+                                  badges={
+                                    <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${
+                                      isDd ? 'bg-brand-teal/10 text-brand-teal ring-brand-teal/20' : isFu ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20' : 'bg-slate-100 text-slate-600 ring-slate-200'
+                                    }`}>
+                                      {r.type}
+                                    </span>
+                                  }
+                                  wrapTitle
+                                  title={
+                                    <span className="block whitespace-normal text-sm font-normal italic text-gray-700 leading-snug">
+                                      <TruncatedTextCell text={r.question} expanded={transcriptExpanded} textClassName="italic" />
+                                    </span>
+                                  }
+                                  fields={[
+                                    {
+                                      label: 'Raw Transcript',
+                                      value: rowSkip && !(diff && diff.mode === 'word')
+                                        ? '—'
+                                        : (
+                                          <span className="text-brand-orange-deep">
+                                            <TruncatedTextCell text={r.raw} expanded={transcriptExpanded}>
+                                              {diff && diff.mode === 'word'
+                                                ? <DiffText parts={diff.raw} tone="raw" />
+                                                : <span className="text-gray-700">{r.raw || '—'}</span>}
+                                            </TruncatedTextCell>
+                                          </span>
+                                        ),
+                                    },
+                                    {
+                                      label: 'Corrected Transcript',
+                                      value: diff && diff.mode === 'word'
+                                        ? <DiffText parts={diff.corrected} tone="corrected" />
+                                        : rowSkip
+                                          ? <span className={`inline-flex items-center gap-1.5 text-2xs font-medium ${rowSkip.tone === 'amber' ? 'text-warning' : 'text-slate-500'}`}>
+                                              <SkipForward className="w-3 h-3" />{rowSkip.text}
+                                            </span>
+                                          : <span className="text-gray-800">{r.corrected || '—'}</span>,
+                                    },
+                                    { label: 'Language', value: r.language || 'English' },
+                                    { label: 'Timestamp', value: formatTs(r.timestamp) },
+                                  ]}
+                                />
+                              );
+                            })}
+                          </MobileRecordList>
                         </div>
                       );
                     })()}
@@ -5236,12 +5027,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         <Award className="w-6 h-6 text-warning" />
                         <div>
                           <div className="text-base font-semibold">Overall Capability Score</div>
-                          <div className="text-xs text-gray-400 mt-0.5">Final weighted score — MTH + NTH + HR</div>
+                          <div className="tf-hint mt-0.5">Final weighted score — MTH + NTH + HR</div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className="text-5xl font-bold text-white">{capScore}</div>
-                        <div className="text-xs text-gray-400 mt-1">out of 100</div>
+                        <div className="tf-hint mt-1">out of 100</div>
                       </div>
                     </div>
                     {/* Score bar */}
@@ -5255,7 +5046,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                   {/* ── Section Score Cards ── */}
                   {Object.keys(sectionScores).length > 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="tf-grid-3">
                       {(['mth', 'nth', 'hr'] as const).map(key => {
                         const sec = sectionScores[key];
                         if (!sec) return null;
@@ -5265,7 +5056,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           <div key={key} className={`rounded-xl border ${bc.border} overflow-hidden`}>
                             <div className={`px-4 py-3 ${bc.bg} border-b ${bc.border}`}>
                               <div className="flex items-center justify-between">
-                                <span className="text-xs font-semibold text-gray-600 uppercase tracking-wide">{sectionLabel}</span>
+                                <span className="tf-caption uppercase tracking-wide">{sectionLabel}</span>
                                 <span className={`text-2xs font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{sec.band}</span>
                               </div>
                             </div>
@@ -5274,8 +5065,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                 <span className={`text-3xl font-bold ${scoreColor(sec.score)}`}>
                                   {sec.score != null ? sec.score : '—'}
                                 </span>
-                                <span className="text-sm text-gray-400 mb-1">/ 100</span>
-                                <span className="ml-auto text-xs text-gray-400 mb-1">{sec.section_pct}% weight</span>
+                                <span className="tf-body-muted mb-1">/ 100</span>
+                                <span className="ml-auto tf-hint mb-1">{sec.section_pct}% weight</span>
                               </div>
                               <div className="mt-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div className={`h-1.5 rounded-full ${bc.bar}`} style={{ width: `${sec.score ?? 0}%` }} />
@@ -5296,12 +5087,12 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         {/* Section header */}
                         <div className="flex items-center gap-2">
                           <Target className="w-4 h-4 text-gray-600" />
-                          <h3 className="text-sm font-semibold text-gray-800">{sectionLabel}</h3>
-                          {sec && <span className="text-xs text-gray-400">({sec.section_pct}% of final score)</span>}
+                          <h3 className="tf-row-title">{sectionLabel}</h3>
+                          {sec && <span className="tf-hint">({sec.section_pct}% of final score)</span>}
                         </div>
 
                         {clusters.length === 0 && (
-                          <div className="text-xs text-gray-400 px-2">No clusters evaluated for this section.</div>
+                          <div className="tf-hint px-2">No clusters evaluated for this section.</div>
                         )}
 
                         {clusters.map(cluster => {
@@ -5312,15 +5103,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               <div className={`flex items-center justify-between px-4 py-3 ${bc.bg}`}>
                                 <div className="flex items-center gap-2 min-w-0">
                                   <TrendingUp className={`w-4 h-4 flex-shrink-0 ${bc.text}`} />
-                                  <span className="text-sm font-semibold text-gray-800 truncate">{cluster.cluster_name}</span>
-                                  <span className="text-2xs text-gray-400 flex-shrink-0">Priority {cluster.priority} · {cluster.weight}% weight</span>
+                                  <span className="tf-row-title truncate">{cluster.cluster_name}</span>
+                                  <span className="tf-micro-hint flex-shrink-0">Priority {cluster.priority} · {cluster.weight}% weight</span>
                                 </div>
                                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
                                   <span className={`text-2xs font-bold px-2 py-0.5 rounded-full border ${bc.border} ${bc.bg} ${bc.text}`}>{cluster.band}</span>
                                   <span className={`text-lg font-bold ${scoreColor(cluster.band_score)}`}>
                                     {cluster.band_score != null ? cluster.band_score : '—'}
                                   </span>
-                                  <span className="text-xs text-gray-400">/100</span>
+                                  <span className="tf-hint">/100</span>
                                 </div>
                               </div>
 
@@ -5337,7 +5128,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                     return (
                                       <div key={si} className="flex items-center gap-3 px-4 py-2.5">
                                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${sbc.dot}`} />
-                                        <span className="text-xs text-gray-700 flex-1 min-w-0">{ss.skill}</span>
+                                        <span className="tf-meta flex-1 min-w-0">{ss.skill}</span>
                                         <span className={`text-2xs font-medium px-1.5 py-0.5 rounded border flex-shrink-0 ${sbc.bg} ${sbc.border} ${sbc.text}`}>{ss.band}</span>
                                         <span className={`text-sm font-semibold w-10 text-right flex-shrink-0 ${scoreColor(ss.score)}`}>
                                           {ss.score != null ? ss.score : '—'}
@@ -5350,7 +5141,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                               {/* Cluster note */}
                               {cluster.cluster_note && (
-                                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 text-2xs text-gray-500 italic">
+                                <div className="px-4 py-2 bg-gray-50 border-t border-gray-100 tf-micro-hint italic">
                                   {cluster.cluster_note}
                                 </div>
                               )}
@@ -5415,7 +5206,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                         size="sm"
                         onClick={() => setShowThresholdEditor(p => !p)}
                         aria-label="Configure risk thresholds" title="Configure risk thresholds"
-                        className="px-2"
+                        className=""
                       >
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
@@ -5428,27 +5219,27 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   {/* Threshold Editor — configures per-box risk levels */}
                   {showThresholdEditor && (
                     <div className="px-4 pb-3 border-t border-gray-200 pt-3 bg-white/60 backdrop-blur-sm">
-                      <p className="text-xs font-medium text-gray-600 mb-2 tracking-tight">Configure Per-Violation Risk Thresholds</p>
+                      <p className="tf-caption mb-2 tracking-tight">Configure Per-Violation Risk Thresholds</p>
                       <div className="flex items-center gap-4 flex-wrap">
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                        <label className="flex items-center gap-2 tf-meta">
                           <span className="text-brand-blue font-medium">Low Risk</span>
                           <span>0 –</span>
                           <input
                             type="number" min={1} max={violationThresholds.medMax - 1}
                             value={violationThresholds.lowMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, lowMax: Math.max(1, Math.min(t.medMax - 1, Number(e.target.value))) }))}
-                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                            className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
-                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                        <label className="flex items-center gap-2 tf-meta">
                           <span className="text-brand-orange-deep font-medium">Medium Risk</span>
                           <span>{violationThresholds.lowMax + 1} –</span>
                           <input
                             type="number" min={violationThresholds.lowMax + 1}
                             value={violationThresholds.medMax}
                             onChange={e => setViolationThresholds(t => ({ ...t, medMax: Math.max(t.lowMax + 1, Number(e.target.value)) }))}
-                            className="w-14 px-2 py-1 rounded-md border border-gray-200 text-xs text-center focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                            className="tf-input h-auto w-14 px-2 py-1 rounded-md text-xs text-center"
                           />
                           <span className="text-gray-400">violations</span>
                         </label>
@@ -5478,8 +5269,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   ];
                   return (
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation Breakdown</h3>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  <h3 className="tf-row-title mb-3 tracking-tight">Violation Breakdown</h3>
+                  <div className="tf-grid-stats">
                     {ALL_TYPES.map(type => {
                       const cfg = EVENT_CONFIG[type];
                       const count = violationCounts[type] ?? 0;
@@ -5520,7 +5311,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
 
                 {/* Event Log Table */}
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Event Log</h3>
+                  <h3 className="tf-row-title mb-3 tracking-tight">Event Log</h3>
                   {groupedViolations.length === 0 ? (
                     <div className="text-center py-12 bg-success-subtle rounded-xl border border-success-line ring-1 ring-success-line">
                       <ShieldAlert className="w-8 h-8 text-success mx-auto mb-2" />
@@ -5529,16 +5320,16 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                     </div>
                   ) : (
                     <>
-                      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
+                      <div className={`tf-card-soft overflow-hidden tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                         <table className="w-full text-sm">
                           <thead className="bg-white border-b border-gray-100">
                             <tr>
-                              <th className="px-4 py-2.5 text-left tf-th w-10">#</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Event</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Time</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Video Time</th>
-                              <th className="px-4 py-2.5 text-left tf-th">Severity</th>
-                              <th className="px-4 py-2.5 text-right tf-th">Count</th>
+                              <th className="tf-th-cell text-left tf-th w-10">#</th>
+                              <th className="tf-th-cell text-left tf-th">Event</th>
+                              <th className="tf-th-cell text-left tf-th">Time</th>
+                              <th className="tf-th-cell text-left tf-th">Video Time</th>
+                              <th className="tf-th-cell text-left tf-th">Severity</th>
+                              <th className="tf-th-cell text-right tf-th">Count</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100">
@@ -5567,8 +5358,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                               };
                               return (
                                 <tr key={idx} className="hover:bg-brand-blue/[0.02] transition-colors">
-                                  <td className="px-4 py-2.5 text-xs text-gray-400">{globalIdx}</td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="tf-td tf-hint">{globalIdx}</td>
+                                  <td className="tf-td">
                                     <div className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 ${
                                       cfg ? `${cfg.bg} ${cfg.color} ring-black/[0.04]` : 'bg-slate-100 text-slate-600 ring-slate-200'
                                     }`}>
@@ -5576,8 +5367,8 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                       {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
                                     </div>
                                   </td>
-                                  <td className="px-4 py-2.5 text-xs text-gray-500 font-mono">{formatTs(row.timestamp)}</td>
-                                  <td className="px-4 py-2.5 text-xs font-mono">
+                                  <td className="tf-td tf-meta font-mono">{formatTs(row.timestamp)}</td>
+                                  <td className="tf-td text-xs font-mono">
                                     {seekable ? (
                                       <button
                                         type="button"
@@ -5592,7 +5383,7 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                                       <span className="text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
                                     )}
                                   </td>
-                                  <td className="px-4 py-2.5">
+                                  <td className="tf-td">
                                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
                                       {sev}
                                     </span>
@@ -5604,6 +5395,66 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                           </tbody>
                         </table>
                       </div>
+                      <MobileRecordList>
+                        {pagedViolations.map((row, idx) => {
+                          const cfg = EVENT_CONFIG[row.event_type];
+                          const sev = normaliseSeverity(row.severity);
+                          const sevStyle =
+                            sev === 'severe'   ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' :
+                            sev === 'moderate' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' :
+                                                 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
+                          const countTone = row.count >= 5 ? 'danger' : row.count >= 3 ? 'warning' : 'neutral';
+                          const globalIdx = (safeViolationPage - 1) * ROWS_PER_PAGE + idx + 1;
+                          const offsetSec = videoOffsetSeconds(row.timestamp, videoAnchor);
+                          const hasRecording = !!(liveSession.recording_file_path || liveSession.screen_recording_file_path);
+                          const seekable = offsetSec != null && hasRecording;
+                          const jumpToRecording = () => {
+                            if (offsetSec == null) return;
+                            seekNonceRef.current += 1;
+                            setRecordingSeek({ seconds: offsetSec, key: seekNonceRef.current });
+                            setActiveTab('recording');
+                          };
+                          return (
+                            <MobileRecordCard
+                              key={idx}
+                              idBadge={<span className="tf-hint">#{globalIdx}</span>}
+                              badges={
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${sevStyle}`}>
+                                  {sev}
+                                </span>
+                              }
+                              title={
+                                <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium ring-1 ${
+                                  cfg ? `${cfg.bg} ${cfg.color} ring-black/[0.04]` : 'bg-slate-100 text-slate-600 ring-slate-200'
+                                }`}>
+                                  {cfg?.icon}
+                                  {cfg?.label ?? row.event_type.replace(/_/g, ' ')}
+                                </span>
+                              }
+                              fields={[
+                                { label: 'Time', value: <span className="font-mono">{formatTs(row.timestamp)}</span> },
+                                {
+                                  label: 'Video Time',
+                                  value: seekable ? (
+                                    <button
+                                      type="button"
+                                      onClick={jumpToRecording}
+                                      title="Jump to this moment in the recording"
+                                      className="inline-flex items-center gap-1 font-mono text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 focus:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue/40 rounded"
+                                    >
+                                      <Play className="w-3 h-3" />
+                                      {formatVideoOffset(row.timestamp, videoAnchor)}
+                                    </button>
+                                  ) : (
+                                    <span className="font-mono text-gray-500">{formatVideoOffset(row.timestamp, videoAnchor)}</span>
+                                  ),
+                                },
+                              ]}
+                              footer={<MobileStatChip tone={countTone}>Count: {row.count}</MobileStatChip>}
+                            />
+                          );
+                        })}
+                      </MobileRecordList>
 
                       {/* Pagination — shared ListPagination (consistent with other pages) */}
                       <ListPagination

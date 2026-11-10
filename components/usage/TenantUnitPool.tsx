@@ -102,7 +102,7 @@ type ExportType = 'consumption' | 'summary';
 
 export default function TenantUnitPool({ compact = false, showHistory = true }: TenantUnitPoolProps) {
   // Role-based access control
-  const { user, isTenantAdmin, isBillingManager, isStandardUser, isRecruiter } = useAuth();
+  const { user, isTenantAdmin, isBillingManager, isRecruiter } = useAuth();
   const canExport = isTenantAdmin || isRecruiter;
 
   const [isLoading, setIsLoading] = useState(true);
@@ -148,16 +148,11 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
         ]);
         setPools(poolsData);
         setSummary(summaryData);
-      } else if (isStandardUser) {
-        // Standard User: No access to pool status or tenant-wide summary
-        // Will only show own consumption history
-        setPools(null);
-        setSummary(null);
       }
     } catch (error: any) {
       // Handle permission errors gracefully
       if (error?.response?.status === 403) {
-        // Permission denied - this is expected for standard users
+        // Permission denied - expected for users without usage access
         console.log('Role-based access restriction applied');
       } else {
         toast.error(friendlyErrorMessage(error, "Couldn't load unit pool data. Please try again."));
@@ -257,7 +252,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+      <div className="tf-card-soft">
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
           <div className="space-y-2">
@@ -271,7 +266,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
         </div>
 
         {/* Unit cards grid — 3 columns, each with icon+label, value, progress bar, footer */}
-        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="tf-grid-3 p-6">
           {Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="p-4 rounded-lg border border-gray-200 bg-gray-50">
               <div className="flex items-center gap-2">
@@ -301,38 +296,6 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
     );
   }
 
-  // Standard User: Show restricted view (own consumption only)
-  if (isStandardUser) {
-    return (
-      <div className={`${compact ? 'p-4' : 'p-6'} bg-white rounded-lg border border-gray-200`}>
-        <div className="flex items-center gap-3 mb-4">
-          <User className="w-5 h-5 text-blue-600" />
-          <div>
-            <h3 className="font-medium text-gray-900">My Consumption</h3>
-            <p className="tf-body-muted">View your personal unit usage</p>
-          </div>
-        </div>
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="text-sm text-blue-900 font-medium">Access Restricted</p>
-              <p className="text-sm text-blue-700 mt-1">
-                Standard users can view their own consumption history but cannot access tenant-wide unit pool details.
-              </p>
-              <Link
-                href="/organization/usage-history"
-                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
-              >
-                View My Consumption History
-                <ExternalLink className="w-3 h-3" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   if (!pools) {
     return (
@@ -346,7 +309,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
 
   if (compact) {
     return (
-      <div className="p-4 bg-white rounded-lg border border-gray-200">
+      <div className="tf-panel p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium text-gray-900">Unit Pool</h3>
           <button
@@ -396,7 +359,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+    <div className="tf-card-soft">
       {/* Header */}
       <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
         <div>
@@ -452,7 +415,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
       </div>
 
       {/* Unit Cards */}
-      <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="tf-grid-3 p-6">
         {unitTypes.map(type => {
           const pool = pools.pools[type];
           const colors = UNIT_TYPE_COLORS[type];
@@ -529,7 +492,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
 
                 {/* Last consumption hidden for Billing Manager */}
                 {!isBillingManager && pool.last_consumption_at && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-gray-400">
+                  <div className="mt-2 flex items-center gap-1 tf-hint">
                     <Clock className="w-3 h-3" />
                     <span>Last used: {formatISTDate(pool.last_consumption_at)}</span>
                   </div>
@@ -571,7 +534,7 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
           <div className="p-4 bg-gray-50 rounded-lg flex items-center gap-3">
             <Calendar className="w-5 h-5 text-gray-400" />
             <div className="flex-1">
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 Billing Cycle: {pools.pools.RS.billing_cycle_start
                   ? formatISTDate(pools.pools.RS.billing_cycle_start)
                   : 'N/A'} - {formatISTDate(pools.pools.RS.billing_cycle_end)}
@@ -695,11 +658,11 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="flex items-center gap-1 text-xs text-gray-400">
+                          <div className="flex items-center gap-1 tf-hint">
                             <User className="w-3 h-3" />
                             {entry.user_name || entry.user_email || 'Unknown'}
                           </div>
-                          <p className="text-xs text-gray-400 mt-0.5">
+                          <p className="tf-hint mt-0.5">
                             {formatIST(entry.created_at)}
                           </p>
                         </div>

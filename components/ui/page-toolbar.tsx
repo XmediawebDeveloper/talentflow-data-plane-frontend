@@ -27,7 +27,7 @@ export function PageToolbar({
   return (
     <div
       className={cn(
-        'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4',
+        'tf-card p-3 sm:p-4 mb-4',
         className,
       )}
     >
@@ -74,7 +74,7 @@ function ToolbarSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="w-full pl-9 pr-9 py-2 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition"
+        className="w-full pl-9 pr-9 h-9 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition"
       />
       {clearable && value && (
         <button
@@ -122,12 +122,7 @@ function ToolbarTabs<T extends string>({ value, onChange, options, className }: 
             key={opt.value}
             type="button"
             onClick={() => onChange(opt.value)}
-            className={cn(
-              'shrink-0 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors',
-              active
-                ? 'bg-brand-blue text-white shadow-sm'
-                : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800',
-            )}
+            className={cn('tf-tab-pill', active && 'tf-tab-pill-active')}
           >
             {opt.label}
             {typeof opt.count === 'number' && (

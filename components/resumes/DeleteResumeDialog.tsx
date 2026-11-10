@@ -53,7 +53,7 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                     <ShieldAlert className="h-4 w-4" />
                   </span>
                   <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                  <p className="text-sm text-gray-800">
+                  <p className="tf-body">
                     This action is <span className="font-semibold text-red-600">permanent</span> and{' '}
                     <span className="font-semibold text-red-600">cannot be undone</span>.
                   </p>
@@ -63,7 +63,7 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                     <Lock className="h-4 w-4" />
                   </span>
                   <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                  <p className="text-sm text-gray-800">
+                  <p className="tf-body">
                     {single ? 'Deleted resume' : 'Deleted resumes'}{' '}
                     <span className="font-semibold text-red-600">cannot be restored</span>.
                   </p>
@@ -73,7 +73,7 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                     <AlertCircle className="h-4 w-4" />
                   </span>
                   <span className="h-6 w-px flex-shrink-0 bg-red-200" aria-hidden="true" />
-                  <p className="text-sm text-gray-800">
+                  <p className="tf-body">
                     All associated data will be <span className="font-semibold text-red-600">permanently removed</span>.
                   </p>
                 </div>
@@ -83,7 +83,7 @@ export default function DeleteResumeDialog({ open, names, onCancel, onConfirm }:
                   <HelpCircle className="h-4 w-4" />
                 </span>
                 <div className="min-w-0">
-                  <p className="break-words tf-cell-name">
+                  <p className="break-words tf-row-title">
                     {single ? (
                       <>Are you sure you want to delete &ldquo;{names[0] ?? ''}&rdquo;?</>
                     ) : (

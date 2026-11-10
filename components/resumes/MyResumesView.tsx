@@ -18,6 +18,7 @@ import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
 import type { DuplicateFile, ExistingResume } from '@/components/DuplicateResumeModal';
@@ -85,6 +86,11 @@ const SUBFOLDER_PEEK_PANEL_WIDTH = 224;
 const FOLDER_ACTION_MENU_HEIGHT = 188;
 
 type CardFolderFilter = 'all' | 'with-resumes' | 'empty' | 'with-subfolders';
+
+/* fetchData options. `dedupe`: the call came from the params effect and may be
+   skipped if it ends up replayed behind a running fetch that loaded the same
+   params. `replay`: set internally when the guard replays a queued call. */
+type FetchDataOptions = { dedupe?: boolean; replay?: boolean };
 
 const CARD_FOLDER_FILTER_OPTIONS: { value: CardFolderFilter; label: string }[] = [
   { value: 'all', label: 'All folders' },
@@ -242,7 +248,7 @@ function UnifiedFolderResumeSearch({
             <>
               {folderResults.length > 0 && (
                 <div>
-                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 tf-eyebrow">
                     Folders ({folderResults.length})
                   </div>
                   {folderResults.map(({ folder, path }) => (
@@ -257,10 +263,10 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                        <span className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15">
                           Folder
                         </span>
-                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">{folder.name}</span>
+                        <span className="min-w-0 truncate tf-row-name">{folder.name}</span>
                       </div>
                       <div className="mt-0.5 truncate tf-meta">{path}</div>
                     </button>
@@ -270,7 +276,7 @@ function UnifiedFolderResumeSearch({
 
               {resumeResults.length > 0 && (
                 <div>
-                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  <div className="border-b border-gray-100 bg-gray-50 px-3 py-2 tf-eyebrow">
                     Resumes ({resumeResults.length})
                   </div>
                   {resumeResults.map((resume) => (
@@ -285,10 +291,10 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-2xs font-medium text-green-700 ring-1 ring-green-200">
+                        <span className="tf-badge bg-green-50 text-2xs text-green-700 ring-1 ring-green-200">
                           Resume
                         </span>
-                        <span className="min-w-0 truncate text-sm font-medium text-gray-900">
+                        <span className="min-w-0 truncate tf-row-name">
                           {resume.name || resume.candidate_name || resume.fileName || 'Resume'}
                         </span>
                       </div>
@@ -577,7 +583,7 @@ function DroppableFolderCard({
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="tf-subsection-title truncate">
+          <h3 className="tf-row-title truncate">
             {isRoot ? 'Root (Default)' : folder.name}
           </h3>
           <p className="tf-meta">
@@ -644,7 +650,7 @@ function DroppableFolderCard({
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
-                {canUpload && !canCreateSubfolder && <span className="ml-auto text-xs text-gray-400 dark:text-slate-600">(max)</span>}
+                {canUpload && !canCreateSubfolder && <span className="ml-auto tf-hint">(max)</span>}
               </button>
               <button
                 type="button"
@@ -743,7 +749,7 @@ function DroppableFolderCard({
                 <span className={`flex-1 min-w-0 truncate text-xs ${
                   peekChild?.id === child.id ? 'font-medium text-brand-blue' : 'text-gray-700'
                 }`}>{child.name}</span>
-                <span className="text-2xs text-gray-500 flex-shrink-0">
+                <span className="tf-micro-hint flex-shrink-0">
                   {childSubfolders > 0 && `${childSubfolders} sub • `}
                   {child.count || 0}
                 </span>
@@ -768,7 +774,7 @@ function DroppableFolderCard({
           style={{ width: `${SUBFOLDER_PEEK_PANEL_WIDTH}px`, maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1.5 text-2xs font-medium text-gray-500 bg-slate-50 border-b border-gray-100 truncate">
+          <div className="px-3 py-1.5 tf-micro-hint bg-slate-50 border-b border-gray-100 truncate">
             {peekChild.name}
           </div>
           {(peekChild.children ?? []).map((grandChild) => (
@@ -785,8 +791,8 @@ function DroppableFolderCard({
               className="w-full flex items-center gap-2 px-3 py-2 text-left border-b border-gray-100 last:border-b-0 border-l-2 border-l-transparent hover:bg-brand-blue/10 hover:border-l-brand-blue/40 transition-colors cursor-pointer"
             >
               <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
-              <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
-              <span className="text-2xs text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
+              <span className="flex-1 min-w-0 truncate tf-meta">{grandChild.name}</span>
+              <span className="tf-micro-hint flex-shrink-0">{grandChild.count || 0}</span>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             </button>
           ))}
@@ -838,12 +844,12 @@ function CardFolderNameInput({
           className="min-w-0 flex-1 rounded-md border border-brand-blue px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
         />
         <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-400">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
+          <span className="tf-hint">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
           <button
             type="button"
             onClick={onSubmit}
             disabled={!value.trim()}
-            className="rounded bg-brand-blue px-3 py-1.5 text-xs text-white shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:cursor-not-allowed disabled:bg-gray-300"
+            className="tf-btn tf-btn-primary rounded bg-brand-blue px-3 py-1.5 text-xs shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 hover:bg-brand-blue-2 disabled:bg-gray-300 whitespace-normal gap-0 font-normal"
           >
             {submitLabel}
           </button>
@@ -880,7 +886,7 @@ function CardFolderNameInput({
           type="button"
           onClick={onSubmit}
           disabled={!value.trim()}
-          className="px-3 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:bg-gray-300 disabled:cursor-not-allowed cursor-pointer"
+          className="tf-btn tf-btn-primary px-3 py-1 text-xs bg-brand-blue rounded hover:bg-brand-blue-2 disabled:bg-gray-300 whitespace-normal shadow-none gap-0 font-normal"
         >
           {submitLabel}
         </button>
@@ -891,7 +897,7 @@ function CardFolderNameInput({
         >
           Cancel
         </button>
-        <span className="text-xs text-gray-400 ml-auto">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
+        <span className="tf-hint ml-auto">{value.length}/{FOLDER_NAME_MAX_LENGTH}</span>
       </div>
     </div>
   );
@@ -911,10 +917,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
   const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
   const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
-  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
+  // covers folder rename / move too (2026-11-10).
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
   const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
+  // Viewing isn't downloading (2026-11-10): own uploads need Resume Upload access.
+  const canDownloadMyResumes = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
   const canMoveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   const { hasPlanFeature } = usePlanFeatures();
   // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
@@ -924,6 +934,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [selectedResumes, setSelectedResumes] = useState<string[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string>('all');
+  // The folder id the currently-rendered `resumes` actually belong to. Set in
+  // lockstep with setResumes in fetchData — unlike `selectedFolder`, which
+  // flips the instant a folder is clicked, this only moves once the rows on
+  // screen really are that folder's. Reading `selectedFolder` directly for
+  // "is this the Archived Resumes folder" let the Archived badge flash on the
+  // previous folder's rows during the silent refetch gap (list view only —
+  // card view already clears `resumes` synchronously in navigateToFolder).
+  const [loadedFolderId, setLoadedFolderId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   // Search + filters in the shared hook, the same one every list toolbar uses.
   // `appliedQuery` is the settled value: it drives the fetch and the result
@@ -989,6 +1007,24 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [uploadStartedThisSession, setUploadStartedThisSession] = useState(false);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<UploadHistoryItem | null>(null);
   const [uploadHistoryFilter, setUploadHistoryFilter] = useState<'completed' | 'duplicated' | 'versioned' | 'error' | 'pending' | 'cancelled' | null>(null);
+  // When the last in-flight batch finishes while the user is watching the
+  // Currently Processing tab, move them to Completed instead of leaving them
+  // on the "No uploads in progress" empty state.
+  const activeUploadCount = useMemo(
+    () => uploadHistory.filter(
+      r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)
+    ).length,
+    [uploadHistory]
+  );
+  const prevActiveUploadCountRef = useRef(activeUploadCount);
+  useEffect(() => {
+    const prev = prevActiveUploadCountRef.current;
+    prevActiveUploadCountRef.current = activeUploadCount;
+    if (prev > 0 && activeUploadCount === 0 && isUploadHistoryModalOpen && uploadHistoryTab === 'current') {
+      setUploadHistoryTab('completed');
+      setUploadHistoryFilter(null);
+    }
+  }, [activeUploadCount, isUploadHistoryModalOpen, uploadHistoryTab]);
   const [retryingBatches, setRetryingBatches] = useState<Set<string>>(new Set());
   const [cancellingBatches, setCancellingBatches] = useState<Set<string>>(new Set());
   const [retryingItems, setRetryingItems] = useState<Set<string>>(new Set());
@@ -1081,13 +1117,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     currentFilters?: any;
     folderId?: string;
     silent?: boolean;
+    dedupe?: boolean;
     resolve?: () => void;
   } | null>(null);
+  // Request params (JSON of the list request) of the last fetch that completed
+  // successfully. Cleared when a fetch starts, so it never describes data that
+  // a later fetch may have replaced. Read by the guard replay below.
+  const lastCompletedFetchKeyRef = useRef<string>('');
   // Always the newest fetchData. The replay has to go through this rather than
   // calling itself: page/sort live in the closure, not the arguments, so a
   // self-call would refetch with the page the *outgoing* render had.
   const fetchDataRef = useRef<
-    ((searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => Promise<void>) | null
+    ((searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean, opts?: FetchDataOptions) => Promise<void>) | null
   >(null);
 
   // Persist + restore this list's scroll position and view state so returning
@@ -1130,8 +1171,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
   useEffect(() => {
     fetchData();
-    fetchUploadHistory();
-    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at ±200).
+    // Upload history is fetched by the `user?.id` effect below, which also
+    // runs on mount whenever the user is already known — calling it here too
+    // sent `upload/batches` twice on every visit.
+    // Self-heal admin-API resume usage on mount (fire-and-forget — capped at
+    // ±200). Throttled inside the service to once per 15 minutes per session.
     resumeService.reconcileUsage();
     hasMountedRef.current = true; // Mark as mounted
 
@@ -1200,7 +1244,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
       // Use lighter loading for page/sort changes when data is already on screen
       const isPageChange = resumes.length > 0;
-      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false).finally(() => {
+      // `dedupe`: if this call has to wait behind a running fetch, its replay
+      // is skipped when it would request exactly what that fetch just loaded
+      // (the state-restore path on a refresh). Write-triggered refetches don't
+      // pass it, so they always run.
+      fetchData(appliedSearchQuery, filters, selectedFolder, isPageChange ? true : false, { dedupe: true }).finally(() => {
         setIsPaginating(false);
         console.log('[MyResumes] useEffect - Fetch complete');
       });
@@ -1606,41 +1654,50 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      request gets the exact number without disturbing the current view — used
      after uploads, which is when the badge would otherwise lag or flicker
      between the folder total and the global one. */
+  /* One GET /resumes/stats for My Resumes: the All Resumes total (active only)
+     and every folder's listing total (archived rows included, as a folder
+     listing includes them). Unfiltered — the badges describe the library. */
+  const fetchMyResumeStats = () =>
+    resumeService.stats({ source: 'my-resumes', include_archived: false });
+
   const refreshAllResumesTotal = async () => {
     try {
       // Same rule as the All Resumes listing: active resumes only, so the badge
       // and the table can never disagree about archived ones.
-      const res = await resumeService.list({
-        source: 'my-resumes',
-        page: 1,
-        page_size: 1,
-        include_archived: false,
-      });
-      allResumesTotalRef.current = res.total;
-      setAllResumesTotal(res.total);
-      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: res.total } : f)));
+      // GET /resumes/stats — same params as the folder reconcile below, so the
+      // api client's GET sharing serves both from one request.
+      const stats = await fetchMyResumeStats();
+      const total = stats.all_total;
+      if (typeof total !== 'number') return;
+      allResumesTotalRef.current = total;
+      setAllResumesTotal(total);
+      setFolders(prev => prev.map(f => (f.id === 'all' ? { ...f, count: total } : f)));
     } catch {
       // Keep the last known figure rather than flashing a wrong one.
     }
   };
 
-  /* Bring every folder badge in line with what opening that folder lists, by
-     asking the same endpoint the table uses for each folder's total. The
-     folders API counts stored rows — versions included — so its numbers can
-     read higher than the list ever shows.
+  /* Bring every folder badge in line with what opening that folder lists,
+     from GET /resumes/stats (built from the same filter as the table's
+     list). The folders API counts stored rows — versions included — so its
+     numbers can read higher than the list ever shows.
 
-     Bounded on purpose: one small request per folder, only from the plain
-     unfiltered view (page load and post-upload refreshes), and skipped
-     entirely for large trees where the fan-out would cost more than the
-     inconsistency. Those keep the server's own count. */
-  const MAX_FOLDERS_TO_RECONCILE = 30;
+     One request for the whole tree, only from the plain unfiltered view
+     (page load and post-upload refreshes). */
   const reconcilingFoldersRef = useRef(false);
   const lastReconciledRef = useRef('');
-  /* Set by the first fetch. That one waits for the reconcile pass before
-     showing the folder tree, so the badges never paint the raw server count
-     and then drop to the corrected one. Later fetches reuse the cached
-     corrections (see below) and reconcile in the background as before. */
-  const folderCountsPrimedRef = useRef(false);
+  /* The newest folder snapshot a fetch put on screen: its signature (ids +
+     raw server counts) and, when it came from the unfiltered view, the raw
+     tree to reconcile. The reconcile pass runs in the background (never
+     awaited by a fetch), so a refetch can land while it is in flight; when
+     the snapshot it measured is no longer the newest, its results are
+     dropped and the pass re-runs against the newest one. */
+  const latestFolderSnapshotRef = useRef<{ signature: string; reconcileTarget: FolderType[] | null }>({
+    signature: '',
+    reconcileTarget: null,
+  });
+  const folderSnapshotSignature = (folderList: FolderType[]) =>
+    JSON.stringify(flattenAllFolders(folderList).filter(f => f.id !== 'all').map(f => [f.id, f.count]));
 
   /* Corrections have to outlive the fetch that produced them. Every fetch
      rebuilds the tree from the API, which reinstalls the raw count — so a
@@ -1673,7 +1730,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const reconcileFolderCounts = async (folderList: FolderType[]) => {
     if (reconcilingFoldersRef.current) return;
     const flat = flattenAllFolders(folderList).filter(f => f.id !== 'all');
-    if (flat.length === 0 || flat.length > MAX_FOLDERS_TO_RECONCILE) return;
+    // One stats call covers any number of folders, so no size cap any more.
+    if (flat.length === 0) return;
 
     // The server's numbers are the input to this correction, so re-running it
     // on an identical snapshot can only produce the same answer. Without this,
@@ -1683,25 +1741,31 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     lastReconciledRef.current = signature;
 
     reconcilingFoldersRef.current = true;
+    let superseded = false;
     try {
-      const totals = await Promise.all(
-        flat.map(async (folder) => {
-          try {
-            const res = await resumeService.list({
-              source: 'my-resumes',
-              folder_id: folder.id,
-              page: 1,
-              page_size: 1,
-              // Folder badges count what the folder lists — and Archived
-              // Resumes lists archived rows, so this mirrors the table's rule.
-              include_archived: true,
-            });
-            return [folder.id, res.total] as const;
-          } catch {
-            return [folder.id, null] as const;
-          }
-        }),
+      /* ONE GET /resumes/stats call for every folder (was one page_size=1
+         list per folder). Its per-folder numbers are exactly what
+         GET /resumes?source=my-resumes&folder_id=<id> returns as `total` —
+         archived rows included, as Archived Resumes lists them. A folder the
+         server has no rows for is 0. On failure nothing is corrected. */
+      let folderTotals: Record<string, number> | null = null;
+      try {
+        folderTotals = (await fetchMyResumeStats()).folders ?? {};
+      } catch {
+        folderTotals = null;
+      }
+      const totals = flat.map(
+        (folder) => [folder.id, folderTotals ? (folderTotals[folder.id] ?? 0) : null] as const,
       );
+
+      // A newer fetch replaced the folder snapshot while these were in
+      // flight (an upload, move, delete, or a filtered folder list). These
+      // totals describe the old one, so drop them; `finally` re-runs the pass
+      // for the newest snapshot.
+      if (latestFolderSnapshotRef.current.signature !== signature) {
+        superseded = true;
+        return;
+      }
 
       const byId = new Map(
         totals.filter((entry): entry is readonly [string, number] => entry[1] !== null),
@@ -1723,10 +1787,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       setFolders(prev => applyCachedCorrections(prev));
     } finally {
       reconcilingFoldersRef.current = false;
+      if (superseded) {
+        // Let the newest snapshot be measured even if it repeats an older
+        // signature, then run it (only if it came from the unfiltered view).
+        lastReconciledRef.current = '';
+        const target = latestFolderSnapshotRef.current.reconcileTarget;
+        if (target) reconcileFolderCounts(target);
+      }
     }
   };
 
-  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean) => {
+  const fetchData = async (searchTerm?: string, currentFilters?: any, folderId?: string, silent?: boolean, opts?: FetchDataOptions) => {
     console.log('[FETCH] fetchData called', {
       searchTerm,
       filtersKeys: currentFilters ? Object.keys(currentFilters) : 'none',
@@ -1745,11 +1816,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       console.log('[FETCH] Already fetching, queueing this call');
       // Resolve as a displaced entry rather than hanging: whoever awaited it
       // (the refetch effect, to drop its overlay) must not wait forever.
-      pendingFetchRef.current?.resolve?.();
+      const displaced = pendingFetchRef.current;
+      displaced?.resolve?.();
+      /* The replay may only be skipped when every call it stands for allowed
+         that — a displaced write-triggered refetch keeps it from being skipped. */
+      const dedupe = !!opts?.dedupe && (displaced ? !!displaced.dedupe : true);
       /* Returns a promise that settles when the REPLAY finishes, not now —
          callers use it to decide when the table has really caught up. */
       return new Promise<void>(resolve => {
-        pendingFetchRef.current = { searchTerm, currentFilters, folderId, silent, resolve };
+        pendingFetchRef.current = { searchTerm, currentFilters, folderId, silent, dedupe, resolve };
       });
     }
 
@@ -1836,6 +1911,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           searchParams.source_type = currentFilters.sourceType;
         }
       }
+
+      /* Guard replay of a param-effect call (see `dedupe` above): skip it when
+         it asks for exactly what the fetch that just finished loaded. On a
+         refresh the restored view usually equals the mount fetch's defaults,
+         and this replay was a second identical list + folders round trip. */
+      const fetchKey = JSON.stringify(searchParams);
+      if (opts?.replay && opts.dedupe && fetchKey === lastCompletedFetchKeyRef.current) {
+        console.log('[FETCH] Replay matches the last completed fetch, skipping');
+        return;
+      }
+      lastCompletedFetchKeyRef.current = '';
 
       const [resumeResponse, folderResponse] = await Promise.all([
         resumeService.list(searchParams),
@@ -1950,21 +2036,25 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // against these, not against numbers it corrected itself.
       const rawFolders: FolderType[] = [allResumesFolder, ...apiFolders];
 
-      // First load only (see folderCountsPrimedRef): the page is still on its
-      // skeleton, so correct the badges before the tree first appears. Bounded
-      // like every reconcile — one parallel round of small requests.
-      const primeFolderCounts = !folderCountsPrimedRef.current;
-      folderCountsPrimedRef.current = true;
-      if (primeFolderCounts && isUnfiltered) await reconcileFolderCounts(rawFolders);
+      // Newest folder snapshot on screen — a reconcile pass that measured an
+      // older one must not write its corrections over this (see the helper).
+      latestFolderSnapshotRef.current = {
+        signature: folderSnapshotSignature(rawFolders),
+        reconcileTarget: isUnfiltered ? rawFolders : null,
+      };
 
       setResumes(convertedResumes);
+      setLoadedFolderId(folderId || 'all');
       setTotalItems(resumeResponse.total);
       setTotalIncludingVersions(resumeResponse.total_including_versions);
       setTotalPages(resumeResponse.total_pages);
       setFolders(applyCachedCorrections(rawFolders));
+      lastCompletedFetchKeyRef.current = fetchKey;
 
       // Same correction for every other folder, so the badges are right before
       // the user opens them. Only off the unfiltered view — see the helper.
+      // Not awaited, including on first load: the tree paints with the
+      // server's `resume_count` and the pass corrects the badges in place.
       if (isUnfiltered) reconcileFolderCounts(rawFolders);
 
       /* A page number restored from the last visit can point past the end of
@@ -2007,6 +2097,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
         Promise.resolve(
           (fetchDataRef.current ?? fetchData)(
             queued.searchTerm, queued.currentFilters, queued.folderId, queued.silent,
+            { dedupe: queued.dedupe, replay: true },
           ),
         ).finally(() => queued.resolve?.());
       }
@@ -2119,17 +2210,45 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   }, [searchParams, getFolderById, navigateToFolder, router]);
 
   const handleSelectResume = (id: string) => {
+    // A resume whose email matches an existing team member is locked out of
+    // selection entirely — ResumeTable disables its checkbox, but this guards
+    // any other path (e.g. a stale click) from slipping it into the selection.
+    const target = resumes.find(r => r.id === id);
+    if (target && (target.is_tenant_user_email || target.isTenantUserEmail)) return;
     setSelectedResumes(prev =>
       prev.includes(id) ? prev.filter(r => r !== id) : [...prev, id]
     );
   };
+
+  // Archived Resumes is a separate action context (Unarchive instead of
+  // Archive; no Score/Assessment/AI Interview/AI Talent Match), so carrying a
+  // selection across its boundary left the bulk action bar showing options
+  // for resumes that aren't even checked in the folder on screen. Clear the
+  // selection on either transition; ordinary folder-to-folder navigation
+  // still preserves cross-folder selections (see handleSelectAll above).
+  const previousSelectedFolderRef = useRef(selectedFolder);
+  useEffect(() => {
+    const archivedFolderId = folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id;
+    const prevFolder = previousSelectedFolderRef.current;
+    previousSelectedFolderRef.current = selectedFolder;
+    if (
+      archivedFolderId &&
+      prevFolder !== selectedFolder &&
+      (prevFolder === archivedFolderId || selectedFolder === archivedFolderId)
+    ) {
+      setSelectedResumes([]);
+    }
+  }, [selectedFolder, folders]);
 
   // Only act on currently visible IDs. Selections in OTHER folders / pages
   // must be preserved — wiping them would surprise users with multi-folder
   // selections (e.g. picking 5 in folder A then opening folder B and clicking
   // Select All used to drop the original 5).
   const handleSelectAll = (selected: boolean) => {
-    const visibleIds = filteredResumes.map(r => r.id);
+    // Resumes locked out for a team-member email never enter a "select all".
+    const visibleIds = filteredResumes
+      .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+      .map(r => r.id);
     setSelectedResumes(prev => {
       if (selected) {
         const merged = new Set(prev);
@@ -2629,6 +2748,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an assessment. Please select active resumes only.`);
       return;
     }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an assessment.`);
+      return;
+    }
     openInvite({
       kind: 'assessment',
       candidates: selectedInviteCandidates(),
@@ -2653,6 +2779,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be invited to an AI interview. Please select active resumes only.`);
       return;
     }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be invited to an AI interview.`);
+      return;
+    }
     openInvite({
       kind: 'interview',
       candidates: selectedInviteCandidates(),
@@ -2674,6 +2807,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       .filter(r => isResumeArchived(r)).length;
     if (archivedCount > 0) {
       toast.error(`Archived resume${archivedCount > 1 ? 's' : ''} cannot be used with AI Talent Match. Please select active resumes only.`);
+      return;
+    }
+    const tenantUserCount = resumes
+      .filter(r => selectedResumes.includes(r.id))
+      .filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be used with AI Talent Match.`);
       return;
     }
     /* The dialog loads the job list itself now, so this no longer gates the
@@ -2725,6 +2865,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     return false;
   };
 
+  // Helper: a resume whose email matches an existing team member — locked out
+  // of every action the same way an archived resume is. The checkbox already
+  // blocks selecting one; these checks catch any other path into these handlers.
+  const isTenantUserEmailResume = (resume: Resume): boolean =>
+    !!(resume.is_tenant_user_email ?? resume.isTenantUserEmail);
+
   // Handle apply to job. One ticked candidate or fifty, the same dialog opens:
   // the Candidates Selected panel lists them on their latest version, and the
   // eye beside a row is where another version is read and picked. A separate
@@ -2742,6 +2888,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       return;
     }
 
+    const tenantUserCount = selectedResumeObjects.filter(r => isTenantUserEmailResume(r)).length;
+    if (tenantUserCount > 0) {
+      toast.error(`${tenantUserCount} selected resume${tenantUserCount > 1 ? 's belong' : ' belongs'} to an existing team member and cannot be applied to any job.`);
+      return;
+    }
+
     // Every ticked candidate goes in on its latest version; the dialog is where
     // a different one is chosen.
     void fetchPublishedJobs();
@@ -2755,6 +2907,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     // Check if resume is archived (by flag OR by folder)
     if (isResumeArchived(resume)) {
       toast.error('Archived resume cannot be applied to any job. Please select an active resume.');
+      return;
+    }
+
+    if (isTenantUserEmailResume(resume)) {
+      toast.error('This resume belongs to an existing team member and cannot be applied to any job.');
       return;
     }
 
@@ -3890,9 +4047,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     // count chip, subtitle, the two action buttons), the search toolbar row,
     // then the shared ResumeTableSkeleton in place of the ResumeTable.
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             {/* Breadcrumb + tab strip — rendered for real even while the list
                 loads, so switching tabs stays possible and nothing shifts. */}
             {header}
@@ -3914,7 +4071,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               </div>
             </div>
             {/* Search / toolbar card */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+            <div className="tf-card-soft p-3 sm:p-4 mb-4">
               <div className="flex items-center gap-3">
                 <Skeleton className="h-10 flex-1 rounded-lg" />
                 <Skeleton className="h-10 w-28 rounded-lg" />
@@ -3941,9 +4098,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   return (
     <FeatureGate feature="resume_upload">
     <DndProvider backend={HTML5Backend}>
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {header}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
         <div className="w-full sm:w-auto min-w-0 flex items-start gap-3">
@@ -3953,14 +4110,18 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
               <h1 className="tf-page-title">My Resume Database</h1>
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+              <span className="tf-badge bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                 {totalItems} Resumes
                 {typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalItems && (
-                  <> ({totalIncludingVersions - totalItems} versions)</>
+                  <span
+                    title={`${totalItems.toLocaleString()} resumes + ${(totalIncludingVersions - totalItems).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                  >
+                    {' '}(+{(totalIncludingVersions - totalItems).toLocaleString()} {totalIncludingVersions - totalItems === 1 ? 'version' : 'versions'})
+                  </span>
                 )}
               </span>
             </div>
-            <p className="tf-card-desc">Resumes uploaded by you</p>
+            <p className="tf-body-secondary">Resumes uploaded by you</p>
           </div>
         </div>
         <div className="flex gap-2 w-full sm:w-auto sm:shrink-0">
@@ -4035,6 +4196,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score')))}
             onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
+            // Own uploads: downloading needs Resume Upload access (lib/permissions/resumeDownload.ts).
+            onDownloadDisabled={!canDownloadMyResumes}
+            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!canDeleteMyResumes}
             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -4066,8 +4230,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             it pins just below the sticky breadcrumb instead of under it. */}
         <div className="sticky top-[var(--crumb-h,0px)] z-20 border-b border-gray-200 bg-white py-3">
           <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
-              <div className="min-w-0 flex-1">
+            {/* Phones / tablets: search · Filter · Sort · List / Grid share line 1, as the
+                Job Openings toolbar (the buttons drop under the search only below
+                ~360px); Folder Filters takes its own line under them. */}
+            <div className="flex flex-wrap items-start gap-2 xl:flex-nowrap">
+              <div className="min-w-[6.5rem] flex-1 basis-0">
                 <UnifiedFolderResumeSearch
                   query={searchQuery}
                   onQueryChange={handleSearchChange}
@@ -4094,7 +4261,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               {/* Folders only. The resume filter that sat beside it is gone —
                   the search box and the Filter panel already narrow resumes. */}
               {viewMode === 'card' && (
-                <div className="grid w-full grid-cols-1 gap-2 xl:w-auto xl:min-w-[190px]">
+                <div className="order-last xl:order-none grid w-full grid-cols-1 gap-2 xl:w-auto xl:min-w-[190px]">
                   <ToolbarFilterSelect<CardFolderFilter>
                     label="Folder Filters"
                     value={cardFolderFilter}
@@ -4105,7 +4272,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-start gap-2 xl:w-auto">
+              <div className="flex flex-nowrap items-start gap-2 xl:w-auto">
                 <SearchFilterBarCompact
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}
@@ -4153,7 +4320,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="tf-meta">Grid filters:</span>
                 {gridToolbarFilterChips.map((chip) => (
-                  <span key={chip.key} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/5 px-2 py-0.5 text-xs text-brand-blue ring-1 ring-brand-blue/20">
+                  <span key={chip.key} className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                     {chip.label}
                     <button
                       type="button"
@@ -4263,6 +4430,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 )}
                 <ResumeTable
                   flushCards
+                  showTeamMemberBadge
                   resumes={filteredResumes}
                   selectedResumes={selectedResumes}
                   onSelectResume={handleSelectResume}
@@ -4273,6 +4441,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
                   onDelete={(id) => handleDelete(id)}
                   onDeleteDisabled={!canDeleteMyResumes}
+                  canDownload={canDownloadMyResumes}
                   onDeleteDisabledReason="You do not have permission to delete resumes"
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
@@ -4296,7 +4465,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   canShare={canShareMyResumes}
                   disablePagination={true}
                   isArchivedFolder={
-                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === selectedFolder)
+                    folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === loadedFolderId)
                   }
                   archivedFolderId={folders.find(f => f.name === 'Archived Resumes' && !f.parentId)?.id}
                   /* All Resumes aggregates every folder, so each row names the
@@ -4543,7 +4712,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <h2 className="tf-section-title truncate">
+                        <h2 className="tf-section-title sm:text-lg truncate">
                           {currentFolderData.name.toLowerCase() === 'root' && !currentFolderData.parentId
                             ? 'Root (Default)'
                             : currentFolderData.name}
@@ -4599,7 +4768,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <LayoutGrid className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
                       </div>
                       <div className="min-w-0">
-                        <h2 className="tf-section-title">All Resumes</h2>
+                        <h2 className="tf-section-title sm:text-lg">All Resumes</h2>
                         <p className="tf-body-muted">{visibleFolderResumes.length} resume{visibleFolderResumes.length !== 1 ? 's' : ''}</p>
                       </div>
                     </div>
@@ -4636,7 +4805,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                   markup (p-3, 36px icon tile, text-sm title) so
                                   they match to the pixel rather than roughly. */}
                               {/* 2-up below lg: three across a tablet truncated "Root (Default)" / "Archived Resumes" to a few letters. */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6 items-stretch">
+                              <div className="tf-grid-3 mb-4 sm:mb-6 items-stretch">
                                 {showAllResumesCard && (
                                   <div
                                     className="h-full bg-white border border-brand-blue/20 ring-1 ring-black/[0.02] rounded-xl shadow-sm shadow-brand-blue/5 overflow-hidden cursor-pointer hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all duration-150"
@@ -4650,7 +4819,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <LayoutGrid className="w-4 h-4 text-[var(--raw-155dfc)]" />
                                       </div>
                                       <div className="flex-1 min-w-0">
-                                        <h3 className="tf-subsection-title truncate">All Resumes</h3>
+                                        <h3 className="tf-row-title truncate">All Resumes</h3>
                                         <p className="tf-meta">{totalItems} resume{totalItems !== 1 ? 's' : ''}</p>
                                       </div>
                                       <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -4702,7 +4871,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             // other card in the row to match — grid items default
                             // to filling the row height, which left the
                             // neighbours padded with blank space.
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                            <div className="tf-grid-3 items-start">
                               {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
@@ -4718,7 +4887,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                         <>
                           {hasCurrentSubfolders && (
                             <div className="flex items-center mb-2 sm:mb-3">
-                              <h3 className="text-sm font-medium text-gray-700">Subfolders</h3>
+                              <h3 className="tf-label">Subfolders</h3>
                             </div>
                           )}
 
@@ -4729,7 +4898,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           )}
 
                           {visibleFoldersToDisplay.length > 0 && (
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                            <div className="tf-grid-3 items-start">
                               {visibleFoldersToDisplay.map(folder => renderFolderCard(folder))}
                             </div>
                           )}
@@ -4746,11 +4915,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       classes, six cards each shaped like DroppableFolderCard
                       (icon box + name line + count line + action dot). */}
                   {loading && cardViewFolder === null && foldersToDisplay.length === 0 && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                    <div className="tf-grid-3 items-start">
                       {Array.from({ length: 6 }).map((_, i) => (
                         <div
                           key={i}
-                          className="bg-white border border-gray-100 rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]"
+                          className="tf-card-soft"
                         >
                           <div className="flex items-center gap-3 p-3">
                             <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
@@ -4782,7 +4951,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {visibleFolderResumes.length > 0 && (
                         <div>
                           {foldersToDisplay.length > 0 && (
-                            <h3 className="text-sm font-medium text-gray-700 mb-3">Resumes in this folder</h3>
+                            <h3 className="tf-label mb-3">Resumes in this folder</h3>
                           )}
                           {/* The list view's table, not a copy of it: one
                               component means the two views cannot drift, and a
@@ -4802,15 +4971,21 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           <div className="bg-white md:border md:border-gray-200 md:ring-1 md:ring-black/[0.02] md:shadow-sm md:shadow-brand-blue/5 md:rounded-xl md:overflow-hidden">
                           <ResumeTable
                             flushCards
+                            showTeamMemberBadge
                             resumes={visibleFolderResumes}
                             selectedResumes={selectedResumes}
                             onSelectResume={handleSelectResume}
                             onSelectAll={(selected) => {
                               // Scoped to this folder's rows, not the whole list.
+                              // Resumes locked out for a team-member email never
+                              // enter a "select all".
+                              const selectableFolderIds = visibleFolderResumes
+                                .filter(r => !(r.is_tenant_user_email || r.isTenantUserEmail))
+                                .map(r => r.id);
                               if (selected) {
-                                setSelectedResumes(prev => [...new Set([...prev, ...visibleFolderResumes.map(r => r.id)])]);
+                                setSelectedResumes(prev => [...new Set([...prev, ...selectableFolderIds])]);
                               } else {
-                                setSelectedResumes(prev => prev.filter(id => !visibleFolderResumes.some(r => r.id === id)));
+                                setSelectedResumes(prev => prev.filter(id => !selectableFolderIds.includes(id)));
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
@@ -4837,6 +5012,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             onUnarchiveDisabled={!canArchiveMyResumes}
                             onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
                             canShare={canShareMyResumes}
+                            canDownload={canDownloadMyResumes}
                             disablePagination={true}
                             isArchivedFolder={
                               folders.some(f => f.name === 'Archived Resumes' && !f.parentId && f.id === cardViewFolder)
@@ -4855,7 +5031,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           fetched. Skeleton mirrors the ResumeTable that renders
                           here once loaded, framed by the same white card. */}
                       {loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && (
-                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div className="tf-panel overflow-hidden">
                           <ResumeTableSkeleton rows={8} />
                         </div>
                       )}
@@ -5026,7 +5202,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                 {/* List of duplicate candidates */}
                 <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                  <h4 className="tf-subsection-title mb-3 flex items-center gap-2">
+                  <h4 className="tf-row-title mb-3 flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-red-600" />
                     Already Scored - Will NOT be Re-scored:
                   </h4>
@@ -5047,7 +5223,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                           </div>
                         </div>
                         <div className="text-right flex-shrink-0">
-                          <div className="tf-cell-name">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
+                          <div className="tf-row-title">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
                           <div className="tf-meta capitalize">{score.match_status}</div>
                         </div>
                       </div>
@@ -5063,7 +5239,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   </div>
                 ) : (
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                    <p className="tf-card-desc">
+                    <p className="tf-body-secondary">
                       All selected candidates are already scored. No new candidates to score.
                     </p>
                   </div>
@@ -5074,7 +5250,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="flex-shrink-0 flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-200">
                 <button
                   onClick={() => setDuplicateScoringWarning({ isOpen: false, jobId: '', jobTitle: '', resumeIds: [], existingScores: [], newCount: 0 })}
-                  className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="tf-btn tf-btn-secondary px-4 py-2 text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 transition-colors whitespace-normal gap-0 font-normal"
                 >
                   Cancel
                 </button>
@@ -5125,7 +5301,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div>
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
                   <p className="tf-body-muted mt-1">
                     All selected resumes will be downloaded and packed in a ZIP file.
@@ -5148,14 +5324,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <button
                   onClick={() => setIsZipDownloadModalOpen(false)}
                   disabled={isDownloadingZip}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isDownloadingZip ? (
                     <>
@@ -5207,7 +5383,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <div>
                   <p className="text-2xl font-bold text-brand-blue">
                     {selectedResumes.length}
-                    <span className="text-base font-semibold text-gray-900 ml-2">candidates selected</span>
+                    <span className="tf-section-title ml-2">candidates selected</span>
                   </p>
                   <p className="tf-body-muted mt-1">
                     The selected resumes will be moved to archive and hidden from the active list.
@@ -5230,14 +5406,14 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <button
                   onClick={() => setIsArchiveModalOpen(false)}
                   disabled={isArchivingResumes}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 rounded-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-secondary px-5 py-2.5 text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-brand-blue/30 whitespace-normal gap-0"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmBulkArchive}
                   disabled={isArchivingResumes}
-                  className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="tf-btn tf-btn-primary flex px-5 py-2.5 bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal justify-start"
                 >
                   {isArchivingResumes ? (
                     <>
@@ -5303,8 +5479,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-3 sm:py-4">
                 <div className="flex items-center justify-between">
                   <div className="min-w-0">
-                    <h2 className="text-base sm:text-xl font-semibold text-gray-900 tracking-tight">Upload History</h2>
-                    <p className="tf-card-desc mt-0.5">View all past bulk upload reports</p>
+                    <h2 className="tf-section-title sm:text-xl tracking-tight">Upload History</h2>
+                    <p className="tf-body-secondary mt-0.5">View all past bulk upload reports</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -5365,7 +5541,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   return (
                     <>
                       {/* Tabs */}
-                      <div className="inline-flex items-center bg-white border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-1 mb-4 sm:mb-6 shadow-sm shadow-brand-blue/5">
+                      <div className="tf-card-soft inline-flex items-center p-1 mb-4 sm:mb-6">
                         <button
                           onClick={() => setUploadHistoryTab('current')}
                           className={`flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-md text-sm font-medium transition-all ${
@@ -5484,15 +5660,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                         if (allZero) {
                           return (
-                            <div className="flex items-center gap-3 mb-4 sm:mb-6 bg-white border border-gray-200 rounded-xl p-4">
+                            <div className="flex items-center gap-3 mb-4 sm:mb-6 tf-panel p-4">
                               <div className="w-9 h-9 bg-brand-blue/10 text-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
                                 <Clock className="w-4 h-4" />
                               </div>
                               <div className="min-w-0">
-                                <p className="text-sm font-medium text-gray-900">
+                                <p className="tf-row-name">
                                   {uploadHistoryTab === 'current' ? 'No uploads in progress' : 'No completed uploads yet'}
                                 </p>
-                                <p className="tf-meta-strong">
+                                <p className="tf-meta">
                                   {uploadHistoryTab === 'current'
                                     ? 'Upload resumes to see live progress and status counts here.'
                                     : 'Finished upload batches and their status counts will appear here.'}
@@ -5527,7 +5703,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     <div className={`w-6 h-6 sm:w-7 sm:h-7 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
                                       <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                     </div>
-                                    <span className="tf-meta-strong truncate">{label}</span>
+                                    <span className="tf-meta truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5538,12 +5714,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                 Hidden when nothing was attempted: 0% would read
                                 as a total failure rather than "no data". */}
                             {attemptedFiles > 0 && (
-                            <div className="bg-white border border-gray-200 rounded-xl p-2.5 sm:p-3 lg:p-4">
+                            <div className="tf-panel p-2.5 sm:p-3 lg:p-4">
                               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-2.5 mb-1.5 sm:mb-2">
                                 <div className="w-6 h-6 sm:w-7 sm:h-7 bg-brand-cyan/10 text-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                                 </div>
-                                <span className="tf-meta-strong truncate">Success Rate</span>
+                                <span className="tf-meta truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5623,7 +5799,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                       {/* Upload History List */}
                       {!showFullEmptyState && (
                         <div className="flex items-center justify-between mb-3">
-                          <h3 className="tf-subsection-title">
+                          <h3 className="tf-row-title">
                             {uploadHistoryTab === 'current' ? 'Active Uploads' : 'Recent Uploads'}
                           </h3>
                           <span className="tf-meta">{displayRecords.length} batch{displayRecords.length !== 1 ? 'es' : ''}</span>
@@ -5699,7 +5875,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                   key={record.id}
                                   /* One subtle border, nothing else: the card is not
                                      clickable, so no hover lift or chevron either. */
-                                  className="bg-white border border-gray-200 rounded-xl pb-4 sm:pb-5"
+                                  className="tf-panel pb-4 sm:pb-5"
                                 >
                                   {/* Header Row */}
                                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4 px-4 sm:px-5 pt-4 sm:pt-5">
@@ -5708,7 +5884,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         <FileText className="w-4 h-4 text-brand-blue" />
                                       </div>
                                       <div className="min-w-0">
-                                        <span className="tf-cell-name block truncate">{record.fileName}</span>
+                                        <span className="tf-row-title block truncate">{record.fileName}</span>
                                         {record.date && (
                                           <span className="tf-meta flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
@@ -5743,13 +5919,13 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     </div>
                                     <div className="flex items-center gap-3 ml-12 sm:ml-0">
                                       {isUploading && (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-blue/10 text-brand-blue text-xs font-medium rounded-full">
+                                        <span className="tf-badge gap-1.5 bg-brand-blue/10 text-brand-blue">
                                           <Loader2 className="w-3 h-3 animate-spin" />
                                           Uploading…
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-brand-orange/10 text-brand-orange-deep text-xs font-medium rounded-full">
+                                        <span className="tf-badge gap-1.5 bg-brand-orange/10 text-brand-orange-deep">
                                           <AlertCircle className="w-3 h-3 flex-shrink-0" />
                                           Needs review
                                         </span>
@@ -5764,7 +5940,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           }`}>
                                             {percentage}%
                                           </div>
-                                          <div className="text-2xs text-gray-500 mt-1 uppercase tracking-wide">Success</div>
+                                          <div className="tf-micro-hint mt-1 uppercase tracking-wide">Success</div>
                                         </div>
                                       )}
                                     </div>
@@ -5784,7 +5960,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     ].map(({ label, value, tone }) => (
                                       <div key={label} className="text-center px-1">
                                         <div className={`text-base font-semibold tabular-nums leading-tight ${value > 0 ? tone : 'text-gray-300'}`}>{value}</div>
-                                        <div className="text-2xs text-gray-500 mt-0.5">{label}</div>
+                                        <div className="tf-micro-hint mt-0.5">{label}</div>
                                       </div>
                                     ))}
                                   </div>
@@ -5955,7 +6131,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                   type="checkbox"
                                                   checked={allSelected}
                                                   readOnly
-                                                  className="w-3 h-3 rounded border-brand-blue-2/40 text-brand-blue-2 pointer-events-none"
+                                                  className="tf-checkbox w-3 h-3 pointer-events-none"
                                                 />
                                                 Select All
                                               </button>
@@ -5987,7 +6163,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                       {filesOpen && (<>
                                       {/* Short note: cancel only for queued items */}
                                       {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="flex items-center gap-1.5 text-2xs text-gray-500 mb-2.5">
+                                        <p className="flex items-center gap-1.5 tf-micro-hint mb-2.5">
                                           <Info className="w-3 h-3 flex-shrink-0 text-gray-400" />
                                           Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
@@ -6057,7 +6233,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                                   }
                                                   setSelectedVersionedItems(newSelected);
                                                 }}
-                                                className="w-4 h-4 rounded border-brand-blue-2/40 text-brand-blue-2 focus:ring-brand-blue-2/40 cursor-pointer flex-shrink-0"
+                                                className="tf-checkbox focus:ring-brand-blue-2/40"
                                               />
                                             )}
                                             {/* Status Icon */}
@@ -6081,7 +6257,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-sm truncate">{file.fileName}</div>
+                                              <div className="tf-row-name truncate">{file.fileName}</div>
                                               <div className="tf-meta mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName || 'Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `${file.candidateName} · version update detected` : 'Version update detected · pending resolution')}
@@ -6150,7 +6326,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                     </div>
                                     ) : uploadHistoryFilter ? (
                                       <div className="mt-4 border-t border-gray-100 pt-4 px-4 sm:px-5">
-                                        <p className="text-xs text-gray-400 text-center py-3">No {
+                                        <p className="tf-hint text-center py-3">No {
                                           uploadHistoryFilter === 'completed' ? 'completed' :
                                           uploadHistoryFilter === 'duplicated' ? 'duplicate' :
                                           uploadHistoryFilter === 'versioned' ? 'versioned' :
@@ -6194,7 +6370,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     </button>
                     <button
                       onClick={() => setIsBulkResolveModalOpen(true)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex items-center justify-center gap-1.5 sm:gap-2"
+                      className="tf-btn tf-btn-primary flex-1 sm:flex-none px-3 sm:px-4 py-1.5 sm:py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue-2/25 ring-1 ring-white/10 flex gap-1.5 sm:gap-2 whitespace-normal"
                     >
                       <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       Resolve ({selectedVersionedItems.size})
@@ -6286,7 +6462,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               </div>
             </div>
             <AlertDialogDescription asChild>
-              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 text-sm text-gray-800">
+              <div className="mt-2 space-y-1.5 rounded-xl border border-red-100 bg-red-50/60 p-4 tf-body">
                 <p>Files already completed are kept</p>
                 <p>Their Resume Storage units are refunded</p>
                 <p>You can re-queue cancelled files later with Retry</p>
@@ -6449,12 +6625,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         value="move-parent"
                                         checked={deleteFolderConfirm.contentAction === 'move-parent'}
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-parent' }))}
-                                        className="w-4 h-4 text-brand-blue"
+                                        className="tf-radio"
                                       />
                                       <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 min-w-0">
                                           <FolderOpen className="w-4 h-4 text-gray-600 flex-shrink-0" />
-                                          <span className="text-sm font-medium text-gray-900 truncate">
+                                          <span className="tf-row-name truncate">
                                             Move to {parentIsRoot ? 'My Resumes (root)' : deleteFolderConfirm.parentFolderName}
                                           </span>
                                         </div>
@@ -6479,12 +6655,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                           value="move-root"
                                           checked={deleteFolderConfirm.contentAction === 'move-root'}
                                           onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'move-root' }))}
-                                          className="w-4 h-4 text-brand-blue"
+                                          className="tf-radio"
                                         />
                                         <div className="flex-1">
                                           <div className="flex items-center gap-2">
                                             <Folder className="w-4 h-4 text-gray-600" />
-                                            <span className="text-sm font-medium text-gray-900">
+                                            <span className="tf-row-name">
                                               Move to My Resumes (root)
                                             </span>
                                           </div>
@@ -6509,7 +6685,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                                         value="delete-all"
                                         checked={deleteFolderConfirm.contentAction === 'delete-all'}
                                         onChange={() => setDeleteFolderConfirm(prev => ({ ...prev, contentAction: 'delete-all' }))}
-                                        className="w-4 h-4 text-red-600"
+                                        className="tf-radio"
                                       />
                                       <div className="flex-1">
                                         <div className="flex items-center gap-2">

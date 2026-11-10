@@ -89,7 +89,7 @@ export default function MemberSelector({
                   : 'bg-gray-50 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-700'
               }`}
             >
-              <NameAvatar name={m.name} fallback={m.email} src={m.avatar_url} userId={m.id} size="xs" className="h-5 w-5 text-[9px]" />
+              <NameAvatar name={m.name} fallback={m.email} src={m.avatar_url} userId={m.id} size="xs" className="h-5 w-5 text-2xs" />
               {m.id === teamLeadId && <Crown className="h-3 w-3 shrink-0" aria-label="Team lead" />}
               <span className="truncate">{m.name}</span>
               <button
@@ -112,7 +112,7 @@ export default function MemberSelector({
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search users by name or email..."
-          className="w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-2.5 pl-10 pr-4 text-sm max-sm:text-[13px] text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
+          className="tf-input pl-10 pr-4"
         />
       </div>
 
@@ -141,15 +141,15 @@ export default function MemberSelector({
         </div>
       )}
 
-      <div className="max-h-60 overflow-y-auto rounded-2xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+      <div className="tf-panel max-h-60 overflow-y-auto">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 p-6 tf-body-muted max-sm:text-[13px]">
+          <div className="flex items-center justify-center gap-2 p-6 tf-body-muted">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading users…
           </div>
         ) : filteredUsers.length === 0 && filteredUnavailable.length === 0 ? (
           <div className="p-6 text-center text-gray-500 dark:text-slate-500">
-            <p className="text-sm max-sm:text-[13px]">
+            <p className="text-sm">
               {searchQuery ? 'No users found matching your search' : 'No users available'}
             </p>
           </div>
@@ -186,11 +186,11 @@ export default function MemberSelector({
                   </div>
                   <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-900 dark:text-slate-50">{user.name}</p>
+                    <p className="truncate tf-row-name">{user.name}</p>
                     <p className="truncate tf-meta">{user.email}</p>
                   </div>
                   {user.role && (
-                    <span className="hidden shrink-0 rounded-full bg-gray-100 dark:bg-slate-800 px-2.5 py-1 text-xs text-gray-700 dark:text-slate-300 sm:inline">
+                    <span className="tf-badge hidden shrink-0 bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 sm:inline">
                       {formatRole(user.role)}
                     </span>
                   )}
@@ -229,10 +229,10 @@ export default function MemberSelector({
                 <div className="h-5 w-5 shrink-0 rounded border-2 border-gray-200 bg-gray-100 dark:border-slate-700 dark:bg-slate-800" />
                 <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm max-sm:text-[13px] font-medium text-gray-700 dark:text-slate-300">{user.name}</p>
+                  <p className="truncate tf-label">{user.name}</p>
                   <p className="truncate tf-meta">{user.email}</p>
                 </div>
-                <span className="max-w-[40%] shrink-0 truncate rounded-full bg-gray-100 px-2.5 py-1 tf-meta-strong dark:bg-slate-800">
+                <span className="tf-badge max-w-[40%] shrink-0 truncate bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-400">
                   In {teamName}
                 </span>
               </div>

@@ -1,4 +1,5 @@
-import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X } from 'lucide-react';
+import { User, Clock, Timer, Award, XCircle, ChevronUp, ChevronDown, FileText, FileDown, FileSpreadsheet, TrendingUp, AlertCircle, Filter, ArrowUpDown, Loader2, BarChart3, Columns3, Trash2, Users, Download, Play, Eye, MoreVertical, X, Mail } from 'lucide-react';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -16,9 +17,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import RowInviteItems from '@/components/talent-match-invite/RowInviteItems';
+import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import { ROW_ACTION_BUTTON_CLASS, ROW_MENU_CONTENT_CLASS, ROW_MENU_ITEM_CLASS, RowDetailsPanel, RowDetailsToggle } from '@/components/ResultRowDetails';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import CandidateResultCard, { CANDIDATE_RESULT_CARD_ICON_ACTION_CLASS } from '@/components/assessments/CandidateResultCard';
+import { MobileRecordCard, MobileStatChip, useMobileRecordCardVariant } from '@/components/ui/mobile-record-card';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -39,7 +42,8 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
 import { Button } from '@/components/ui/button';
 import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
-import { Badge } from '@/components/ui/badge';
+import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import ListToolbar from '@/components/ui/list-toolbar';
 import SearchableSelect from '@/components/ui/searchable-select';
 import FilterSelect from '@/components/ui/filter-select';
@@ -54,7 +58,7 @@ import ListPagination from '@/components/ListPagination';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
-import { SortByControl } from '@/components/ui/select-all-menu';
+import { SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { JOB_TAB_FILTER_GRID_CLASS, JOB_TAB_FILTER_FIELD_CLASS, JOB_TAB_FILTER_LABEL_CLASS, JOB_TAB_FILTER_CONTROL_CLASS } from '@/components/ScoredResumesTable';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 
@@ -273,7 +277,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const canExportAssessments = isTenantAdmin || hasPermissionCode('assessments:export');
   const EXPORT_DENIED_REASON = 'You do not have permission to export assessments';
   const openExportModal = () => { if (canExportAssessments) setShowExportModal(true); };
-  const showName = (name: string) => (formatCandidateName && name ? formatCandidateName(name) : name);
+  /* Every name in Capitalized Case (the invite trackers' rule), after the host's own formatter. */
+  const showName = (name: string) => capitalizedCase(formatCandidateName && name ? formatCandidateName(name) : name);
   const router = useRouter();
   /* Embedded in the Job Details "Assessments Results" tab (toolbar portals into
      that card's slot) → toolbar controls drop to the 36px AI Talent Match
@@ -288,6 +293,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const { open: openInvite } = useInviteDialog();
 
   // AS-25: PDF download state
   const [downloadingPDF, setDownloadingPDF] = useState<string | null>(null);
@@ -1265,19 +1271,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        full set the cards are counted from. */
   }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, appliedDateFrom, appliedDateTo, refreshTick]);
 
-  // Canonical status → Badge variant (shared mapping so statuses don't drift).
-  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
-    switch (status) {
-      case 'Completed': return 'success';
-      case 'In Progress': return 'info';
-      case 'Terminated': return 'destructive';
-      case 'Pending': return 'warning';
-      case 'Failed':
-      case 'Abandoned': return 'destructive';
-      default: return 'muted';
-    }
-  };
-
   /** What a result status reads as on screen.
    *
    *  'Pending' is the STORED value and stays one: it is what `statusFilter`
@@ -1291,6 +1284,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const PENDING_STATUS_LABEL = 'Invited';
   const statusLabel = (status: CandidateResult['status']) =>
     status === 'Pending' ? PENDING_STATUS_LABEL : status;
+  /* A result's status in the shared invite-status look (InviteStatusChip). */
+  const RESULT_STATUS_KIND: Record<CandidateResult['status'], InviteStatusKind> = {
+    Completed: 'completed', 'In Progress': 'in_progress', Terminated: 'terminated', Pending: 'invited',
+  };
+  const resultStatusChip = (status: CandidateResult['status']) => (
+    <InviteStatusChip kind={RESULT_STATUS_KIND[status] ?? 'other'} label={statusLabel(status)} />
+  );
 
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
@@ -1305,8 +1305,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return entries.length ? entries.join(' | ') : '-';
   };
 
+  // canDownloadPDF: the role's Download Report permission (2026-11-10) — it was
+  // accepted but never read, so Viewer could download every report here.
   const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
-    return candidate.status === 'Completed' && candidate.scoring_status === 'completed';
+    return canDownloadPDF && candidate.status === 'Completed' && candidate.scoring_status === 'completed';
   };
 
   // Handle delete result
@@ -1566,6 +1568,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   /* The row ⋮ (View Result, Create / Send, Download PDF Report) — one
      renderer for the list table, the grid cards and the phone / tablet list
      cards, so all three offer the same actions. */
+  /* Inside the Job Openings module the phone list uses the shared JD-style record card. */
+  const recordCardVariant = useMobileRecordCardVariant();
+
   const renderRowMenu = (candidate: CandidateResult) => (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -1605,6 +1610,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <DropdownMenuItem
             className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
             disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
+            title={!canDownloadPDF ? "You can view this result, but your role can't download the report" : undefined}
             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
           >
             {downloadingPDF === candidate.id ? (
@@ -1626,6 +1632,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
+  /* Actions › Create / Send Assessment | AI Interview: the ticked candidates
+     (one per email) into the invite popup — the host's (Job Details), else
+     the shared one, for this job. */
+  const inviteSelected = (kind: 'assessment' | 'interview') => {
+    const seen = new Set<string>();
+    const candidates: InviteCandidate[] = displayResults
+      .filter((c) => selectedRows.includes(c.id) && c.email)
+      .filter((c) => { const k = c.email.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .map((c) => ({ id: c.resumeId || c.id, name: c.name, email: c.email, phone: c.phone, resumeId: c.resumeId }));
+    if (onOpenInviteDialog) { onOpenInviteDialog(kind, candidates); return; }
+    openInvite({
+      kind,
+      job: jdId ? { jdId, jdTitle: jdTitle || '', jdCode: jdShortId || undefined, versionNumber: jdVersion || undefined } : undefined,
+      candidates,
+      onSent: () => setSelectedRows([]),
+    });
+  };
 
   /* Report the table's record count (`totalItems`, set below) to the host.
      Runs after every render but only calls out when the number changes; the
@@ -1875,7 +1898,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </span>
         );
       case 'jobVersion':
-        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="text-xs text-gray-400">—</span>;
+        return candidate.jobVersion != null ? <VersionPill kind="job" version={candidate.jobVersion} /> : <span className="tf-hint">—</span>;
       default:
         return null;
     }
@@ -1894,9 +1917,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        ROUTE, and nothing at all when embedded, where the host has already drawn
        one around this view. The nesting is kept either way so the content tree
        below is the one tree, never a second copy written for the tab. */
-    <div ref={rootRef} className={embedded ? undefined : 'flex-1 overflow-x-clip bg-slate-50'}>
+    <div ref={rootRef} className={embedded ? undefined : 'tf-page'}>
       <div className={embedded ? undefined : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? undefined : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? undefined : 'tf-page-sheet'}>
           {/* Previous / Next assessment navigation rides inside the breadcrumb
               bar, as on job-details, so users can step through assessments
               without going back to the list — and without it scrolling away
@@ -1945,7 +1968,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   /* The app's one Job ID badge — see JobIdBadge. */
                   <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>
                 )}
-                <h1 className="min-w-0 text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">
+                <h1 className="tf-page-title min-w-0 tf-section-title truncate">
                   {jdTitle || assessmentTitle}
                 </h1>
               </div>
@@ -1957,7 +1980,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   assessment version) in the same way. Wraps under itself on a
                   phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-card-desc">
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 tf-body-secondary">
                   <span className="shrink-0">
                     {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
                   </span>
@@ -2247,7 +2270,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         /* Embedded: the AI Talent Match tab's spacing — the row's own `mb-3`
            under the controls and the More Filters panel's `pb-4` under the
            fields, nothing on the block itself. */
-        <div className={toolbarPortal ? '' : 'bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4'}>
+        /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
+           list's lines — search · filter icon, Result, Customize Columns · Export,
+           the status tabs (underlined), then Select All · Sort · List / Grid. */
+        <div className={toolbarPortal ? '' : 'tf-jobs-toolbar tf-card p-3 sm:p-4 mb-3 sm:mb-4'}>
           <ListToolbar
             searchValue={searchQuery}
             /* Keystroke-by-keystroke, as the search field always was. */
@@ -2299,6 +2325,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             ) : (
               /* Result inline with Search, as Location / Industry are on the
                  Job Openings page (and so not repeated in More Filters). */
+              <div className="tf-jobs-filter-pills contents">
               <SearchableSelect
                 className="w-full sm:w-44"
                 value={passFailFilter === 'all' ? '' : passFailFilter}
@@ -2312,11 +2339,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 searchPlaceholder="Search result..."
                 ariaLabel="Filter by result"
               />
+              </div>
             )}
             trailing={portaled ? <ListViewToggle value={displayMode} onChange={setDisplayMode} className="h-9 [&>button]:p-2 [&_svg]:w-4 [&_svg]:h-4" /> : undefined}
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
-            afterFiltersActions={toolbarActions}
+            /* Standalone phones: the page's Invite leaves line 1 for a full line of its
+               own, above Customize Columns / Export (globals.css, `.tf-jobs-invite`). */
+            afterFiltersActions={toolbarActions && !portaled ? <div className="tf-jobs-invite contents">{toolbarActions}</div> : toolbarActions}
             activeFilterCount={activeFilterCount}
             filtersApplied={activeFilterCount > 0}
             /* Reset — search, status, result and every panel filter at once. */
@@ -2329,6 +2359,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 standalone page; embedded in Job Details they are items in the
                 Actions pill beside Select All (see `beforeSearch` above). */}
             {!portaled && (
+              <div className="tf-jobs-actions-line contents">
               <Button
                 variant="secondary"
                 size="sm"
@@ -2339,8 +2370,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               >
                 Customize Columns ({enabledColumnsCount})
               </Button>
-            )}
-            {!portaled && (
               <Button
                 variant="primary"
                 size="sm"
@@ -2352,6 +2381,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               >
                 Export
               </Button>
+              </div>
             )}
           </ListToolbar>
 
@@ -2361,7 +2391,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               of line; h-9 matches the toolbar band. Holds Customize Columns
               and Export plus the selection-bound Download PDF Reports. */}
           {portaled && selectedRows.length > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="tf-tb-bulk mb-3 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none [&>div>button]:w-full sm:[&>div>button]:w-auto animate-in fade-in slide-in-from-top-1 duration-200">
             <div className="relative">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2410,6 +2440,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                     </span>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                  <RowInviteItems onInvite={inviteSelected} />
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
@@ -2422,7 +2454,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <X className="w-4 h-4" />
               Clear
             </button>
-          </div>
+          </StickyBulkBar>
           )}
 
           {/* More Filters. Embedded in Job Details: the AI Talent Match tab's
@@ -2437,8 +2469,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
             </div>
           ) : (
-            <div className="mt-3 pt-3 border-t border-brand-blue/10">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+            <div className="tf-jobs-filter-panel mt-3 pt-3 border-t border-brand-blue/10">
+              <div className="tf-grid-4 [&>div]:min-w-0">
                 {filterFields}
               </div>
             </div>
@@ -2447,7 +2479,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {/* Standalone row 2 — the Job Openings page's: Select All, the
               status pills, then Sort by and List / Grid at the row's end. */}
           {!portaled && (
-            <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+            <div className="tf-jobs-row2 flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-gray-200 dark:border-slate-700">
+              <div className="tf-jobs-select">
               <ToolbarSelectAll
                 selectedCount={selectedRows.length}
                 allSelected={filteredCandidates.length > 0 && filteredCandidates.every((c) => selectedRows.includes(c.id))}
@@ -2463,14 +2496,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 onSelectAll={() => setSelectedRows(filteredCandidates.map((c) => c.id))}
                 onClear={() => setSelectedRows([])}
               />
+              </div>
               {/* AS-26: Bulk PDF download — once a row is ticked. */}
               {selectedRows.length > 0 && (
-              <div className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+              <StickyBulkBar className="basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                      className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                       aria-label={`Actions for ${selectedRows.length} selected`}
                     >
                       <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -2501,21 +2535,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         {downloadingBulkPDF ? 'Downloading...' : 'Download PDF Reports'}
                       </span>
                     </DropdownMenuItem>
+                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                    <RowInviteItems onInvite={inviteSelected} />
                   </DropdownMenuContent>
                 </DropdownMenu>
                 <button
                   type="button"
                   onClick={() => setSelectedRows([])}
                   title="Clear the selection"
-                  className="h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
+                  className="h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue"
                 >
                   <X className="w-4 h-4" />
                   Clear
                 </button>
-              </div>
+              </StickyBulkBar>
               )}
               {/* Status pills — as the Job Openings page's All Jobs /
                   Published / Draft … Same state the dropdown drove. */}
+              <div className="tf-jobs-status-tabs contents">
               {([
                 ['all', 'All Candidates'],
                 ['In Progress', 'In Progress'],
@@ -2529,13 +2566,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(value);
                     setCurrentPage(1);
                   }}
+                  aria-pressed={statusFilter === value}
                   className={tabPill(statusFilter === value)}
                 >
                   {label}
                 </button>
               ))}
-              <div className="flex items-center gap-2 sm:ml-auto">
-                {resultsSortControl}
+              </div>
+              <div className="tf-jobs-trail flex items-center gap-2 sm:ml-auto">
+                <div className="tf-jobs-sort contents">{resultsSortControl}</div>
+                {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+                <PhoneSortMenu<typeof sortField>
+                  value={sortField}
+                  order={sortDirection}
+                  options={[
+                    { value: 'name', label: 'Name' },
+                    { value: 'score', label: 'Score' },
+                    { value: 'date', label: 'Submitted' },
+                  ]}
+                  orderLabels={(f) => (f === 'date'
+                    ? { desc: 'Newest first', asc: 'Oldest first' }
+                    : f === 'score' ? { desc: 'Highest first', asc: 'Lowest first' } : { desc: 'Z → A', asc: 'A → Z' })}
+                  onChange={setSortField}
+                  onOrderChange={setSortDirection}
+                />
                 <ListViewToggle value={displayMode} onChange={setDisplayMode} />
               </div>
             </div>
@@ -2546,7 +2600,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         })()}
 
         {/* Candidates Results Table */}
-        <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
+        <div className="tf-card overflow-hidden">
           {/* Heading + candidate count — standalone only. Embedded in Job
               Details this row is dropped entirely to match the AI Talent
               Match reference, whose table card has no heading/count row at
@@ -2559,7 +2613,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {!portaled && (
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 dark:border-slate-700 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
+              <h2 className="truncate tf-row-name sm:text-base tracking-tight">Candidate Results</h2>
               {isFetching && (
                 <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
               )}
@@ -2631,11 +2685,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   jobTitle={jdTitle}
                   jobVersion={candidate.jobVersion}
                   assessmentVersion={candidate.assessmentVersion}
-                  statusBadge={
-                    <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                      {statusLabel(candidate.status)}
-                    </Badge>
-                  }
+                  statusBadge={resultStatusChip(candidate.status)}
                   /* Only the rounds this assessment runs, as the table's
                      score columns. */
                   scores={[
@@ -2678,6 +2728,46 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   ...(assessmentDetails?.technical_enabled ? [{ label: 'Tech', value: candidate.tech_score }] : []),
                   ...(assessmentDetails?.coding_enabled ? [{ label: 'Coding', value: candidate.coding_score }] : []),
                 ];
+                if (recordCardVariant === 'jd') {
+                  const shownRounds = rounds.filter(({ value }) => value !== undefined);
+                  return (
+                    <MobileRecordCard
+                      key={candidate.id}
+                      selected={isSelected}
+                      onClick={() => viewCandidateDetails(candidate)}
+                      select={
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
+                          className="tf-checkbox focus:ring-brand-blue/40"
+                        />
+                      }
+                      badges={resultStatusChip(candidate.status)}
+                      title={showName(candidate.name) || 'Unknown'}
+                      actions={renderRowMenu(candidate)}
+                      meta={[{ icon: <Mail />, label: candidate.email ? <span className="[overflow-wrap:anywhere]">{candidate.email}</span> : null }]}
+                      fields={[
+                        { label: 'Submitted', value: candidate.completedDate && candidate.completedDate !== '-' ? candidate.completedDate : null },
+                        { label: 'Duration', value: candidate.duration && candidate.duration !== '-' ? candidate.duration : null },
+                      ]}
+                      footer={shownRounds.length > 0 ? (
+                        <>
+                          {shownRounds.map(({ label, value }) => (
+                            <MobileStatChip
+                              key={label}
+                              tone={typeof value !== 'number' ? 'neutral' : value >= passingThreshold ? 'success' : 'danger'}
+                            >
+                              {label} {typeof value === 'number' ? `${value}%` : '—'}
+                            </MobileStatChip>
+                          ))}
+                        </>
+                      ) : undefined}
+                    />
+                  );
+                }
                 return (
                   <div
                     key={candidate.id}
@@ -2693,7 +2783,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         onChange={(e) => handleSelectRow(candidate.id, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
                         aria-label={`Select ${candidate.name || 'candidate'}`}
-                        className="mt-1 w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 shrink-0"
+                        className="tf-checkbox mt-1 focus:ring-brand-blue/40"
                       />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-2">
@@ -2701,9 +2791,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             {showName(candidate.name) || 'Unknown'}
                           </p>
                           <div className="flex items-center gap-2 shrink-0" onClick={(e) => e.stopPropagation()}>
-                            <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
-                              {statusLabel(candidate.status)}
-                            </Badge>
+                            {resultStatusChip(candidate.status)}
                             {renderRowMenu(candidate)}
                           </div>
                         </div>
@@ -2981,9 +3069,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             </div>
                           ) : (
                           <div className="flex min-w-0 items-center gap-2">
-                            <div className="h-6 w-6 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-2xs font-semibold">
-                              {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                            </div>
                             {/* Name over email, one identity cell — the same
                                 shape the invite tracker uses, which is what
                                 let the separate Email column go. */}
@@ -3004,9 +3089,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('status') && (
                         <td className={`${cellPad}`}>
-                          <Badge variant={getStatusVariant(candidate.status)}>
-                            {statusLabel(candidate.status)}
-                          </Badge>
+                          {resultStatusChip(candidate.status)}
                         </td>
                       )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
@@ -3066,7 +3149,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {jdShortId ? (
                             <JobIdBadge>{jdShortId}</JobIdBadge>
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3084,7 +3167,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.jobVersion != null ? (
                             <VersionPill kind="job" version={candidate.jobVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}
@@ -3100,7 +3183,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {candidate.assessmentVersion != null ? (
                             <VersionPill kind="assessment" version={candidate.assessmentVersion} />
                           ) : (
-                            <span className="text-xs text-gray-400">—</span>
+                            <span className="tf-hint">—</span>
                           )}
                         </td>
                       )}

@@ -1,7 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import CreateRoleForm from '@/components/roles/CreateRoleForm';
-
+// Roles are created in a popup on the Role Management page now.
 export default function CreateRolePage() {
-  return <CreateRoleForm />;
+  redirect('/organization/role-management');
 }

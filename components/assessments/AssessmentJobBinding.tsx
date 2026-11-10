@@ -26,7 +26,7 @@ export default function AssessmentJobBinding({
         <span className="min-w-0 text-brand-blue font-medium [overflow-wrap:anywhere]">{role}</span>
       )}
       {version != null && (
-        <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-gray-700 ring-1 ring-gray-200">
+        <span className="flex-shrink-0 inline-flex items-center px-2 py-0.5 rounded tf-caption bg-slate-100 ring-1 ring-gray-200">
           v{version}
         </span>
       )}

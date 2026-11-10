@@ -11,7 +11,7 @@ import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus, JDLocation } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { formatJobVersionLabel, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
+import { formatJobVersionLabel, formatJobActionMessage, formatJobSubject } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -75,9 +75,9 @@ interface ExtendedJob extends Job {
 // Interview panels). Kept inline (no separate file) so it can't drift.
 function JobDetailsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Breadcrumb + pager */}
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="h-4 w-72 max-w-[60%] rounded bg-gray-200 animate-pulse" />
@@ -123,7 +123,7 @@ function JobDetailsSkeleton() {
           </div>
 
           {/* Content — two columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+          <div className="tf-grid-3">
             {/* Left (2/3): description + two half-cards + summary bar */}
             <div className="lg:col-span-2 space-y-4 sm:space-y-5">
               <div className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
@@ -132,7 +132,7 @@ function JobDetailsSkeleton() {
                 <div className="h-4 w-5/6 rounded bg-gray-100 animate-pulse" />
                 <div className="h-4 w-2/3 rounded bg-gray-100 animate-pulse" />
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="tf-grid-2">
                 {Array.from({ length: 2 }).map((_, i) => (
                   <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-2">
                     <div className="h-4 w-32 rounded bg-gray-200 animate-pulse" />
@@ -598,11 +598,11 @@ function JobDetailsContent() {
       // The job already had an open draft version: that one is reopened, not a new copy.
       if (newJd.reused_existing_draft) {
         toast.success('Opened the existing draft version', {
-          description: `Version ${newJd.version_number ?? ''} is already in draft for this job. Continue editing it.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} is already in draft. Continue editing it.`,
         });
       } else {
         toast.success('New version created', {
-          description: `Version ${newJd.version_number ?? ''} created as a new draft. Edit and publish it independently.`,
+          description: `${formatJobSubject({ job_id: newJd.job_id, title: newJd.title, versionNumber: newJd.version_number })} was created as a new draft. Edit and publish it independently.`,
         });
       }
       // `new_version=1`: the editor names this "New Version" (reopening the
@@ -730,7 +730,7 @@ function JobDetailsContent() {
 
   if (!job) {
     return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
+      <div className="tf-page flex items-center justify-center">
         <div className="text-center">
           <p className="text-gray-600 dark:text-slate-400 mb-4">Job not found</p>
           <button
@@ -843,7 +843,7 @@ function JobDetailsContent() {
     : undefined;
 
   return (
-    <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
+    <div className="tf-page relative flex flex-col">
       {/* Disable Confirmation Modal */}
       {/* Disable confirm — the shared component. This page used to render its
           own header-bar modal that never named the JD being disabled. */}

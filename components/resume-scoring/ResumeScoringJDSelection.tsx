@@ -59,9 +59,9 @@ export default function ResumeScoringJDSelection() {
   };
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -126,7 +126,7 @@ export default function ResumeScoringJDSelection() {
             {Array.from({ length: 5 }).map((_, i) => (
               <div
                 key={i}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 tf-card"
               >
                 <div className="flex items-start gap-4 flex-1 min-w-0">
                   <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0 mt-0.5" />
@@ -153,7 +153,7 @@ export default function ResumeScoringJDSelection() {
             ))}
           </div>
         ) : filteredJds.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
               icon={Briefcase}
               title="No published job descriptions found"
@@ -182,7 +182,7 @@ export default function ResumeScoringJDSelection() {
               return (
                 <div
                   key={jd.id}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 sm:p-4 tf-card hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
                 >
                   {/* Left: icon + info */}
                   <div className="flex items-start gap-4 flex-1 min-w-0">
@@ -195,20 +195,20 @@ export default function ResumeScoringJDSelection() {
                         {jd.job_id && (
                           <JobIdBadge className="flex-shrink-0 max-w-[9rem] sm:max-w-none truncate">{jd.job_id}</JobIdBadge>
                         )}
-                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
-                        <span className="flex items-center gap-1 px-2 py-0.5 text-xs whitespace-nowrap flex-shrink-0 text-green-700 bg-green-100 rounded-full ring-1 ring-green-200">
+                        <h3 className="tf-row-title sm:text-base truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
+                        <span className="tf-badge flex flex-shrink-0 text-green-700 bg-green-100 ring-1 ring-green-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           Published
                         </span>
                         {scored > 0 && (
-                          <span className="flex items-center gap-1 px-2 py-0.5 text-xs whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 rounded-full ring-1 ring-brand-blue/20">
+                          <span className="tf-badge flex flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">
                             <ClipboardList className="w-3 h-3" />
                             {scored} scored
                           </span>
                         )}
                       </div>
                       {/* Metadata row */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 tf-meta-strong">
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-1.5 tf-meta">
                         {jd.department && (
                           <span className="flex items-center gap-1">
                             <Building2 className="w-3 h-3" />

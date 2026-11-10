@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import type { LucideIcon } from 'lucide-react';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import {
   Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Eye, Pencil, Send,
   MoreVertical, Monitor, RefreshCw, X, History, Link2,
@@ -479,6 +480,8 @@ export interface RowAction {
   iconClassName?: string;
 }
 
+export const NO_INVITE_PERMISSION_MESSAGE = "You can view invitations, but your role can't resend, edit or revoke them";
+
 export function buildInvitationRowActions(inv: any, opts: {
   onResend?: (inv: any) => void;
   resendingId?: string | null;
@@ -500,7 +503,13 @@ export function buildInvitationRowActions(inv: any, opts: {
    *  lists that span several assessments/JDs. Mirrors AI Interview's
    *  `jdDisabled`. */
   jdDisabled?: boolean;
+  /** The role's Assessments "Invite" permission (2026-11-10). False →
+   *  Resend, Edit / Edit Email and Revoke stay visible but disabled, so a
+   *  view-only role (Viewer) can't resend expired links. */
+  canInvite?: boolean;
 }): RowAction[] {
+  const noInvite = opts.canInvite === false;
+  const noInviteProps = noInvite ? { disabled: true, title: NO_INVITE_PERMISSION_MESSAGE } : {};
   const actions: RowAction[] = [];
   const status = resolveInviteStatus(inv);
   const jdLocked = !!opts.jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
@@ -534,6 +543,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       disabled: opts.resendingId === inv.id || locked,
       iconClassName: 'text-menu-icon-share',
       ...(locked ? { title: lockedMessage } : {}),
+      ...noInviteProps,
     });
   }
   if (opts.onEditEmail && (status === 'failed' || status === 'bounced')) {
@@ -543,6 +553,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       Icon: Pencil,
       run: () => opts.onEditEmail!(inv),
       iconClassName: 'text-menu-icon-edit',
+      ...noInviteProps,
     });
   }
   if (opts.onEdit && canEditInvitation(inv)) {
@@ -554,6 +565,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       title: locked ? lockedMessage : 'Edit candidate details and send',
       iconClassName: 'text-menu-icon-edit',
       disabled: locked,
+      ...noInviteProps,
     });
   }
   if (opts.onRevoke && isRevocableInvitation(inv)) {
@@ -566,6 +578,7 @@ export function buildInvitationRowActions(inv: any, opts: {
       busy: opts.revokingId === inv.id,
       title: locked ? lockedMessage : "Revoke this invitation — the candidate's link will stop working",
       destructive: true,
+      ...noInviteProps,
     });
   }
   return actions;
@@ -581,7 +594,7 @@ export function InvitationActionsMenu({ actions, extraItems, className }: {
   extraItems?: React.ReactNode;
   className?: string;
 }) {
-  if (actions.length === 0 && !extraItems) return <span className="text-xs text-gray-400 dark:text-slate-500">—</span>;
+  if (actions.length === 0 && !extraItems) return <span className="tf-hint">—</span>;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -722,13 +735,13 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-3 sm:p-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 px-4 sm:px-6 pt-4 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
-          <h3 className="min-w-0 truncate tf-section-title">Edit Invitation</h3>
+          <h3 className="min-w-0 truncate tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
           <Button
             variant="secondary"
             size="sm"
             onClick={() => { if (!saving) onClose(); }}
             aria-label="Close"
-            className="px-2 shrink-0"
+            className="shrink-0"
           >
             <X className="w-5 h-5" />
           </Button>
@@ -738,13 +751,13 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             Update the candidate's details below. Saving will send them a fresh invitation link automatically.
           </p>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+            <label className="block tf-caption mb-1">Candidate name</label>
             <input
               type="text"
               value={form.candidate_name}
               onChange={(e) => setForm((f) => ({ ...f, candidate_name: e.target.value }))}
               aria-invalid={nameError ? 'true' : undefined}
-              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full min-w-0 h-9 px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 nameError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -753,13 +766,13 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
             {nameError && <p className="mt-1 tf-error">{nameError}</p>}
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+            <label className="block tf-caption mb-1">Candidate email</label>
             <input
               type="email"
               value={form.candidate_email}
               onChange={(e) => setForm((f) => ({ ...f, candidate_email: e.target.value }))}
               aria-invalid={emailError ? 'true' : undefined}
-              className={`w-full min-w-0 h-[38px] px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+              className={`w-full min-w-0 h-9 px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                 emailError
                   ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -873,7 +886,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
               popup names the address. */}
           <DialogDescription className="break-words">
             
-            {target?.candidate_name || (!target?.candidate_email ? 'Candidate' : null)}
+            {capitalizedCase(target?.candidate_name) || (!target?.candidate_email ? 'Candidate' : null)}
             {target?.candidate_name && target?.candidate_email && ' — '}
             {target?.candidate_email && <span className="break-all">{target.candidate_email}</span>}
           
@@ -912,15 +925,15 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                     <div className="min-w-0 flex-1">
                       <p className="tf-meta">{formatIST(entry.at)}</p>
                       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
+                        <p className="tf-row-name">{entry.label}</p>
                         {isCurrent && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                          <span className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                             Current status
                           </span>
                         )}
                       </div>
                       {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
-                        <p className="tf-meta-strong break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
+                        <p className="tf-meta break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
                       )}
                     </div>
                   </li>

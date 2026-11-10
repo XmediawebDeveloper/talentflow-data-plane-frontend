@@ -119,7 +119,7 @@ export default function AccessRestrictedModal() {
             Access Restricted
           </h2>
 
-          <p className="tf-card-desc">
+          <p className="tf-body-secondary">
             Your access has been restricted by your organization administrator.
           </p>
         </div>
@@ -128,7 +128,7 @@ export default function AccessRestrictedModal() {
         <div className="px-6 sm:px-8 pb-6 flex-1 overflow-y-auto">
 
           {/* Explanation */}
-          <p id="access-restricted-desc" className="mt-4 tf-card-desc leading-relaxed text-center">
+          <p id="access-restricted-desc" className="mt-4 tf-body-secondary leading-relaxed text-center">
             Your current session has ended and you can no longer access the application.
             If you believe this restriction was made in error, please contact your administrator.
           </p>
@@ -157,7 +157,7 @@ export default function AccessRestrictedModal() {
           <button
             onClick={handleSignOut}
             autoFocus
-            className="w-full px-4 py-2.5 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md shadow-red-600/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+            className="tf-btn tf-btn-destructive w-full px-4 py-2.5 text-sm bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25 ring-1 ring-white/10 transition-colors flex whitespace-normal"
           >
             <LogOut className="w-4 h-4" />
             Sign Out

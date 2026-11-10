@@ -7,7 +7,7 @@ import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
-import { hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
+import { hasAvailableQuota, checkQuotaStatus, QuotaInfo, getQuotaTotalLimit } from '@/lib/services/usageTrackingService';
 import { usePlanLock } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { toast } from 'sonner';
@@ -379,7 +379,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
       >
         <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
         <span className={`truncate flex-1 ${MENU_ITEM_SCALE_CLASS}`}>{folder.name}</span>
-        <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>
+        <span className="flex-shrink-0 tf-hint">({folder.count})</span>
         {hasChildren && (
           <ChevronRight
             className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0"
@@ -839,7 +839,8 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
     const numericValue = Number(value);
     return Number.isFinite(numericValue) ? numericValue : fallback;
   };
-  const quotaLimit = toFiniteNumber(quotaInfo?.subscription?.limit);
+  // Plan limit + add-on units, so units added by an admin raise the total.
+  const quotaLimit = getQuotaTotalLimit(quotaInfo) ?? 0;
   const quotaUsed = toFiniteNumber(quotaInfo?.subscription?.used);
   const quotaRemaining = toFiniteNumber(quotaInfo?.total_remaining);
   const quotaPercentageFromApi = Number(quotaInfo?.percentage);
@@ -861,7 +862,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               <FileUser className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-semibold tracking-tight text-gray-900 dark:text-slate-50">Upload Resume</h2>
+              <h2 className="tf-section-title sm:text-xl tracking-tight">Upload Resume</h2>
               <p className="tf-body-muted mt-0.5">
                 Add candidate resumes to your library
               </p>
@@ -880,7 +881,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 mb-2">
                   <span
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-slate-50"
+                    className="inline-flex items-center gap-1.5 tf-row-name"
                     title="Each resume you store consumes one Resume Storage Unit from your plan."
                   >
                     Resume Storage Units (RU)
@@ -889,7 +890,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                   {isCheckingQuota ? (
                     <span className="tf-body-muted">Checking...</span>
                   ) : quotaInfo ? (
-                    <span className="text-sm font-medium text-gray-700 dark:text-slate-200 tabular-nums">
+                    <span className="tf-label tabular-nums">
                       {quotaRemaining.toLocaleString()} / {quotaLimit.toLocaleString()} available
                     </span>
                   ) : (
@@ -911,19 +912,19 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                       />
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-1.5">
-                      <span className="tf-meta-strong tabular-nums">
+                      <span className="tf-meta tabular-nums">
                         {quotaUsed.toLocaleString()} used ({quotaPercent.toFixed(1)}%)
                       </span>
                       {quotaInfo.status === 'EXCEEDED' ? (
-                        <span className="text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">
+                        <span className="tf-badge text-red-700 bg-red-50 ring-1 ring-red-200">
                           Quota exhausted
                         </span>
                       ) : (quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') ? (
-                        <span className="text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">
+                        <span className="tf-badge text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
                           Low quota
                         </span>
                       ) : (
-                        <span className="text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">
+                        <span className="tf-badge text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 tabular-nums">
                           {quotaFreePercent.toFixed(0)}% free
                         </span>
                       )}
@@ -1000,10 +1001,10 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               aria-hidden="true"
               className={`mx-auto mb-2.5 h-16 w-auto sm:h-20 transition-transform ${isDragging ? 'scale-105' : ''}`}
             />
-            <p className="tf-cell-name">
+            <p className="tf-row-title">
               {activeTab === 'single' ? 'Drag & drop your resume here' : 'Drag & drop your resumes here'}
             </p>
-            <p className="tf-meta-strong mt-1 mb-3">
+            <p className="tf-meta mt-1 mb-3">
               or <span className="text-brand-blue font-medium underline-offset-2 hover:underline">click to browse</span> from your device
             </p>
             {/* The accepted formats as chips — quicker to scan than a sentence. */}
@@ -1011,7 +1012,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
               {['PDF', 'DOCX', 'DOC'].map(format => (
                 <span
                   key={format}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-2xs font-medium text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  className="tf-badge gap-1.5 border border-brand-cyan/20 bg-white text-2xs text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
                   {format === 'PDF' ? (
                     <FileFormatIcon color="var(--raw-dc2626)" accent="var(--raw-f87171)" label="PDF" />
@@ -1022,7 +1023,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                 </span>
               ))}
             </div>
-            <div className="flex flex-col items-center justify-center gap-1 text-2xs text-gray-500 dark:text-slate-400 sm:flex-row sm:gap-3 sm:text-2xs">
+            <div className="flex flex-col items-center justify-center gap-1 tf-micro-hint sm:flex-row sm:gap-3 sm:text-2xs">
               <span className="flex items-center gap-1">
                 <FileText className="h-3 w-3" />
                 Max file size: {maxFileSizeMB} MB
@@ -1080,7 +1081,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                   >
                     <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-teal flex-shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
+                      <div className="tf-body truncate">{file.name}</div>
                       <div className="tf-meta">{formatFileSize(file.size)}</div>
                     </div>
                     <button
@@ -1128,7 +1129,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                     )}
                     <div className="flex-1 min-w-0">
                       {error.fileName && (
-                        <div className="text-sm text-gray-900 dark:text-slate-50 truncate mb-1">{error.fileName}</div>
+                        <div className="tf-body truncate mb-1">{error.fileName}</div>
                       )}
                       <div className={`text-sm whitespace-pre-line ${
                         error.type === 'virus' ? 'text-red-800' :
@@ -1144,7 +1145,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                           <div className="tf-meta mb-1">Existing Resume</div>
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="min-w-0">
-                              <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                              <div className="tf-row-name truncate">
                                 {error.existingResume.candidateName}
                               </div>
                               {error.existingResume.uploadedAt && (
@@ -1176,7 +1177,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
           )}
 
           <div className="mt-4 sm:mt-6">
-            <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-slate-100 mb-2">
+            <label className="flex items-center gap-1.5 tf-row-name mb-2">
               Select Folder
               <span className="font-normal text-gray-500 dark:text-slate-400">(Optional)</span>
               <Info
@@ -1202,7 +1203,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                       setFolderPickerPosition(null);
                       setShowFolderPicker(true);
                     }}
-                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 transition-colors"
+                    className="w-full flex items-center gap-2 px-3 sm:px-4 py-2.5 tf-panel focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 transition-colors"
                   >
                     <FolderOpen className={`w-4 h-4 flex-shrink-0 ${selectedFolderIconColorClass}`} />
                     <span className="flex-1 min-w-0 truncate text-left">{selectedFolderLabel}</span>
@@ -1258,7 +1259,7 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                                 <span className={`flex-1 truncate text-left ${MENU_ITEM_SCALE_CLASS}`}>
                                   {folder.name.toLowerCase() === 'root' ? 'Root (Default)' : folder.name}
                                 </span>
-                                <span className="flex-shrink-0 text-xs text-gray-400 dark:text-slate-500">({folder.count})</span>
+                                <span className="flex-shrink-0 tf-hint">({folder.count})</span>
                               </button>
                             ))}
                           </>
@@ -1332,13 +1333,13 @@ function UploadModalBody({ folders: hostFolders, tenant, uploadSection, onClose,
                           placeholder="e.g., Senior Developers"
                           maxLength={FOLDER_NAME_MAX_LENGTH}
                           autoFocus
-                          className="w-full min-w-0 px-3 sm:px-4 py-2.5 border border-gray-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-sm text-gray-900 dark:text-slate-100 bg-white dark:bg-slate-900"
+                          className="tf-input sm:px-4 rounded-xl"
                         />
                         <button
                           onClick={handleCreateFolder}
                           disabled={!newFolderName.trim() || newFolderTooDeep}
                           title={newFolderTooDeep ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
-                          className="px-3 sm:px-4 py-2.5 bg-brand-blue text-white rounded-xl hover:bg-brand-blue-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium whitespace-nowrap"
+                          className="tf-btn tf-btn-primary px-3 sm:px-4 py-2.5 bg-brand-blue rounded-xl hover:bg-brand-blue-2 transition-colors text-sm shadow-none gap-0"
                         >
                           Create
                         </button>

@@ -8,6 +8,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
+import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
@@ -20,6 +21,30 @@ function formatDateTimeIST(date: Date | string | undefined): { date: string; tim
   }
   const str = typeof date === 'string' ? date : date.toISOString();
   return { date: formatISTDate(str) || '-', time: formatISTTime(str) };
+}
+
+/* JD id → its readable code ("JD-0042"), read once per job for rows whose
+   host did not carry `jobCode` (the app-wide popup's runs, which live in
+   context and localStorage, have only the JD id). Kept across opens of the
+   popup; a job whose read failed is left out so a later open tries again. */
+const jobCodeCache = new Map<string, string>();
+const jobCodeLoading = new Set<string>();
+/* Every open popup re-renders when codes land — including one opened while
+   the read it needs was already in flight. */
+const jobCodeListeners = new Set<() => void>();
+
+function loadJobCodes(ids: string[]) {
+  ids.forEach(id => jobCodeLoading.add(id));
+  void Promise.all(ids.map(async id => {
+    try {
+      const jd = await jdService.get(id);
+      if (jd.job_id) jobCodeCache.set(id, jd.job_id);
+    } catch {
+      /* no code — the cell shows a dash, a later open tries again */
+    } finally {
+      jobCodeLoading.delete(id);
+    }
+  })).then(() => jobCodeListeners.forEach(listener => listener()));
 }
 
 export interface ScoringProgressItem {
@@ -105,7 +130,7 @@ interface BulkScoringProgressModalProps {
 
 export default function BulkScoringProgressModal({
   onClose,
-  progressData = [],
+  progressData: rawProgressData = [],
   filterByJobId,
   showJobTitleColumn = true,
   showJobColumns = false,
@@ -119,6 +144,25 @@ export default function BulkScoringProgressModal({
   onOpenResume,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
+
+  /* Rows without a `jobCode` get their job's code from the JD itself, so the
+     Job ID column and header chip show "JD-0042" instead of the JD's uuid. */
+  const [, setJobCodesTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setJobCodesTick(n => n + 1);
+    jobCodeListeners.add(listener);
+    return () => { jobCodeListeners.delete(listener); };
+  }, []);
+  const missingCodeKey = [...new Set(rawProgressData.filter(item => !item.jobCode && item.jobId).map(item => item.jobId))]
+    .filter(id => !jobCodeCache.has(id) && !jobCodeLoading.has(id))
+    .join(',');
+  useEffect(() => {
+    if (missingCodeKey) loadJobCodes(missingCodeKey.split(','));
+  }, [missingCodeKey]);
+  const fillsCode = (item: ScoringProgressItem) => !item.jobCode && jobCodeCache.has(item.jobId);
+  const progressData = rawProgressData.some(fillsCode)
+    ? rawProgressData.map(item => (fillsCode(item) ? { ...item, jobCode: jobCodeCache.get(item.jobId) } : item))
+    : rawProgressData;
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -514,18 +558,18 @@ export default function BulkScoringProgressModal({
                   {scopedToJobTitle && headerJob!.code && (
                     <JobIdBadge className="flex-shrink-0">{headerJob!.code}</JobIdBadge>
                   )}
-                  <h2 className="text-base sm:text-xl font-bold text-gray-900 dark:text-slate-50 break-words sm:truncate min-w-0" title={scopedToJobTitle ? headerJob!.title : undefined}>
+                  <h2 className="tf-section-title sm:text-xl break-words sm:truncate min-w-0" title={scopedToJobTitle ? headerJob!.title : undefined}>
                     {scopedToJobTitle ? headerJob!.title : 'Bulk Scoring Progress'}
                   </h2>
                 </div>
                 {/* Line 2: what this is, and how far it got. */}
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
                   {scopedToJobTitle && (
-                    <span className="text-sm font-medium text-gray-600 dark:text-slate-400">
+                    <span className="tf-label">
                       Bulk scoring progress
                     </span>
                   )}
-                  <span className="tf-card-desc">
+                  <span className="tf-body-secondary">
                     {completedCount + skippedCount + failedCount}/{totalResumes} resumes processed
                   </span>
                 </div>
@@ -535,7 +579,7 @@ export default function BulkScoringProgressModal({
             {/* Action buttons - always visible */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {isAllComplete && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded-full text-xs font-medium">
+                <div className="tf-badge hidden sm:flex gap-1.5 bg-success-subtle text-success ring-1 ring-success-line">
                   <CheckCircle2 className="w-3 h-3" />
                   Complete
                 </div>
@@ -554,7 +598,7 @@ export default function BulkScoringProgressModal({
                     }
                   }}
                   disabled={refreshing}
-                  className="w-8 px-0"
+                  className="w-8"
                   aria-label="Refresh"
                   title="Refresh"
                 >
@@ -565,7 +609,7 @@ export default function BulkScoringProgressModal({
                 variant="secondary"
                 size="sm"
                 onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
-                className="w-8 px-0"
+                className="w-8"
                 aria-label="Minimize to background"
                 title="Run in background"
               >
@@ -586,7 +630,7 @@ export default function BulkScoringProgressModal({
                   variant="secondary"
                   size="sm"
                   onClick={onClose}
-                  className="w-8 px-0"
+                  className="w-8"
                   aria-label="Close modal"
                 >
                   <X className="w-4 h-4" />
@@ -598,7 +642,7 @@ export default function BulkScoringProgressModal({
           {/* ETA - below title */}
           <div className="mt-3 flex items-center justify-end gap-3 empty:mt-0">
             {eta && !isAllComplete && (
-              <div className="flex items-center gap-1 text-gray-600 dark:text-slate-400 text-xs font-medium flex-shrink-0">
+              <div className="flex items-center gap-1 tf-caption flex-shrink-0">
                 <Clock className="w-3 h-3" />
                 <span>{eta.remaining} Resume{eta.remaining !== 1 ? 's' : ''} Remaining</span>
               </div>
@@ -713,7 +757,7 @@ export default function BulkScoringProgressModal({
               placeholders / "All Status" / "All Sources" name them. */}
           <div className="flex flex-wrap items-center gap-x-2 gap-y-2 sm:gap-x-3">
             <div className="flex items-center gap-1.5 flex-1 min-w-0 max-sm:min-w-[calc(100%-5.5rem)] sm:flex-none sm:w-auto">
-              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
                 Search
               </label>
               <input
@@ -721,12 +765,12 @@ export default function BulkScoringProgressModal({
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Name or email..."
-                className="flex-1 min-w-0 sm:flex-none sm:w-44 h-9 px-2.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-sm"
+                className="tf-input w-auto flex-1 sm:flex-none sm:w-44 px-2.5"
               />
             </div>
 
             <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
-              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
                 Status
               </label>
               <FilterSelect
@@ -746,7 +790,7 @@ export default function BulkScoringProgressModal({
             </div>
 
             <div className="flex items-center gap-1.5 max-sm:order-2 max-sm:w-[calc(50%-0.25rem)] sm:w-auto">
-              <label className="max-sm:sr-only text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+              <label className="max-sm:sr-only tf-caption whitespace-nowrap shrink-0">
                 Source
               </label>
               <FilterSelect
@@ -791,14 +835,14 @@ export default function BulkScoringProgressModal({
 
           {showMoreFilters && (
               <div className="mt-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.03] p-2.5 sm:p-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 [&>div]:min-w-0">
+                <div className="tf-grid-4 [&>div]:min-w-0">
                   {/* Each select appears only when the rows actually carry that
                       field - a popup for a single scoring run has no versions
                       to choose between - and its options are read off the rows
                       themselves. */}
                   {scoredByOptions.length > 0 && (
                     <div className="flex items-center gap-2 min-w-0">
-                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+                      <label className="tf-caption whitespace-nowrap shrink-0">
                         Scored By
                       </label>
                       <FilterSelect
@@ -816,7 +860,7 @@ export default function BulkScoringProgressModal({
 
                   {jobVersionOptions.length > 0 && (
                     <div className="flex items-center gap-2 min-w-0">
-                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+                      <label className="tf-caption whitespace-nowrap shrink-0">
                         Job Version
                       </label>
                       <FilterSelect
@@ -833,7 +877,7 @@ export default function BulkScoringProgressModal({
                   )}
 
                   <div className="flex items-center gap-2 min-w-0">
-                    <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+                    <label className="tf-caption whitespace-nowrap shrink-0">
                       Scored From
                     </label>
                     <DateField
@@ -844,7 +888,7 @@ export default function BulkScoringProgressModal({
                   </div>
 
                   <div className="flex items-center gap-2 min-w-0">
-                    <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+                    <label className="tf-caption whitespace-nowrap shrink-0">
                       Scored To
                     </label>
                     <DateField
@@ -921,19 +965,19 @@ export default function BulkScoringProgressModal({
                     <tr>
                       {showJobIdTitleColumns && (
                         <>
-                          <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
-                          <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
+                          <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job ID</th>
+                          <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Title</th>
                         </>
                       )}
-                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
-                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
-                      {showScoreColumn && <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
-                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
-                      {showJobColumns && <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
-                      <th className="text-center py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
-                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
-                      <th className="text-left py-3 px-3 tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
-                      <th className="text-left py-3 px-3 tf-th bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Candidate</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Status</th>
+                      {showScoreColumn && <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Status</th>
+                      {showJobColumns && <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Job Version</th>}
+                      <th className="tf-th-cell text-center tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Resume Version</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Source</th>
+                      <th className="tf-th-cell text-left tf-th leading-tight bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">{showScoredByColumn ? 'Scored By / Date' : 'Scored Date'}</th>
+                      <th className="tf-th-cell text-left tf-th bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -953,18 +997,18 @@ export default function BulkScoringProgressModal({
                       >
                         {showJobIdTitleColumns && (
                           <>
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
+                            <td className="tf-td whitespace-nowrap">
+                              <span className="font-mono text-xs font-semibold text-brand-blue">{item.jobCode || '—'}</span>
                             </td>
-                            <td className="py-3 px-3 whitespace-nowrap">
-                              <div className="text-sm text-gray-900 dark:text-slate-50" title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</div>
+                            <td className="tf-td whitespace-nowrap">
+                              <div className="tf-body" title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</div>
                             </td>
                           </>
                         )}
                         {/* 1. Candidate */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <div className="flex flex-col gap-1">
-                            <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
+                            <div className="tf-row-name truncate max-w-[200px]" title={item.candidateName}>{item.candidateName}</div>
                             {item.email && (
                               <div className="tf-meta truncate max-w-[200px]" title={item.email}>{item.email}</div>
                             )}
@@ -979,7 +1023,7 @@ export default function BulkScoringProgressModal({
                           </div>
                         </td>
                         {/* 2. Status */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <div className="flex flex-col gap-1">
                             <span className={`${TABLE_BADGE} ${getStatusBadgeClass(item.status)}`}>
                               {getStatusIcon(item.status)}
@@ -996,49 +1040,49 @@ export default function BulkScoringProgressModal({
                         {/* 3. Score out of 10 — the Match Status badge's colours,
                             so the number and the verdict read as one. */}
                         {showScoreColumn && (
-                          <td className="py-3 px-3 whitespace-nowrap text-center">
+                          <td className="tf-td whitespace-nowrap text-center">
                             {item.score !== undefined && item.matchResult ? (
                               <span className={`${SCORE_CELL_TEXT} ${SCORE_TEXT_CLASS[item.matchResult]}`}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
                             ) : (
-                              <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
+                              <span className="tf-body-muted">&mdash;</span>
                             )}
                           </td>
                         )}
                         {/* 4. Match Status */}
-                        <td className="py-3 px-3 whitespace-nowrap">
-                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>}
+                        <td className="tf-td whitespace-nowrap">
+                          {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : <span className="tf-body-muted">Pending</span>}
                         </td>
                         {/* Job Version — the job itself is in the header. */}
                         {showJobColumns && (
-                          <td className="py-3 px-3 whitespace-nowrap text-center">
+                          <td className="tf-td whitespace-nowrap text-center">
                             {item.jobVersion !== undefined ? (
                               <span className={`${TABLE_BADGE} bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-300 dark:border-blue-500/30`}>
                                 v{item.jobVersion}
                               </span>
                             ) : (
-                              <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
+                              <span className="tf-body-muted">&mdash;</span>
                             )}
                           </td>
                         )}
                         {/* 5. Resume Version */}
-                        <td className="py-3 px-3 whitespace-nowrap text-center">
+                        <td className="tf-td whitespace-nowrap text-center">
                           <span className={`${TABLE_BADGE} bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700`}>
                             v{item.resumeVersion ?? 1}
                           </span>
                         </td>
                         {/* 6. Source */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           <span className={`${TABLE_BADGE} bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700`}>
                             {item.source === 'Internal DB' ? <Database className="w-3 h-3" /> : <FolderOpen className="w-3 h-3" />}
                             {item.source}
                           </span>
                         </td>
                         {/* 7. Scored By / Date — who, then when (date · time). */}
-                        <td className="py-3 px-3 whitespace-nowrap">
+                        <td className="tf-td whitespace-nowrap">
                           {scoredAt ? (
                             <div className="tf-body">
                               {showScoredByColumn && (
-                                <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{item.scoredBy || '-'}</div>
+                                <div className="tf-row-name">{item.scoredBy || '-'}</div>
                               )}
                               <div className={showScoredByColumn ? 'text-xs text-gray-500 dark:text-slate-500' : 'font-medium'}>
                                 {scoredAt.date}
@@ -1049,10 +1093,10 @@ export default function BulkScoringProgressModal({
                               )}
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">Pending</span>
+                            <span className="tf-body-muted">Pending</span>
                           )}
                         </td>
-                        <td className="py-3 px-3 whitespace-nowrap tf-sticky-col">
+                        <td className="tf-td whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center gap-2">
                             {item.resumeId && (
                               <Button
@@ -1078,7 +1122,7 @@ export default function BulkScoringProgressModal({
                               </Button>
                             )}
                             {!item.resumeId && !(onRetryFailed && item.status === 'Failed') && (
-                              <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
+                              <span className="tf-body-muted">&mdash;</span>
                             )}
                           </div>
                         </td>
@@ -1109,7 +1153,7 @@ export default function BulkScoringProgressModal({
                             {/* One job: the header names it, so only the version. */}
                             {showJobIdTitleColumns && (
                               <>
-                                <span className="font-mono font-semibold text-brand-blue">{item.jobCode || item.jobId}</span>
+                                <span className="font-mono font-semibold text-brand-blue">{item.jobCode || '—'}</span>
                                 <span title={item.jobTitle}>{truncateJobTitle(item.jobTitle)}</span>
                               </>
                             )}
@@ -1127,7 +1171,7 @@ export default function BulkScoringProgressModal({
                         </span>
                       </div>
                       <div className="min-w-0">
-                        <div className="font-medium text-gray-900 dark:text-slate-50 text-sm [overflow-wrap:anywhere]">{item.candidateName}</div>
+                        <div className="tf-row-name [overflow-wrap:anywhere]">{item.candidateName}</div>
                         {item.email && (
                           <div className="tf-meta [overflow-wrap:anywhere]">{item.email}</div>
                         )}
@@ -1276,8 +1320,8 @@ export default function BulkScoringProgressModal({
                 <path stroke="currentColor" strokeWidth="2" className="opacity-60" d="M191 76h8M195 72v8M56 88h8M60 84v8" />
               </svg>
 
-              <h3 className="mt-5 text-base sm:text-lg font-bold text-gray-900 dark:text-slate-50">No Records Found</h3>
-              <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-slate-400 max-w-md">
+              <h3 className="mt-5 tf-section-title sm:text-lg">No Records Found</h3>
+              <p className="mt-2 tf-body-secondary sm:text-base max-w-md">
                 {anyFiltersApplied
                   ? 'No scoring records match your current filters.'
                   : 'No scoring operations in progress.'}

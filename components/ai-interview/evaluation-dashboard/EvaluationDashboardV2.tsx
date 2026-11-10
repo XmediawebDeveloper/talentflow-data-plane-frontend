@@ -6,11 +6,12 @@
 import { useState, type ReactNode } from 'react';
 import {
   ChevronDown, ChevronUp, TrendingUp, TrendingDown, Minus, Clock, Brain, Calculator, X, MessageSquare, SkipForward,
-  List, LayoutGrid,
+  List, LayoutGrid, ClipboardList, Info, BarChart3, ChevronRight,
 } from 'lucide-react';
 import type { DashboardData, PerQuestionDetail } from './types';
 import { orderQuestionsAsAsked, isSkillNotAssessed } from './types';
 import { buildRationaleLines } from './types';
+import { isNonEnglishAnswer, NON_ENGLISH_ANSWER_TEXT } from './nonEnglishAnswer';
 import { IS_PRODUCTION_ENV } from '../../../lib/utils/env';
 
 import { formatScore1, formatSkillScore, truncate1 } from '@/lib/utils/matchStatus';
@@ -225,14 +226,14 @@ function SkillsListView({ data }: { data: DashboardData }) {
         <div className="col-span-3 @4xl:col-span-1 min-w-0">
           <div className={`text-sm font-semibold break-words ${notAssessed ? 'text-gray-500' : 'text-gray-900'}`}>{s.name}</div>
           {notAssessed && (
-            <span className="mt-1 inline-block text-2xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-200 text-gray-600 whitespace-nowrap">Not assessed</span>
+            <span className="tf-badge mt-1 inline-block tf-micro-hint bg-gray-200">Not assessed</span>
           )}
         </div>
 
         {/* Cluster — "P1 - Cluster name" */}
         <div className="col-span-3 @4xl:col-span-1 min-w-0">
           <div className={statLabel}>Cluster</div>
-          <div className="text-xs text-gray-700 break-words">
+          <div className="tf-meta break-words">
             <span className={`inline-block text-2xs font-semibold px-1.5 py-0.5 rounded border align-middle ${pr.color}`}>{tag.tag}</span> - {s.clusterName}
           </div>
         </div>
@@ -278,31 +279,31 @@ function SkillsListView({ data }: { data: DashboardData }) {
   ) => (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 pt-1">
-        <div className="text-base font-bold text-gray-900">{title}</div>
+        <div className="tf-section-title">{title}</div>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chip}</span>
       </div>
-      <div className="@container rounded-2xl border border-gray-200 bg-white overflow-hidden">
+      <div className="tf-panel @container overflow-hidden">
         {/* Summary — the section score (question scores ÷ planned questions)
             is the number Pass/Fail and the report use, not an average of the
             skill rows below. */}
         <div className={`grid grid-cols-3 @3xl:grid-cols-[1fr_1fr_1fr_auto] border-b border-gray-200 ${summaryCls}`}>
           <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
-            <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
+            <div className="tf-micro-hint mb-0.5">Section Score</div>
             <div className={`text-lg sm:text-xl font-bold tabular-nums ${accentCls}`}>
               {formatScore1(avg)}<span className="text-sm font-semibold text-gray-400">/10</span>
             </div>
           </div>
           <div className="px-3 sm:px-5 py-3 border-r border-gray-200">
-            <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
+            <div className="tf-micro-hint mb-0.5">Skills</div>
             <div className={`text-lg sm:text-xl font-bold tabular-nums ${accentCls}`}>{skills.length}</div>
           </div>
           <div className="px-3 sm:px-5 py-3 @3xl:border-r border-gray-200">
-            <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
+            <div className="tf-micro-hint mb-0.5">Strong (≥7)</div>
             <div className="text-lg sm:text-xl font-bold tabular-nums text-emerald-600">{skills.filter(s => s.score >= 7.0).length}</div>
           </div>
           {/* Priority legend — explains the P-codes in the Cluster column. */}
           <div className="col-span-3 @3xl:col-span-1 px-3 sm:px-5 py-3 border-t @3xl:border-t-0 border-gray-200">
-            <div className="text-2xs text-gray-500 mb-1">Priority</div>
+            <div className="tf-micro-hint mb-1">Priority</div>
             <div className="flex flex-wrap items-center gap-1.5">
               {([3, 2, 1] as const).map(n => {
                 const pl = getPriorityLabel(n);
@@ -320,7 +321,7 @@ function SkillsListView({ data }: { data: DashboardData }) {
           <div>Cluster</div>
           <div className="text-center">Skill Weight</div>
           <div className="text-center">Score (10)</div>
-          <div className="text-center">Contribution<div className="text-2xs font-medium text-gray-500">(Skill Weight × Score)</div></div>
+          <div className="text-center">Contribution<div className="tf-micro-hint">(Skill Weight × Score)</div></div>
           <div>AI Analysis</div>
         </div>
         <div className="divide-y divide-gray-200">
@@ -339,7 +340,7 @@ function SkillsListView({ data }: { data: DashboardData }) {
       )}
 
       {allSkills.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+        <div className="rounded-2xl border border-gray-200 p-10 text-center tf-body-muted italic">
           No skills evaluated yet.
         </div>
       ) : (
@@ -433,7 +434,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
                 {tag.tag} • {s.clusterName}
               </span>
               {notAssessed ? (
-                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-200 text-gray-600">Not assessed</span>
+                <span className="tf-caption px-2 py-0.5 rounded-full bg-gray-200">Not assessed</span>
               ) : trendIcon(s.score)}
             </div>
             <div className="flex items-center gap-4 sm:gap-5 shrink-0 ml-auto">
@@ -460,7 +461,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
         {isOpen && notAssessed && (
           <div className="px-4 sm:px-5 pb-5">
             <hr className="border-gray-200 mb-4" />
-            <div className="p-4 rounded-xl bg-white border border-gray-200 tf-card-desc leading-relaxed">
+            <div className="p-4 tf-panel tf-body-secondary leading-relaxed">
               No question in this interview covered this skill, so it has no skill score. If its planned question was never reached (the interview ended early), that question still counts as 0 in the Section Score.
             </div>
           </div>
@@ -476,7 +477,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               <hr className="border-gray-200 mb-4" />
               {!hasSplit && (
                 <div className="p-4 rounded-xl bg-gray-50 mb-4">
-                  <div className="tf-cell-name mb-1.5">AI Analysis:</div>
+                  <div className="tf-row-title mb-1.5">AI Analysis:</div>
                   <div className="tf-body leading-relaxed">
                     {s.feedback || 'No specific feedback captured for this skill.'}
                   </div>
@@ -484,7 +485,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               )}
 
               {hasSplit && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                <div className="tf-grid-2 mb-4">
                   {strengths.length > 0 && (
                     <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200">
                       <div className="text-sm font-semibold text-emerald-700 mb-2">✓ Strengths</div>
@@ -529,7 +530,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
       )}
 
       {allSkills.length === 0 ? (
-        <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+        <div className="rounded-2xl border border-gray-200 p-10 text-center tf-body-muted italic">
           No skills evaluated yet.
         </div>
       ) : (
@@ -539,8 +540,8 @@ function SkillsGridView({ data }: { data: DashboardData }) {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-base font-bold text-gray-900">Must-Have Skills</div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700">
+                  <div className="tf-section-title">Must-Have Skills</div>
+                  <span className="tf-badge bg-indigo-50 text-indigo-700">
                     {isPartialEvaluation ? 'Evaluated from Attended Questions' : 'Scored for Pass/Fail'}
                   </span>
                 </div>
@@ -561,8 +562,8 @@ function SkillsGridView({ data }: { data: DashboardData }) {
             <div className="space-y-3 pt-2">
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-base font-bold text-gray-900">Nice-to-Have Skills</div>
-                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">
+                  <div className="tf-section-title">Nice-to-Have Skills</div>
+                  <span className="tf-badge bg-amber-50 text-amber-700">
                     Information Only
                   </span>
                 </div>
@@ -580,7 +581,7 @@ function SkillsGridView({ data }: { data: DashboardData }) {
       {/* Per-section summary — separate MHS / NHS totals so the recruiter
           doesn't have to do mental math from a combined number. */}
       {allSkills.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
+        <div className="tf-grid-2 pt-2">
           {mhSkills.length > 0 && (
             <div className="rounded-2xl border border-indigo-200 p-5 bg-indigo-50/40">
               <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700 mb-3">
@@ -588,15 +589,15 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
+                  <div className="tf-micro-hint mb-0.5">Section Score</div>
                   <div className="text-xl font-bold text-indigo-700">{formatScore1(mhAvg)}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
+                  <div className="tf-micro-hint mb-0.5">Skills</div>
                   <div className="text-xl font-bold text-indigo-700">{mhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
+                  <div className="tf-micro-hint mb-0.5">Strong (≥7)</div>
                   <div className="text-xl font-bold text-emerald-600">
                     {mhSkills.filter(s => s.score >= 7.0).length}
                   </div>
@@ -611,15 +612,15 @@ function SkillsGridView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Section Score</div>
+                  <div className="tf-micro-hint mb-0.5">Section Score</div>
                   <div className="text-xl font-bold text-amber-600">{formatScore1(nhAvg)}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
+                  <div className="tf-micro-hint mb-0.5">Skills</div>
                   <div className="text-xl font-bold text-amber-600">{nhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥7)</div>
+                  <div className="tf-micro-hint mb-0.5">Strong (≥7)</div>
                   <div className="text-xl font-bold text-emerald-600">
                     {nhSkills.filter(s => s.score >= 7.0).length}
                   </div>
@@ -678,7 +679,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
 
   if (delivered.length === 0) {
     return (
-      <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+      <div className="rounded-2xl border border-gray-200 p-10 text-center tf-body-muted italic">
         The candidate exited the interview without answering any questions, so question-level details are not shown here.
       </div>
     );
@@ -706,6 +707,10 @@ export function QuestionsView({ data, renderAnswerAction }: {
     if (s >= MHS_THRESHOLD) return 'text-warning bg-warning-subtle border-warning-line';
     return 'text-destructive bg-destructive-subtle border-destructive-line';
   };
+  // Text-only version of the same bands, for the big per-skill score in the
+  // Score Rationale rows.
+  const skillScoreText = (s: number): string =>
+    s >= 8.0 ? 'text-success' : s >= MHS_THRESHOLD ? 'text-warning' : 'text-destructive';
   // Priority chip color — the shared P1/P2/P3 colours (PRIORITY_LABELS), as on
   // Skill Coverage and Skill Breakdown. Numeric scale: 3 = High … 1 = Low.
   const priorityChipClass = (level: 'High' | 'Medium' | 'Low' | null): string => {
@@ -798,7 +803,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
         {/* 2. Candidate's answer */}
         <div className="border-l-2 border-brand-blue/20 pl-3">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
-            <div className="text-xs font-medium text-gray-500">
+            <div className="tf-caption">
               Candidate's Answer
             </div>
             {renderAnswerAction?.(q)}
@@ -828,6 +833,9 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 !ansClean ||
                 ansClean.toLowerCase() === '[skipped]' ||
                 ['skipped', 'not_answered', 'timeout', 'low_coverage', 'idk'].includes(rt);
+              if (ansClean && isNonEnglishAnswer(ansClean)) {
+                return <span className="text-gray-400 italic">{NON_ENGLISH_ANSWER_TEXT}</span>;
+              }
               if (!noRealAnswer) {
                 return <span className="text-gray-700">{answer}</span>;
               }
@@ -852,160 +860,197 @@ export function QuestionsView({ data, renderAnswerAction }: {
           </div>
         </div>
 
-        {/* 2b. Why this score — deterministic per-question rationale (what the
-            candidate demonstrated, what was missing, and the overall reason).
-            Shown in ALL environments, INCLUDING production where the per-skill
-            dropdown below is hidden — this is the reviewer's one explanation of
-            the score. HR turns carry no rationale (never scored), so this hides
-            for them automatically. */}
-        {/* Score Rationale — derived from the SAME `q.skills[]` array that the
-            "Skills assessed" table below renders from, so the two can NEVER
-            disagree on a score (the recruiter's core requirement). Each line is
-            `<Skill>: <score>/10 — <note>` using the skill's own map-sourced
-            score+note; only the qualitative "Overall:" summary (and any non
-            per-skill sentence) is carried over from the backend rationale
-            string. Previously this rendered the backend `q.scoreRationale`
-            string independently, which could drift from the table. */}
+        {/* 2b. Score Rationale — one row per skill (skill · score · note) built
+            from the SAME `q.skills[]` the Skills Assessed table uses, so the two
+            can never disagree; the backend's qualitative summary ("Overall: …")
+            follows in its own callout. Shown in ALL environments, including
+            production where the table below is hidden. HR is never scored. */}
         {!isHr && !q.notDelivered && q.skills.length > 0 && (() => {
-          // buildRationaleLines regenerates the per-skill lines from q.skills[]
-          // (same source as the "Skills assessed" table) + carries the backend
-          // summary sentences. Shared by the PDF/report so all surfaces match.
-          const lines = buildRationaleLines(q.skills, q.scoreRationale);
+          // buildRationaleLines = per-skill lines first, then the summary lines.
+          const summary = buildRationaleLines(q.skills, q.scoreRationale).slice(q.skills.length);
           return (
-            <div className="border-l-2 border-warning-line pl-3">
-              <div className="text-xs font-medium text-gray-500 mb-1">
-                Score Rationale
+            <div className="rounded-xl border border-warning-line bg-warning-subtle/40 p-3 sm:p-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="grid place-items-center w-7 h-7 rounded-lg bg-warning text-white shrink-0">
+                  <ClipboardList className="w-4 h-4" />
+                </span>
+                <span className="text-sm font-semibold text-gray-900">Score Rationale</span>
               </div>
-              <div className="flex items-start gap-1.5 tf-body bg-warning-subtle/60 border border-warning-line rounded px-2.5 py-2 break-words leading-relaxed">
-                <Brain className="w-3.5 h-3.5 text-warning mt-0.5 shrink-0" />
-                <div className="space-y-1 flex-1">
-                  {lines.map((line, li) => {
-                    const ci = line.indexOf(':');
-                    const labeled = ci > 0 && ci <= 120;
-                    return (
-                      <div key={li}>
-                        {labeled
-                          ? <><span className="font-semibold text-gray-900">{line.slice(0, ci)}</span>{line.slice(ci)}</>
-                          : line}
-                      </div>
-                    );
-                  })}
+              <div className="divide-y divide-warning-line/60">
+                {q.skills.map((s, i) => (
+                  <div key={i} className="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,15rem)_4.5rem_minmax(0,1fr)] items-center gap-x-3 gap-y-1.5 py-2 first:pt-0 last:pb-0">
+                    <span className="inline-flex items-center gap-2 min-w-0 w-fit max-w-full rounded-full bg-white/80 ring-1 ring-brand-blue/15 px-3 py-1 text-sm font-semibold text-gray-900">
+                      <span className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0" />
+                      <span className="truncate">{s.name}</span>
+                    </span>
+                    <span className={`text-right md:text-center text-lg font-bold tabular-nums ${
+                      s.is_unscored || s.is_skipped ? 'text-gray-400' : skillScoreText(s.score)
+                    }`}>
+                      {s.is_unscored ? '—' : <>{formatSkillScore(s.score)}<span className="text-xs font-semibold text-gray-400">/10</span></>}
+                    </span>
+                    <span className="col-span-2 md:col-span-1 border-l-2 border-warning pl-3 tf-body text-gray-700 leading-relaxed break-words">
+                      {s.is_unscored
+                        ? <span className="italic text-gray-500">Not evaluated — excluded from the question score.</span>
+                        : s.is_skipped
+                          ? <span className="italic text-gray-500">Skipped — not scored for this skill.</span>
+                          : (s.note || <span className="italic text-gray-400">No note from the evaluator.</span>)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              {summary.length > 0 && (
+                <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning-line bg-warning-subtle px-3 py-2.5 tf-body text-gray-800 leading-relaxed">
+                  <Info className="w-4 h-4 text-warning mt-0.5 shrink-0" />
+                  <div className="space-y-1 min-w-0 break-words">
+                    {summary.map((line, li) => {
+                      const m = /^(overall|summary)\s*:\s*/i.exec(line);
+                      return (
+                        <div key={li}>
+                          {m
+                            ? <><span className="font-semibold text-warning-strong">Overall:</span> {line.slice(m[0].length)}</>
+                            : line}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           );
         })()}
 
-        {/* 3. Per-skill rows — collapsible dropdown. For HR, skipped entirely
-            (HR isn't scored). Multi-skill questions list 2-3 skills, so the
-            block collapses by default; expanding shows each skill's score AND
-            the AI's per-skill rationale (one_line_note). */}
+        {/* 3. Skills Assessed — table (P# · skill · score · weight · score×weight)
+            then the Calculation Details strip. Hidden in production, as before.
+            Open by default; the header collapses it. */}
         {!isHr && !q.notDelivered && !IS_PRODUCTION_ENV && (
           <div>
             {q.skills.length === 0 ? (
               <>
-                <div className="text-xs font-medium text-gray-500 mb-1.5">Skills assessed in this question</div>
-                <span className="text-xs text-gray-400 italic">No skills tagged</span>
+                <div className="tf-caption mb-1.5">Skills assessed in this question</div>
+                <span className="tf-hint italic">No skills tagged</span>
               </>
             ) : (() => {
-              const isOpen = !!openSkills[idx];
+              const isOpen = openSkills[idx] !== false;
+              const fmtN = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
               return (
-                <div className="rounded-lg border border-gray-200 overflow-hidden">
-                  {/* Dropdown header — click to expand/collapse */}
+                <div className="space-y-2.5">
                   <button
                     type="button"
                     onClick={() => toggleSkills(idx)}
-                    className="w-full flex items-center justify-between gap-3 px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    aria-expanded={isOpen}
+                    className="w-full flex items-center justify-between gap-3 rounded-xl border border-brand-blue/10 bg-brand-blue/[0.04] px-3 py-2.5 hover:bg-brand-blue/[0.07] transition-colors"
                   >
-                    <span className="flex items-center gap-2 text-xs font-semibold text-gray-700">
-                      {isOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                      Skills assessed ({q.skills.length})
+                    <span className="flex items-center gap-2">
+                      <span className="grid place-items-center w-7 h-7 rounded-lg bg-white text-brand-blue ring-1 ring-brand-blue/20 shrink-0">
+                        <BarChart3 className="w-4 h-4" />
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900">Skills Assessed ({q.skills.length})</span>
                     </span>
-                    <span className="flex items-center gap-2 min-w-0">
+                    <span className="flex items-center gap-2 text-gray-500">
                       {!isOpen && (
-                        <span className="hidden sm:flex items-center gap-1 min-w-0">
-                          {q.skills.slice(0, 3).map((s, i) => (
-                            <span key={i} className="text-2xs px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 truncate max-w-[110px]">
-                              {s.name}
-                            </span>
-                          ))}
-                          {q.skills.length > 3 && <span className="text-2xs text-gray-400">+{q.skills.length - 3}</span>}
+                        <span className="tf-micro-hint font-mono">
+                          Q Score <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
                         </span>
                       )}
-                      <span className="text-2xs font-mono text-gray-500 shrink-0">
-                        Q Score <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
-                      </span>
+                      {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </span>
                   </button>
 
                   {isOpen && (
-                    <div className="p-2 space-y-1.5 border-t border-gray-200">
-                      {q.skills.map((s, i) => {
-                        const contribution = +(s.score * s.weight).toFixed(1);
-                        return (
-                          <div key={i} className="rounded bg-gray-50 border border-gray-200 p-2">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="text-sm text-gray-900 truncate">{s.name}</span>
-                                <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}>
-                                  {priorityLabel(s.priority)}
-                                </span>
-                              </div>
-                              {s.is_unscored ? (
-                                <span
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold bg-gray-100 text-gray-500 border border-gray-300"
-                                  title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
-                                >
-                                  Not evaluated
-                                </span>
-                              ) : (
-                                <div className="flex items-center gap-4 text-xs font-mono shrink-0">
-                                  <span title="LLM score for this skill">
-                                    <span className="text-gray-400">Score </span>
-                                    <span className={`${s.is_skipped ? 'text-gray-400' : 'text-gray-900'} font-semibold`}>
-                                      {formatSkillScore(s.score)}
-                                    </span>
-                                    {s.is_skipped ? (
-                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
-                                        title="Candidate skipped or said 'I don't know' — not scored for this skill.">
-                                        Skipped
-                                      </span>
-                                    ) : s.is_fallback ? (
-                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-warning-subtle text-warning-strong border border-warning-line"
-                                        title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question.">
-                                        Q
-                                      </span>
-                                    ) : null}
+                    <>
+                      <div className="rounded-xl border border-gray-200 overflow-x-auto">
+                        <table className="w-full min-w-[34rem] text-sm">
+                          <thead>
+                            <tr className="bg-brand-blue/5 text-gray-700 text-xs font-semibold">
+                              <th className="text-left px-3 py-2 w-16">#</th>
+                              <th className="text-left px-3 py-2">Skill</th>
+                              <th className="text-center px-3 py-2">Score <span className="font-normal text-gray-500">(out of 10)</span></th>
+                              <th className="text-center px-3 py-2">Skill Weight</th>
+                              <th className="text-center px-3 py-2 leading-tight">Weighted Score<div className="font-normal text-gray-500">(Score × Weight)</div></th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            {q.skills.map((s, i) => (
+                              <tr key={i} className="hover:bg-gray-50/70">
+                                <td className="px-3 py-2">
+                                  <span className={`inline-block text-2xs font-bold px-2 py-0.5 rounded-md border ${priorityChipClass(s.priority)}`}>
+                                    {priorityLabel(s.priority)}
                                   </span>
-                                  <span title="Priority weight"><span className="text-gray-400">×</span><span className="text-gray-700"> {s.weight}</span></span>
-                                  <span title="Score × Weight"><span className="text-gray-400">= </span><span className="text-brand-blue font-semibold">{contribution}</span></span>
-                                </div>
-                              )}
-                            </div>
-                            {/* Per-skill AI analysis (one_line_note) */}
-                            {s.note && !s.is_unscored && (
-                              <div className="mt-1.5 flex items-start gap-1.5 tf-meta-strong bg-white border border-gray-100 rounded px-2 py-1.5">
-                                <Brain className="w-3 h-3 text-brand-blue mt-0.5 shrink-0" />
-                                <span className="leading-relaxed">{s.note}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                                </td>
+                                <td className="px-3 py-2 font-semibold text-gray-900">{s.name}</td>
+                                {s.is_unscored ? (
+                                  <td colSpan={3} className="px-3 py-2 text-center">
+                                    <span
+                                      className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold bg-gray-100 text-gray-500 border border-gray-300"
+                                      title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
+                                    >
+                                      Not evaluated
+                                    </span>
+                                  </td>
+                                ) : (
+                                  <>
+                                    <td className="px-3 py-2 text-center font-semibold tabular-nums">
+                                      <span className={s.is_skipped ? 'text-gray-400' : 'text-gray-900'}>{formatSkillScore(s.score)}</span>
+                                      {s.is_skipped ? (
+                                        <span className="ml-1 inline-flex items-center px-1.5 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                          title="Candidate skipped or said 'I don't know' — not scored for this skill.">
+                                          Skipped
+                                        </span>
+                                      ) : s.is_fallback ? (
+                                        <span className="ml-1 inline-flex items-center px-1.5 rounded text-2xs font-semibold bg-warning-subtle text-warning-strong border border-warning-line"
+                                          title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question.">
+                                          Q
+                                        </span>
+                                      ) : null}
+                                    </td>
+                                    <td className="px-3 py-2 text-center font-semibold tabular-nums text-gray-700">{s.weight}</td>
+                                    <td className="px-3 py-2 text-center font-bold tabular-nums text-brand-blue">{fmtN(+(s.score * s.weight).toFixed(1))}</td>
+                                  </>
+                                )}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
                       {sumW > 0 ? (
-                        <div className="text-2xs font-mono text-gray-500 pl-1 pt-1">
-                          Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{formatScore1(q.questionScore)}</span>
+                        <div className="rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] p-3 flex flex-col lg:flex-row lg:items-center gap-3">
+                          <div className="flex items-center gap-2 lg:pr-4 lg:border-r lg:border-brand-blue/15 shrink-0">
+                            <Calculator className="w-5 h-5 text-brand-blue" />
+                            <span className="text-sm font-semibold text-brand-blue">Calculation Details</span>
+                          </div>
+                          <div className="flex flex-1 flex-col sm:flex-row sm:items-center gap-2 sm:gap-1 min-w-0">
+                            {[
+                              { t: 'Total Weighted Score', expr: scoredSkills.map(k => fmtN(+(k.score * k.weight).toFixed(1))).join(' + '), res: fmtN(+sumWS.toFixed(1)) },
+                              { t: 'Total Weight', expr: scoredSkills.map(k => k.weight).join(' + '), res: fmtN(sumW) },
+                              { t: 'Final Score', expr: `${fmtN(+sumWS.toFixed(1))} ÷ ${fmtN(sumW)}`, res: formatScore1(q.questionScore) },
+                            ].map((st, si) => (
+                              <div key={si} className="flex items-center gap-1 min-w-0 flex-1">
+                                <span className="grid place-items-center w-5 h-5 rounded-full ring-1 ring-brand-blue text-brand-blue text-2xs font-bold shrink-0">{si + 1}</span>
+                                <div className="min-w-0 ml-1">
+                                  <div className="text-xs font-semibold text-gray-900">{st.t}</div>
+                                  <div className="text-xs text-gray-600 tabular-nums break-words">
+                                    = {st.expr} = <span className="font-bold text-gray-900">{st.res}</span>
+                                  </div>
+                                </div>
+                                {si < 2 && <ChevronRight className="hidden sm:block w-4 h-4 text-gray-400 shrink-0 ml-auto" />}
+                              </div>
+                            ))}
+                          </div>
+                          <span className="self-start lg:self-auto shrink-0 inline-flex items-center gap-2 rounded-lg bg-brand-blue text-white px-3.5 py-2 text-sm font-semibold">
+                            Question Score: <span className="text-base font-bold tabular-nums">{formatScore1(q.questionScore)} / 10</span>
+                          </span>
                         </div>
                       ) : q.isUnscored && displayOnlyScore !== null ? (
-                        <div className="text-2xs text-warning italic pl-1 pt-1">
+                        <div className="text-2xs text-warning italic pl-1">
                           Partial runtime score shown for this attended question. Excluded from the terminated-session section average.
                         </div>
                       ) : q.isUnscored ? (
-                        <div className="text-2xs text-gray-400 italic pl-1 pt-1">
+                        <div className="tf-micro-hint italic pl-1">
                           Not evaluated — excluded from the section average.
                         </div>
                       ) : null}
-                    </div>
+                    </>
                   )}
                 </div>
               );
@@ -1077,13 +1122,13 @@ export function QuestionsView({ data, renderAnswerAction }: {
                         </span>
                       )}
                     </div>
-                    <div className="text-sm text-gray-800">{fu.question || <span className="italic text-gray-500">(no follow-up text)</span>}</div>
-                    <div className="text-xs text-gray-700">
+                    <div className="tf-body">{fu.question || <span className="italic text-gray-500">(no follow-up text)</span>}</div>
+                    <div className="tf-meta">
                       <span className="text-gray-500">Answer: </span>
                       {fu.answer ? fu.answer : <span className="italic text-gray-500">(no response)</span>}
                     </div>
                     {fu.note && (
-                      <div className="text-2xs italic text-gray-600">{fu.note}</div>
+                      <div className="tf-micro-hint italic">{fu.note}</div>
                     )}
                     {reasonNote && (
                       <div className="text-2xs text-warning-strong bg-warning-subtle border border-warning-line rounded px-2 py-1.5 mt-1">
@@ -1116,11 +1161,11 @@ export function QuestionsView({ data, renderAnswerAction }: {
                     </span>
                     <span className="text-2xs text-brand-orange-deep italic">candidate asked to repeat / rephrase</span>
                   </div>
-                  <div className="text-sm text-gray-800">
+                  <div className="tf-body">
                     {cl.question || <span className="italic text-gray-500">(no clarification text)</span>}
                   </div>
                   {cl.answer && (
-                    <div className="text-xs text-gray-700">
+                    <div className="tf-meta">
                       <span className="text-gray-500">Answer: </span>
                       {cl.answer}
                     </div>
@@ -1146,12 +1191,12 @@ export function QuestionsView({ data, renderAnswerAction }: {
       <div
         key={`q-${idx}`}
         id={anchorId(q)}
-        className="rounded-2xl border border-gray-200 bg-white p-5 space-y-3 scroll-mt-[calc(var(--crumb-h,3rem)+9.5rem)]"
+        className="tf-panel p-5 space-y-3 scroll-mt-[calc(var(--crumb-h,3rem)+9.5rem)]"
       >
         {/* 1. Question + question score badge (suppressed for HR) */}
         <div>
           <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-            <span className="text-xs font-semibold text-white bg-brand-blue px-2 py-0.5 rounded-full">
+            <span className="tf-badge text-white bg-brand-blue">
               {/* Sections view: per-section serial number (q.qNum, from 1). */}
               {allNum !== undefined ? `Question ${allNum}` : `S.No. ${q.qNum}`}
             </span>
@@ -1165,13 +1210,13 @@ export function QuestionsView({ data, renderAnswerAction }: {
             )}
             {isHr && q.notDelivered ? (
               <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                className="tf-badge border bg-gray-100 text-gray-500 border-gray-300"
                 title="This selected HR question was never asked — the candidate ended the interview before reaching it."
               >
                 HR · Not Asked
               </span>
             ) : isHr ? (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20">
+              <span className="tf-badge border bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20">
                 HR · For Reference
               </span>
             ) : q.notDelivered ? (
@@ -1190,7 +1235,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             ) : q.isUnscored ? (
               <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-100 text-gray-500 border-gray-300"
+                className="tf-badge border bg-gray-100 text-gray-500 border-gray-300"
                 title="No evaluator scores were produced for this question — excluded from the section average rather than counted as 0.0."
               >
                 Not Evaluated
@@ -1210,7 +1255,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 starts at Q6 even when only 3 HR questions were asked. */}
             {allNum === undefined && allNumOf.has(q) && (
               <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-gray-50 text-gray-600 border-gray-200"
+                className="tf-caption px-2 py-0.5 rounded-full border bg-gray-50 border-gray-200"
                 title="Position in the whole interview, as numbered in the All view"
               >
                 Q{allNumOf.get(q)}
@@ -1218,7 +1263,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
             )}
             {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (
               <span
-                className="text-xs font-semibold px-2 py-0.5 rounded-full border bg-warning-subtle text-warning border-warning-line"
+                className="tf-badge border bg-warning-subtle text-warning border-warning-line"
                 title="This planned question was reframed as a follow-up because the candidate volunteered the skill in an earlier answer."
               >
                 {q.bundledFollowUp.source_qnum && q.bundledFollowUp.source_qnum > 0
@@ -1227,7 +1272,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
               </span>
             )}
           </div>
-          <div className="tf-cell-name leading-relaxed">
+          <div className="tf-row-title leading-relaxed">
             {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
           </div>
           {q.bundledFollowUp && q.bundledFollowUp.source_qnum !== q.qNum && (() => {
@@ -1336,7 +1381,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // Compact list: one row per question; clicking a row expands its details
   // (answer, rationale, skills assessed…) right under it.
   const renderList = (qs: typeof delivered) => qs.length === 0 ? null : (
-    <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden">
+    <div className="tf-panel overflow-hidden">
       <div className={`hidden md:grid ${listCols} items-center gap-x-3 px-4 py-2.5 bg-brand-blue/5 border-b border-gray-200 text-xs font-semibold text-gray-700`}>
         <div>Q#</div>
         <div>Question</div>
@@ -1363,7 +1408,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
                 {isOpen ? <ChevronUp className="w-3.5 h-3.5 shrink-0" /> : <ChevronDown className="w-3.5 h-3.5 shrink-0" />}
                 Q{n}
               </div>
-              <div className="text-sm text-gray-900 leading-snug line-clamp-2 min-w-0">
+              <div className="tf-body leading-snug line-clamp-2 min-w-0">
                 {ensureQuestionMark(q.question) || `Question ${q.qNum}`}
               </div>
               <div className="col-start-2 md:col-start-auto flex flex-wrap items-center gap-1.5 md:contents">
@@ -1423,7 +1468,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
   // visible divider between MHS / NHS / HR.
   const sectionHeading = (label: string, chipText: string, count: number, chipCls: string) => (
     <>
-      <div className="text-base font-bold text-gray-900">{label}</div>
+      <div className="tf-section-title">{label}</div>
       <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${chipCls}`}>{chipText}</span>
       <span className="tf-meta">· {count} question{count === 1 ? '' : 's'}</span>
     </>
@@ -1491,7 +1536,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
         <div className="flex flex-wrap items-center gap-2">
           {viewMode === 'all' ? (
             <>
-              <div className="text-base font-bold text-gray-900">All Questions</div>
+              <div className="tf-section-title">All Questions</div>
               <span className="tf-meta">· {totalQs} question{totalQs === 1 ? '' : 's'}</span>
             </>
           ) : firstSection === 'mh' ? mhHeading()
@@ -1547,7 +1592,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
         </div>
       </div>
       {noneMatch && (
-        <div className="rounded-2xl border border-gray-200 p-8 text-center text-sm text-gray-400 italic">
+        <div className="rounded-2xl border border-gray-200 p-8 text-center tf-body-muted italic">
           No questions match this filter.
         </div>
       )}
@@ -1588,7 +1633,7 @@ export function QuestionsView({ data, renderAnswerAction }: {
           a "For Reference" info card so the recruiter knows the HR Qs were
           asked but didn't affect the Pass/Fail decision. */}
       {!isPartialEvaluation && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+        <div className="tf-grid-3 pt-2">
           {mhQs.length > 0 && (
             <div className="rounded-2xl border-2 border-brand-blue overflow-hidden">
               <div className="bg-brand-blue text-white px-4 py-2 text-xs font-bold uppercase tracking-wide">
@@ -1686,12 +1731,12 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+      <div className="tf-card-soft p-6 text-gray-900 dark:text-slate-50">
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5" /></div>
           <div className="min-w-0 flex-1">
             <div className="text-xl font-bold mb-2">Question-by-Question Analysis</div>
-            <div className="tf-card-desc mb-3">
+            <div className="tf-body-secondary mb-3">
               Detailed evaluation of each interview question with skill scoring, weighted contributions, and AI-derived rationale.
             </div>
             <div className="flex gap-6 flex-wrap text-sm">
@@ -1713,7 +1758,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
       </div>
 
       {data.perQuestionDetails.length === 0 && (
-        <div className="rounded-2xl border border-gray-200 p-10 text-center text-sm text-gray-400 italic">
+        <div className="rounded-2xl border border-gray-200 p-10 text-center tf-body-muted italic">
           No question-level data available.
         </div>
       )}
@@ -1724,7 +1769,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
         return (
           <div key={sec.key} className="space-y-3">
             <div className="flex items-center gap-2">
-              <div className="text-base font-bold text-gray-900">{sec.label}</div>
+              <div className="tf-section-title">{sec.label}</div>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${sec.chipCls}`}>{sec.chip}</span>
             </div>
 
@@ -1749,7 +1794,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <span className="text-xs font-semibold text-white bg-indigo-600 px-2 py-0.5 rounded-full">
+                          <span className="tf-badge text-white bg-indigo-600">
                             Question {q.qNum}
                           </span>
                           <div className="flex items-center gap-1 tf-meta">
@@ -1760,10 +1805,10 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                             })()}
                           </div>
                         </div>
-                        <div className="tf-cell-name mb-2">{q.question || `Question ${q.qNum}`}</div>
+                        <div className="tf-row-title mb-2">{q.question || `Question ${q.qNum}`}</div>
                         <div className="flex flex-wrap gap-1.5">
                           {q.skills.map((s, idx) => (
-                            <span key={idx} className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">
+                            <span key={idx} className="tf-meta px-2 py-0.5 rounded bg-gray-100">
                               {s.name} ({priorityTag(s.priority).tag})
                             </span>
                           ))}
@@ -1789,11 +1834,11 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                           <div className="text-sm font-semibold">Candidate Response</div>
                         </div>
                         {q.answer && q.answer.trim() ? (
-                          <blockquote className="text-sm text-gray-800 leading-relaxed border-l-2 border-gray-300 pl-3 italic">
+                          <blockquote className="tf-body leading-relaxed border-l-2 border-gray-300 pl-3 italic">
                             {q.answer}
                           </blockquote>
                         ) : (
-                          <div className="text-sm italic text-gray-400">
+                          <div className="tf-body-muted italic">
                             No response recorded — candidate skipped, timed out, or didn't answer.
                           </div>
                         )}
@@ -1812,7 +1857,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                       </div>
 
                       {/* Skill scoring breakdown */}
-                      <div className="tf-cell-name mb-2">Skill Scoring Breakdown</div>
+                      <div className="tf-row-title mb-2">Skill Scoring Breakdown</div>
                       <div className="space-y-2 mb-4">
                         {q.skills.map((s, idx) => {
                           const tag = priorityTag(s.priority);
@@ -1821,7 +1866,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                             <div key={idx} className="p-3 rounded-xl bg-gray-50 border border-gray-200">
                               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                                 <div className="flex items-center gap-2">
-                                  <div className="tf-cell-name">{s.name}</div>
+                                  <div className="tf-row-title">{s.name}</div>
                                   <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${tag.bg} ${tag.text}`}>
                                     {tag.tag}
                                   </span>
@@ -1947,7 +1992,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
           return parts.length ? parts.join(' + ') : '0';
         };
         return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="tf-grid-2">
           {data.sectionsPresent.mustHave && (
             <div className="rounded-2xl border-2 border-indigo-600 overflow-hidden">
               <div className="bg-indigo-600 text-white px-5 py-3 text-sm font-bold">
@@ -2036,7 +2081,7 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-              <div className="text-base font-semibold text-gray-900">
+              <div className="tf-section-title">
                 Question {transcriptOpen.qNum} — Full Transcript
               </div>
               <button
@@ -2140,26 +2185,26 @@ export function FormulaView() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+      <div className="tf-card-soft p-6 text-gray-900 dark:text-slate-50">
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Calculator className="w-5 h-5" /></div>
           <div className="min-w-0 flex-1">
             <div className="text-xl font-bold mb-2">Scoring Formula & Example Scenarios</div>
-            <div className="tf-card-desc">
+            <div className="tf-body-secondary">
               Reference card explaining how skill scores roll up into question scores, section scores, and the final Pass/Fail decision — plus the worked scenarios from the evaluation spec.
             </div>
           </div>
         </div>
       </div>
 
-      <div className="rounded-2xl border border-gray-200 p-6 bg-white">
-        <div className="text-base font-bold text-gray-900 mb-4">Priority Weights</div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="tf-panel p-6">
+        <div className="tf-section-title mb-4">Priority Weights</div>
+        <div className="tf-grid-3">
           {priorityWeights.map(p => (
             <div key={p.priority} className="p-4 rounded-xl border" style={{ borderColor: p.color, backgroundColor: `${p.color}0F` }}>
               <div className="text-sm font-semibold mb-1" style={{ color: p.color }}>{p.priority}</div>
               <div className="text-3xl font-bold mb-1" style={{ color: p.color }}>{p.weight}</div>
-              <div className="tf-meta-strong">{p.description}</div>
+              <div className="tf-meta">{p.description}</div>
             </div>
           ))}
         </div>
@@ -2179,7 +2224,7 @@ export function FormulaView() {
       </div>
 
       {/* Doc §5 — Worked scenarios */}
-      <div className="text-lg font-bold text-gray-900 pt-2">Worked Scenarios</div>
+      <div className="tf-section-title pt-2">Worked Scenarios</div>
 
       {scenarios.map((sc, i) => {
         const resultChip = sc.result === 'PASS'
@@ -2195,8 +2240,8 @@ export function FormulaView() {
           >
             <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
               <div>
-                <div className="text-base font-bold text-gray-900 mb-1">{sc.title}</div>
-                <div className="tf-meta-strong">{sc.description}</div>
+                <div className="tf-section-title mb-1">{sc.title}</div>
+                <div className="tf-meta">{sc.description}</div>
               </div>
               <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${resultChip}`}>
                 {sc.result}
@@ -2206,7 +2251,7 @@ export function FormulaView() {
             {/* Skills + contributions */}
             <div className="space-y-1 mb-3">
               {sc.skills.map((sk, j) => (
-                <div key={j} className="text-sm font-mono text-gray-800">
+                <div key={j} className="tf-body font-mono">
                   • {sk.name} ({sk.priority}, weight {sk.weight}) → score {sk.score}
                   {'  '}→ contribution = {sk.score} × {sk.weight} = {sk.score * sk.weight}
                 </div>
@@ -2215,7 +2260,7 @@ export function FormulaView() {
 
             <hr className="border-gray-200 my-3" />
 
-            <div className="space-y-1 text-sm font-mono text-gray-800">
+            <div className="space-y-1 tf-body font-mono">
               <div>Total Weighted = {sc.skills.map(s => s.score * s.weight).join(' + ')} = {sc.totalWeighted}</div>
               <div>Total Weight = {sc.skills.map(s => s.weight).join(' + ')} = {sc.totalWeight}</div>
               <div className="text-base font-bold pt-1" style={{ color: sc.color }}>
@@ -2223,7 +2268,7 @@ export function FormulaView() {
               </div>
             </div>
 
-            <div className="mt-3 tf-meta-strong italic leading-relaxed">{sc.insight}</div>
+            <div className="mt-3 tf-meta italic leading-relaxed">{sc.insight}</div>
           </div>
         );
       })}
@@ -2232,8 +2277,8 @@ export function FormulaView() {
       <div className="rounded-2xl p-6 border-2 border-indigo-300 bg-indigo-50/40">
         <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
           <div>
-            <div className="text-base font-bold text-gray-900 mb-1">Scenario 4: Full Must-Have Section (10 Questions)</div>
-            <div className="tf-meta-strong">How section score is computed from individual question scores</div>
+            <div className="tf-section-title mb-1">Scenario 4: Full Must-Have Section (10 Questions)</div>
+            <div className="tf-meta">How section score is computed from individual question scores</div>
           </div>
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
             mhSectionAvg >= MHS_THRESHOLD
@@ -2244,7 +2289,7 @@ export function FormulaView() {
           </span>
         </div>
 
-        <div className="text-sm font-mono text-gray-800 space-y-1">
+        <div className="tf-body font-mono space-y-1">
           <div>Question scores: {mhScores.join(', ')}</div>
           <div>Sum = {mhScores.reduce((a, b) => a + b, 0).toFixed(1)}</div>
           <div>Section Score = {mhScores.reduce((a, b) => a + b, 0).toFixed(1)} ÷ {mhScores.length} = <strong>{formatScore1(mhSectionAvg)}</strong></div>
@@ -2260,7 +2305,7 @@ export function FormulaView() {
           {formatScore1(mhSectionAvg)} {mhSectionAvg >= MHS_THRESHOLD ? '≥' : '<'} {MHS_THRESHOLD.toFixed(1)} → {mhSectionAvg >= MHS_THRESHOLD ? 'PASS ✓' : 'FAIL ✗'}
         </div>
 
-        <div className="mt-3 tf-meta-strong italic leading-relaxed">
+        <div className="mt-3 tf-meta italic leading-relaxed">
           Nice-to-Have (5 questions) is calculated the same way but only informational — it never affects Pass/Fail.
         </div>
       </div>

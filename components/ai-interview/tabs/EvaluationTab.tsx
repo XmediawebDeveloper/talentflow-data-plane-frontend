@@ -8,6 +8,7 @@ import {
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '../ResultRowActions';
 import { toast } from 'sonner';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -86,7 +87,7 @@ function ScoreGauge({ score, size = 'lg' }: { score: number; size?: 'lg' | 'sm' 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className={`${size === 'lg' ? 'text-2xl' : 'text-sm'} font-bold ${color}`}>{Math.round(pct)}</span>
-        {size === 'lg' && <span className="text-2xs text-gray-400">/ 100</span>}
+        {size === 'lg' && <span className="tf-micro-hint">/ 100</span>}
       </div>
     </div>
   );
@@ -270,7 +271,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
     <div className="space-y-6">
       {/* ── Download bar ──────────────────────────────────────────── */}
       <div className="flex items-center justify-end gap-2">
-        <span className="text-xs text-gray-400 mr-auto">
+        <span className="tf-hint mr-auto">
           {isV2 ? 'Formula-based scoring (v2)' : 'Legacy evaluation (v1)'}
         </span>
         {['pdf', 'excel', 'json'].map(fmt => (
@@ -289,12 +290,12 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
       </div>
 
       {/* ── Overall score hero ────────────────────────────────────── */}
-      <div className={`${bandStyle.bg} ${bandStyle.border} border rounded-xl p-6`}>
+      <div className={`${bandStyle.bg} ${bandStyle.border} border rounded-xl p-4 sm:p-6`}>
         <div className="flex items-center gap-6">
           <ScoreGauge score={overallScore} size="lg" />
           <div className="flex-1">
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-lg font-bold text-gray-900">Overall Score</h2>
+              <h2 className="tf-section-title">Overall Score</h2>
               <span className={`px-3 py-1 rounded-full text-xs font-bold ${bandStyle.bg} ${bandStyle.text} ${bandStyle.border} border`}>
                 {recommendation.replace(/_/g, ' ')}
               </span>
@@ -325,7 +326,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
       {/* ── Section → Cluster → Skill hierarchy ──────────────────── */}
       {sections.length > 0 && (
         <div className="space-y-5">
-          <h3 className="tf-subsection-title">Section Breakdown</h3>
+          <h3 className="tf-row-title">Section Breakdown</h3>
           {sections.map(section => {
             const sStyle = SECTION_STYLES[section.key] || SECTION_STYLES.mth;
             const sectionCards = sectionSkillMap[section.key] || [];
@@ -346,7 +347,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                     <div className="text-right">
                       <div className="flex items-baseline gap-1">
                         <span className={`text-2xl font-bold ${sColor}`}>{Math.round(section.score)}</span>
-                        <span className="text-xs text-gray-400">/ 100</span>
+                        <span className="tf-hint">/ 100</span>
                       </div>
                     </div>
                   </div>
@@ -366,10 +367,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                         <div key={ci}>
                           <button
                             onClick={() => toggleCluster(cKey)}
-                            className="w-full flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors text-left"
+                            className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 hover:bg-gray-50 transition-colors text-left"
                           >
                             <div className="flex items-center gap-2">
-                              <span className="tf-cell-name">{cl.name}</span>
+                              <span className="tf-row-title">{cl.name}</span>
                               <span className={`text-2xs px-1.5 py-0.5 rounded ${
                                 (cl as any).priority_label === 'High' || cl.priority >= 3 ? 'bg-emerald-50 text-emerald-700' :
                                 (cl as any).priority_label === 'Medium' || cl.priority === 2 ? 'bg-amber-50 text-amber-700' :
@@ -377,7 +378,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               }`}>
                                 {(cl as any).priority_label || (cl.priority >= 3 ? 'High' : cl.priority === 2 ? 'Medium' : 'Low')} Priority · {cl.weight}% weight
                               </span>
-                              <span className="text-2xs text-gray-400">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
+                              <span className="tf-micro-hint">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center gap-3">
                               <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-2xs text-gray-400 font-normal">/10</span></span>
@@ -389,17 +390,18 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                           {cOpen && (
                             <div className="border-t border-gray-50 bg-gray-50/30">
                               {clSkills.length === 0 ? (
-                                <div className="text-xs text-gray-400 italic px-6 py-3">No skill-level data available for this cluster.</div>
+                                <div className="tf-hint italic px-6 py-3">No skill-level data available for this cluster.</div>
                               ) : (
-                                <div className="overflow-x-auto tf-table-shell">
+                                <>
+                                <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                                   <table className="w-full text-xs">
-                                    <thead className="bg-white text-gray-600 text-xs">
+                                    <thead className="bg-white tf-meta">
                                       <tr>
-                                        <th className="px-5 py-2 text-left font-semibold">Skill</th>
-                                        <th className="px-3 py-2 text-center font-semibold w-20">Base</th>
-                                        <th className="px-3 py-2 text-center font-semibold w-28">Modifiers</th>
-                                        <th className="px-3 py-2 text-center font-semibold w-20">Final</th>
-                                        <th className="px-3 py-2 text-center font-semibold w-16">%</th>
+                                        <th className="tf-th-cell text-left font-semibold">Skill</th>
+                                        <th className="tf-th-cell text-center font-semibold w-20">Base</th>
+                                        <th className="tf-th-cell text-center font-semibold w-28">Modifiers</th>
+                                        <th className="tf-th-cell text-center font-semibold w-20">Final</th>
+                                        <th className="tf-th-cell text-center font-semibold w-16">%</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-gray-100 bg-white">
@@ -415,10 +417,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
 
                                         return (
                                           <tr key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
-                                            <td className="px-5 py-2.5 align-top">
+                                            <td className="tf-td align-top">
                                               <div className="flex items-center gap-2">
-                                                <span className="text-sm font-medium text-gray-900">{card.skill}</span>
-                                                <span className="text-2xs text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
+                                                <span className="tf-row-name">{card.skill}</span>
+                                                <span className="tf-micro-hint capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
                                               </div>
                                               {isExp && card.formula && (
                                                 <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
@@ -426,9 +428,9 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                                 </div>
                                               )}
                                             </td>
-                                            <td className="px-3 py-2.5 text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
-                                            <td className="px-3 py-2.5 text-center text-gray-500">{modStr}</td>
-                                            <td className="px-3 py-2.5 text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
+                                            <td className="tf-td text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
+                                            <td className="tf-td text-center text-gray-500">{modStr}</td>
+                                            <td className="tf-td text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
                                             <td className={`px-3 py-2.5 text-center font-bold ${pctColor}`}>{card.final_pct}%</td>
                                           </tr>
                                         );
@@ -436,6 +438,39 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                     </tbody>
                                   </table>
                                 </div>
+                                <MobileRecordList className="p-3">
+                                  {clSkills.map(card => {
+                                    const isExp = expandedSkills.has(card.skill);
+                                    const mods = card.modifiers;
+                                    const modParts: string[] = [];
+                                    if (mods.follow_up_bonus) modParts.push(`+${mods.follow_up_bonus} follow-up`);
+                                    if (mods.depth_bonus) modParts.push(`+${mods.depth_bonus} depth`);
+                                    if (mods.idk_penalty) modParts.push(`${mods.idk_penalty} IDK`);
+                                    const modStr = modParts.length > 0 ? modParts.join(', ') : '—';
+                                    const pctColor = card.final_pct >= 80 ? 'text-emerald-600' : card.final_pct >= 60 ? 'text-blue-600' : card.final_pct >= 40 ? 'text-amber-600' : 'text-red-600';
+                                    return (
+                                      <MobileRecordCard
+                                        key={card.skill}
+                                        badges={card.coverage_level ? <span className="tf-micro-hint capitalize">{card.coverage_level.replace(/_/g, ' ')}</span> : undefined}
+                                        title={card.skill}
+                                        footer={<span className={`font-bold ${pctColor}`}>{card.final_pct}%</span>}
+                                        fields={[
+                                          { label: 'Base', value: <span className="font-mono text-gray-700">{Math.round(card.base_score)}</span> },
+                                          { label: 'Modifiers', value: modStr },
+                                          { label: 'Final', value: <span className="font-bold text-gray-900">{Math.round(card.final_score)}</span> },
+                                        ]}
+                                        onClick={() => toggleSkill(card.skill)}
+                                      >
+                                        {isExp && card.formula && (
+                                          <div className="mt-2.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
+                                            {card.formula}
+                                          </div>
+                                        )}
+                                      </MobileRecordCard>
+                                    );
+                                  })}
+                                </MobileRecordList>
+                                </>
                               )}
                             </div>
                           )}
@@ -447,17 +482,18 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                   /* No clusters — show skills directly under section */
                   <div className="bg-white">
                     {sectionCards.length === 0 ? (
-                      <div className="text-xs text-gray-400 italic px-5 py-4">No skill data available for this section.</div>
+                      <div className="tf-hint italic px-5 py-4">No skill data available for this section.</div>
                     ) : (
-                      <div className="overflow-x-auto tf-table-shell">
+                      <>
+                      <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
                         <table className="w-full text-xs">
-                          <thead className="bg-white text-gray-600 text-xs">
+                          <thead className="bg-white tf-meta">
                             <tr>
-                              <th className="px-5 py-2 text-left font-semibold">Skill</th>
-                              <th className="px-3 py-2 text-center font-semibold w-20">Base</th>
-                              <th className="px-3 py-2 text-center font-semibold w-28">Modifiers</th>
-                              <th className="px-3 py-2 text-center font-semibold w-20">Final</th>
-                              <th className="px-3 py-2 text-center font-semibold w-16">%</th>
+                              <th className="tf-th-cell text-left font-semibold">Skill</th>
+                              <th className="tf-th-cell text-center font-semibold w-20">Base</th>
+                              <th className="tf-th-cell text-center font-semibold w-28">Modifiers</th>
+                              <th className="tf-th-cell text-center font-semibold w-20">Final</th>
+                              <th className="tf-th-cell text-center font-semibold w-16">%</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
@@ -473,10 +509,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
 
                               return (
                                 <tr key={card.skill} className="cursor-pointer hover:bg-gray-50/50" onClick={() => toggleSkill(card.skill)}>
-                                  <td className="px-5 py-2.5 align-top">
+                                  <td className="tf-td align-top">
                                     <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-gray-900">{card.skill}</span>
-                                      <span className="text-2xs text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
+                                      <span className="tf-row-name">{card.skill}</span>
+                                      <span className="tf-micro-hint capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
                                     </div>
                                     {isExp && card.formula && (
                                       <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
@@ -484,9 +520,9 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                       </div>
                                     )}
                                   </td>
-                                  <td className="px-3 py-2.5 text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
-                                  <td className="px-3 py-2.5 text-center text-gray-500">{modStr}</td>
-                                  <td className="px-3 py-2.5 text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
+                                  <td className="tf-td text-center font-mono text-gray-700">{Math.round(card.base_score)}</td>
+                                  <td className="tf-td text-center text-gray-500">{modStr}</td>
+                                  <td className="tf-td text-center font-bold text-gray-900">{Math.round(card.final_score)}</td>
                                   <td className={`px-3 py-2.5 text-center font-bold ${pctColor}`}>{card.final_pct}%</td>
                                 </tr>
                               );
@@ -494,6 +530,39 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                           </tbody>
                         </table>
                       </div>
+                      <MobileRecordList className="p-3">
+                        {sectionCards.map(card => {
+                          const isExp = expandedSkills.has(card.skill);
+                          const mods = card.modifiers;
+                          const modParts: string[] = [];
+                          if (mods.follow_up_bonus) modParts.push(`+${mods.follow_up_bonus} follow-up`);
+                          if (mods.depth_bonus) modParts.push(`+${mods.depth_bonus} depth`);
+                          if (mods.idk_penalty) modParts.push(`${mods.idk_penalty} IDK`);
+                          const modStr = modParts.length > 0 ? modParts.join(', ') : '—';
+                          const pctColor = card.final_pct >= 80 ? 'text-emerald-600' : card.final_pct >= 60 ? 'text-blue-600' : card.final_pct >= 40 ? 'text-amber-600' : 'text-red-600';
+                          return (
+                            <MobileRecordCard
+                              key={card.skill}
+                              badges={card.coverage_level ? <span className="tf-micro-hint capitalize">{card.coverage_level.replace(/_/g, ' ')}</span> : undefined}
+                              title={card.skill}
+                              footer={<span className={`font-bold ${pctColor}`}>{card.final_pct}%</span>}
+                              fields={[
+                                { label: 'Base', value: <span className="font-mono text-gray-700">{Math.round(card.base_score)}</span> },
+                                { label: 'Modifiers', value: modStr },
+                                { label: 'Final', value: <span className="font-bold text-gray-900">{Math.round(card.final_score)}</span> },
+                              ]}
+                              onClick={() => toggleSkill(card.skill)}
+                            >
+                              {isExp && card.formula && (
+                                <div className="mt-2.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
+                                  {card.formula}
+                                </div>
+                              )}
+                            </MobileRecordCard>
+                          );
+                        })}
+                      </MobileRecordList>
+                      </>
                     )}
                   </div>
                 )}
@@ -506,7 +575,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
       {/* ── v1 Cluster Insights fallback (when sections couldn't be built) ── */}
       {sections.length === 0 && clusterInsights.length > 0 && (
         <div>
-          <h3 className="tf-subsection-title mb-3">Skill Breakdown</h3>
+          <h3 className="tf-row-title mb-3">Skill Breakdown</h3>
           <div className="space-y-4">
             {clusterInsights.map((ci: any, idx: number) => {
               const bandScore = Number(ci.band_score) || 0;
@@ -514,7 +583,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
               return (
                 <div key={idx} className="border border-gray-200 rounded-xl p-4">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="tf-subsection-title">{ci.cluster_name || 'Skills'}</h4>
+                    <h4 className="tf-row-title">{ci.cluster_name || 'Skills'}</h4>
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
                       (ci.band === 'High' || ci.band === 'Strong') ? 'bg-emerald-100 text-emerald-700' :
                       (ci.band === 'Medium' || ci.band === 'Proficient' || ci.band === 'Developing') ? 'bg-amber-100 text-amber-700' :
@@ -524,7 +593,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                   </div>
                   <div className="flex items-end gap-2 mb-3">
                     <span className="text-xl font-bold text-gray-900">{displayScore}</span>
-                    <span className="text-xs text-gray-400 mb-0.5">/ 100</span>
+                    <span className="tf-hint mb-0.5">/ 100</span>
                   </div>
                   {ci.skill_scores?.length > 0 && (
                     <div className="space-y-1.5 mt-2 pt-2 border-t border-gray-100">

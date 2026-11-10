@@ -5,9 +5,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 // cardholder line, and action buttons).
 export default function Loading() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {/* Add button */}
           <div className="mb-4 flex items-center justify-end">
             <Skeleton className="h-9 w-44 rounded-lg" />
@@ -16,7 +16,7 @@ export default function Loading() {
           {/* Payment-method cards */}
           <div className="space-y-4">
             {Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6">
+              <div key={i} className="tf-panel p-5 sm:p-6">
                 <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
                   <div className="flex min-w-0 items-center gap-4">
                     <Skeleton className="h-12 w-16 shrink-0 rounded-xl" />

@@ -2,7 +2,55 @@
  * Resume Service
  */
 
-import api, { handleApiError, dispatchUnitsConsumed } from './api';
+import api, { handleApiError, dispatchUnitsConsumed, getTokens } from './api';
+
+/* Throttle for POST /resumes/usage/reconcile. Three places ask for it (the
+   dashboard layout once per load, My Resumes and Resume Database on mount),
+   and each tab switch re-ran it. It now runs at most once per 15 minutes per
+   browser tab session, per signed-in account. Concurrent callers share the
+   in-flight request, so a caller that awaits it (the layout, which refetches
+   the quota widget afterwards) still waits for the real reconcile to finish.
+   If sessionStorage is unavailable the call simply runs, as before. Pass
+   `{ force: true }` to skip the throttle (e.g. right after a write). */
+const RECONCILE_THROTTLE_MS = 15 * 60 * 1000;
+const RECONCILE_STORAGE_PREFIX = 'tf-usage-reconcile-at:';
+let reconcileInFlight: Promise<boolean> | null = null;
+
+function reconcileStorageKey(): string {
+  // Key by account so a different login in the same tab is not throttled by
+  // the previous account's run.
+  let id = 'anon';
+  try {
+    const token = getTokens().accessToken;
+    const part = token?.split('.')[1];
+    if (part) {
+      const json = JSON.parse(atob(part.replace(/-/g, '+').replace(/_/g, '/')));
+      id = [json.sub, json.tenant_id ?? json.tenant].filter(Boolean).join(':') || 'anon';
+    }
+  } catch {
+    // fall back to 'anon'
+  }
+  return RECONCILE_STORAGE_PREFIX + id;
+}
+
+function readReconcileStamp(key: string): number | null {
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    const n = raw ? Number(raw) : NaN;
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeReconcileStamp(key: string, value: number | null) {
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, String(value));
+  } catch {
+    // storage unavailable: no throttle, same as before
+  }
+}
 
 /* Fired after any write that changes how many resumes a folder or pool holds
    — archive, unarchive, move, delete. Count badges live in several places
@@ -169,6 +217,10 @@ export interface Resume {
   is_duplicate?: boolean;
   is_archived?: boolean;  // Whether resume is archived
   archived_at?: string;  // When resume was archived
+  // True when candidate_email matches an existing tenant team member's login
+  // email. Uploads are blocked at the source now; this flags resumes stored
+  // before that restriction existed so the UI can grey them out.
+  is_tenant_user_email?: boolean;
   // Team assignment (recruiter id) — surfaced on internal-DB and my-resumes lists
   assigned_to?: string;
   created_at?: string;
@@ -228,6 +280,8 @@ export interface Resume {
   isArchived?: boolean;
   /** @deprecated use archived_at */
   archivedAt?: string;
+  /** @deprecated use is_tenant_user_email */
+  isTenantUserEmail?: boolean;
   /** @deprecated use professional_summary */
   professionalSummary?: string;
   /** @deprecated use technical_skills */
@@ -362,9 +416,42 @@ export interface ResumeSearchParams {
   page_size?: number;
   sort_by?: string;
   include_archived?: boolean;
+  /** Multi-keyword search: 'all' keywords must match (server default) or 'any'. */
+  search_mode?: 'all' | 'any';
+}
+
+/** GET /resumes/stats — counts built from the same filters as GET /resumes. */
+export interface ResumeStatsParams extends Omit<ResumeSearchParams, 'folder_id' | 'page' | 'page_size' | 'sort_by'> {
+  /** false skips the per-folder GROUP BY (tab badges only). */
+  include_folders?: boolean;
+}
+
+export interface ResumeStats {
+  source: 'my-resumes' | 'internal-db' | null;
+  /** = GET /resumes?source=<source> total (no folder). Null when not readable. */
+  all_total: number | null;
+  /** Tab badges; a pool the user may not read is null. */
+  sources: { 'my-resumes': number | null; 'internal-db': number | null };
+  /** = GET /resumes?source=<source>&folder_id=uncategorized total. */
+  uncategorized: number | null;
+  /** folder_id -> GET /resumes?source=<source>&folder_id=<id> total (archived rows included). */
+  folders: Record<string, number>;
 }
 
 export const resumeService = {
+  /**
+   * Card / badge counts for the Resume Database in one call (replaces the
+   * per-tab and per-folder page_size=1 probes).
+   */
+  async stats(params?: ResumeStatsParams): Promise<ResumeStats> {
+    try {
+      const response = await api.get<ResumeStats>('/resumes/stats', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   /**
    * List resumes with filters
    */
@@ -381,13 +468,37 @@ export const resumeService = {
    * Fire-and-forget: ask the backend to reconcile the admin API's RU usage
    * with our actual active resume count. Safe to call on every page mount —
    * the endpoint is idempotent and returns delta=0 when already in sync.
+   * Throttled to once per 15 minutes per tab session (see
+   * RECONCILE_THROTTLE_MS above); `force` bypasses the throttle.
+   * Resolves true only when a reconcile actually ran and succeeded, so a
+   * caller refreshes quota only when the counter may have moved.
    */
-  async reconcileUsage(): Promise<void> {
-    try {
-      await api.post('/resumes/usage/reconcile');
-    } catch {
-      // Reconciliation is best-effort; never block the page on it.
+  async reconcileUsage(options?: { force?: boolean }): Promise<boolean> {
+    if (reconcileInFlight) return reconcileInFlight;
+    const key = typeof window !== 'undefined' ? reconcileStorageKey() : null;
+    if (key && !options?.force) {
+      const last = readReconcileStamp(key);
+      const now = Date.now();
+      if (last !== null && last <= now && now - last < RECONCILE_THROTTLE_MS) return false;
     }
+    if (key) writeReconcileStamp(key, Date.now());
+    reconcileInFlight = (async () => {
+      try {
+        // Adjusts a usage counter only — no listed data changes, so keep the
+        // list caches (see `invalidatesLists`); the layout refetches quota
+        // itself after a reconcile that ran.
+        await api.post('/resumes/usage/reconcile', undefined, { invalidatesLists: false });
+        return true;
+      } catch {
+        // Reconciliation is best-effort; never block the page on it. Drop the
+        // stamp so the next mount retries, as it did before the throttle.
+        if (key) writeReconcileStamp(key, null);
+        return false;
+      } finally {
+        reconcileInFlight = null;
+      }
+    })();
+    return reconcileInFlight;
   },
 
   /**

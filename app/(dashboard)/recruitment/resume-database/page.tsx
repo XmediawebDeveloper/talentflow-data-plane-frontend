@@ -118,9 +118,9 @@ export default function ResumeDatabasePage() {
   const tabLocked = (tab: ResumeTab): boolean =>
     !authLoading && (tab === 'my-resumes' ? !canSeeMyResumes : !canSeeInternalDb);
 
-  /* Per-pool totals for the tab badges. One page_size=1 request each — the
-     same probe the views use for their own totals — so switching tabs never
-     waits on a full listing. Active resumes only, matching the My Resumes
+  /* Per-pool totals for the tab badges: ONE GET /resumes/stats call (both
+     pools in a single COUNT … FILTER query, no folder breakdown) instead of a
+     page_size=1 probe per tab. Active resumes only, matching the My Resumes
      "All Resumes" badge. Refetched when the tab changes so a count picks up
      uploads/deletes made on the other tab. */
   const [tabCounts, setTabCounts] = useState<Partial<Record<ResumeTab, number>>>({});
@@ -128,16 +128,22 @@ export default function ResumeDatabasePage() {
     if (!bothPools) return;
     let cancelled = false;
     const load = () => {
-      (['my-resumes', 'internal-db'] as const).forEach((tab) => {
-        resumeService
-          .list({ source: tab, page: 1, page_size: 1, include_archived: false })
-          .then((res) => {
-            if (!cancelled) setTabCounts((prev) => ({ ...prev, [tab]: res.total }));
-          })
-          .catch(() => {
-            // Keep the last known figure (or none) rather than showing a wrong one.
+      resumeService
+        .stats({ include_archived: false, include_folders: false })
+        .then((res) => {
+          if (cancelled) return;
+          setTabCounts((prev) => {
+            const next = { ...prev };
+            (['my-resumes', 'internal-db'] as const).forEach((tab) => {
+              const n = res.sources?.[tab];
+              if (typeof n === 'number') next[tab] = n;
+            });
+            return next;
           });
-      });
+        })
+        .catch(() => {
+          // Keep the last known figure (or none) rather than showing a wrong one.
+        });
     };
     load();
     // Archive / unarchive / move / delete inside either view changes these
@@ -220,16 +226,16 @@ export default function ResumeDatabasePage() {
   // empty list that reads as "you have no resumes".
   if (!activeTab) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             <PageBreadcrumb className="mb-4 md:mb-6" items={CRUMBS} />
             <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
               <span className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-100 text-gray-500">
                 <Lock className="h-5 w-5" />
               </span>
-              <h1 className="text-lg font-semibold text-gray-900">Access Restricted</h1>
-              <p className="max-w-md tf-card-desc">
+              <h1 className="tf-page-title">Access Restricted</h1>
+              <p className="max-w-md tf-body-secondary">
                 You don&apos;t have permission to view the resume database. Ask your administrator
                 for access to My Resumes or the Shared Database.
               </p>

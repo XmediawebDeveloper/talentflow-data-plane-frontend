@@ -66,7 +66,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
         folderService.list(),
         jdService.list({ search: searchQuery, page_size: 5 }),
         assessmentService.list({ search: searchQuery, page_size: 5 }),
-        aiInterviewService.list({ search: searchQuery, page_size: 5 }),
+        aiInterviewService.list({ search: searchQuery, page_size: 5, compact: true }),
       ]);
 
       setResumes(resumeRes.status === 'fulfilled' ? resumeRes.value.items : []);
@@ -186,13 +186,13 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
           }}
           placeholder="Search folders, resumes, jobs, assessments, interviews or IDs..."
           aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
-          className="peer w-full pl-8 pr-14 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
+          className="peer w-full pl-8 pr-14 py-1.5 tf-body border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-500 dark:focus:ring-gray-400 focus:border-transparent bg-gray-50 dark:bg-gray-800 hover:bg-white dark:hover:bg-gray-700 transition-colors placeholder-gray-400 dark:placeholder-gray-500 [&::-webkit-search-cancel-button]:hidden"
         />
         {/* Shortcut hint — only while empty and unfocused */}
         {!isLoading && !query && (
           <kbd
             aria-hidden
-            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-gray-300 bg-white px-1.5 py-px font-sans text-[10px] font-semibold text-gray-500 shadow-[0_1px_0_#e5e7eb] peer-focus:hidden dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:shadow-none"
+            className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded border border-gray-300 bg-white px-1.5 py-px font-sans text-2xs font-semibold text-gray-500 shadow-[0_1px_0_#e5e7eb] peer-focus:hidden dark:border-gray-600 dark:bg-gray-700 dark:text-gray-400 dark:shadow-none"
           >
             {isMac ? '⌘K' : 'Ctrl K'}
           </kbd>
@@ -219,7 +219,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               Searching...
             </div>
           ) : !hasResults ? (
-            <div className="py-8 text-center text-gray-500 dark:text-gray-400 text-sm">
+            <div className="py-8 text-center tf-body-muted">
               No results found for &ldquo;{query}&rdquo;
             </div>
           ) : (
@@ -227,7 +227,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               {/* Folders */}
               {folders.length > 0 && (
                 <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                  <div className="px-3 py-2 tf-eyebrow bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <FolderIcon className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                     Folders ({folders.length})
                   </div>
@@ -238,14 +238,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                        <span className="tf-badge bg-brand-blue/10 text-2xs text-brand-blue ring-1 ring-brand-blue/15">
                           Folder
                         </span>
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                        <span className="tf-row-name truncate">
                           {folder.name}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                      <div className="tf-meta mt-0.5 truncate">
                         {path}
                       </div>
                     </button>
@@ -256,7 +256,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               {/* Resumes */}
               {resumes.length > 0 && (
                 <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                  <div className="px-3 py-2 tf-eyebrow bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <FileText className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                     Resumes ({resumes.length})
                   </div>
@@ -267,14 +267,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-2xs font-medium text-green-700 ring-1 ring-green-200">
+                        <span className="tf-badge bg-green-50 text-2xs text-green-700 ring-1 ring-green-200">
                           Resume
                         </span>
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
+                        <span className="tf-row-name truncate">
                           {resume.candidate_name || resume.file_name}
                         </span>
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="tf-meta mt-0.5">
                         {[resume.current_title, resume.current_company, resume.location].filter(Boolean).join(' · ') || resume.candidate_email || resume.file_name}
                       </div>
                     </button>
@@ -285,7 +285,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               {/* Job Descriptions */}
               {jds.length > 0 && (
                 <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                  <div className="px-3 py-2 tf-eyebrow bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <Briefcase className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                     Job Descriptions ({jds.length})
                   </div>
@@ -296,15 +296,15 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{jd.title}</span>
+                        <span className="tf-row-name">{jd.title}</span>
                         {jd.job_id && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{jd.job_id}</span>
+                          <span className="tf-hint">{jd.job_id}</span>
                         )}
                         {!!(jd as any).version_number && (
                           <VersionBadge version={(jd as any).version_number} size="sm" variant="secondary" />
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="tf-meta mt-0.5">
                         {[jd.department, jd.location, jd.status].filter(Boolean).join(' · ')}
                       </div>
                     </button>
@@ -315,7 +315,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               {/* Assessments */}
               {assessments.length > 0 && (
                 <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                  <div className="px-3 py-2 tf-eyebrow bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <ClipboardList className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                     Assessments ({assessments.length})
                   </div>
@@ -326,17 +326,17 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{assessment.title}</span>
+                        <span className="tf-row-name">{assessment.title}</span>
                         {assessment.short_id && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{assessment.short_id}</span>
+                          <span className="tf-hint">{assessment.short_id}</span>
                         )}
                         {/* Every version of an assessment shares one AS-XXX, so
                             the version is what tells two results apart here. */}
                         {assessment.version > 1 && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">V{assessment.version}</span>
+                          <span className="tf-hint">V{assessment.version}</span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="tf-meta mt-0.5">
                         {assessment.jd_title} · {assessment.status}
                       </div>
                     </button>
@@ -347,7 +347,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
               {/* AI Interviews */}
               {aiInterviews.length > 0 && (
                 <div>
-                  <div className="px-3 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
+                  <div className="px-3 py-2 tf-eyebrow bg-gray-50 dark:bg-gray-750 border-b border-gray-100 dark:border-gray-700">
                     <Video className="w-3.5 h-3.5 inline mr-1.5 -mt-0.5" />
                     AI Interviews ({aiInterviews.length})
                   </div>
@@ -358,14 +358,14 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                        <span className="tf-row-name">
                           {interview.candidate_name || interview.position || 'AI Interview'}
                         </span>
                         {interview.display_id && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500">{interview.display_id}</span>
+                          <span className="tf-hint">{interview.display_id}</span>
                         )}
                       </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      <div className="tf-meta mt-0.5">
                         {[interview.position, interview.jd_title, interview.status].filter(Boolean).join(' · ')}
                       </div>
                     </button>

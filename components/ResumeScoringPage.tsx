@@ -1,6 +1,7 @@
 "use client";
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Cell, Pie, PieChart as RechartsPieChart, ResponsiveContainer } from 'recharts';
@@ -27,6 +28,7 @@ import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringSe
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { useFreshQuota } from '@/lib/hooks/useFreshQuota';
 import { Resume as SharedResume } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -34,6 +36,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import FilterSelect from '@/components/ui/filter-select';
 import { DateField } from '@/components/ui/date-field';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -43,7 +46,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { BulkActionConfirmModal, useScoringActionPermissions, renderInviteTargetItems, resolveSelectionJobLock, type BulkActionKind, type InviteTargetJob } from './ScoredResumesTable';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -55,8 +58,7 @@ import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets, isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
-import { useJobRecords } from '@/lib/hooks/useJobRecords';
+import { lineageKey, resolveVersionHistoryRows, getDisplayStatus, getStatusConfig, mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
   DropdownMenu,
@@ -246,6 +248,14 @@ interface ScoredResumeData {
   jdCreatedByName?: string;
   totalScored: number;
   scoredResumes: any[];
+  /** Server-counted Exact / Partial / No Match for this JD version, every
+   *  score event (GET /scoring/jds). The job rows read their counts from
+   *  these, so they never need the whole scored-resume table. */
+  verdictCounts?: { exact: number; partial: number; none: number };
+  /** Who ran this version's most recent scoring (GET /scoring/jds). */
+  latestScoredBy?: string;
+  /** True once `scoredResumes` holds this version's scores (onLoadJdScores). */
+  scoresLoaded?: boolean;
   /**
    * The highest `jdVersionNumber` seen across every scored entry in this
    * job's lineage, filled in by `collapseHistoryToLatestVersions`. Since that
@@ -314,8 +324,17 @@ const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
   { value: 'none', label: 'No Match' },
 ];
 
+/** The two orders of a job-list sort, worded for the field (the phone Sort menu):
+ *  dates newest / oldest, counts highest / lowest, text A → Z / Z → A. */
+const jobSortOrderLabels = (field: JobSortKey): { desc: string; asc: string } =>
+  field === 'scored'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'title' || field === 'jdId'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
+
 const TOOLBAR_BUTTON_CLASS =
-  'h-[38px] px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
+  'h-9 px-3 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-2 text-sm whitespace-nowrap bg-brand-blue/5 text-gray-700 border border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed';
 
 /** One row's verdict, either spelling; no verdict reads as No Match. */
 const rowVerdict = (r: { matchStatus?: string; match_status?: string }): Verdict =>
@@ -405,6 +424,10 @@ interface BatchProgress {
 
 interface ResumeScoringPageProps {
   jobs?: Job[];
+  /** `jobs` has its final value. The route only loads the one JD the
+   *  JD-first flow (?mode=new&jd_id) names, so an empty `jobs` alone can't
+   *  tell "still loading" from "not a published JD". */
+  jobsLoaded?: boolean;
   resumes?: Resume[];
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
@@ -416,7 +439,11 @@ interface ResumeScoringPageProps {
    *  only once the route re-fetches the ENTIRE scored-resume table just to
    *  re-derive these same four numbers by summing rows client-side. `null`
    *  while that initial probe is still in flight. */
-  scoreCounts?: { total: number; exact: number; partial: number; none: number } | null;
+  scoreCounts?: {
+    total: number; exact: number; partial: number; none: number;
+    /** Distinct candidates behind each card (GET /scoring/stats). */
+    people?: { all: number; exact: number; partial: number; none: number };
+  } | null;
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
   onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
@@ -434,6 +461,7 @@ interface ResumeScoringPageProps {
 
 export default function ResumeScoringPage({
   jobs: propJobs = [],
+  jobsLoaded = false,
   resumes: propResumes = [],
   scoredHistory = [],
   historyLoading = false,
@@ -469,7 +497,7 @@ export default function ResumeScoringPage({
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const canExport = isTenantAdmin || hasPermissionCode('scoring:export');
   // Resume Scoring's own export right — the same check ScoredResumesTable's
   // Export uses, so View by Job and View by Candidates gate it identically.
   const canExportScores = isTenantAdmin || hasPermissionCode('scoring:export');
@@ -504,6 +532,8 @@ export default function ResumeScoringPage({
 
   // Track if we've already handled the initialJdId to prevent re-triggering
   const [initialJdHandled, setInitialJdHandled] = useState(false);
+  // One per-JD score load for a ?jd_id&score_id landing (see the initial-JD effect).
+  const initialJdScoresRequestedRef = useRef(false);
   const [selectedCandidateForView, setSelectedCandidateForView] = useState<any | null>(null);
   /* Whether the JD being viewed has a published assessment to invite to — the
      one gate the Invite controls on this page need, since only assessment
@@ -631,6 +661,18 @@ export default function ResumeScoringPage({
     }
   };
 
+  /* The Scoring History modal lists every score of the job's lineage. The
+     landing index carries counts only, so opening it loads each version's
+     scores that are not in yet (once; Refresh above re-reads them all). */
+  useEffect(() => {
+    if (!historyModalItem || !onLoadJdScores) return;
+    const groupKey = resolveHistoryGroupKey(historyModalItem);
+    scoredHistory
+      .filter((h) => resolveHistoryGroupKey(h) === groupKey && !h.scoresLoaded && !!h.verdictCounts)
+      .forEach((h) => { void onLoadJdScores(h.jobId, h.jobTitle); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyModalItem]);
+
   /* "Show All Versions" beside the version badge on a job's own scoring page: lists every
      version's scored resumes for that job instead of only the version the
      page is scoped to. Held as the jobId it was switched on for, so moving to
@@ -667,10 +709,19 @@ export default function ResumeScoringPage({
   // `historyModalFilter`: one object, updated directly on every change, no
   // separate Apply step.
   const [historyModalFilter, setHistoryModalFilter] = useState<ScoringHistoryModalFilters>(EMPTY_SCORING_HISTORY_FILTERS);
-  // Full JD records by id — so the job list rows print the Job Descriptions
-  // cards' tags (experience, salary, AI/Manual…), which the scoring records
-  // themselves don't carry.
-  const jobRecordsById = useJobRecords();
+  // Each scored JD version's live status / republish counter / JD code, by id.
+  // Read off the scored index rows (GET /scoring/jds joins the JD table, so
+  // these are the JD's own current values) — this used to be useJobRecords(),
+  // a walk of EVERY JD the user owns (GET /jd, pages of 100) on every landing,
+  // for the same three fields of the rows already in hand.
+  const jobRecordsById = useMemo(
+    () => new Map(scoredHistory.map(h => [h.jobId, {
+      status: mapJDStatus(h.jdStatus || 'published'),
+      currentVersion: h.jdCurrentVersion,
+      job_id: h.jdJobId,
+    }])),
+    [scoredHistory],
+  );
   /** A JD version's status, capitalised ('Published', 'Disabled', 'Archived', …),
    *  for every badge and Disabled/Archived lock on this page. `jobRecordsById`
    *  only holds the user's OWN JDs (my-jds), so in a tenant where someone else
@@ -692,7 +743,7 @@ export default function ResumeScoringPage({
      job the drill-in or a candidate view is on. null = closed. Rendered in
      each of those views' returns via `inviteDialogEl`. */
   const [inviteRequest, setInviteRequest] = useState<InviteDialogRequest | null>(null);
-  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} />;
+  const inviteDialogEl = <JobInviteDialogHost request={inviteRequest} onClose={() => setInviteRequest(null)} openOn="score-resume" />;
   /* THE invite popup, global opener — for the lists that span jobs (View by
      Job's Actions, a create round trip's return). */
   const { open: openInvite } = useInviteDialog();
@@ -970,9 +1021,14 @@ export default function ResumeScoringPage({
   // Bulk download state for scored resumes
   const [selectedScoredResumes, setSelectedScoredResumes] = useState<string[]>([]);
 
-  // Available units from quota API
-  const [availableUnits, setAvailableUnits] = useState<number | null>(null);  // RS quota for scoring
-  const [availableASUnits, setAvailableASUnits] = useState<number | null>(null);  // AS quota for invites
+  // Available units from the shared QuotaContext (one /usage/quota-status call
+  // app-wide). useFreshQuota refreshes it on mount unless it is seconds old.
+  const { quotaData: sharedQuotaData, loading: sharedQuotaLoading } = useFreshQuota();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sharedQuotas = sharedQuotaData?.quotas as any;
+  const availableUnits: number | null = sharedQuotas?.RS ? (sharedQuotas.RS.total_remaining || 0) : null;  // RS quota for scoring
+  // FIX: Use AS (Assessment) quota for invite button, not RS
+  const availableASUnits: number | null = sharedQuotas?.AS ? (sharedQuotas.AS.total_remaining || 0) : null;  // AS quota for invites
 
   // Global view state (view all scored resumes across all JDs)
   const [isGlobalView, setIsGlobalView] = useState(false);
@@ -1041,7 +1097,7 @@ export default function ResumeScoringPage({
      flag also flips on failure, and a 10s cap stops a slow call from holding
      the page. Latched: later refreshes never bring the skeleton back. */
   const [globalSettled, setGlobalSettled] = useState(false);
-  const [quotaSettled, setQuotaSettled] = useState(false);
+  const quotaSettled = !!sharedQuotaData || !sharedQuotaLoading;
   const [firstPaintCapped, setFirstPaintCapped] = useState(false);
   const firstPaintDoneRef = useRef(false);
   useEffect(() => {
@@ -1130,7 +1186,7 @@ export default function ResumeScoringPage({
       // to silently cap this list at 100 rows with no pagination to reach
       // the rest, so "Total Resumes Scored"/"View by Candidates" undercounted
       // against the real total the moment more than 100 resumes existed.
-      const response = await fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page, page_size }));
+      const response = await fetchAllRows((page_size, page) => scoringService.getAllScoredResumes({ page, page_size, include_counts: false }));
 
       // Convert to ScoredResumesTable format
       const converted = response.items.map((item: any) => ({
@@ -1178,6 +1234,8 @@ export default function ResumeScoringPage({
     } catch (error) {
       console.error('Failed to fetch global scored resumes:', error);
       setGlobalFailed(true);
+      // Let the next need (another tick / expand) try again.
+      globalPrefetchedRef.current = false;
       if (!silent) toast.error('Failed to load all scored candidates');
     } finally {
       setIsLoadingGlobal(false);
@@ -1298,6 +1356,8 @@ export default function ResumeScoringPage({
     setPartialJobRows(h.partialJobRows ?? {});
     setSelectedScoredResumes(h.selectedScoredResumes ?? []);
     setHandoffReturn(h);
+    // The hand-off resolves its candidates from the cross-job score list.
+    ensureGlobalScoredResumes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -1331,6 +1391,7 @@ export default function ResumeScoringPage({
         kind: h.kind,
         job: { jdId: h.jdId, jdTitle: h.jdTitle, jdCode: h.jdCode },
         candidates: scoreRowsToInvitees(rows),
+        openOn: 'score-resume',
         onSent: () => finishHandoffInvite(true),
       });
     })();
@@ -1385,39 +1446,36 @@ export default function ResumeScoringPage({
    *  scored list is in, a placeholder until then — never the version's own
    *  total first, which would then jump to the tally. See `globalFailed`. */
   const scoredCountValue = (versionTotal: number, tally: { exact: number; partial: number; none: number }) => {
-    if (globalLoaded) return tally.exact + tally.partial + tally.none;
+    // Server counts (GET /scoring/jds) are there from the first paint.
+    if (globalLoaded || (scoredHistory.length > 0 && scoredHistory.every(h => h.verdictCounts))) {
+      return tally.exact + tally.partial + tally.none;
+    }
     if (globalFailed) return versionTotal;
     return <span className="inline-block h-4 w-6 rounded bg-gray-100 dark:bg-slate-800 animate-pulse align-middle" aria-label="Loading" />;
   };
 
   /**
-   * Warm the "View by Candidates" list in the background, so clicking that card
-   * renders rows instead of a spinner.
-   *
-   * The card shows its count from `scoredHistory`, which is already loaded — so
-   * the user can click the moment the page paints, while the rows themselves
-   * hadn't been requested yet. Fetching them during the seconds spent reading
-   * the cards moves that wait off the click.
-   *
-   * Deliberately after `historyLoading` clears: the history IS the page, and
-   * this request must not compete with it for the connection.
-   *
-   * `prefetchedRef` makes this fire at most once per mount. Without it a failed
-   * request would leave the list empty, the effect would re-satisfy its own
-   * conditions, and it would retry forever.
+   * The cross-job scored list (every score, with resume details) is NOT
+   * loaded on landing any more: the cards come from GET /scoring/stats and
+   * the job rows' counts from GET /scoring/jds. It loads only when something
+   * on screen needs the individual scores — View by Candidates (the effect
+   * above), a job opened inline or ticked (its candidates / export / invite),
+   * an invite hand-off coming back, or a candidate page reopened from a
+   * cross-job list. `globalPrefetchedRef` keeps it to one request per need;
+   * `invalidateGlobalScoredResumes` resets it after new scores land.
    */
-  useEffect(() => {
-    // Not waiting for the history any more: the first paint now waits for
-    // both, so fetching them side by side gets the page up sooner.
-    // Already in the view — the effect above is handling it.
-    if (isGlobalView) return;
-    if (globalScoredResumes.length > 0 || isLoadingGlobal) return;
-    if (globalPrefetchedRef.current) return;
-
+  const ensureGlobalScoredResumes = () => {
+    if (globalLoaded || isLoadingGlobal || globalPrefetchedRef.current) return;
     globalPrefetchedRef.current = true;
     void fetchGlobalScoredResumes({ silent: true });
+  };
+  const needsGlobalScores = expandedJobKeys.size > 0
+    || selectedHistoryItems.size > 0
+    || Object.values(partialJobRows).some(ids => ids.length > 0);
+  useEffect(() => {
+    if (needsGlobalScores) ensureGlobalScoredResumes();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isGlobalView, globalScoredResumes.length, isLoadingGlobal]);
+  }, [needsGlobalScores, globalLoaded]);
 
   /** `scroll`: bring the list into view. On for the stat cards (they sit
    *  above the list and open it); OFF for the view pills — those sit right on
@@ -1484,6 +1542,8 @@ export default function ResumeScoringPage({
     // cross-job scores are in (see `initialOpenedFrom`).
     if (initialJdId && initialScoreId && initialOpenedFrom) {
       if (!globalSettled) {
+        // Not loaded on landing any more — this page needs it, so ask now.
+        ensureGlobalScoredResumes();
         if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
         return;
       }
@@ -1531,7 +1591,7 @@ export default function ResumeScoringPage({
           setTimeout(() => {
             setShowResumeSelectionModal(true);
           }, 300);
-        } else if (jobs.length === 0) {
+        } else if (jobs.length === 0 && !jobsLoaded) {
           // Jobs not loaded yet - wait
           console.log('[ResumeScoringPage] JD-first flow: waiting for jobs to load');
           return;
@@ -1554,11 +1614,25 @@ export default function ResumeScoringPage({
       if (scoredHistory.length > 0) {
         console.log('[ResumeScoringPage] Checking for initialJdId:', initialJdId);
         const historyItem = scoredHistory.find(item => item.jobId === initialJdId);
+        /* The landing index carries no per-JD scores any more (only counts):
+           a score_id (or show_progress) landing needs THIS job's scores, so
+           load them first and come back here once they are in. The waiting
+           timeout below still releases the page if that load never lands. */
+        const needsJdScores = !!historyItem && !historyItem.scoresLoaded && !!historyItem.verdictCounts
+          && (!!initialScoreId || (initialShowProgress && !pendingScoringData));
+        if (historyItem && needsJdScores) {
+          if (!initialJdScoresRequestedRef.current) {
+            initialJdScoresRequestedRef.current = true;
+            onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+          }
+          if (!isWaitingForInitialJd) setIsWaitingForInitialJd(true);
+          return;
+        }
         if (historyItem) {
           console.log('[ResumeScoringPage] Found history item for JD, auto-opening:', historyItem.jobTitle);
           setSelectedHistoryItem(historyItem);
-          // Load full scores for this JD dynamically
-          onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+          // Load full scores for this JD dynamically (unless just loaded above)
+          if (!historyItem.scoresLoaded) onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
 
           // If we also have a score_id, open the candidate view directly
           if (initialScoreId && historyItem.scoredResumes) {
@@ -1607,7 +1681,7 @@ export default function ResumeScoringPage({
         }
       }
     }
-  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, initialOpenedFrom, globalSettled, globalScoredResumes]);
+  }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs, jobsLoaded, initialOpenedFrom, globalSettled, globalScoredResumes]);
 
   // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
   // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
@@ -1631,13 +1705,20 @@ export default function ResumeScoringPage({
   // popup refreshed history the moment the run settled). Same layout-effect
   // shape as pendingAutoSelectJdId, for the same no-intermediate-paint reason.
   const [pendingViewResult, setPendingViewResult] = useState<{ jobId: string; resumeId: string } | null>(null);
+  const pendingViewLoadRef = useRef<string | null>(null);
   useLayoutEffect(() => {
     if (!pendingViewResult) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingViewResult.jobId);
     const candidate = historyItem?.scoredResumes?.find((r: any) =>
       r.resumeId === pendingViewResult.resumeId || r.resume_id === pendingViewResult.resumeId || r.id === pendingViewResult.resumeId
     );
+    // The history index holds counts only: pull this job's scores once.
+    if (historyItem && !candidate && !historyItem.scoresLoaded && pendingViewLoadRef.current !== historyItem.jobId) {
+      pendingViewLoadRef.current = historyItem.jobId;
+      onLoadJdScores?.(historyItem.jobId, historyItem.jobTitle);
+    }
     if (!historyItem || !candidate) return;
+    pendingViewLoadRef.current = null;
     setPendingViewResult(null);
     setSelectedHistoryItem(historyItem);
     setSelectedCandidateForView(candidate);
@@ -1665,28 +1746,6 @@ export default function ResumeScoringPage({
       return () => clearTimeout(timeout);
     }
   }, [isWaitingForInitialJd]);
-
-  // Fetch available units on mount
-  useEffect(() => {
-    const fetchQuota = async () => {
-      try {
-        const response = await api.get('/usage/quota-status');
-        const quotas = response.data?.data?.quotas;
-        if (quotas?.RS) {
-          setAvailableUnits(quotas.RS.total_remaining || 0);
-        }
-        // FIX: Use AS (Assessment) quota for invite button, not RS
-        if (quotas?.AS) {
-          setAvailableASUnits(quotas.AS.total_remaining || 0);
-        }
-      } catch (error) {
-        console.log('[ResumeScoringPage] Failed to load quota:', error);
-      } finally {
-        setQuotaSettled(true);
-      }
-    };
-    fetchQuota();
-  }, []);
 
   // Track jobs that have already started scoring to prevent duplicate scoring
   const scoringStartedRef = useRef<Set<string>>(new Set());
@@ -2372,7 +2431,9 @@ export default function ResumeScoringPage({
   // First paint of the list landing: hold the skeleton until everything the
   // first screen shows has arrived (see `globalSettled`).
   if (!firstPaintDoneRef.current) {
-    const ready = firstPaintCapped || (!historyLoading && globalSettled && quotaSettled);
+    // The cross-job score list is no longer part of the first screen (cards
+    // and job-row counts come from the server), so it no longer gates it.
+    const ready = firstPaintCapped || (!historyLoading && quotaSettled);
     if (!ready && !initialJdId) return <ResumeScoringSkeleton variant="overview" />;
     firstPaintDoneRef.current = true;
   }
@@ -2691,9 +2752,9 @@ export default function ResumeScoringPage({
     };
 
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
         {/* Previous / Next rides inside the breadcrumb bar, as on job-details,
             so it stays reachable while the sticky crumb is pinned. */}
         <PageBreadcrumb
@@ -2742,7 +2803,7 @@ export default function ResumeScoringPage({
         {/* Job header — the Prev/Next that used to sit beside Score New Resumes
             moved into the breadcrumb. */}
         <div className="mb-5">
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-5">
+          <div className="tf-card p-4 sm:p-5">
             <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
               <div className="flex items-start gap-3 min-w-0 flex-1">
                 {/* Icon tile from sm only (as on the other page headers): on a
@@ -2796,7 +2857,7 @@ export default function ResumeScoringPage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
+                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                           v{detailsVersionNumber}
                         </span>
@@ -2856,7 +2917,7 @@ export default function ResumeScoringPage({
                       View Job Detail
                     </button>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 tf-meta-strong">
+                  <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3.5 h-3.5" />
                       {formatIST(selectedHistoryItem.scoredAt)}
@@ -3066,7 +3127,7 @@ export default function ResumeScoringPage({
                  above, reactively, once this flips true. */
               setIsBulkProgressMinimized(true);
             }}
-            onRetryFailed={async (item) => {
+            onRetryFailed={!canRunScoring ? undefined : async (item) => {
               try {
                 // Update item status to "Scoring in progress"
                 setProgressData(prev => prev.map(p =>
@@ -3151,7 +3212,21 @@ export default function ResumeScoringPage({
        scored resume just to sum/reduce over them again. Falls back to the
        client-side tally below when the prop isn't available (e.g. an older
        host of this component, or the probe failing). */
-    const totalResumesScored = scoreCounts ? scoreCounts.total : allScoredResumeRows.length;
+    /* Fallback when the stats call failed: the per-version server counts the
+       job index carries, else (an older host) the rows themselves. */
+    const indexCounts = scoredHistory.every(h => h.verdictCounts)
+      ? scoredHistory.reduce(
+          (acc, h) => ({
+            exact: acc.exact + (h.verdictCounts?.exact ?? 0),
+            partial: acc.partial + (h.verdictCounts?.partial ?? 0),
+            none: acc.none + (h.verdictCounts?.none ?? 0),
+          }),
+          { exact: 0, partial: 0, none: 0 },
+        )
+      : null;
+    const totalResumesScored = scoreCounts
+      ? scoreCounts.total
+      : indexCounts ? indexCounts.exact + indexCounts.partial + indexCounts.none : allScoredResumeRows.length;
     /* How the whole library came out, one bucket per verdict. Counted over
        scoring EVENTS — the same rows `totalResumesScored` counts — so the
        three add up to that first card rather than to some other population.
@@ -3162,7 +3237,7 @@ export default function ResumeScoringPage({
        Match, which is how the per-job breakdown below has always treated it. */
     const matchCounts = scoreCounts
       ? { exact: scoreCounts.exact, partial: scoreCounts.partial, none: scoreCounts.none }
-      : allScoredResumeRows.reduce(
+      : indexCounts ?? allScoredResumeRows.reduce(
           (acc, r: any) => {
             const verdict = normalizeMatchResult(r.matchStatus ?? r.match_status);
             if (verdict === 'Exact Match') acc.exact += 1;
@@ -3236,17 +3311,52 @@ export default function ResumeScoringPage({
     }
     const jobScores = (item: ScoredResumeData): any[] => scoresByJob.get(resolveHistoryGroupKey(item)) || [];
 
+    /* A job's Exact / Partial / No Match across every version, from the
+       server counts on each scored version (GET /scoring/jds) - summed per
+       lineage with the same key the rows collapse by. Available on landing,
+       so the rows, the verdict filter and the count sorts no longer wait for
+       (or need) the whole cross-job score list. Falls back to counting the
+       loaded rows for a host that passes no server counts. */
+    const serverTallies = scoredHistory.every(h => h.verdictCounts);
+    const tallyByJob = new Map<string, { exact: number; partial: number; none: number }>();
+    if (serverTallies) {
+      for (const h of scoredHistory) {
+        const key = resolveHistoryGroupKey(h);
+        const t = tallyByJob.get(key) || { exact: 0, partial: 0, none: 0 };
+        t.exact += h.verdictCounts!.exact;
+        t.partial += h.verdictCounts!.partial;
+        t.none += h.verdictCounts!.none;
+        tallyByJob.set(key, t);
+      }
+    }
+    const jobTally = (item: ScoredResumeData): { exact: number; partial: number; none: number } => {
+      if (serverTallies) return tallyByJob.get(resolveHistoryGroupKey(item)) || { exact: 0, partial: 0, none: 0 };
+      return jobScores(item).reduce(
+        (acc, r) => {
+          const v = rowVerdict(r);
+          if (v === 'Exact Match') acc.exact += 1;
+          else if (v === 'Partial Match') acc.partial += 1;
+          else acc.none += 1;
+          return acc;
+        },
+        { exact: 0, partial: 0, none: 0 },
+      );
+    };
+    const tallyReady = serverTallies || globalLoaded;
+    const tallyOf = (t: { exact: number; partial: number; none: number }, v: Verdict) =>
+      v === 'Exact Match' ? t.exact : v === 'Partial Match' ? t.partial : t.none;
+
     /* Under a verdict filter, only jobs that have at least one such score.
        Not applied until the scores have loaded — an unloaded list would
        otherwise hide every job. */
-    const collapsedHistoryFiltered = matchFilter && globalLoaded
-      ? collapsedHistoryAll.filter(item => jobScores(item).some(r => rowVerdict(r) === matchFilter))
+    const collapsedHistoryFiltered = matchFilter && tallyReady
+      ? collapsedHistoryAll.filter(item => tallyOf(jobTally(item), matchFilter) > 0)
       : collapsedHistoryAll;
 
     /* Sort by — Last Scored / Job Title / JD ID / candidate counts (under
        the verdict pill). Ties keep the list's own newest-first order. */
     const jobSortValue = (item: ScoredResumeData): number | string => {
-      const verdictCount = (v: Verdict) => jobScores(item).filter(r => rowVerdict(r) === v).length;
+      const verdictCount = (v: Verdict) => tallyOf(jobTally(item), v);
       switch (jobSortBy) {
         case 'title': return (item.jobTitle || '').toLowerCase();
         case 'jdId': {
@@ -3255,7 +3365,8 @@ export default function ResumeScoringPage({
           return isNaN(n) ? code.toLowerCase() : n;
         }
         case 'candidates':
-          return matchFilter ? verdictCount(matchFilter) : jobScores(item).length;
+          if (matchFilter) return verdictCount(matchFilter);
+          { const t = jobTally(item); return t.exact + t.partial + t.none; }
         case 'exact': return verdictCount('Exact Match');
         case 'partial': return verdictCount('Partial Match');
         case 'none': return verdictCount('No Match');
@@ -3338,9 +3449,9 @@ export default function ResumeScoringPage({
 
 
     return (
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+      <main ref={rootRef} className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className={`p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
+        <div className={`tf-page-sheet ${pageView === 'list' ? 'min-h-[calc(100dvh-7rem)]' : ''}`}>
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Scoring' }]} />
         {/* Header — shared PageHeader (User Management uniform) */}
         <PageHeader
@@ -3348,13 +3459,15 @@ export default function ResumeScoringPage({
           title="Resume Scoring"
           description="View and manage previously scored resumes"
           actions={
-            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-nowrap sm:w-auto sm:justify-end [&>[role=status]]:flex-shrink-0">
+              {/* Phones / tablets: units left and Score Resumes on ONE line — the badge at its
+                  own width, the button taking the rest. */}
               {onBack && (
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
-                  className="px-2"
+                 
                   aria-label="Back to Dashboard" title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -3382,7 +3495,7 @@ export default function ResumeScoringPage({
                   requestJobPickerScroll();
                 }}
                 aria-disabled={!canRunScoring}
-                className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`flex-1 min-w-0 sm:flex-none ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                 title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
                 icon={<ClipboardList className="w-4 h-4" />}
               >
@@ -3408,16 +3521,19 @@ export default function ResumeScoringPage({
             const v = rowVerdict(r);
             (v === 'Exact Match' ? people.exact : v === 'Partial Match' ? people.partial : people.none).add(k);
           });
+          // Server-counted (GET /scoring/stats) - no longer needs every score.
+          const peopleCounts = scoreCounts?.people
+            ?? (globalLoaded ? { all: people.all.size, exact: people.exact.size, partial: people.partial.size, none: people.none.size } : null);
           const CandidatesChip = ({ count }: { count: number }) => (
-            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+            <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
               {count} {count === 1 ? 'candidate' : 'candidates'}
             </span>
           );
           const cards = [
-            { id: null, label: 'All Scored', icon: FileText, count: totalResumesScored, people: people.all.size },
-            { id: 'Exact Match' as const, label: 'Exact Match', icon: CheckCircle2, count: matchCounts.exact, people: people.exact.size },
-            { id: 'Partial Match' as const, label: 'Partial Match', icon: TrendingUp, count: matchCounts.partial, people: people.partial.size },
-            { id: 'No Match' as const, label: 'No Match', icon: XCircle, count: matchCounts.none, people: people.none.size },
+            { id: null, label: 'All Scored', icon: FileText, count: totalResumesScored, people: peopleCounts?.all },
+            { id: 'Exact Match' as const, label: 'Exact Match', icon: CheckCircle2, count: matchCounts.exact, people: peopleCounts?.exact },
+            { id: 'Partial Match' as const, label: 'Partial Match', icon: TrendingUp, count: matchCounts.partial, people: peopleCounts?.partial },
+            { id: 'No Match' as const, label: 'No Match', icon: XCircle, count: matchCounts.none, people: peopleCounts?.none },
           ];
           return (
             <div className="mb-4 sm:mb-5">
@@ -3439,7 +3555,7 @@ export default function ResumeScoringPage({
                       setPageView('list');
                     }}
                   >
-                    {globalLoaded && <CandidatesChip count={card.people} />}
+                    {card.people !== undefined && <CandidatesChip count={card.people} />}
                   </StatsCard>
                 ))}
               </StatsCardGrid>
@@ -3465,10 +3581,10 @@ export default function ResumeScoringPage({
              2. HOW to group — By Job / By Candidates.
            Any grouping combines with any verdict: "By Job + Exact" lists the
            jobs that have Exact matches, each opening its own Exact rows. */
-        // h-[38px] + text-sm + font-medium: the same size as the toolbar's
+        // h-9 + text-sm + font-medium: the same size as the toolbar's
         // More Filters / Export buttons below.
         const pillClass = (active: boolean) =>
-          `inline-flex items-center gap-2 h-[38px] px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
+          `inline-flex items-center gap-2 h-9 px-3 rounded-lg text-sm font-medium whitespace-nowrap transition-all ${
             active
               ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
               : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
@@ -3486,9 +3602,12 @@ export default function ResumeScoringPage({
         /* Rendered inside each view's second toolbar row (Job Openings
            layout): verdict pills, then the view switch as one segmented
            toggle — the active side lifts to a white chip. */
+        /* Phones (globals.css, `.tf-jobs-toolbar`): the verdict pills become the Job
+           Openings list's underlined status tabs and View by its full-width
+           segmented row; from sm unchanged. */
         const viewPills = (
-        <div className="flex items-center gap-2 flex-wrap">
-          <div role="group" aria-label="Filter by match" className="flex items-center gap-2 flex-wrap">
+        <div className="tf-jobs-contents flex items-center gap-2 flex-wrap">
+          <div role="group" aria-label="Filter by match" className="tf-jobs-status-tabs flex items-center gap-2 flex-wrap">
             {verdictFilters.map(f => {
               const active = matchFilter === f.id;
               return (
@@ -3513,12 +3632,12 @@ export default function ResumeScoringPage({
 
           {/* "View by" once, then a sliding tile toggle: two equal halves on
               one track, and a white tile that slides under the active one. */}
-          <div className="flex w-full sm:w-auto items-center gap-2">
-            <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
+          <div className="tf-jobs-method flex w-full sm:w-auto items-center gap-2">
+            <span className="tf-label whitespace-nowrap">View by</span>
             <div
               role="radiogroup"
               aria-label="View by"
-              className="relative grid grid-cols-2 flex-1 sm:flex-none h-[38px] p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+              className="relative grid grid-cols-2 flex-1 sm:flex-none h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
             >
               <span
                 aria-hidden
@@ -3565,12 +3684,12 @@ export default function ResumeScoringPage({
             ) : globalScoredResumes.length === 0 ? (
               <>
               <div className="mb-3">{viewPills}</div>
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
+              <div className="tf-card-soft p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
                   <Search className="w-5 h-5 text-brand-blue" />
                 </div>
                 <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2 tracking-tight">No Scored Candidates</h3>
-                <p className="tf-card-desc">Score resumes against jobs to see them here.</p>
+                <p className="tf-body-secondary">Score resumes against jobs to see them here.</p>
               </div>
               </>
             ) : (
@@ -3632,9 +3751,19 @@ export default function ResumeScoringPage({
            framed the job cards card-in-card. */
         <div>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
+        {/* Toolbar — search, filters, Select All, verdict tabs, View by and the
+            selection's Actions. Phones / tablets: the Job Openings list's toolbar
+            card; phones also get its line layout (globals.css, `.tf-jobs-toolbar`):
+              ( search ............ ) (⚙) [≡ ⊞]
+              [ All Locations ▾ ][ All Industries ▾ ]
+              All 12  Exact Match 4  Partial Match 5  No …   ← underlined tabs
+              View by [ Job | Candidates ]
+              [☐ Select All ▾]          [⇅ Sort ▾] [⇕]
+            From lg the toolbar is unchanged. */}
+        <div className="tf-jobs-toolbar tf-toolbar-card max-lg:mb-4">
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
-          <div className="mb-3">
+          <div className="tf-jobs-contents mb-3">
             {/* No "Job List (N)" heading, and no count badge — the same bare
                 toolbar as View by Candidates; the pagination below carries
                 the totals. */}
@@ -3662,7 +3791,7 @@ export default function ResumeScoringPage({
                 const locations = [...new Set(scoredHistory.map(i => i.jdLocation).filter(Boolean))] as string[];
                 const industries = [...new Set(scoredHistory.map(i => i.jdIndustryType).filter(Boolean))] as string[];
                 return (
-                  <>
+                  <div className="tf-jobs-filter-pills contents">
                     <SearchableSelect
                       className="w-full sm:w-48"
                       value={historyLocation}
@@ -3683,14 +3812,16 @@ export default function ResumeScoringPage({
                       searchPlaceholder="Search industry..."
                       ariaLabel="Filter by industry"
                     />
-                  </>
+                  </div>
                 );
               })()}
               className="mb-0"
             >
               {/* Sort by, then List / Grid — where Export used to be (Export
                   is now in the Actions menu, shown once jobs are ticked). */}
+              {/* Phones sort from the Sort menu in the row below (PhoneSortMenu). */}
               {displayHistory.length > 0 && (
+                <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={jobSortBy}
                   order={jobSortOrder}
@@ -3698,11 +3829,12 @@ export default function ResumeScoringPage({
                   onChange={(v) => { setJobSortBy(v); setHistoryCurrentPage(1); }}
                   onToggleOrder={() => { setJobSortOrder(o => (o === 'asc' ? 'desc' : 'asc')); setHistoryCurrentPage(1); }}
                 />
+                </div>
               )}
               <ListViewToggle
                 value={jobListDisplayMode}
                 onChange={setJobListDisplayMode}
-                className="h-[38px] !border-brand-blue/10"
+                className="tf-jobs-viewtoggle h-9 !border-brand-blue/10"
               />
             </ListToolbar>
 
@@ -3717,8 +3849,8 @@ export default function ResumeScoringPage({
               return (
                 /* Same boxed panel, and the same gap under the toolbar, as
                    View by Candidates' More Filters (ScoredResumesTable). */
-                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 [&>div]:min-w-0">
+                <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-3 sm:p-4">
+                  <div className="tf-grid-3 [&>div]:min-w-0">
                     <div>
                       <label className={labelCls}>Created By</label>
                       <FilterSelect
@@ -3792,8 +3924,9 @@ export default function ResumeScoringPage({
 
         {/* Row 2: Select All, the verdict pills and View by toggle (Actions
             and Clear get their own row below once jobs are ticked). */}
-        <div className={`${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 flex flex-wrap items-center gap-2`}>
+        <div className={`tf-jobs-row2 ${scoredHistory.length > 0 ? 'pt-3 border-t border-gray-200 dark:border-slate-700/60' : ''} mb-4 max-lg:mb-0 flex flex-wrap items-center gap-2`}>
           {selectableJobKeys.length > 0 && (
+            <div className="tf-jobs-select">
             <SelectAllMenu
               selectedCount={selectedJobCount}
               pageCount={pageJobKeys.length}
@@ -3814,11 +3947,23 @@ export default function ResumeScoringPage({
               }}
               onClear={clearJobSelection}
             />
+            </div>
           )}
           {selectableJobKeys.length > 0 && (
             <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
           )}
           {viewPills}
+          {/* Phones: the Job Openings list's Sort menu (the inline Sort by above hides). */}
+          {displayHistory.length > 0 && (
+            <PhoneSortMenu<JobSortKey>
+              value={jobSortBy}
+              order={jobSortOrder}
+              options={JOB_SORT_OPTIONS}
+              orderLabels={jobSortOrderLabels}
+              onChange={(v) => { setJobSortBy(v); setHistoryCurrentPage(1); }}
+              onOrderChange={(o) => { setJobSortOrder(o); setHistoryCurrentPage(1); }}
+            />
+          )}
           {/* Expand all / Collapse all — every job on this page, the same
               control View by Candidates has. */}
           {pageJobKeys.length > 0 && (() => {
@@ -3834,10 +3979,12 @@ export default function ResumeScoringPage({
                   })
                 }
                 aria-pressed={allOpen}
-                className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                title={allOpen ? 'Collapse all' : 'Expand all'}
+                /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
               >
                 {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                {allOpen ? 'Collapse all' : 'Expand all'}
+                <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
               </button>
             );
           })()}
@@ -3846,7 +3993,7 @@ export default function ResumeScoringPage({
         {/* Row 3 — only while jobs are ticked: Actions and Clear, on a line
             of their own under Select All. */}
         {selectedJobCount > 0 && (
-          <div className="-mt-1 mb-4 flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
+          <StickyBulkBar className="-mt-1 mb-4 max-lg:mt-3 max-lg:mb-0 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 [&>*]:flex-1 sm:[&>*]:flex-none animate-in fade-in slide-in-from-top-1 duration-200">
           {/* Actions — the same menu as View by Candidates', on the ticked
                 jobs' candidates. Fades in with a blinking dot. */}
             {(
@@ -3854,7 +4001,7 @@ export default function ResumeScoringPage({
                 <DropdownMenuTrigger asChild>
               <button
                 type="button"
-                className="relative h-[38px] px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
+                className="relative h-9 px-3 rounded-lg font-medium text-sm whitespace-nowrap inline-flex items-center justify-center gap-2 transition-all bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 hover:border-gray-300 data-[state=open]:bg-gray-200 shadow-sm animate-in fade-in zoom-in-95 duration-300"
                 aria-label={`Actions for ${selectedJobCount} selected ${selectedJobCount === 1 ? 'job' : 'jobs'}`}
               >
                 <span aria-hidden className="absolute -top-1 -right-1 flex h-3 w-3">
@@ -3946,6 +4093,7 @@ export default function ResumeScoringPage({
                         kind,
                         job: singleSelectedJob ? inviteJobOf(singleSelectedJob) : undefined,
                         candidates: scoreRowsToInvitees(jobViewExportRows),
+                        openOn: 'score-resume',
                         onSent: () => clearJobSelection(),
                       });
                       return (
@@ -3953,6 +4101,7 @@ export default function ResumeScoringPage({
                           {renderInviteTargetItems({
                             kind: 'assessment',
                             target: { state: 'ready' },
+                            label: 'Create / Send Assessment',
                             itemClass: itemCls,
                             allowed: assessmentAllowed,
                             deniedReason: assessmentReason,
@@ -3967,6 +4116,7 @@ export default function ResumeScoringPage({
                           {renderInviteTargetItems({
                             kind: 'interview',
                             target: { state: 'ready' },
+                            label: 'Create / Send AI Interview',
                             itemClass: itemCls,
                             allowed: interviewAllowed,
                             deniedReason: interviewReason,
@@ -4001,8 +4151,9 @@ export default function ResumeScoringPage({
                 Clear
               </button>
             )}
-          </div>
+          </StickyBulkBar>
         )}
+        </div>
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (() => {
@@ -4013,7 +4164,6 @@ export default function ResumeScoringPage({
           const pageItems = displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
           const rowNodes = pageItems.map((item) => {
 
-              const jobDetails = jobs.find(j => j.id === item.jobId);
 
               // This item's own entry in its (prefetched) lineage — the
               // authoritative version_number for the badge below, since
@@ -4154,16 +4304,7 @@ export default function ResumeScoringPage({
               const isSelected = selectedHistoryItems.has(jobKey);
               const isPartlySelected = isJobPartlySelected(jobKey);
               const scoresForJob = jobScores(item);
-              const verdictTally = scoresForJob.reduce(
-                (acc, r) => {
-                  const v = rowVerdict(r);
-                  if (v === 'Exact Match') acc.exact += 1;
-                  else if (v === 'Partial Match') acc.partial += 1;
-                  else acc.none += 1;
-                  return acc;
-                },
-                { exact: 0, partial: 0, none: 0 },
-              );
+              const verdictTally = jobTally(item);
               const scoresInFilter = matchFilter
                 ? scoresForJob.filter(r => rowVerdict(r) === matchFilter)
                 : scoresForJob;
@@ -4202,7 +4343,7 @@ export default function ResumeScoringPage({
                     <>
                       {versionChips.length > 1 && (
                         <div className="flex flex-wrap items-center gap-2 mb-3">
-                          <span className="text-xs font-medium text-gray-500 dark:text-slate-400 uppercase tracking-wide">Versions</span>
+                          <span className="tf-eyebrow tracking-wide">Versions</span>
                           <button
                             type="button"
                             onClick={() => setJobVersionPick(prev => { const next = { ...prev }; delete next[jobKey]; return next; })}
@@ -4337,7 +4478,7 @@ export default function ResumeScoringPage({
                           </div>
                           {/* Version badge */}
                           {displayVersionNumber && displayVersionNumber >= 1 && (
-                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                               v{displayVersionNumber}
                             </span>
@@ -4379,11 +4520,11 @@ export default function ResumeScoringPage({
                             icon-less meta line: label in the form-label weight,
                             value a shade lighter (JobOpeningSummary's
                             MetaLabelValue). */}
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-card-desc mb-2">
-                          {item.scoredResumes?.[0]?.scoredBy && (
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-body-secondary mb-2">
+                          {(item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy) && (
                             <span className="flex items-center gap-1">
                               <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
-                              <span className="font-normal text-gray-500 dark:text-slate-400 min-w-0 [overflow-wrap:anywhere]">{item.scoredResumes[0].scoredBy}</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400 min-w-0 [overflow-wrap:anywhere]">{item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy}</span>
                             </span>
                           )}
                           <span className="flex items-center gap-1">
@@ -4404,7 +4545,7 @@ export default function ResumeScoringPage({
                               view stacks them on the right, as the Job
                               Descriptions cards stack Applicants / Assessed /
                               Interviewed. */}
-                          {jobListDisplayMode !== 'grid' ? null : !globalLoaded ? (
+                          {jobListDisplayMode !== 'grid' ? null : !tallyReady ? (
                             <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                               {scoredCountValue(item.totalScored, verdictTally)} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored
@@ -4453,9 +4594,9 @@ export default function ResumeScoringPage({
                             (see `scoredCountValue`). */}
                         {jobListDisplayMode !== 'grid' && (
                           <div className="flex flex-row flex-wrap gap-1 sm:flex-col sm:items-stretch sm:gap-1.5 flex-shrink-0">
-                            {!globalLoaded ? (
+                            {!tallyReady ? (
                               <span className="flex items-center gap-1.5 px-1.5 sm:px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
-                                <FileText className="w-4 h-4 max-[359px]:hidden" />
+                                <FileText className="w-4 h-4 max-2xs:hidden" />
                                 {scoredCountValue(item.totalScored, verdictTally)} Scored
                               </span>
                             ) : ([
@@ -4476,7 +4617,7 @@ export default function ResumeScoringPage({
                                       muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
                                     }`}
                                   >
-                                    <Icon className="w-4 h-4 max-[359px]:hidden" />
+                                    <Icon className="w-4 h-4 max-2xs:hidden" />
                                     <span className="tabular-nums">{count}</span> {id}
                                   </span>
                                 );
@@ -4515,6 +4656,176 @@ export default function ResumeScoringPage({
                     </div>
                     {inlineCandidatesPanel}
                   </div>
+                ), mobileCard: (
+                  /* Below xl: the same job as the card above, in the shared
+                     MobileRecordCard layout (the job-openings card) — same
+                     handlers, same values. The card above stays for xl Grid. */
+                  <MobileRecordCard
+                    key={item.id}
+                    // The row opens its candidates in place; the job title (and
+                    // the View Details button) still go to the job's own page.
+                    onClick={() => toggleJobExpanded(jobKey)}
+                    aria-expanded={isJobExpanded}
+                    selected={isSelected || isPartlySelected || isJobExpanded}
+                    select={!item.isProcessing ? (
+                      /* Tick the job for Export. Stops the click so it doesn't
+                         also open / close the row. */
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}
+                        aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false}
+                        aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'}
+                        title={isPartlySelected ? 'Some candidates of this job are selected' : undefined}
+                        className="inline-flex p-1.5 -m-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : isPartlySelected ? (
+                          <MinusSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    ) : undefined}
+                    /* The scoring record's own JD code, else the full JD
+                       record's — some scores come back without it. */
+                    idBadge={jdCodeOf(item) ? (
+                      <JobIdBadge className={JOB_ID_BADGE_FIT} title={jdCodeOf(item)}>{jdCodeOf(item)}</JobIdBadge>
+                    ) : undefined}
+                    title={
+                      <span
+                        className="cursor-pointer hover:text-brand-blue transition-colors"
+                        title={item.jobTitle}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedHistoryItem(item);
+                          setViewMode('details');
+                          onLoadJdScores?.(item.jobId, item.jobTitle);
+                          try { localStorage.setItem('lastViewedScoringJdId', item.jobId); } catch (e) {}
+                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                        }}
+                      >
+                        {item.jobTitle}
+                      </span>
+                    }
+                    badges={
+                      <>
+                        {displayVersionNumber && displayVersionNumber >= 1 && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></span>
+                            v{displayVersionNumber}
+                          </span>
+                        )}
+                        {(() => {
+                          const record = jobRecordsById.get(item.jobId);
+                          const raw = record?.status || (item.jdStatus === 'active' ? 'published' : item.jdStatus) || 'published';
+                          const label = getDisplayStatus(
+                            raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
+                            record?.currentVersion ?? item.jdCurrentVersion,
+                          );
+                          const tone = getStatusConfig(label);
+                          /* Only Archived / Disabled earns a badge — see the card above. */
+                          return label !== 'Published' && label !== 'Republished' ? (
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${tone.bg} ${tone.text} border ${tone.border} gap-1.5 flex-shrink-0`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${tone.dot}`}></span>
+                              {label}
+                            </span>
+                          ) : null;
+                        })()}
+                      </>
+                    }
+                    fields={[
+                      { label: 'By', value: item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy },
+                      { label: 'Scored', value: formatIST(item.scoredAt) },
+                      {
+                        label: 'Scored Count',
+                        value: <span className="tabular-nums">{scoredCountValue(item.totalScored, verdictTally)}</span>,
+                      },
+                    ]}
+                    /* Exact / Partial / No Match across every version of this
+                       job; under a verdict filter the others are muted. Until
+                       the scores load, a placeholder (see `scoredCountValue`). */
+                    footer={!tallyReady ? (
+                      <MobileStatChip tone="info" icon={<FileText />}>
+                        {scoredCountValue(item.totalScored, verdictTally)} Scored
+                      </MobileStatChip>
+                    ) : (
+                      <>
+                        {([
+                          { id: 'Exact Match' as const, count: verdictTally.exact, Icon: CheckCircle2, tone: 'success' as const },
+                          { id: 'Partial Match' as const, count: verdictTally.partial, Icon: MinusCircle, tone: 'warning' as const },
+                          { id: 'No Match' as const, count: verdictTally.none, Icon: XCircle, tone: 'danger' as const },
+                        ]).map(({ id, count, Icon, tone }) => {
+                          const muted = !!matchFilter && id !== matchFilter;
+                          return (
+                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={`tf-verdict-chip${muted ? ' opacity-60' : ''}`}>
+                              <span className="tabular-nums">{count}</span> <span>{id}</span>
+                            </MobileStatChip>
+                          );
+                        })}
+                      </>
+                    )}
+                    actions={
+                      <>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
+                          className="w-7 flex-shrink-0"
+                          aria-label="Scoring History" title="Scoring History"
+                        >
+                          <History className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedHistoryItem(item);
+                            setViewMode('details');
+                            onLoadJdScores?.(item.jobId, item.jobTitle);
+                            showAllVersionsFor(item);
+                            try {
+                              localStorage.setItem('lastViewedScoringJdId', item.jobId);
+                            } catch (e) {}
+                            router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                          }}
+                          aria-label="View Details"
+                          title="View Details"
+                          className="w-7 flex-shrink-0"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                          disabled={loadingProgressJobId === item.jobId}
+                          aria-label="View Progress"
+                          title="View Progress (every version of this job)"
+                          className="w-7 flex-shrink-0"
+                        >
+                          {loadingProgressJobId === item.jobId
+                            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            : <WorkInProgressIcon className="w-3.5 h-3.5" />}
+                        </Button>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
+                          aria-expanded={isJobExpanded}
+                          title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
+                          className={`h-7 px-3 rounded-lg transition-all text-xs font-medium flex items-center gap-1.5 justify-center whitespace-nowrap border ${
+                            isJobExpanded
+                              ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
+                              : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-900 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </>
+                    }
+                    expanded={inlineCandidatesPanel}
+                  />
                 ), row: (
                   /* List mode — User-Management-uniform table row (+ an
                      expandable full-width row holding this job's candidates). */
@@ -4524,7 +4835,7 @@ export default function ResumeScoringPage({
                       onClick={() => toggleJobExpanded(jobKey)}
                       aria-expanded={isJobExpanded}
                     >
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <td className="tf-td">
                         {!item.isProcessing && (
                           <button
                             type="button"
@@ -4537,10 +4848,10 @@ export default function ResumeScoringPage({
                           </button>
                         )}
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
-                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="text-xs text-gray-400 dark:text-slate-500">—</span>}
+                      <td className="tf-td hidden sm:table-cell">
+                        {jdCodeOf(item) ? <JobIdBadge className="inline-flex h-7 items-center">{jdCodeOf(item)}</JobIdBadge> : <span className="tf-hint">—</span>}
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                      <td className="tf-td">
                         <div className="flex items-center gap-2 flex-wrap min-w-0">
                           <button
                             type="button"
@@ -4579,22 +4890,22 @@ export default function ResumeScoringPage({
                           {/* Scoring History moved into the row's ⋮ menu. */}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell">
-                        <span className="tf-card-desc">{item.scoredResumes?.[0]?.scoredBy || '—'}</span>
+                      <td className="tf-td hidden lg:table-cell">
+                        <span className="tf-body-secondary">{item.scoredResumes?.[0]?.scoredBy || item.latestScoredBy || '—'}</span>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden lg:table-cell whitespace-nowrap">
+                      <td className="tf-td hidden lg:table-cell whitespace-nowrap">
                         <div className="flex items-center gap-2 tf-body-muted">
                           <Calendar className="w-4 h-4 text-brand-cyan" />
                           {formatIST(item.scoredAt)}
                         </div>
                       </td>
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden md:table-cell">
-                        <span className="tf-cell-name tabular-nums">
+                      <td className="tf-td hidden md:table-cell">
+                        <span className="tf-row-title tabular-nums">
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
                       </td>
                       {/* Result: one column per match type (Exact / Partial / No Match). */}
-                      {!globalLoaded ? (
+                      {!tallyReady ? (
                         <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
                             <FileText className="w-3.5 h-3.5" />
@@ -4618,7 +4929,7 @@ export default function ResumeScoringPage({
                           );
                         })
                       )}
-                      <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                      <td className="tf-td tf-sticky-col">
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="secondary"
@@ -4626,7 +4937,7 @@ export default function ResumeScoringPage({
                             onClick={(e) => { e.stopPropagation(); toggleJobExpanded(jobKey); }}
                             aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'}
                             title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8"
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
@@ -4636,7 +4947,7 @@ export default function ResumeScoringPage({
                     </tr>
                     {isJobExpanded && (
                       <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                        <td colSpan={10} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">
+                        <td colSpan={10} className="tf-td pb-4 pt-0">
                           {inlineCandidatesPanel}
                         </td>
                       </tr>
@@ -4651,7 +4962,7 @@ export default function ResumeScoringPage({
                 every field stays visible. Same responsive approach the
                 candidates table uses. */}
             <div className="xl:hidden space-y-3">
-              {rowNodes.map(n => n.card)}
+              {rowNodes.map(n => n.mobileCard)}
             </div>
             {/* xl and up: honor the List / Grid toggle — the uniform table for
                 List (fits cleanly at this width), cards for Grid. */}
@@ -4662,11 +4973,11 @@ export default function ResumeScoringPage({
                 </div>
               ) : (
                 /* User-Management-uniform table shell */
-                <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="tf-table-shell overflow-x-auto tf-card">
                   <table className="w-full">
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
+                        <th className="tf-th-cell w-10" aria-hidden="true" />
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Job ID</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Job Title</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Scored By</th>
@@ -4700,7 +5011,7 @@ export default function ResumeScoringPage({
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4"
+                className="tf-card-soft p-4"
               >
                 <div className="flex flex-col sm:flex-row items-start gap-3">
                   {/* Scoring icon */}
@@ -4737,11 +5048,11 @@ export default function ResumeScoringPage({
             ))}
           </div>
         ) : scoredHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
-              icon={History}
+              icon={ClipboardList}
               title="No Scoring History Yet"
-              description="Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit."
+              description="Start scoring resumes against job descriptions to see your results here."
               action={{
                 label: 'Score Resumes Now',
                 disabledReason: !canRunScoring ? 'You do not have permission to score resumes' : undefined,
@@ -4756,7 +5067,7 @@ export default function ResumeScoringPage({
             />
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
               icon={Search}
               title="No Results Found"
@@ -4831,7 +5142,7 @@ export default function ResumeScoringPage({
                  above, reactively, once this flips true. */
               setIsBulkProgressMinimized(true);
             }}
-            onRetryFailed={async (item) => {
+            onRetryFailed={!canRunScoring ? undefined : async (item) => {
               try {
                 // Update item status to "Scoring in progress"
                 setProgressData(prev => prev.map(p =>
@@ -5097,7 +5408,7 @@ export default function ResumeScoringPage({
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="text-base sm:text-lg truncate font-bold text-gray-900 dark:text-slate-50">Scoring History</h3>
+                    <h3 className="tf-section-title sm:text-lg truncate">Scoring History</h3>
                     <p className="tf-body-muted truncate">
                       {historyModalItem.jobTitle}
                       {jdCodeOf(historyModalItem) && ` (${jdCodeOf(historyModalItem)})`}
@@ -5127,7 +5438,7 @@ export default function ResumeScoringPage({
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="px-2" aria-label="Close">
+                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="" aria-label="Close">
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
@@ -5143,8 +5454,8 @@ export default function ResumeScoringPage({
                   short to fit the rest, instead of silently cutting it. */}
               <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="px-4 sm:px-6 pt-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-2.5 sm:gap-3">
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                <div className="tf-grid-4">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                       <FileText className="w-4 h-4 text-brand-blue" />
                     </div>
@@ -5153,7 +5464,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-brand-blue">{summary.total}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-success-subtle flex items-center justify-center flex-shrink-0">
                       <CheckCircle className="w-4 h-4 text-success" />
                     </div>
@@ -5162,7 +5473,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-success">{summary.exact}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center flex-shrink-0">
                       <PieChart className="w-4 h-4 text-orange-500" />
                     </div>
@@ -5171,7 +5482,7 @@ export default function ResumeScoringPage({
                       <div className="text-xl font-bold text-orange-500">{summary.partial}</div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
+                  <div className="tf-panel flex items-center gap-2.5 px-3.5 py-3.5 sm:px-4 sm:py-4">
                     <div className="w-10 h-10 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">
                       <XCircle className="w-4 h-4 text-destructive" />
                     </div>
@@ -5194,7 +5505,7 @@ export default function ResumeScoringPage({
                 <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
                   {/* Phone: one filter per row; sm: a 2×2 grid; lg: the single
                       row (py-1 -my-1 keeps focus rings from clipping). */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:items-end gap-3 sm:gap-4 py-1 -my-1 [&>div]:min-w-0">
+                  <div className="tf-grid-2 lg:flex lg:items-end py-1 -my-1 [&>div]:min-w-0">
                     <div className="min-w-0 lg:flex-1 lg:min-w-[11rem]">
                       <label className={historyLabelClass}>Search</label>
                       <div className="relative">
@@ -5270,11 +5581,12 @@ export default function ResumeScoringPage({
                   history popups: the table with its version summary beneath
                   it on the left, a breakdown donut with its own version
                   picker on the right, stretched to the left column's height. */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 px-4 sm:px-6 py-4 items-stretch">
+              <div className="tf-grid-3 px-4 sm:px-6 py-4 items-stretch">
                 <div className="lg:col-span-2 min-w-0 flex flex-col gap-4">
-                <div className="flex flex-col rounded-lg border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                {/* Bordered box from lg only (around the table); phones show the cards bare. */}
+                <div className="flex flex-col lg:rounded-lg lg:border lg:border-gray-100 lg:dark:border-slate-700/60 lg:overflow-hidden">
                   {groups.length === 0 ? (
-                    <div className="flex-1 flex items-center justify-center py-10 text-center text-sm text-gray-400 dark:text-slate-500">
+                    <div className="flex-1 flex items-center justify-center py-10 text-center tf-body-muted">
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
                     </div>
                   ) : (
@@ -5292,72 +5604,67 @@ export default function ResumeScoringPage({
                     <>
                     {/* Phone: one card per session (same groups, same View
                         action); the 9-column table takes over from sm. */}
-                    <div className="sm:hidden rounded-lg border border-gray-200 dark:border-slate-700 divide-y divide-gray-100 dark:divide-slate-800 max-h-[320px] overflow-y-auto overscroll-contain">
+                    {/* No outer border or padding — just the cards, as the JD Version History. */}
+                    <div className="lg:hidden tf-record-list max-h-[320px] overflow-y-auto overscroll-contain">
                       {groups.map((g) => (
-                        <div key={`${g.version}||${g.scoredBy}||${g.date}`} className="p-3 text-xs">
-                          <div className="flex items-start gap-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="font-semibold text-gray-900 dark:text-slate-100 truncate" title={g.scoredBy}>{g.scoredBy}</div>
-                              {g.scoredByEmail && (
-                                <div className="text-gray-400 dark:text-slate-600 truncate" title={g.scoredByEmail}>{g.scoredByEmail}</div>
-                              )}
-                            </div>
-                            <span className="px-2 py-0.5 rounded-md font-semibold whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                        <MobileRecordCard
+                          key={`${g.version}||${g.scoredBy}||${g.date}`}
+                          idBadge={
+                            <span className="px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap flex-shrink-0 text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                               v{g.version}
                             </span>
+                          }
+                          title={<span title={g.scoredBy}>{g.scoredBy}</span>}
+                          meta={[
+                            { label: g.scoredByEmail ? <span title={g.scoredByEmail}>{g.scoredByEmail}</span> : null },
+                            { icon: <Calendar className="text-brand-blue" />, label: g.date },
+                          ]}
+                          footer={
+                            <>
+                              <MobileStatChip tone="info">{g.count} Resumes Scored</MobileStatChip>
+                              <MobileStatChip tone="success">Exact {g.exactCount}</MobileStatChip>
+                              <MobileStatChip tone="warning">Partial {g.partialCount}</MobileStatChip>
+                              <MobileStatChip tone="danger">No Match {g.noMatchCount}</MobileStatChip>
+                              <MobileStatChip tone="neutral">Avg Score {Math.round(g.totalScore / g.count)}</MobileStatChip>
+                            </>
+                          }
+                          actions={
                             <Button
                               variant="secondary"
                               size="sm"
                               onClick={() => goToHistoryResume(g.resumes[0])}
-                              className="px-2 flex-shrink-0"
+                              className="flex-shrink-0"
                               aria-label="View job scores"
                               title="View job scores"
                             >
                               <Eye className="w-4 h-4" />
                             </Button>
-                          </div>
-                          <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-800 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
-                            <dt className="text-gray-500 dark:text-slate-500">Date</dt>
-                            <dd className="min-w-0 text-gray-600 dark:text-slate-400 inline-flex items-center gap-1.5">
-                              <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
-                              {g.date}
-                            </dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Resumes Scored</dt>
-                            <dd className="font-semibold text-gray-900 dark:text-slate-100">{g.count}</dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Status</dt>
-                            <dd className="flex flex-wrap items-center gap-1">
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-success bg-success-subtle/60">Exact {g.exactCount}</span>
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">Partial {g.partialCount}</span>
-                              <span className="px-1.5 py-0.5 rounded font-semibold whitespace-nowrap text-destructive bg-destructive-subtle/60">No Match {g.noMatchCount}</span>
-                            </dd>
-                            <dt className="text-gray-500 dark:text-slate-500">Average Score</dt>
-                            <dd className={`${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</dd>
-                          </dl>
-                        </div>
+                          }
+                        />
                       ))}
                     </div>
-                    <div className="max-sm:hidden overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
+                    <div className="max-lg:hidden overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
                       <table className="w-full text-xs">
                         <thead className="sticky top-0 z-10 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr className="text-left bg-white dark:bg-slate-900">
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Version</th>
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Scored By</th>
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Version</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Scored By</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Date
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Resumes Scored
                             </th>
-                            <th colSpan={3} className="py-1.5 px-3 tf-th text-center border-b border-gray-200 dark:border-slate-700">Status</th>
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">
+                            <th colSpan={3} className="tf-th-cell tf-th text-center border-b border-gray-200 dark:border-slate-700">Status</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom">
                               Average Score
                             </th>
-                            <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom text-right">Action</th>
+                            <th rowSpan={2} className="tf-th-cell tf-th align-bottom text-right">Action</th>
                           </tr>
                           <tr className="text-left bg-white dark:bg-slate-900">
-                            <th className="py-1.5 px-3 font-semibold text-success text-xs">Exact</th>
-                            <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400 text-xs">Partial</th>
-                            <th className="py-1.5 px-3 font-semibold text-destructive text-xs">No Match</th>
+                            <th className="tf-th-cell font-semibold text-success text-xs">Exact</th>
+                            <th className="tf-th-cell font-semibold text-brand-orange-deep dark:text-orange-400 text-xs">Partial</th>
+                            <th className="tf-th-cell font-semibold text-destructive text-xs">No Match</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -5365,29 +5672,29 @@ export default function ResumeScoringPage({
                           const groupKey = `${g.version}||${g.scoredBy}||${g.date}`;
                           return (
                             <tr key={groupKey} className="hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.06]">
-                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                <td className="tf-td whitespace-nowrap">
                                   <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                     v{g.version}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                <td className="tf-td whitespace-nowrap">
                                   <div className="font-semibold text-gray-900 dark:text-slate-100 truncate max-w-[160px]">{g.scoredBy}</div>
                                   {g.scoredByEmail && (
                                     <div className="text-gray-400 dark:text-slate-600 truncate max-w-[160px]">{g.scoredByEmail}</div>
                                   )}
                                 </td>
-                                <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">
                                   <span className="inline-flex items-center gap-1.5">
                                     <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
                                     {g.date}
                                   </span>
                                 </td>
-                                <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
+                                <td className="tf-td font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
+                                <td className="tf-td text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
+                                <td className="tf-td text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
+                                <td className="tf-td text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
                                 <td className={`py-2.5 px-3 ${SCORE_CELL_TEXT} text-brand-blue`}>{Math.round(g.totalScore / g.count)}</td>
-                                <td className="py-2.5 px-3 text-right">
+                                <td className="tf-td text-right">
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
                                       regardless of how many resumes the session scored. */}
@@ -5395,7 +5702,7 @@ export default function ResumeScoringPage({
                                     variant="secondary"
                                     size="sm"
                                     onClick={() => goToHistoryResume(g.resumes[0])}
-                                    className="px-2"
+                                    className=""
                                     aria-label="View job scores"
                                     title="View job scores"
                                   >
@@ -5419,21 +5726,21 @@ export default function ResumeScoringPage({
                   <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Job Version Average</p>
-                      <p className="text-2xs text-gray-500 dark:text-slate-500">Average score by version</p>
+                      <p className="tf-micro-hint">Average score by version</p>
                     </div>
                     <TrendingUp className="w-4 h-4 text-brand-blue flex-shrink-0" />
                   </div>
                   <div className="p-4">
                     {versionAverages.length === 0 ? (
-                      <div className="text-center text-xs text-gray-400 dark:text-slate-500 py-4">No data yet.</div>
+                      <div className="text-center tf-hint py-4">No data yet.</div>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-3">
+                      <div className="tf-grid-3">
                         {versionAverages.map((v, idx) => {
                           const accent = VERSION_ACCENTS[idx % VERSION_ACCENTS.length];
                           return (
                             <div key={v.version}>
                               <div className="flex items-center justify-between gap-2 mb-1.5">
-                                <span className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-800 dark:text-slate-200">
+                                <span className="inline-flex items-center gap-1.5 tf-label">
                                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${accent.dot}`} />
                                   v{v.version}
                                 </span>
@@ -5461,7 +5768,7 @@ export default function ResumeScoringPage({
                       <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                         <PieChart className="w-4 h-4" />
                       </div>
-                      <span className="tf-cell-name truncate">Match Breakdown</span>
+                      <span className="tf-row-title truncate">Match Breakdown</span>
                     </div>
                     <FilterSelect
                       value={breakdownVersion}
@@ -5530,7 +5837,7 @@ export default function ResumeScoringPage({
               <div className="px-4 sm:px-6 pb-4">
                 <div className="flex items-start gap-2.5 p-3.5 bg-brand-blue/[0.05] rounded-xl">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                  <p className="tf-card-desc">
+                  <p className="tf-body-secondary">
                     Match status is based on the comparison of candidate resumes with the job description.
                   </p>
                 </div>
@@ -5549,9 +5856,9 @@ export default function ResumeScoringPage({
 
   // New Scoring Flow
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
       {/* "Score Resumes" is an in-page view of this same route, reached via the
           Score Resumes button, so it needs its own crumb — "Resume Scoring"
           goes back to the history overview in-page (onClick, not href, since the
@@ -5581,7 +5888,7 @@ export default function ResumeScoringPage({
           JobOpeningPickerList), just rendered inline instead of behind a
           popup. Everything after picking a job — Select Resumes, and the
           scoring flow beyond it — stays a popup, unchanged. */}
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-5">
+      <div className="tf-card-soft p-3 sm:p-4 mb-5">
         <label className="block tf-label mb-2">
           Select Job Description
         </label>
@@ -5688,7 +5995,7 @@ export default function ResumeScoringPage({
                near showBulkProgressFromJob once this flips true. */
             setIsBulkProgressMinimized(true);
           }}
-          onRetryFailed={async (item) => {
+          onRetryFailed={!canRunScoring ? undefined : async (item) => {
             try {
               console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);
 

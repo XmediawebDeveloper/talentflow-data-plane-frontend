@@ -251,8 +251,8 @@ export default function ScoringJobProgressModal({
               <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="tf-section-title truncate">Scoring: {jobTitle}</h2>
-              <p className="tf-card-desc">{overallCompleted}/{overallTotal} resumes scored</p>
+              <h2 className="tf-section-title sm:text-lg truncate">Scoring: {jobTitle}</h2>
+              <p className="tf-body-secondary">{overallCompleted}/{overallTotal} resumes scored</p>
             </div>
           </div>
 
@@ -274,7 +274,7 @@ export default function ScoringJobProgressModal({
                   style={{ width: `${overallPercentage}%` }}
                 />
               </div>
-              <span className="text-sm font-semibold w-10 text-gray-700 dark:text-slate-300">{overallPercentage}%</span>
+              <span className="tf-row-title w-10">{overallPercentage}%</span>
             </div>
 
             <div className="flex items-center gap-1">
@@ -283,7 +283,7 @@ export default function ScoringJobProgressModal({
                   variant="secondary"
                   size="sm"
                   onClick={onMinimize}
-                  className="w-8 px-0"
+                  className="w-8"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-4 h-4" />
@@ -293,7 +293,7 @@ export default function ScoringJobProgressModal({
                 variant="secondary"
                 size="sm"
                 onClick={onClose}
-                className="w-8 px-0"
+                className="w-8"
                 aria-label="Close"
               >
                 <X className="w-4 h-4" />
@@ -320,7 +320,7 @@ export default function ScoringJobProgressModal({
                 style={{ width: `${overallPercentage}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-gray-700 dark:text-slate-300">{overallPercentage}%</span>
+            <span className="tf-row-title">{overallPercentage}%</span>
           </div>
 
           {/* Stats */}
@@ -328,24 +328,24 @@ export default function ScoringJobProgressModal({
             {alreadyScoredCount > 0 && (
               <div className="flex items-center gap-1.5">
                 <AlertCircle className="w-3.5 h-3.5 text-brand-orange-deep" />
-                <span className="tf-card-desc">Duplicate: <span className="font-semibold text-brand-orange-deep">{alreadyScoredCount}</span></span>
+                <span className="tf-body-secondary">Duplicate: <span className="font-semibold text-brand-orange-deep">{alreadyScoredCount}</span></span>
               </div>
             )}
             <div className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-              <span className="tf-card-desc">Queue: <span className="font-semibold text-gray-900 dark:text-slate-50">{overallQueued}</span></span>
+              <span className="tf-body-secondary">Queue: <span className="font-semibold text-gray-900 dark:text-slate-50">{overallQueued}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <Loader2 className={`w-3.5 h-3.5 text-brand-blue ${overallInProgress > 0 ? 'animate-spin' : ''}`} />
-              <span className="tf-card-desc">Processing: <span className="font-semibold text-brand-blue">{overallInProgress}</span></span>
+              <span className="tf-body-secondary">Processing: <span className="font-semibold text-brand-blue">{overallInProgress}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-brand-cyan" />
-              <span className="tf-card-desc">Done: <span className="font-semibold text-brand-cyan">{overallCompleted - alreadyScoredCount}</span></span>
+              <span className="tf-body-secondary">Done: <span className="font-semibold text-brand-cyan">{overallCompleted - alreadyScoredCount}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
               <XCircle className="w-3.5 h-3.5 text-destructive" />
-              <span className="tf-card-desc">Failed: <span className="font-semibold text-destructive">{overallFailed}</span></span>
+              <span className="tf-body-secondary">Failed: <span className="font-semibold text-destructive">{overallFailed}</span></span>
             </div>
           </div>
 
@@ -391,7 +391,7 @@ export default function ScoringJobProgressModal({
 
                   {/* Candidate Name */}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                    <p className="tf-row-name truncate">
                       {item.candidateName || 'Unknown Candidate'}
                     </p>
                     {item.status === 'failed' && item.errorMessage && (

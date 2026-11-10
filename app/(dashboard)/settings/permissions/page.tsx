@@ -9,14 +9,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import { clearRbacSessionCache } from '@/lib/utils/rbacSessionCache';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
 // hero + 3-col grid (Roles list, then the module permissions panel).
 function PermissionsSkeleton() {
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
 
           {/* Header — mirrors PageHeader (icon tile + title/description) */}
@@ -28,9 +29,9 @@ function PermissionsSkeleton() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          <div className="tf-grid-3">
             {/* Roles list */}
-            <div className="rounded-xl border border-gray-100 bg-white p-3 sm:p-4 lg:p-6">
+            <div className="tf-panel p-3 sm:p-4 lg:p-6">
               <Skeleton className="h-5 w-20 mb-4" />
               <div className="space-y-3">
                 {Array.from({ length: 5 }).map((_, i) => (
@@ -47,7 +48,7 @@ function PermissionsSkeleton() {
             </div>
 
             {/* Permissions grid */}
-            <div className="lg:col-span-2 rounded-xl border border-gray-100 bg-white p-3 sm:p-4 lg:p-6">
+            <div className="tf-panel lg:col-span-2 p-3 sm:p-4 lg:p-6">
               <div className="flex items-center justify-between gap-3 mb-6">
                 <div className="space-y-2">
                   <Skeleton className="h-5 w-48" />
@@ -269,6 +270,8 @@ export default function PermissionsPage() {
       }
 
       const updatedRole = await res.json();
+      // This save bypasses the api client, so drop the role-count cache here.
+      clearRbacSessionCache();
       setSelectedRole(updatedRole);
 
       // Update role in list
@@ -311,9 +314,9 @@ export default function PermissionsPage() {
   }
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Profile Settings', href: '/settings/general-settings' }, { label: 'Permissions & Roles' }]} />
 
         <PageHeader
@@ -340,10 +343,10 @@ export default function PermissionsPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div className="tf-grid-3">
           {/* Roles List */}
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 lg:p-6">
-            <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Roles</h2>
+          <div className="tf-card-soft p-3 sm:p-4 lg:p-6">
+            <h2 className="tf-section-title mb-3 sm:mb-4">Roles</h2>
             <div className="space-y-2 sm:space-y-3">
               {roles.map((role) => (
                 <button
@@ -356,14 +359,14 @@ export default function PermissionsPage() {
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <p className="tf-cell-name truncate">{role.name}</p>
+                    <p className="tf-row-title truncate">{role.name}</p>
                     {(role.is_system || role.code === 'recruiter') && (
-                      <span className="text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
+                      <span className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 sm:px-2 flex-shrink-0">System</span>
                     )}
                   </div>
                   <p className="tf-body-muted mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
                   <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 tf-meta">
-                    <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
+                    
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
                 </button>
@@ -372,12 +375,12 @@ export default function PermissionsPage() {
           </div>
 
           {/* Permissions Grid */}
-          <div className="lg:col-span-2 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 lg:p-6">
+          <div className="lg:col-span-2 tf-card-soft p-3 sm:p-4 lg:p-6">
             {selectedRole ? (
               <>
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
                   <div className="min-w-0">
-                    <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 truncate">{selectedRole.name} Permissions</h2>
+                    <h2 className="tf-section-title truncate">{selectedRole.name} Permissions</h2>
                     <p className="tf-body-muted truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
@@ -389,7 +392,7 @@ export default function PermissionsPage() {
                           startEditing();
                         }}
                         aria-disabled={!canManage}
-                        className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+                        className={`${(!canManage ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                         title={!canManage ? 'You do not have permission to manage roles' : ''}
                       >
                         <Edit2 className="w-4 h-4 flex-shrink-0" />
@@ -428,7 +431,7 @@ export default function PermissionsPage() {
 
                 <div className="space-y-4 sm:space-y-6 max-h-[500px] sm:max-h-[600px] overflow-y-auto">
                   {Object.entries(permissionsByModule).map(([module, modulePermissions]) => (
-                    <div key={module} className="border border-gray-100 dark:border-slate-700/60 rounded-lg p-3 sm:p-4 bg-white dark:bg-slate-900 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    <div key={module} className="tf-panel p-3 sm:p-4">
                       <h3 className="font-semibold text-brand-blue mb-2 sm:mb-3 text-sm">
                         {moduleDisplayNames[module] || module.charAt(0).toUpperCase() + module.slice(1)}
                       </h3>
@@ -446,7 +449,7 @@ export default function PermissionsPage() {
                               }`}
                             >
                               <div className="min-w-0 flex-1">
-                                <p className="tf-cell-name">{permission.name}</p>
+                                <p className="tf-row-title">{permission.name}</p>
                               </div>
                               {isEditing && !selectedRole.is_system && selectedRole.code !== 'recruiter' ? (
                                 <button

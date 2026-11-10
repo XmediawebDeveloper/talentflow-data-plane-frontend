@@ -74,7 +74,7 @@ export default function DeleteRecordModal({
           <h2 id="delete-record-title" className="mt-3 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
             Delete {kind}
           </h2>
-          <p className="mt-2 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+          <p className="mt-2 tf-body-secondary sm:text-base">
             Are you sure you want to delete this {noun}?
             <br />
             This action cannot be undone.
@@ -86,7 +86,7 @@ export default function DeleteRecordModal({
               <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue dark:text-blue-400" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
+              <p className="tf-eyebrow tracking-wide">
                 Job Details
               </p>
               <p className="mt-0.5 text-sm sm:text-base font-bold text-gray-900 dark:text-slate-100 uppercase break-words" title={heading}>

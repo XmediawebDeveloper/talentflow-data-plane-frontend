@@ -22,9 +22,8 @@ function ClassicFooter() {
               className="h-10 w-auto"
             />
             </Link>
-            <p className="text-gray-400 text-sm leading-relaxed">
-              AI-powered recruitment solutions for agencies, companies, and
-              freelance recruiters.
+            <p className="tf-body-muted leading-relaxed">
+              From JD to hire, all with AI. Any industry, any role.
             </p>
           </div>
 
@@ -115,50 +114,14 @@ function ClassicFooter() {
                   Terms of Service
                 </Link>
               </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  Cookie Policy
-                </a>
-              </li>
-              <li>
-                <a
-                  href="#"
-                  className="text-gray-400 hover:text-white transition-colors"
-                >
-                  GDPR Compliance
-                </a>
-              </li>
             </ul>
           </div>
         </div>
 
         <div className="border-t border-gray-700 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-gray-400 text-sm">
+          <p className="tf-body-muted">
             &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
-          <div className="flex items-center gap-6">
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors text-sm"
-            >
-              LinkedIn
-            </a>
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors text-sm"
-            >
-              Twitter
-            </a>
-            <a
-              href="#"
-              className="text-gray-400 hover:text-white transition-colors text-sm"
-            >
-              Facebook
-            </a>
-          </div>
         </div>
       </div>
     </footer>

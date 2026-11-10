@@ -10,6 +10,7 @@ import { isResultRestoreArrival } from '@/lib/utils/resultReturnContext';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
+import { checkAssessmentJobLock } from '@/lib/utils/assessmentJobLock';
 import { Button } from '@/components/ui/button';
 import { UserPlus } from 'lucide-react';
 
@@ -42,7 +43,7 @@ export default function AssessmentResultsPage() {
      names `all` for both, which is the job read whole. The page renders the
      same view for either — these choose where its two selectors start. */
   const assessmentVersionScopeParam = searchParams.get('assessment_version');
-  const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canDownloadPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download');
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
@@ -58,6 +59,10 @@ export default function AssessmentResultsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
+  // Whether the job version this assessment belongs to is Archived/Disabled,
+  // and why — greys the Invite button the same way Job Details' own Results
+  // tab does, instead of leaving it clickable until the server's 409.
+  const [jobLockMessage, setJobLockMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
@@ -74,6 +79,7 @@ export default function AssessmentResultsPage() {
           setJdId(response.jd_id || '');
           setJdShortId(response.jd_short_id || '');
           setJdVersion(response.jd_version ?? null);
+          setJobLockMessage(await checkAssessmentJobLock(response.jd_id));
         } else {
           setError('Assessment not found');
         }
@@ -133,7 +139,8 @@ export default function AssessmentResultsPage() {
   const { open: openInvite } = useInviteDialog();
   const canInvite = isTenantAdmin || hasPermissionCode('assessments:invite');
   const inviteBlocked = !canInvite ? 'You do not have permission to invite candidates'
-    : !jdId ? 'This assessment is not linked to a job' : null;
+    : !jdId ? 'This assessment is not linked to a job'
+    : jobLockMessage ? jobLockMessage : null;
   const inviteAction = (
     <Button
       variant="primary"
@@ -169,14 +176,14 @@ export default function AssessmentResultsPage() {
 
   if (error) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet">
             <div className="flex flex-col items-center justify-center h-64 space-y-3">
               <div className="text-red-500 dark:text-red-400 text-base">{error}</div>
               <button
                 onClick={handleBack}
-                className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="tf-btn tf-btn-primary px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
               >
                 {fromSource === 'jd' ? 'Back to Job Details' : 'Back to Assessments'}
               </button>

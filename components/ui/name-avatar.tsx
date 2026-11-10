@@ -66,7 +66,7 @@ export default function NameAvatar({
         src={src}
         alt={name || fallback || 'Avatar'}
         title={title ?? (name || fallback || undefined)}
-        className={cn('shrink-0 rounded-full object-cover ring-1 ring-brand-blue/20', SIZES[size], className)}
+        className={cn('tf-name-avatar shrink-0 rounded-full object-cover ring-1 ring-brand-blue/20', SIZES[size], className)}
       />
     );
   }
@@ -74,7 +74,7 @@ export default function NameAvatar({
     <span
       title={title ?? (name || fallback || undefined)}
       className={cn(
-        'inline-flex shrink-0 select-none items-center justify-center rounded-full bg-brand-blue/10 font-semibold text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
+        'tf-name-avatar inline-flex shrink-0 select-none items-center justify-center rounded-full bg-brand-blue/10 font-semibold text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-200 dark:ring-brand-blue/30',
         SIZES[size],
         className,
       )}

@@ -212,10 +212,15 @@ function DroppableFolderItem({
               e.currentTarget.getBoundingClientRect(),
             );
           }}
-          className={`opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
-            hasMenu ? 'opacity-100 bg-blue-100' : ''
+          // Hover-reveal only on desktop (lg+). Phones and tablets have no
+          // hover, so the button stays visible there instead of hiding.
+          className={`flex-shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 p-1 rounded hover:bg-blue-100 text-blue-600 transition-opacity ${
+            hasMenu ? 'lg:opacity-100 bg-blue-100' : ''
           }`}
           aria-label="Folder actions" title="Folder actions"
+          aria-haspopup="menu"
+          aria-expanded={hasMenu}
+          data-folder-menu-trigger={folder.id}
         >
           <MoreVertical className="w-4 h-4" />
         </button>
@@ -451,6 +456,13 @@ export default function FolderTree({
       const insideSubFolder = subFolderInputRef.current?.contains(target);
       const insideMenu = menuRef.current?.contains(target);
       if (insideNewFolder || insideSubFolder || insideMenu) return;
+      // The open menu's own three-dots button toggles it in its onClick —
+      // closing here first would make that click reopen it.
+      if (
+        showFolderMenu &&
+        target instanceof Element &&
+        target.closest(`[data-folder-menu-trigger="${CSS.escape(showFolderMenu)}"]`)
+      ) return;
       if (isCreatingFolder || creatingSubFolderFor) {
         setIsCreatingFolder(false);
         setCreatingSubFolderFor(null);
@@ -782,7 +794,7 @@ export default function FolderTree({
               <Plus className={`w-4 h-4 ${canCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
               {!canCreateSubfolder && (
-                <span className="text-xs text-gray-400 dark:text-slate-600 ml-auto">
+                <span className="tf-hint ml-auto">
                   {!canCreateFolder ? '(no permission)' : '(max depth)'}
                 </span>
               )}

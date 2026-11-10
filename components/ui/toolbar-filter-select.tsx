@@ -72,7 +72,7 @@ export default function ToolbarFilterSelect({
         onChange={onChange}
         ariaLabel={ariaLabel}
         options={options}
-        className="w-auto sm:w-auto max-w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-3.5 sm:pl-3.5 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-0 bg-brand-blue/5 dark:bg-brand-blue/10 shadow-none text-sm text-gray-700 dark:text-slate-300 transition-all"
+        className="w-auto sm:w-auto max-w-full data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-3.5 sm:pl-3.5 pr-3 sm:pr-3 rounded-lg sm:rounded-lg border-0 bg-brand-blue/5 dark:bg-brand-blue/10 shadow-none tf-body transition-all"
       />
     </div>
   );

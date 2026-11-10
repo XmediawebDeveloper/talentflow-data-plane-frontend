@@ -8,7 +8,7 @@ import { DISABLED_REASON_MESSAGE } from '@/lib/navigation/menuSections';
 
 /**
  * Shared tab bar for the organization area, in two groups:
- *   'users' — User Management: Users, Usage History, Roles & Permissions
+ *   'users' — User Management: Users, Roles & Permissions, Usage History
  *   'teams' — Teams: Teams, Chat (reached from the dashboard's Teams tile)
  *
  * Tabs navigate between routes — each target page keeps its own content — and
@@ -39,8 +39,10 @@ export default function OrganizationTabs({ stickyTop, group = 'users' }: { stick
     // used to be isTenantAdmin-only for all three, hiding tabs a non-owner
     // admin with the right granular permissions could actually open.
     { id: 'users', group: 'users', label: 'Users', short: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers'), deniedMessage: 'You do not have permission to view users' },
-    { id: 'usage-history', group: 'users', label: 'Usage History', short: 'Usage', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage'), deniedMessage: 'You do not have permission to view usage history' },
-    { id: 'role-management', group: 'users', label: 'Roles & Permissions', short: 'Roles', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to manage roles & permissions' },
+    { id: 'role-management', group: 'users', label: 'Roles & Permissions', short: 'Roles', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canViewRoles') || hasPermission('canManagePermissionsRoles') || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to view roles & permissions' },
+    { id: 'usage-history', group: 'users', label: 'Usage History', short: 'Usage', href: '/organization/usage-history', visible: isTenantAdmin, deniedMessage: 'Usage History is only available to the account owner' },
+    // Owner only (user decision 2026-11-10), same as the route rule in
+    // lib/navigation/routeAccess.ts and the company-wide usage endpoints.
     // Plan-gated: stays visible but disabled (hover explains) when the plan lacks Teams.
     { id: 'team-management', group: 'teams', label: 'Teams', short: 'Teams', href: '/organization/team-management', visible: isTenantAdmin || hasPermission('canViewTeams') || hasPermission('canCreateTeams') || hasPermission('canManageUsers'), deniedMessage: 'You do not have permission to view teams', planLocked: !planLoading && !hasPlanFeature('teams') },
     { id: 'team-chat', group: 'teams', label: 'Chat', short: 'Chat', href: '/organization/team-chat', visible: true },
@@ -128,7 +130,7 @@ export default function OrganizationTabs({ stickyTop, group = 'users' }: { stick
       >
         {tabs.map((tab) => {
           const isActive = pathname === tab.href || pathname.startsWith(`${tab.href}/`);
-          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm max-sm:text-[13px] font-medium transition-colors';
+          const base = '-mb-px whitespace-nowrap rounded-t-lg border px-4 py-2.5 text-sm font-medium transition-colors';
           if (tab.planLocked) {
             return (
               <span

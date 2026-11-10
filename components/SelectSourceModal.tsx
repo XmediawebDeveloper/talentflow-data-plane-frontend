@@ -33,6 +33,7 @@ import UploadModal from './UploadModal';
 import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { canDownloadResume } from '@/lib/permissions/resumeDownload';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -185,6 +186,8 @@ export default function SelectSourceModal({
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
   const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canDownloadMine = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
+  const canDownloadShared = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: false });
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // State
@@ -934,14 +937,14 @@ export default function SelectSourceModal({
               <ClipboardList className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title mb-0.5 sm:mb-1">
+              <h2 className="tf-section-title sm:text-lg mb-0.5 sm:mb-1">
                 <span className="hidden sm:inline">Select Applicants to Score</span>
                 <span className="sm:hidden">Select Applicants</span>
               </h2>
               {/* JD ID · job name · job version */}
               <div className="flex items-center gap-2 min-w-0 flex-wrap">
                 {jobShortId && <JobIdBadge className="inline-flex items-center flex-shrink-0">{jobShortId}</JobIdBadge>}
-                <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 max-w-full" title={jobTitle}>{jobTitle}</span>
+                <span className="tf-row-name truncate min-w-0 max-w-full" title={jobTitle}>{jobTitle}</span>
                 {jobVersion != null && jobVersion > 0 && (
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
                 )}
@@ -1173,7 +1176,7 @@ export default function SelectSourceModal({
                       <button
                         onClick={handleSelectAll}
                         disabled={filteredResumes.length === 0}
-                        className="h-9 px-3 sm:px-4 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 whitespace-nowrap"
+                        className="tf-btn tf-btn-secondary h-9 px-3 sm:px-4 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex gap-1.5 sm:gap-2 justify-start"
                       >
                         {allVisibleSelected ? (
                           <>
@@ -1197,7 +1200,7 @@ export default function SelectSourceModal({
                       </button>
                     );
                   })()}
-                  <div className="text-sm text-gray-700 dark:text-slate-300 bg-brand-blue/5 ring-1 ring-brand-blue/15 h-9 inline-flex items-center px-2.5 sm:px-4 rounded-lg border border-transparent font-medium whitespace-nowrap">
+                  <div className="tf-label bg-brand-blue/5 ring-1 ring-brand-blue/15 h-9 inline-flex items-center px-2.5 sm:px-4 rounded-lg border border-transparent whitespace-nowrap">
                     <span className="text-brand-blue">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
                   </div>
                 </div>
@@ -1264,6 +1267,7 @@ export default function SelectSourceModal({
                      org-wide list to pick candidates from, not one this
                      modal manages), so only the read-only Preview/Download
                      actions carry over onto it. */
+                  canDownload={activeTab === 'my-resumes' ? canDownloadMine : canDownloadShared}
                   onArchive={activeTab === 'my-resumes' ? handleArchiveResume : undefined}
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
@@ -1295,9 +1299,6 @@ export default function SelectSourceModal({
                      match those pages without a second implementation here.
                      Selection is held by resume id, so ticks survive a page
                      change. */
-                  /* Left at its default (true), as on My Resumes and Resume
-                     Database, so the Download Resume entry appears. */
-                  canDownload
                   /* Fill the modal body and scroll inside it. Without this
                      the shell keeps `.tf-table-shell`'s 400px floor / vh cap
                      — taller than the space left under the header and tabs —
@@ -1317,7 +1318,7 @@ export default function SelectSourceModal({
                         <div className="text-center py-10 sm:py-16">
                           <Database className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-3 sm:mb-4 text-gray-300 dark:text-slate-500" />
                           <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-2">No Resumes Found</h3>
-                          <p className="tf-card-desc max-w-md mx-auto">
+                          <p className="tf-body-secondary max-w-md mx-auto">
                             {searchTerm
                               ? 'No resumes match your search. Try different keywords.'
                               : 'No resumes available in the internal database.'}
@@ -1347,7 +1348,7 @@ export default function SelectSourceModal({
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-            <div className="tf-card-desc">
+            <div className="tf-body-secondary">
               {selectedResumes.length > 0 ? (
                 <span>
                   <span className="font-medium text-gray-900 dark:text-slate-50">{selectedResumes.length}</span> resume{selectedResumes.length === 1 ? '' : 's'} selected
@@ -1362,7 +1363,7 @@ export default function SelectSourceModal({
                   type="button"
                   onClick={onClose}
                   disabled={submitting}
-                  className="w-full sm:w-auto px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                  className="tf-btn tf-btn-secondary w-full sm:w-auto px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-600 text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-normal gap-0"
                 >
                   Cancel
                 </button>

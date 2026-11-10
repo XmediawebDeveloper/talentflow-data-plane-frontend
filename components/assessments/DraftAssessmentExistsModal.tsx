@@ -53,7 +53,7 @@ export default function DraftAssessmentExistsModal({
               variant="secondary"
               size="sm"
               onClick={onClose}
-              className="px-2 -mr-1.5 -mt-1"
+              className="-mr-1.5 -mt-1"
               aria-label="Close"
             >
               <X className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -67,7 +67,7 @@ export default function DraftAssessmentExistsModal({
             <h3 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
               Draft already exists
             </h3>
-            <p className="mt-2 max-w-md text-sm sm:text-base text-gray-500 dark:text-slate-400 leading-snug">
+            <p className="mt-2 max-w-md tf-body-muted sm:text-base leading-snug">
               {message}
             </p>
           </div>
@@ -89,7 +89,7 @@ export default function DraftAssessmentExistsModal({
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   {/* The whole name on ONE line - never wrapped, never cut. A
                       long name widens the popup instead (it sizes to this row). */}
-                  <span className="flex-shrink-0 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-slate-50">
+                  <span className="flex-shrink-0 whitespace-nowrap tf-row-name">
                     {jobTitle}
                   </span>
                   <span title="Job version" className="flex-shrink-0 inline-flex">
@@ -100,7 +100,7 @@ export default function DraftAssessmentExistsModal({
                     <span className="tf-meta">Assessment</span>
                     <VersionChip kind="assessment" version={draftVersion} />
                   </span>
-                  <span className="flex-shrink-0 inline-flex items-center gap-1.5 whitespace-nowrap text-xs font-semibold px-2.5 py-1 rounded-full ring-1 bg-warning-subtle text-warning-strong ring-warning-line">
+                  <span className="tf-badge flex-shrink-0 gap-1.5 ring-1 bg-warning-subtle text-warning-strong ring-warning-line">
                     <span className="w-1.5 h-1.5 rounded-full bg-current" />
                     Draft
                   </span>

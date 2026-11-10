@@ -126,7 +126,7 @@ export default function ListPagination({
     ? 'p-2'
     : attached
       ? 'rounded-b-xl border-t border-gray-200 bg-gray-50/60 px-3 py-3 sm:px-4 dark:border-slate-700 dark:bg-slate-800/40'
-      : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
+      : 'tf-panel p-3 sm:p-4 mt-4 sm:mt-6';
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
@@ -161,10 +161,10 @@ export default function ListPagination({
   return (
     <div className={shellClass}>
       <div className={`flex ${minimalOnMobile ? 'flex-row items-center justify-between' : 'flex-col sm:flex-row sm:items-center sm:justify-between'} ${compact ? 'gap-2' : 'gap-3'}`}>
-        {/* Compact (popups) on phones: the bar stacks into two rows, and the
-            lower one (Go to / ‹ page ›) is centred — so the upper one (Show /
-            Showing) is centred too, instead of hanging off the left edge. */}
-        <div className={`flex flex-wrap items-center ${groupGapClass} ${compact && !minimalOnMobile ? 'max-sm:justify-center max-sm:text-center' : ''}`}>
+        {/* On phones the bar stacks into rows, and the lower one (Go to /
+            ‹ page ›) is centred — so the upper ones (Show / Showing) are centred
+            too, instead of hanging off the left edge. */}
+        <div className={`flex flex-wrap items-center ${groupGapClass} ${!minimalOnMobile ? 'max-sm:justify-center max-sm:text-center' : ''}`}>
           <div className={`${minimalOnMobile ? 'hidden sm:flex' : 'flex'} items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
             <span className={`${labelClass} text-gray-600`}>Show:</span>
             <FilterSelect
@@ -183,7 +183,7 @@ export default function ListPagination({
           <div className="hidden sm:block h-5 w-px bg-gray-200" />
 
           {minimalOnMobile && (
-            <span className="tf-meta-strong sm:hidden">
+            <span className="tf-meta sm:hidden">
               <span className="font-medium text-gray-900">{(safePage - 1) * itemsPerPage + 1}–{Math.min(safePage * itemsPerPage, totalItems)}</span> of{' '}
               <span className="font-medium text-gray-900">{totalItems}</span>
             </span>

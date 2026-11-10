@@ -59,7 +59,7 @@ function StatsGridSkeleton({ count = 4, className }: { count?: number; className
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 sm:p-5"
+          className="tf-panel p-4 sm:p-5"
         >
           <Skeleton className="h-3.5 w-20 mb-3" />
           <Skeleton className="h-7 w-16" />
@@ -178,11 +178,11 @@ function TableSkeleton({
 /** Matches a responsive card grid (1/2/3 cols). */
 function CardGridSkeleton({ count = 6, className }: { count?: number; className?: string }) {
   return (
-    <div className={cn("grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5", className)}>
+    <div className={cn("tf-grid-3", className)}>
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 sm:p-6"
+          className="tf-panel p-5 sm:p-6"
         >
           <div className="flex items-center gap-3 mb-4">
             <Skeleton className="h-10 w-10 rounded-xl" />
@@ -205,11 +205,11 @@ function FormSkeleton({ fields = 6, className }: { fields?: number; className?: 
   return (
     <div
       className={cn(
-        "rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-5 sm:p-6 lg:p-8",
+        "tf-panel p-5 sm:p-6 lg:p-8",
         className,
       )}
     >
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+      <div className="tf-grid-2">
         {Array.from({ length: fields }).map((_, i) => (
           <div key={i} className="space-y-2">
             <Skeleton className="h-3.5 w-24" />
@@ -249,7 +249,7 @@ function PageSkeleton({
 }) {
   const isForm = variant === "form";
   return (
-    <main className={cn("flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 lg:p-8", className)}>
+    <main className={cn("tf-page tf-page-pad overflow-y-auto", className)}>
       <div className="mx-auto max-w-7xl">
         <HeaderSkeleton />
         {showStats && !isForm && <StatsGridSkeleton count={statsCount} />}

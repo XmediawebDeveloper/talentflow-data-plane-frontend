@@ -41,6 +41,7 @@ import {
   Cell,
 } from 'recharts';
 import { useRouter } from 'next/navigation';
+import api from '@/lib/services/api';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService } from '@/lib/services/resumeService';
 import { dashboardService, RecentActivity } from '@/lib/services/dashboardService';
@@ -313,21 +314,18 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           return;
         }
 
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
-
-        const quotaStatusResponse = await fetch(`${API_BASE}/usage/quota-status`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
+        // Shared api client (was a raw fetch): shares an identical in-flight /
+        // just-finished quota-status GET. The 15s abort timer still drops a late
+        // answer; validateStatus keeps non-2xx on the branches below.
+        const quotaStatusResponse = await api.get('/usage/quota-status', {
+          timeout: 15000,
+          validateStatus: () => true,
         });
 
         if (controller.signal.aborted) return;
 
-        if (quotaStatusResponse.ok) {
-          const responseData = await quotaStatusResponse.json();
+        if (quotaStatusResponse.status >= 200 && quotaStatusResponse.status < 300) {
+          const responseData = quotaStatusResponse.data;
           console.log('[EnhancedDashboard] Quota status from API:', responseData);
 
           const data = responseData.data || responseData;
@@ -527,8 +525,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   };
 
   return (
-    <div className="bg-slate-50 dark:bg-slate-950 flex-1 overflow-x-clip">
-      <div className="space-y-6 p-4 md:p-8 w-full max-w-[1400px] mx-auto">
+    <div className="tf-page">
+      <div className="tf-page-pad space-y-6 w-full max-w-[1400px] mx-auto">
       {/* Welcome Banner */}
       <WelcomeBanner user={user} tenant={tenant} />
 
@@ -541,7 +539,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <Briefcase className="h-4.5 w-4.5 text-brand-blue" />
               </div>
               <div>
-                <CardTitle className="text-lg font-semibold text-gray-900 dark:text-slate-50">Job Description Status</CardTitle>
+                <CardTitle className="tf-section-title">Job Description Status</CardTitle>
                 <CardDescription className="text-gray-600 dark:text-slate-400">
                   Overview of all job descriptions by status
                 </CardDescription>
@@ -550,7 +548,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             {canCreateJD && (
               <Button
                 onClick={() => router.push('/recruitment/jd-creation')}
-                className="bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
+                className="bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-1 ring-white/10 transition-all focus-visible:ring-2 hover:shadow-md active:shadow-sm"
               >
                 <Briefcase className="mr-2 h-4 w-4" />
                 Create Job
@@ -559,7 +557,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="tf-grid-4">
             {/* Published JDs */}
             <div
               className="group p-4 rounded-xl border border-success-line bg-gradient-to-br from-green-50 to-green-50/40 hover:border-success-line hover:shadow-md hover:shadow-green-100 transition-all cursor-pointer"
@@ -573,8 +571,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <CheckCircle className="h-4 w-4 text-success" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Published</h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Active job postings</p>
+                  <h3 className="tf-row-title">Published</h3>
+                  <p className="tf-meta">Active job postings</p>
                 </div>
               </div>
             </div>
@@ -592,8 +590,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <Edit2 className="h-4 w-4 text-brand-orange-deep" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Draft</h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Incomplete postings</p>
+                  <h3 className="tf-row-title">Draft</h3>
+                  <p className="tf-meta">Incomplete postings</p>
                 </div>
               </div>
             </div>
@@ -611,8 +609,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <AlertCircle className="h-4 w-4 text-destructive" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Disabled</h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Temporarily hidden</p>
+                  <h3 className="tf-row-title">Disabled</h3>
+                  <p className="tf-meta">Temporarily hidden</p>
                 </div>
               </div>
             </div>
@@ -630,8 +628,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <Archive className="h-4 w-4 text-gray-600 dark:text-gray-400" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Archived</h3>
-                  <p className="text-xs text-gray-600 dark:text-gray-400">Closed postings</p>
+                  <h3 className="tf-row-title">Archived</h3>
+                  <p className="tf-meta">Closed postings</p>
                 </div>
               </div>
             </div>
@@ -650,13 +648,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <TrendingUp className="h-4 w-4 text-brand-blue" />
                 </span>
                 <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900 dark:text-slate-50">Activity Trend</CardTitle>
+                  <CardTitle className="tf-section-title">Activity Trend</CardTitle>
                   <CardDescription className="text-gray-600 dark:text-slate-400">
                     Your actions over the last 7 days
                   </CardDescription>
                 </div>
               </div>
-              <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm self-start sm:self-auto">
+              <span className="tf-badge border border-brand-cyan/20 bg-white dark:bg-slate-900 text-brand-blue shadow-sm self-start sm:self-auto">
                 {activityTotal} total
               </span>
             </div>
@@ -671,7 +669,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <div className="mx-auto h-12 w-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mb-3">
                   <Activity className="h-6 w-6 text-brand-blue" />
                 </div>
-                <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No activity in the last 7 days</p>
+                <p className="tf-row-name">No activity in the last 7 days</p>
                 <p className="tf-meta mt-1">Your daily activity will appear here</p>
               </div>
             ) : (
@@ -736,13 +734,13 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <BarChart3 className="h-4 w-4 text-brand-orange-deep" />
                 </span>
                 <div>
-                  <CardTitle className="text-lg font-semibold text-gray-900 dark:text-slate-50">Jobs by Status</CardTitle>
+                  <CardTitle className="tf-section-title">Jobs by Status</CardTitle>
                   <CardDescription className="text-gray-600 dark:text-slate-400">
                     Distribution of all your job descriptions
                   </CardDescription>
                 </div>
               </div>
-              <span className="inline-flex items-center rounded-full border border-brand-orange/20 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-brand-orange-deep shadow-sm self-start sm:self-auto">
+              <span className="tf-badge border border-brand-orange/20 bg-white dark:bg-slate-900 text-brand-orange-deep shadow-sm self-start sm:self-auto">
                 {jdStatusTotal} total
               </span>
             </div>
@@ -757,7 +755,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <div className="mx-auto h-12 w-12 rounded-full bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center mb-3">
                   <Briefcase className="h-6 w-6 text-brand-orange-deep" />
                 </div>
-                <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No jobs yet</p>
+                <p className="tf-row-name">No jobs yet</p>
                 <p className="tf-meta mt-1">Create your first job to see the breakdown</p>
               </div>
             ) : (
@@ -810,7 +808,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         {/* Published Jobs */}
         <Card className="border-gray-100 dark:border-slate-700/60 dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <CardTitle className="flex items-center gap-2.5 tf-section-title">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Briefcase className="h-4 w-4 text-brand-blue" />
               </span>
@@ -828,7 +826,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             ) : publishedJDs.length === 0 ? (
               <div className="text-center py-8">
                 <Briefcase className="h-10 w-10 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="tf-card-desc">No published jobs yet</p>
+                <p className="tf-body-secondary">No published jobs yet</p>
                 {canCreateJD && (
                   <Button
                     variant="outline"
@@ -855,14 +853,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                             {jd.job_id}
                           </span>
                         )}
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                        <p className="tf-row-name truncate">
                           {jd.title || 'Untitled'}
                         </p>
                         <Badge className="bg-success-subtle text-success hover:bg-success-subtle">
                           Published
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 tf-meta-strong">
+                      <div className="flex items-center gap-3 tf-meta">
                         {jd.department && (
                           <span className="flex items-center gap-1">
                             <Building2 className="h-3 w-3" />
@@ -912,7 +910,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
         {/* Draft Jobs */}
         <Card className="border-gray-100 dark:border-slate-700/60 dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <CardTitle className="flex items-center gap-2.5 tf-section-title">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15">
                 <FileText className="h-4 w-4 text-brand-orange-deep" />
               </span>
@@ -930,7 +928,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             ) : draftJDs.length === 0 ? (
               <div className="text-center py-8">
                 <FileText className="h-10 w-10 text-gray-300 dark:text-slate-600 mx-auto mb-3" />
-                <p className="tf-card-desc">No drafts saved</p>
+                <p className="tf-body-secondary">No drafts saved</p>
               </div>
             ) : (
               <div className="space-y-3">
@@ -946,14 +944,14 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                             {jd.job_id}
                           </span>
                         )}
-                        <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                        <p className="tf-row-name truncate">
                           {jd.title || 'Untitled Draft'}
                         </p>
                         <Badge className="bg-brand-orange/15 text-brand-orange-deep hover:bg-brand-orange/15 border border-brand-orange/20">
                           Draft
                         </Badge>
                       </div>
-                      <div className="flex items-center gap-3 tf-meta-strong">
+                      <div className="flex items-center gap-3 tf-meta">
                         {jd.creation_stage && (
                           <span>Stage: {jd.creation_stage}</span>
                         )}
@@ -997,7 +995,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       {(canCreateJD || canUploadResumes || canViewResumes) && (
         <Card className="border-gray-100 dark:border-slate-700/60 dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <CardTitle className="flex items-center gap-2.5 tf-section-title">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-cyan/15 ring-1 ring-brand-cyan/20">
                 <Sparkles className="h-4 w-4 text-brand-teal" />
               </span>
@@ -1006,7 +1004,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
             <CardDescription className="text-gray-600 dark:text-slate-400">Common tasks to get you started</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="tf-grid-4">
               {canCreateJD && (
                 <Button
                   variant="outline"
@@ -1016,7 +1014,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 group-hover:bg-brand-blue/15 transition-colors">
                     <Briefcase className="h-5 w-5 text-brand-blue" />
                   </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Create Job</span>
+                  <span className="tf-row-name">Create Job</span>
                 </Button>
               )}
               {canUploadResumes && (
@@ -1028,7 +1026,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 group-hover:bg-brand-cyan/15 transition-colors">
                     <FileText className="h-5 w-5 text-brand-cyan" />
                   </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Upload Resumes</span>
+                  <span className="tf-row-name">Upload Resumes</span>
                 </Button>
               )}
               {canViewResumes && (
@@ -1040,7 +1038,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-teal/10 ring-1 ring-brand-teal/15 group-hover:bg-brand-teal/15 transition-colors">
                     <ClipboardList className="h-5 w-5 text-brand-teal" />
                   </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50">Score Resumes</span>
+                  <span className="tf-row-name">Score Resumes</span>
                 </Button>
               )}
               {canViewResumes && (
@@ -1052,7 +1050,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 group-hover:bg-brand-orange/15 transition-colors">
                     <Sparkles className="h-5 w-5 text-brand-orange-deep" />
                   </span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-slate-50">AI Talent Match</span>
+                  <span className="tf-row-name">AI Talent Match</span>
                 </Button>
               )}
             </div>
@@ -1064,7 +1062,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
       <Card className="border-gray-100 dark:border-slate-700/60 dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
         <CardHeader className="flex flex-row items-start justify-between space-y-0 gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
           <div className="min-w-0">
-            <CardTitle className="flex items-center gap-2.5 text-lg font-semibold text-gray-900 dark:text-slate-50">
+            <CardTitle className="flex items-center gap-2.5 tf-section-title">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15">
                 <Clock className="h-4 w-4 text-brand-blue" />
               </span>
@@ -1079,7 +1077,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
             </span>
-            <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm">
+            <span className="tf-badge border border-brand-cyan/20 bg-white dark:bg-slate-900 text-brand-blue shadow-sm">
               Last 24 hours
             </span>
           </div>
@@ -1094,7 +1092,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <div className="mx-auto h-12 w-12 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mb-3">
                 <Activity className="h-6 w-6 text-brand-blue" />
               </div>
-              <p className="text-sm font-medium text-gray-900 dark:text-slate-50">No activity in the last 24 hours</p>
+              <p className="tf-row-name">No activity in the last 24 hours</p>
               <p className="tf-meta mt-1">Your recent actions will appear here</p>
             </div>
           ) : (
@@ -1123,7 +1121,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
+                          <p className="tf-row-name truncate">
                             {activity.action_display}
                           </p>
                           {detailText && (

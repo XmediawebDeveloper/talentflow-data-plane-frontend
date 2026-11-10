@@ -8,7 +8,7 @@ export default function TmpFeedbackPreview() {
   const [open, setOpen] = useState(true);
   return (
     <div className="min-h-screen bg-slate-100 p-6">
-      <button className="px-4 py-2 rounded-lg bg-brand-blue text-white text-sm" onClick={() => setOpen(true)}>
+      <button className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue text-sm whitespace-normal shadow-none gap-0 font-normal hover:bg-brand-blue" onClick={() => setOpen(true)}>
         Reopen feedback popup
       </button>
       {open && (

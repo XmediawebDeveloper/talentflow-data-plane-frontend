@@ -96,10 +96,10 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               <StatusIcon className={`w-4.5 h-4.5 sm:w-6 sm:h-6 ${config.iconColor}`} />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">
+              <h2 className="tf-section-title sm:text-xl mb-0.5 sm:mb-1">
                 {config.title}
               </h2>
-              <p className="tf-card-desc">
+              <p className="tf-body-secondary">
                 {config.description}
               </p>
             </div>
@@ -115,7 +115,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
                 <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate">{item.fileName}</h3>
+                <h3 className="tf-row-name sm:text-base truncate">{item.fileName}</h3>
                 <p className="tf-body-muted">Uploaded file</p>
               </div>
             </div>
@@ -135,7 +135,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               <div className="flex items-start gap-2.5 sm:gap-3">
                 <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                  <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">Duplicate Detected</h4>
+                  <h4 className="tf-row-name sm:text-base mb-0.5 sm:mb-1">Duplicate Detected</h4>
                   <p className="tf-body">
                     {item.errorMessage || 'A resume with the same candidate email already exists in your database. The duplicate was automatically skipped to prevent redundant entries.'}
                   </p>
@@ -149,12 +149,12 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
               <div className="flex items-start gap-2.5 sm:gap-3">
                 <GitBranch className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div className="min-w-0">
-                  <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 mb-0.5 sm:mb-1">New Version Created</h4>
+                  <h4 className="tf-row-name sm:text-base mb-0.5 sm:mb-1">New Version Created</h4>
                   <p className="tf-body">
                     This resume was recognized as an update for an existing candidate. A new version has been created to preserve the resume history.
                   </p>
                   {item.candidateName && (
-                    <p className="tf-card-desc mt-1.5 sm:mt-2">
+                    <p className="tf-body-secondary mt-1.5 sm:mt-2">
                       Candidate: <span className="font-medium text-gray-900 dark:text-slate-50">{item.candidateName}</span>
                     </p>
                   )}
@@ -201,7 +201,7 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 shrink-0">
           <button
             onClick={onClose}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors"
+            className="tf-btn tf-btn-secondary px-4 py-2 text-sm text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 transition-colors whitespace-normal gap-0"
           >
             Close
           </button>

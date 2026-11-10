@@ -108,13 +108,13 @@ export default function EvaluationReportTab({
   return (
     <div className="space-y-8">
       {/* ── Action bar ─────────────────────────────────────────────── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm">
+      <div className="tf-card-soft flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3">
         <div className="flex items-center gap-2">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center">
             <FileText className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="tf-subsection-title">Evaluation Report</h3>
+            <h3 className="tf-row-title">Evaluation Report</h3>
             <p className="tf-meta">Final candidate assessment · download as PDF, Excel, or JSON</p>
           </div>
         </div>

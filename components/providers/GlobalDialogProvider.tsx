@@ -313,7 +313,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 {/* Message */}
                 <p
                   id="global-dialog-desc"
-                  className="text-gray-600 dark:text-gray-400 text-center text-sm whitespace-pre-line mb-4"
+                  className="tf-body-secondary text-center whitespace-pre-line mb-4"
                 >
                   {dialog.message}
                 </p>
@@ -334,7 +334,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                         )}
                         <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{dialog.item.name}</p>
                         {dialog.item.badge && (
-                          <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                          <span className="tf-badge mt-1 text-2xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                             {dialog.item.badge}
                           </span>
                         )}

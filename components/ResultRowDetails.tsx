@@ -39,20 +39,20 @@ export function RowDetailsToggle({ expanded, onToggle }: { expanded: boolean; on
 export function RowDetailsPanel({ colSpan, fields }: { colSpan: number; fields: { label: string; value: ReactNode }[] }) {
   return (
     <tr className="bg-gray-50/60 dark:bg-slate-800/30">
-      <td colSpan={colSpan} className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-        <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-x-auto">
+      <td colSpan={colSpan} className="tf-td" onClick={(e) => e.stopPropagation()}>
+        <div className="tf-panel overflow-x-auto">
           <table className="w-full">
             <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
               <tr>
                 {fields.map((f) => (
-                  <th key={f.label} className="py-2.5 px-3 text-left tf-th whitespace-nowrap align-middle">{f.label}</th>
+                  <th key={f.label} className="tf-th-cell text-left tf-th">{f.label}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               <tr>
                 {fields.map((f) => (
-                  <td key={f.label} className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{f.value}</td>
+                  <td key={f.label} className="tf-td tf-body whitespace-nowrap">{f.value}</td>
                 ))}
               </tr>
             </tbody>

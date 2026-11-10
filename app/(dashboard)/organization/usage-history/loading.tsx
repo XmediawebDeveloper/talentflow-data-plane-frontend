@@ -9,9 +9,9 @@ export default function Loading() {
       <HeaderSkeleton actions={2} breadcrumb={false} className="mb-0" />
 
       {/* Five usage cards in one row */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <div className="tf-grid-stats-5">
         {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="rounded-xl border border-gray-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-900">
+          <div key={i} className="tf-panel p-4">
             <div className="mb-3 flex items-start justify-between">
               <Skeleton className="h-8 w-8 rounded-lg" />
               <Skeleton className="h-5 w-9 rounded-full" />
@@ -31,13 +31,13 @@ export default function Loading() {
       </div>
 
       {/* Filters + view toggle + table, one card */}
-      <div className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+      <div className="overflow-hidden tf-panel">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-slate-700">
           <div className="flex flex-wrap gap-3">
             <Skeleton className="h-9 w-40 rounded-lg" />
             <Skeleton className="h-9 w-72 rounded-lg" />
           </div>
-          <Skeleton className="h-[38px] w-56 rounded-lg" />
+          <Skeleton className="h-9 w-56 rounded-lg" />
         </div>
         <TableSkeleton toolbar={false} columns={7} rows={8} className="rounded-none border-0 shadow-none" />
       </div>

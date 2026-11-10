@@ -5,12 +5,10 @@
  * Role-based rendering:
  * - Tenant Admin / Recruiter: Full unit pool view
  * - Billing Manager: Billing summary (filtered)
- * - Standard User: Own consumption only
  */
 
 import { useAuth } from '@/lib/hooks/useAuth';
 import TenantUnitPool from '@/components/usage/TenantUnitPool';
-import MyConsumptionHistory from '@/components/usage/MyConsumptionHistory';
 import { BarChart3 } from 'lucide-react';
 import { PageSkeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -18,7 +16,7 @@ import { PageHeader } from '@/components/ui/page-header';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 export default function UsagePage() {
-  const { user, isLoading, isBillingManager, isStandardUser } = useAuth();
+  const { user, isLoading, isBillingManager } = useAuth();
 
   // Scroll-only persistence: this page just routes to a role-based child; the
   // list filters/pagination live inside those children (see MyConsumptionHistory).
@@ -36,17 +34,15 @@ export default function UsagePage() {
     );
   }
 
-  const title = isStandardUser ? 'My Usage' : isBillingManager ? 'Billing & Usage' : 'Organization Usage';
-  const subtitle = isStandardUser
-    ? 'View your personal consumption history across all features.'
-    : isBillingManager
-      ? 'Aggregated billing and usage overview for your organization.'
-      : "Monitor and manage your organization's unit consumption in real time.";
+  const title = isBillingManager ? 'Billing & Usage' : 'Organization Usage';
+  const subtitle = isBillingManager
+    ? 'Aggregated billing and usage overview for your organization.'
+    : "Monitor and manage your organization's unit consumption in real time.";
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+      <div className="tf-page-sheet space-y-6">
         <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Usage' }]} />
 
         <PageHeader
@@ -57,11 +53,7 @@ export default function UsagePage() {
         />
 
         {/* Role-Based Content */}
-        {isStandardUser ? (
-          <MyConsumptionHistory />
-        ) : (
-          <TenantUnitPool compact={false} showHistory={true} />
-        )}
+        <TenantUnitPool compact={false} showHistory={true} />
       </div>
       </div>
     </main>

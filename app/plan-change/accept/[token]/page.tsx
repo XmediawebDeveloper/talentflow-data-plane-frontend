@@ -58,7 +58,7 @@ export default function PlanChangeAcceptPage() {
                 {status === 'error' && <XCircle className="w-5 h-5 sm:w-6 sm:h-6 text-white" />}
               </div>
               <div className="min-w-0">
-                <h1 className="text-lg sm:text-xl font-bold text-white truncate">
+                <h1 className="tf-page-title text-white truncate">
                   {status === 'loading' && 'Processing...'}
                   {status === 'success' && 'Changes Accepted'}
                   {status === 'error' && 'Acceptance Failed'}

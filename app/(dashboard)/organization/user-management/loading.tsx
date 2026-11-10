@@ -9,7 +9,7 @@ export default function Loading() {
       <HeaderSkeleton actions={2} breadcrumb={false} />
 
       {/* Status pills + seat usage, then search + count */}
-      <div className="mb-4 sm:mb-5 rounded-xl border border-gray-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-900">
+      <div className="mb-4 sm:mb-5 tf-panel p-3 sm:p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-2">
             {Array.from({ length: 3 }).map((_, i) => (

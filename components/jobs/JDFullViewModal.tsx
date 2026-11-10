@@ -131,10 +131,10 @@ export default function JDFullViewModal({
               <Briefcase className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title">
+              <h2 className="tf-section-title sm:text-lg tracking-tight">
                 Job Description
               </h2>
-              <p className="tf-card-desc truncate">
+              <p className="tf-body-secondary truncate">
                 {jd?.title || jdTitle || 'Loading…'}
               </p>
             </div>

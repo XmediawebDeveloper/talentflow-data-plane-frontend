@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { fetchAllPages } from '@/lib/utils/fetchPagesParallel';
 import { isInvitableAssessment } from './useJobInviteTargets';
 
 /**
@@ -38,36 +39,26 @@ export interface AllJobInviteTargets {
 
 async function fetchAllAssessmentJdIds(): Promise<Set<string>> {
   const ids = new Set<string>();
-  let page = 1;
-  let seen = 0;
-  while (page <= 50) {
-    const res = await assessmentService.list({ page, page_size: 200 });
-    const items = res?.items || [];
-    for (const a of items) {
-      if (isInvitableAssessment(a)) ids.add(a.jd_id);
-    }
-    seen += items.length;
-    if (items.length < 200 || seen >= (res?.total ?? seen)) break;
-    page += 1;
+  const items = await fetchAllPages(
+    (page) => assessmentService.list({ page, page_size: 200 }),
+    { pageSize: 200, maxPages: 50 },
+  );
+  for (const a of items) {
+    if (isInvitableAssessment(a)) ids.add(a.jd_id);
   }
   return ids;
 }
 
 async function fetchAllAiInterviewJdIds(): Promise<Set<string>> {
   const ids = new Set<string>();
-  let page = 1;
-  let seen = 0;
-  while (page <= 50) {
-    const res = await aiInterviewService.listConfigs({ page, page_size: 200, compact: true });
-    const items = res?.items || [];
-    for (const c of items) {
-      if (c.status !== 'archived' && LIVE_AI_INTERVIEW_STATUSES.includes(c.status)) {
-        ids.add(c.jd_id);
-      }
+  const items = await fetchAllPages(
+    (page) => aiInterviewService.listConfigs({ page, page_size: 200, compact: true }),
+    { pageSize: 200, maxPages: 50 },
+  );
+  for (const c of items) {
+    if (c.status !== 'archived' && LIVE_AI_INTERVIEW_STATUSES.includes(c.status)) {
+      ids.add(c.jd_id);
     }
-    seen += items.length;
-    if (items.length < 200 || seen >= (res?.total ?? seen)) break;
-    page += 1;
   }
   return ids;
 }

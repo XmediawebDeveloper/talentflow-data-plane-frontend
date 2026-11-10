@@ -154,10 +154,51 @@ function JobOpeningMetaItems({ job, showIcons = true, showCounts = true, colored
   );
 }
 
+/** Job Openings phone/tablet card: "Created | Posted" on one line and
+ *  "By | Last Updated" on the next ("Label: value" pairs) in two aligned
+ *  columns. Same fields and helpers as <JobOpeningMetaItems>. */
+export function JobOpeningDatesGrid({ job }: { job: Job }) {
+  const posted = getPublishedDate(job);
+  type Pair = { label: string; value: string } | null;
+  /* Two lines: Created · Posted, then By · Last Updated. A missing value is
+     simply skipped; it never pulls a pair from the other line. */
+  const rows: Pair[][] = [
+    [
+      job.created_at ? { label: 'Created', value: formatISTDate(job.created_at) } : null,
+      posted ? { label: 'Posted', value: formatISTDate(posted) } : null,
+    ],
+    [
+      job.postedBy ? { label: 'By', value: job.postedBy } : null,
+      job.updated_at ? { label: 'Last Updated', value: formatLastUpdated(job.updated_at) } : null,
+    ],
+  ].filter((row) => row.some(Boolean));
+  if (rows.length === 0) return null;
+  return (
+    <dl className="tf-jd-card-dates">
+      {rows.map((row, r) => (
+        <div key={r} className="tf-jd-card-date-row">
+          {row.map((pair) => pair && (
+            <div key={pair.label} className="tf-jd-card-date">
+              <dt className="tf-jd-card-date-label">{pair.label}:</dt>
+              <dd className="tf-jd-card-date-value">{pair.value}</dd>
+            </div>
+          ))}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** Experience / industry / location / employment type / work mode, as items.
  *  Exported so a list that is not a Job Openings row (AI Talent Match's
  *  Matched Jobs) can print the same JD details line. */
-export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; hideEmpty?: boolean }) {
+export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType = false }: {
+  job: Job;
+  hideEmpty?: boolean;
+  /** Job Openings phone/tablet card: start Employment type / Work mode on their own
+   *  line, so the card always reads "experience · industry" over "type · mode". */
+  breakBeforeType?: boolean;
+}) {
   // Per-city names when the full array is available (every current JD); hosts
   // that only ever set the legacy joined `location` string (older cached data)
   // fall back to showing that string as-is, same as before this array existed.
@@ -211,12 +252,14 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false }: { job: Job; h
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
         <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
+          <DollarSign className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
             : ''}
         </span>
       )}
+      {breakBeforeType && <span aria-hidden="true" className="tf-line-break" />}
       <span className="flex items-center gap-1.5">
         <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
         {formatEmploymentType(job.employmentType)}
@@ -371,7 +414,7 @@ export default function JobOpeningSummary({
         </h3>
         </div>
         {job.versionNumber && job.versionNumber >= 1 && (
-          <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
+          <span className="tf-badge bg-gray-50 text-gray-700 border border-gray-200 flex gap-1.5 flex-shrink-0 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">
             <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
             v{job.versionNumber}
           </span>

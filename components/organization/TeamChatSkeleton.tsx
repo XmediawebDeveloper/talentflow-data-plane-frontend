@@ -7,11 +7,11 @@ import { Skeleton } from '@/components/ui/skeleton';
  */
 export default function TeamChatSkeleton() {
   return (
-    <div className="flex flex-1 min-h-[480px] overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+    <div className="flex flex-1 min-h-[480px] overflow-hidden tf-panel">
       <div className="hidden w-72 shrink-0 flex-col gap-3 border-r border-gray-200 p-3 md:flex lg:w-80 dark:border-slate-700">
         <Skeleton className="h-5 w-24" />
         <Skeleton className="h-9 w-full rounded-lg" />
-        <Skeleton className="h-[38px] w-full rounded-lg" />
+        <Skeleton className="h-9 w-full rounded-lg" />
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} className="flex items-center gap-3 px-1 py-1">
             <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />

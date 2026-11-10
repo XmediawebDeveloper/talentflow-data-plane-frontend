@@ -2,8 +2,7 @@
 
 import { SCORE_CELL_TEXT } from '@/lib/utils/score';
 import { ListBulkActions } from '@/components/ui/list-toolbar-slot';
-import { useState, useEffect, useMemo, useCallback, useRef, type ReactNode } from 'react';
-import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
+import { useState, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import Dropdown from '@/components/ui/filter-select'; // aliased: ColumnFilterFields' FilterSelect is also imported
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -11,13 +10,13 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ResultRowActions, { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TimelineStamps from '@/components/ui/timeline-stamps';
-import NameAvatar from '@/components/ui/name-avatar';
+import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import {
   ChevronLeft, ChevronRight, Users, CheckCircle, XCircle,
   FileDown, FileText, FileSpreadsheet, Download, X, ChevronDown, Loader2,
-  Square, CheckSquare,
+  Square, CheckSquare, Mail, Briefcase,
 } from 'lucide-react';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import {
@@ -34,26 +33,24 @@ import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card
 import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import type { AIInterviewResponse, AICandidateResultRow, AICandidateResultsFilters, AICandidateResultsFilterOptions, AICandidateResultsQuery, AICandidateResultsStats } from '@/lib/services/aiInterviewService';
+import { usePagedList } from '@/lib/hooks/usePagedList';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import {
-  getStatusVariant,
   getStatusLabel,
+  SessionStatusChip,
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
-import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
 import {
   FilterSelect,
   FilterDateRange,
-  jobFilterOptions,
-  versionFilterOptions,
   INVITE_SOURCE_FILTER_OPTIONS,
   RESULT_FILTER_OPTIONS,
-  matchesDateRange,
 } from './ColumnFilterFields';
 
 /** One filter per filterable column; '' means any. */
@@ -100,14 +97,9 @@ const CANDIDATE_COLUMNS = [
 ] as const;
 type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
 
-/** A session plus the interview it belongs to — rows here span configs. */
-type CandidateSessionRow = AIInterviewResponse & {
-  _config_id: string;
-  _config_title: string;
-  _job_id: string;
-  _job_version: number;
-  _interview_version: number;
-};
+/** A session plus the interview it belongs to — rows here span configs. The
+ *  server (GET /ai-interview/candidate-results) joins the labels on. */
+type CandidateSessionRow = AICandidateResultRow;
 
 /* Job versions blue, interview versions cyan — same two colours the All
  * Interviews table and the Interview/Assessment Version History panels use
@@ -177,117 +169,12 @@ export interface AIInterviewCandidateResultsProps {
   onDisplayModeChange?: (mode: ListDisplayMode) => void;
 }
 
-/**
- * Every completed / terminated interview session, as result rows. Module level
- * so the page can warm this tab (`prefetchAIResultRows`) through the same code
- * the tab itself uses. Returns null when `isStale()` says a newer run replaced
- * this one.
- */
-async function fetchAIResultRows(isStale: () => boolean = () => false): Promise<CandidateSessionRow[] | null> {
-    /* Every config, archived included and every page of each — the same set
-       the page's Total Interviewed card counts sessions over. A config past
-       the first page, or one archived after its candidates finished, used
-       to drop its sessions from this tab while the card still counted
-       them. A page that fails throws, rather than ending the list early. */
-    const listAllConfigs = async (status?: string) => {
-      const all: AIInterviewResponse[] = [];
-      for (let page = 1; ; page += 1) {
-        const res = await aiInterviewService.listConfigs({ status, page, page_size: 500, compact: true });
-        const items = res.items ?? [];
-        all.push(...items);
-        if (items.length < 500 || all.length >= (res.total ?? all.length)) break;
-      }
-      return all;
-    };
-    /* The sessions list does not depend on the config lists, so it is asked
-       for beside them rather than after them. */
-    const fetchSessions = async (): Promise<AIInterviewResponse[] | null> => {
-      // Paginated — a mature tenant can have more completed/terminated
-      // sessions than fit on one page.
-      const collected: AIInterviewResponse[] = [];
-      for (let page = 1; page <= 40; page += 1) {
-        // No catch: a failed page is a load error, not the end of the list.
-        const res = await aiInterviewService.list({ status: 'completed,terminated', page, page_size: 1000 });
-        if (isStale()) return null;
-        const items = res.items ?? [];
-        collected.push(...items);
-        if (items.length < 1000 || collected.length >= (res.total ?? collected.length)) break;
-      }
-      return collected;
-    };
-    const [activeConfigs, archivedConfigs, fetchedSessions] = await Promise.all([listAllConfigs(), listAllConfigs('archived'), fetchSessions()]);
-    if (isStale() || fetchedSessions === null) return null;
-    const configById = new Map([...activeConfigs, ...archivedConfigs].map((c) => [c.id, c]));
-    const configs = [...configById.values()];
-    if (configs.length === 0) return [];
-
-    /* Interview version — the Nth config created against a given job
-     * version (jd_id), oldest first. Same derivation as the All Interviews
-     * table's own column, computed once over the WHOLE fetched set so a
-     * version's number doesn't shift depending on which configs happen to
-     * have completed sessions. */
-    const ordinalByConfigId = new Map<string, number>();
-    const byJobVersion = new Map<string, AIInterviewResponse[]>();
-    for (const config of configs) {
-      if (!config.jd_id) continue;
-      const bucket = byJobVersion.get(config.jd_id);
-      if (bucket) bucket.push(config);
-      else byJobVersion.set(config.jd_id, [config]);
-    }
-    for (const bucket of byJobVersion.values()) {
-      bucket
-        .slice()
-        .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
-        .forEach((config, index) => ordinalByConfigId.set(config.id, index + 1));
-    }
-
-    const sessions = fetchedSessions;
-
-    // `configs` includes archived interviews, so this only drops a session
-    // whose config no longer exists at all.
-    const merged = sessions
-      .filter((session) => session.config_id && configById.has(session.config_id))
-      .map((session): CandidateSessionRow => {
-        const config = configById.get(session.config_id as string)!;
-        return {
-          ...session,
-          _config_id: config.id,
-          // jd_title first, matching how the interview cards on this page
-          // are labelled, so the column reads the same as the list above it.
-          _config_title: config.jd_title || config.position || 'Untitled',
-          _job_id: config.jd_short_id || '',
-          _job_version: config.jd_version ?? 1,
-          _interview_version: ordinalByConfigId.get(config.id) ?? 1,
-        };
-      })
-      // Newest first — completed sessions lead, then whatever started or
-      // was invited most recently.
-      .sort((a, b) => {
-        const ta = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
-        const tb = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
-        return tb - ta;
-      });
-  return merged;
-}
-
-/** Loads the rows and remembers them, so opening the Results tab draws at once. */
-export async function prefetchAIResultRows(): Promise<void> {
-  const rows = await fetchAIResultRows();
-  if (rows) writeListSnapshot('ai-results:rows', rows);
-}
-
 export default function AIInterviewCandidateResults({ sortOrder = 'newest', toolbarSlot, refreshSignal, displayMode: hostDisplayMode, onDisplayModeChange }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
   // Export is RBAC-gated (`ai_interview:export`, enforced server-side by the
   // audit endpoint too) — greyed with the reason when missing, never hidden.
   const { isTenantAdmin, hasPermissionCode } = useAuth();
   const canExport = isTenantAdmin || hasPermissionCode('ai_interview:export');
-
-  /* The last set this tab loaded draws at once (return from a details page, or
-     reopening the tab); the load below still runs and replaces it. */
-  const [rows, setRows] = useState<CandidateSessionRow[]>(() => readListSnapshot<CandidateSessionRow[]>('ai-results:rows') ?? []);
-  const [isLoading, setIsLoading] = useState(() => readListSnapshot<CandidateSessionRow[]>('ai-results:rows') === null);
-  const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE);
@@ -298,7 +185,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
 
   // Search state lives in the shared hook: typed vs applied query, plus a
   // reset. No status filter — the fetch itself is scoped to Completed only
-  // (see loadAllSessions), so there is nothing left to filter by. `onChange`
+  // (on the server), so there is nothing left to filter by. `onChange`
   // returns to page 1 — narrowing from page 3 would otherwise strand the
   // user on a page that no longer exists.
   const [showFilters, setShowFilters] = useState(false);
@@ -322,7 +209,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
   useEffect(() => {
     if (isPhoneWidth()) setLocalDisplayMode('grid');
   }, []);
-  useListStatePersistence(
+  const listStateRestored = useListStatePersistence(
     'ai-interview-candidate-results',
     { currentPage, pageSize, query: search.query, filters: search.filters, displayMode },
     (s) => {
@@ -334,55 +221,43 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     },
   );
 
-  /**
-   * One tenant-wide call (paginated), not one request per config per status.
-   * This used to fan out `configs.length × 2` unthrottled requests — hundreds
-   * on a tenant with many AI-interview configs — because there was no
-   * cross-config sessions endpoint. `GET /ai-interview` (`aiInterviewService
-   * .list`) already covers every session tenant-wide, so asking it once for
-   * `status=completed,terminated` returns the same rows the old per-config
-   * loop assembled by hand.
-   *
-   * Completed AND Terminated — the two states with a result to show (a
-   * terminated interview has its partial evaluation).
-   */
-  /* Bumped by every loadAllSessions run, so a slower, older run (mount and a
-     Refresh click overlapping) can't overwrite the newer one's rows. */
-  const loadSeqRef = useRef(0);
-  const rowsRef = useRef(rows);
-  rowsRef.current = rows;
-  const loadAllSessions = useCallback(async () => {
-    const seq = ++loadSeqRef.current;
-    const isStale = () => seq !== loadSeqRef.current;
-    const startedAt = performance.now();
-    // Rows already on screen: refresh behind them instead of a skeleton.
-    if (rowsRef.current.length === 0) setIsLoading(true);
-    setError(null);
-    try {
-      const merged = await fetchAIResultRows(isStale);
-      if (merged === null) return;
-      setRows(merged);
-      writeListSnapshot('ai-results:rows', merged);
-      perfNote('AI Interviews / Results — loaded', startedAt);
-      // Page is NOT reset here — it may have just been restored (see
-      // useListStatePersistence above), and safePage clamps it if the
-      // reload left fewer pages.
-    } catch (err: any) {
-      if (isStale()) return;
-      setError(err?.message || 'Failed to load candidate results');
-      setRows([]);
-    } finally {
-      // A stale run leaves the spinner to the run that replaced it.
-      if (!isStale()) setIsLoading(false);
-    }
-  }, []);
+  /* ── Rows: ONE page from the server, plus the counts, in parallel ──
+     GET /ai-interview/candidate-results (+ /stats) with the tab's search,
+     filters and sort. The server builds both from one filter function, so the
+     total always matches. The tab used to download every finished session of
+     the tenant (full rows) and every config, then filter, sort and page here.
+     Waits for the restore and for a typed search to settle, so a return to
+     this tab asks once, for the state on screen. */
+  const f = search.filters;
+  const resultFilters: AICandidateResultsFilters = {
+    search: search.appliedQuery.trim() || undefined,
+    job: f.job || undefined,
+    jd_version: f.jobVersion ? Number(f.jobVersion) : undefined,
+    interview_version: f.interviewVersion ? Number(f.interviewVersion) : undefined,
+    invite_source: f.inviteSource || undefined,
+    status: f.status || undefined,
+    result: (f.result || undefined) as AICandidateResultsFilters['result'],
+    risk: (f.risk || undefined) as AICandidateResultsFilters['risk'],
+    completed_from: f.completedFrom || undefined,
+    completed_to: f.completedTo || undefined,
+  };
+  const sortBy: 'newest' | 'oldest' = sortOrder === 'oldest' ? 'oldest' : 'newest';
+  const resultsQuery: AICandidateResultsQuery = { ...resultFilters, sort_by: sortBy, page: currentPage, page_size: pageSize };
+  const paged = usePagedList<CandidateSessionRow, AICandidateResultsStats, AICandidateResultsQuery>({
+    name: 'ai-candidate-results',
+    query: resultsQuery,
+    fetchPage: (q) => aiInterviewService.listCandidateResults(q),
+    fetchStats: (filters) => aiInterviewService.getCandidateResultsStats(filters),
+    enabled: listStateRestored && search.query === search.appliedQuery,
+  });
+  const pageRows = paged.items;
+  const total = paged.total;
+  /* Nothing on screen yet — also while the request is held for the restore or
+     a restored search, so that wait draws the skeleton, not "no results". */
+  const isLoading = paged.loading || (pageRows.length === 0 && (!listStateRestored || search.query !== search.appliedQuery));
+  const error = paged.error ? ((paged.error as Error)?.message || 'Failed to load candidate results') : null;
 
-  useEffect(() => {
-    loadAllSessions();
-  }, [loadAllSessions]);
-
-  /* Host's Refresh button — skips the mount value so this doesn't
-     double-fetch alongside the effect above. */
+  /* Host's Refresh button — skips the mount value (the list loads itself). */
   const skippedFirstRefreshSignal = useRef(false);
   useEffect(() => {
     if (refreshSignal === undefined) return;
@@ -390,40 +265,35 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
       skippedFirstRefreshSignal.current = true;
       return;
     }
-    loadAllSessions();
+    paged.refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshSignal]);
 
-  // Filtering is client-side: the rows are already all in memory. Keyed off
-  // the APPLIED query so the list doesn't rebuild on every keystroke.
-  const filteredRows = useMemo(() => {
-    const query = search.appliedQuery.trim().toLowerCase();
-    const f = search.filters;
+  /* Filter options — the values that occur in the result rows, from the
+     server, when the panel first opens (not on landing). */
+  const [filterOptions, setFilterOptions] = useState<AICandidateResultsFilterOptions | null>(null);
+  useEffect(() => {
+    if (!showFilters || filterOptions) return;
+    let alive = true;
+    aiInterviewService.getCandidateResultsFilterOptions()
+      .then((opts) => { if (alive) setFilterOptions(opts); })
+      .catch(() => { /* the panel keeps its "All" choices */ });
+    return () => { alive = false; };
+  }, [showFilters, filterOptions]);
+  const jobOptions = useMemo(() => (filterOptions?.jobs || [])
+    .slice()
+    .sort((a, b) => a.value.localeCompare(b.value, undefined, { numeric: true }))
+    .map(({ value, title }) => ({ value, label: title ? `${value} · ${title}` : value })), [filterOptions]);
+  const jobVersionOptions = useMemo(() => (filterOptions?.job_versions || []).map((v) => ({ value: String(v), label: `V${v}` })), [filterOptions]);
+  const interviewVersionOptions = useMemo(() => (filterOptions?.interview_versions || []).map((v) => ({ value: String(v), label: `V${v}` })), [filterOptions]);
 
-    return (sortOrder === 'oldest' ? [...rows].reverse() : rows).filter((row) => {
-      if (query && ![row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title, row._job_id]
-        .some((field) => (field || '').toLowerCase().includes(query))) return false;
-      if (f.job && row._job_id !== f.job) return false;
-      if (f.jobVersion && String(row._job_version) !== f.jobVersion) return false;
-      if (f.interviewVersion && String(row._interview_version) !== f.interviewVersion) return false;
-      if (f.inviteSource && (row as any).invite_source !== f.inviteSource) return false;
-      if (f.status && row.status !== f.status) return false;
-      if (!matchesInviteResultFilter(row, mhsScore(row), f.result)) return false;
-      if (f.risk && getProctoringRisk(row).level !== f.risk) return false;
-      if (!matchesDateRange(row.completed_at, f.completedFrom, f.completedTo)) return false;
-      return true;
-    });
-  }, [rows, sortOrder, search.appliedQuery, search.filters]);
-
-  /* Filter options come from the loaded rows, so every choice matches at
-     least one candidate. */
-  const jobOptions = useMemo(() => jobFilterOptions(rows, (r) => r._job_id, (r) => r._config_title), [rows]);
-  const jobVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._job_version), [rows]);
-  const interviewVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._interview_version), [rows]);
-
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const pageRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+  /* A page past the end (rows gone, or a restored page) steps back once the
+     total is known. */
+  useEffect(() => {
+    if (!paged.refreshing && total > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [paged.refreshing, total, currentPage, totalPages]);
 
   // Local text so a partial edit doesn't get clobbered by safePage until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState(String(safePage));
@@ -454,6 +324,40 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
       else next.add(key);
       return next;
     });
+  /* Every row ticked is remembered as it was seen — selection survives paging,
+     and Export / Download act on the rows themselves. */
+  const [knownRows, setKnownRows] = useState<Record<string, CandidateSessionRow>>({});
+  useEffect(() => {
+    if (pageRows.length === 0) return;
+    setKnownRows((prev) => {
+      const next = { ...prev };
+      for (const row of pageRows) next[rowKey(row)] = row;
+      return next;
+    });
+  }, [pageRows]);
+  /* "Select all N" — every row matching the search / filters, across pages:
+     their ids from GET /candidate-results/ids, and the rows not seen yet by id
+     (Export and Download PDF Reports need the rows). */
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatching = async () => {
+    setSelectingAll(true);
+    try {
+      const refs = await aiInterviewService.getCandidateResultIds({ ...resultFilters, sort_by: sortBy });
+      const keyOf = (r: { id: string; config_id: string }) => `${r.config_id}-${r.id}`;
+      const missing = refs.filter((r) => !knownRows[keyOf(r)]).map((r) => r.id);
+      const fetched = missing.length ? await aiInterviewService.getCandidateResultsByIds(missing) : [];
+      setKnownRows((prev) => {
+        const next = { ...prev };
+        for (const row of fetched) next[rowKey(row)] = row;
+        return next;
+      });
+      setSelectedKeys(new Set(refs.map(keyOf)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not select every result');
+    } finally {
+      setSelectingAll(false);
+    }
+  };
   const allOnPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedKeys.has(rowKey(row)));
   const toggleAllOnPage = () =>
     setSelectedKeys((prev) => {
@@ -462,7 +366,10 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
       else pageRows.forEach((row) => next.add(rowKey(row)));
       return next;
     });
-  const selectedRows = rows.filter((row) => selectedKeys.has(rowKey(row)));
+  const selectedRows = useMemo(
+    () => [...selectedKeys].map((key) => knownRows[key]).filter((row): row is CandidateSessionRow => !!row),
+    [selectedKeys, knownRows],
+  );
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
@@ -582,13 +489,18 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
    * this tab, not from an interview's own Results page, so its breadcrumb and
    * Back both point back here instead of through a page never visited.
    */
-  const openSession = (row: CandidateSessionRow) => {
+  const openSession = async (row: CandidateSessionRow) => {
+    /* Every candidate in the current (filtered, sorted) list — across all
+       pages and interviews — each carrying its own interview, so Previous /
+       Next walk the Candidate Results list rather than stopping at the rows
+       of one interview on one page (which read "1 / 1"). The list is on the
+       server now: its ids (one light call); the page on screen if that fails. */
+    let navList = pageRows.map((r) => ({ id: r.id, configId: r._config_id }));
     try {
-      /* Every candidate in the current (filtered, sorted) list — across all
-         pages and interviews — each carrying its own interview, so Previous /
-         Next walk the Candidate Results list rather than stopping at the rows
-         of one interview on one page (which read "1 / 1"). */
-      const navList = filteredRows.map((r) => ({ id: r.id, configId: r._config_id }));
+      const refs = await aiInterviewService.getCandidateResultIds({ ...resultFilters, sort_by: sortBy });
+      if (refs.length) navList = refs.map((r) => ({ id: r.id, configId: r.config_id }));
+    } catch { /* keep the page's rows */ }
+    try {
       sessionStorage.setItem('aiInterviewResultNavList', JSON.stringify(navList));
     } catch { /* ignore storage failures */ }
     /* Stamp this page's own entry with the tab first (no navigation), so the
@@ -622,6 +534,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         leadingActions={
           /* Result (Pass / Fail) first, ahead of More Filters — the same
              toolbar order as the per-interview results view. */
+          <div className="tf-jobs-filter-pills contents">
           <Dropdown
             value={search.filters.result}
             onChange={(v) => search.setFilter('result', v)}
@@ -632,13 +545,14 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               ...RESULT_FILTER_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label })),
             ]}
           />
+          </div>
         }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,
              email and CID are what the search box is for. Picks are drafts
              until Done, as on the Activity Logs tab. */
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+            <div className="tf-grid-4">
               <SearchableSelect
                 label="Job"
                 value={search.draftFilters.job}
@@ -696,8 +610,19 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
-                  {selectedRows.length.toLocaleString()} selected
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500 flex items-center justify-between gap-2">
+                  <span>{selectedRows.length.toLocaleString()} selected</span>
+                  {/* Select every row matching the search / filters, across pages. */}
+                  {selectedKeys.size < total && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.preventDefault(); void selectAllMatching(); }}
+                      disabled={selectingAll}
+                      className="normal-case font-medium text-brand-blue hover:underline disabled:opacity-50"
+                    >
+                      {selectingAll ? 'Selecting…' : `Select all ${total.toLocaleString()}`}
+                    </button>
+                  )}
                 </div>
                 <DropdownMenuItem
                   className={`flex items-center gap-2.5 px-4 py-2.5 text-sm ${canExport ? 'cursor-pointer' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
@@ -757,58 +682,58 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     stateBody = displayMode === 'grid' ? <CardGridSkeleton count={8} className="xl:grid-cols-4" /> : (
       <div>
         {/* Table mirror — same columns/order as the real candidate results table */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+        <div className="tf-card-soft overflow-hidden">
           <div className="overflow-x-auto tf-table-shell">
             <table className="w-full text-sm">
               <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                 <tr>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-left"><Skeleton className="h-3 w-20" /></th>
+                  <th className="tf-th-cell text-right tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <tr key={i}>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td"><Skeleton className="h-5 w-14 rounded-md" /></td>
+                    <td className="tf-td">
                       <div className="flex items-center gap-2">
                         <Skeleton className="w-7 h-7 rounded-full" />
                         <Skeleton className="h-4 w-28" />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td"><Skeleton className="h-4 w-32" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-28" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="tf-td">
                       <div className="flex items-center gap-2">
                         <Skeleton className="h-1.5 w-16 rounded-full" />
                         <Skeleton className="h-4 w-8" />
                       </div>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="tf-td">
                       <div className="flex flex-col gap-1">
                         <Skeleton className="h-3 w-28" />
                         <Skeleton className="h-3 w-28" />
                         <Skeleton className="h-3 w-16" />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
-                    <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
+                    <td className="tf-td"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="tf-td text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
                   </tr>
                 ))}
               </tbody>
@@ -821,12 +746,12 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     stateBody = (
       <div className="p-6 text-center">
         <p className="text-sm text-destructive mb-3">{error}</p>
-        <Button variant="primary" size="md" onClick={loadAllSessions}>
+        <Button variant="primary" size="md" onClick={() => paged.refresh()}>
           Retry
         </Button>
       </div>
     );
-  } else if (rows.length === 0) {
+  } else if (total === 0 && !search.isNarrowed) {
     stateBody = (
       <ListEmptyState
         icon={Users}
@@ -851,8 +776,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     <div>
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-        {filteredRows.length === 0 ? (
+      <div className="tf-card-soft overflow-hidden">
+        {pageRows.length === 0 ? (
           <ListEmptyState
             icon={Users}
             isNarrowed
@@ -863,7 +788,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
           />
         ) : displayMode === 'grid' ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            <div className="tf-grid-4 p-4">
               {pageRows.map((row) => {
                 const risk = getProctoringRisk(row);
                 const isSelected = selectedKeys.has(rowKey(row));
@@ -885,10 +810,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       selectionActive={selectedKeys.size > 0}
                     />
                     <div className="flex items-start gap-2.5">
-                      <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="md" />
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
-                          {row.candidate_name || 'Unknown'}
+                          {capitalizedCase(row.candidate_name) || 'Unknown'}
                         </p>
                         <p className="tf-meta truncate">
                           {row.candidate_email || '—'}
@@ -901,20 +825,20 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       )}
                     </div>
 
-                    <p className="tf-meta-strong truncate" title={row._config_title}>
+                    <p className="tf-meta truncate" title={row._config_title}>
                       {row._config_title}
                     </p>
 
                     {inviteSourceLabel(row) && (
-                      <p className="tf-meta-strong">
+                      <p className="tf-meta">
                         <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
                       </p>
                     )}
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                      <SessionStatusChip session={row} />
                       {row.status === 'in_progress' && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                        <span className="tf-badge flex bg-destructive text-white text-2xs">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                           LIVE
                         </span>
@@ -948,9 +872,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 );
               })}
             </div>
-            {filteredRows.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+            {total > 0 && (
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -963,7 +887,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     />
                     <span>per page</span>
                   </label>
-                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>
+                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, total)} of {total}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
@@ -982,7 +906,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                      className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
                   <button
@@ -1008,11 +932,11 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
           </>
         ) : (
           <>
-            <div className="overflow-x-auto tf-table-shell">
+            <div className={`overflow-x-auto tf-table-shell ${DESKTOP_TABLE_ONLY}`}>
               <table className="w-full text-sm">
                 <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700">
                   <tr>
-<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left tf-th">
+<th className="tf-th-cell text-left w-12 tf-sticky-col-left tf-th">
                       <button
                         type="button"
                         onClick={toggleAllOnPage}
@@ -1027,19 +951,19 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         )}
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                    <th className="text-left px-4 py-3 tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-                    <th className="text-left px-4 py-3 tf-th whitespace-nowrap"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
-                    <th className="text-right px-4 py-3 tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Result</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Proctoring Risk</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
+                    <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
+                    <th className="tf-th-cell text-right tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1052,12 +976,11 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         content: (
                           <>
                             <div className="flex items-center gap-2">
-                              <NameAvatar name={row.candidate_name} fallback={row.candidate_email} size="sm" />
                               {/* Email under the name, as on Track Invites,
                                   rather than a column of its own. */}
                               <div className="min-w-0 max-w-[220px]">
-                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={row.candidate_name || 'Unknown'}>
-                                  {row.candidate_name || 'Unknown'}
+                                <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={capitalizedCase(row.candidate_name) || 'Unknown'}>
+                                  {capitalizedCase(row.candidate_name) || 'Unknown'}
                                 </p>
                                 <p className="tf-meta truncate" title={row.candidate_email || undefined}>
                                   {row.candidate_email || '—'}
@@ -1082,9 +1005,9 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         content: (
                           <>
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                              <SessionStatusChip session={row} />
                               {row.status === 'in_progress' && (
-                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                <span className="tf-badge flex bg-destructive text-white text-2xs">
                                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                                   LIVE
                                 </span>
@@ -1194,8 +1117,22 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     };
                     const key = rowKey(row);
                     return (
-                      <tr key={key} className="transition-colors hover:bg-brand-blue/5">
-                        <td className="px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                      <tr
+                        key={key}
+                        /* Clicking anywhere on the row acts as View; the checkbox,
+                           links and action buttons keep their own behaviour.
+                           Clicks inside a portal (menu / download dialog) bubble
+                           through React but are not in this row's DOM — ignored. */
+                        onClick={(e) => {
+                          const t = e.target as HTMLElement;
+                          if (!e.currentTarget.contains(t)) return;
+                          if (t.closest('a, button, input, select, label, [role="button"], [role="menuitem"]')) return;
+                          if (window.getSelection()?.toString()) return; // selecting text, not opening
+                          openSession(row);
+                        }}
+                        className="transition-colors cursor-pointer hover:bg-brand-blue/5"
+                      >
+                        <td className="tf-td w-12 tf-sticky-col-left">
                           <button
                             type="button"
                             onClick={() => toggleSelected(row)}
@@ -1212,7 +1149,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                         {CANDIDATE_COLUMNS.map((c) => (
                           <td key={c.id} className={cells[c.id].className}>{cells[c.id].content}</td>
                         ))}
-                        <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
+                        <td className="tf-td text-right whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center justify-end gap-1.5">
                             <ResultRowActions session={row} onView={() => openSession(row)} />
                           </div>
@@ -1223,10 +1160,89 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 </tbody>
               </table>
             </div>
+            <MobileRecordList className="p-3">
+              {pageRows.map((row) => {
+                const risk = getProctoringRisk(row);
+                const isSelected = selectedKeys.has(rowKey(row));
+                return (
+                  <MobileRecordCard
+                    key={rowKey(row)}
+                    selected={isSelected}
+                    select={
+                      <button
+                        type="button"
+                        onClick={() => toggleSelected(row)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                        aria-label={isSelected ? 'Deselect candidate' : 'Select candidate'}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    }
+                    idBadge={
+                      (row.candidate_cid || row._job_id) ? (
+                        <>
+                          {row.candidate_cid && (
+                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                              {row.candidate_cid}
+                            </span>
+                          )}
+                          {row._job_id && <JobIdBadge>{row._job_id}</JobIdBadge>}
+                        </>
+                      ) : undefined
+                    }
+                    badges={
+                      <>
+                        <SessionStatusChip session={row} />
+                        {row.status === 'in_progress' && (
+                          <span className="tf-badge flex bg-destructive text-white text-2xs">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            LIVE
+                          </span>
+                        )}
+                      </>
+                    }
+                    title={capitalizedCase(row.candidate_name) || 'Unknown'}
+                    actions={<ResultRowActions session={row} onView={() => openSession(row)} />}
+                    meta={[
+                      { icon: <Mail className="w-3.5 h-3.5" />, label: row.candidate_email || '—' },
+                      { icon: <Briefcase className="w-3.5 h-3.5" />, label: row._config_title },
+                      { label: inviteSourceLabel(row) ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" /> : null },
+                    ]}
+                    fields={[
+                      {
+                        label: 'Score',
+                        value: mhsScore(row) != null ? (
+                          <span className={`${SCORE_CELL_TEXT} ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                            {mhsScore(row)}%
+                          </span>
+                        ) : '—',
+                      },
+                      { label: 'Result', value: sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : '—' },
+                      {
+                        label: 'Proctoring Risk',
+                        value: (row.status === 'completed' || row.status === 'terminated') ? (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>{risk.level}</span>
+                        ) : '—',
+                      },
+                      { label: 'Job Version', value: <VersionPill kind="job" version={row._job_version} /> },
+                      { label: 'Interview Version', value: <VersionPill kind="interview" version={row._interview_version} /> },
+                    ]}
+                  >
+                    <div className="text-xs text-gray-600 dark:text-slate-400">
+                      <InviteTimelineLines inv={row} duration={formatDuration(row)} />
+                    </div>
+                  </MobileRecordCard>
+                );
+              })}
+            </MobileRecordList>
 
-            {filteredRows.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+            {total > 0 && (
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -1239,7 +1255,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     />
                     <span>per page</span>
                   </label>
-                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>
+                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, total)} of {total}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
@@ -1258,7 +1274,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       }}
                       onBlur={commitGoToPage}
                       aria-label="Go to page"
-                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                      className="tf-input w-14 h-8 px-2 text-center"
                     />
                   </div>
                   <button

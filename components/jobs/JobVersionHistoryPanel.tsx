@@ -392,7 +392,7 @@ export default function JobVersionHistoryPanel({
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
       <div className="flex items-center gap-2 mb-2.5">
         <FileText className="w-4 h-4 text-brand-blue" />
-        <p className="tf-cell-name">Version History</p>
+        <p className="tf-row-title">Version History</p>
       </div>
       {loading && !versions ? (
         <div className="flex items-center gap-2 py-2 tf-meta">
@@ -411,65 +411,64 @@ export default function JobVersionHistoryPanel({
            away. The brand-tinted border marks this as the ACTIVE version table
            — it only exists while View Versions is open. */
         <>
-        {/* Phones: one card per version instead of the 640–960px table, which
-            at phone width showed a sliver of itself and had to be scrolled
-            sideways to read a row. Same values (rowModels), same radio, same
-            actions; from sm up the table below is unchanged. */}
+        {/* Phones + tablets: one compact card per version instead of the
+            640-960px table. Header line (select, vN, Latest, status, actions),
+            the title, then every value under its own small label in an aligned
+            grid: 2 columns on phones, 3 from sm, 4 from md. Same values
+            (rowModels), same radio / checkbox / actions as the table. */}
         <div
-          className={`sm:hidden rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 divide-y divide-gray-200 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:divide-slate-700 ${
-            jobVersions.length > 3 ? 'overflow-y-auto max-h-[360px] overscroll-contain' : ''
+          className={`lg:hidden tf-ver-list ${
+            jobVersions.length > 3 ? 'overflow-y-auto max-h-[420px] overscroll-contain' : ''
           }`}
         >
           {rowModels.map(({ isChecked, version, isLatest, versionStatus, versionStatusConfig, versionJob, detail, experienceText, postedOn, lastUpdated, locationText, isSelected, selectable, notSelectableReason }) => {
             const scoredInfo = versionScoredBy ? versionScoredBy[version.id] : undefined;
             const scoredLoaded = !!versionScoredBy && Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
-            /* Every value under a NAME — "Experience 2-4 years", not a bare
-               "2-4 years" — so a card reads without the table's headings. A
-               missing value says "Not specified" rather than dropping the row,
-               so every card has the same rows in the same order. */
-            const notSet = <span className="text-gray-400 dark:text-slate-500 italic">Not specified</span>;
+            const dash = <span className="text-gray-400 dark:text-slate-500">—</span>;
             const jobType = [detail?.employment_type, detail?.remote_type]
               .filter(Boolean)
               .map((t) => formatEmploymentType(t as string))
               .join(' · ');
-            const details: [string, ReactNode][] = [
+            /* [label, value, full row?] */
+            const details: [string, ReactNode, boolean?][] = [
               ...(hideJdDetails ? [] : [
-                ['Experience', experienceText || notSet],
-                ['Industry', detail?.industry_type ? formatIndustryType(detail.industry_type) : notSet],
-                ['Location', locationText || notSet],
-                ['Job type', jobType || notSet],
-                ['Posted on', postedOn ? formatISTDate(postedOn) : notSet],
-                ['Posted by', detail?.created_by_name || notSet],
-                ['Last updated', lastUpdated ? formatISTDate(lastUpdated) : notSet],
+                ['Experience', experienceText || dash],
+                ['Industry', detail?.industry_type ? formatIndustryType(detail.industry_type) : dash],
+                ['Location', locationText || dash],
+                ['Job type', jobType || dash],
+                ['Posted on', postedOn ? formatISTDate(postedOn) : dash],
+                ['Posted by', detail?.created_by_name || dash],
+                ['Last updated', lastUpdated ? formatISTDate(lastUpdated) : dash],
               ] as [string, ReactNode][]),
-              ...(versionScoredBy ? [[
-                'Scored by',
-                scoredInfo
-                  ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
-                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
-              ] as [string, ReactNode]] : []),
               [applicantsLabel, (
                 <span className="inline-flex items-center gap-1">
                   <Users className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
                   {versionApplicants[version.id] ?? '—'}
                 </span>
               )],
+              ...(versionScoredBy ? [[
+                'Scored by',
+                scoredInfo
+                  ? `${scoredInfo.name}, ${formatIST(scoredInfo.scoredAt)}`
+                  : <span className="text-gray-400 dark:text-slate-500 italic">{scoredLoaded ? 'Not scored yet' : '—'}</span>,
+                true,
+              ] as [string, ReactNode, boolean]] : []),
               ...extraColumns.map(({ label, render }) => [label, render(versionJob)] as [string, ReactNode]),
             ];
+            const titleText = version.title || detail?.title || '—';
             return (
               <div
                 key={version.id}
-                className={`p-3 text-xs text-gray-600 dark:text-slate-400 ${
-                  isSelected
-                    ? 'bg-brand-blue/[0.07] dark:bg-brand-blue/[0.14]'
-                    : isLatest
-                      ? 'bg-brand-blue/[0.025] dark:bg-brand-blue/[0.06]'
-                      : ''
-                } ${onRowClick ? 'cursor-pointer' : ''}`}
+                role={onRowClick ? 'button' : undefined}
+                tabIndex={onRowClick ? 0 : undefined}
                 onClick={onRowClick ? () => onRowClick(version.id) : undefined}
+                onKeyDown={onRowClick ? (e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onRowClick(version.id); }
+                } : undefined}
+                className={`tf-ver-card ${isSelected ? 'tf-ver-card-selected' : isLatest ? 'tf-ver-card-latest' : ''} ${onRowClick ? 'cursor-pointer' : ''}`}
               >
-                {/* Line 1: pick · version · status — actions on the right. */}
-                <div className="flex items-center gap-2">
+                <div className="tf-ver-card-top">
                   {onSelectVersion && (
                     <label
                       className={`flex items-center flex-shrink-0 ${selectable ? 'cursor-pointer' : 'cursor-not-allowed opacity-50'}`}
@@ -489,53 +488,44 @@ export default function JobVersionHistoryPanel({
                     </label>
                   )}
                   {renderVersionCheckbox(versionJob, isChecked)}
-                  <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
-                    <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                      v{version.version_number ?? 1}
+                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                    v{version.version_number ?? 1}
+                  </span>
+                  {isLatest && (
+                    <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                      Latest
                     </span>
-                    {isLatest && (
-                      <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
-                        Latest
-                      </span>
-                    )}
-                    {!hideJdDetails && (
-                      <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
-                        {versionStatus}
-                      </span>
-                    )}
-                  </div>
+                  )}
+                  {!hideJdDetails && (
+                    <span className={`inline-flex min-w-0 items-center gap-1 px-2 py-0.5 rounded-full text-xs whitespace-nowrap ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
+                      <span className={`tf-ver-dot w-1.5 h-1.5 flex-shrink-0 rounded-full ${versionStatusConfig.dot}`} />
+                      <span className="truncate">{versionStatus}</span>
+                    </span>
+                  )}
                   {renderAction && (
-                    <div className="flex items-center gap-1 flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                    <div className="tf-ver-card-actions" onClick={(e) => e.stopPropagation()}>
                       {renderAction(versionJob)}
                     </div>
                   )}
                 </div>
-
-                {/* Line 2: the role, in full (two lines at most). */}
-                {plainTitle ? (
-                  <p className="mt-1.5 text-sm text-gray-900 dark:text-slate-100 line-clamp-2 [overflow-wrap:anywhere]" title={version.title || detail?.title || ''}>
-                    {version.title || detail?.title || '—'}
-                  </p>
-                ) : (
-                  <Link
-                    href={versionHref(version.id)}
-                    target={openInNewTab ? '_blank' : undefined}
-                    rel={openInNewTab ? 'noopener noreferrer' : undefined}
-                    onClick={(e) => e.stopPropagation()}
-                    className="mt-1.5 block text-sm text-gray-900 dark:text-slate-100 line-clamp-2 [overflow-wrap:anywhere] hover:text-brand-blue hover:underline"
-                  >
-                    {version.title || detail?.title || '—'}
-                  </Link>
-                )}
-
-                {/* Then the details as label / value rows — the name in a
-                    muted left column, the value beside it. */}
-                <dl className="mt-2 pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1">
-                  {details.map(([label, value]) => (
-                    <div key={label} className="contents">
-                      <dt className="text-gray-500 dark:text-slate-400">{label}</dt>
-                      <dd className="text-gray-800 dark:text-slate-200 font-medium min-w-0 [overflow-wrap:anywhere]">{value}</dd>
+                <div className="tf-ver-card-title" title={titleText}>
+                  {plainTitle ? titleText : (
+                    <Link
+                      href={versionHref(version.id)}
+                      target={openInNewTab ? '_blank' : undefined}
+                      rel={openInNewTab ? 'noopener noreferrer' : undefined}
+                      onClick={(e) => e.stopPropagation()}
+                      className="hover:text-brand-blue hover:underline"
+                    >
+                      {titleText}
+                    </Link>
+                  )}
+                </div>
+                <dl className="tf-ver-card-grid">
+                  {details.map(([label, value, wide]) => (
+                    <div key={label} className={`tf-ver-card-field ${wide ? 'tf-ver-card-field-wide' : ''}`}>
+                      <dt className="tf-ver-card-label">{label}</dt>
+                      <dd className="tf-ver-card-value">{value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -544,7 +534,7 @@ export default function JobVersionHistoryPanel({
           })}
         </div>
         <div
-          className={`max-sm:hidden overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
+          className={`max-lg:hidden overflow-x-auto rounded-lg border border-brand-blue/50 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-900 dark:border-brand-blue/40 dark:ring-brand-blue/25 dark:shadow-black/20 ${
             jobVersions.length > 3 ? 'overflow-y-auto max-h-[240px] overscroll-contain' : ''
           }`}
         >
@@ -678,7 +668,7 @@ export default function JobVersionHistoryPanel({
                       </span>
                     </td>
                     <td
-                      className="p-0 text-sm text-gray-900 dark:text-slate-100 max-w-[220px] overflow-hidden align-middle"
+                      className="p-0 tf-body max-w-[220px] overflow-hidden align-middle"
                       title={version.title || detail?.title || ''}
                     >
                       {/* The job role pops on row hover — a gentle scale from
@@ -714,7 +704,7 @@ export default function JobVersionHistoryPanel({
                     </td>
                     {/* Status is JD detail too — dropped under hideJdDetails. */}
                     {!hideJdDetails && (
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className="tf-td whitespace-nowrap">
                       <div className="flex flex-col items-start gap-1">
                         <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs ${versionStatusConfig.bg} ${versionStatusConfig.text} border ${versionStatusConfig.border}`}>
                           <span className={`w-1.5 h-1.5 rounded-full ${versionStatusConfig.dot}`} />
@@ -741,7 +731,7 @@ export default function JobVersionHistoryPanel({
                         space-saving treatment as Posted On / By below.
                         Industry runs through the same formatter as the job rows
                         so it never shows the raw snake_case value. */}
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className="tf-td whitespace-nowrap">
                       <div className="tf-body">
                         {experienceText || '—'}
                       </div>
@@ -755,7 +745,7 @@ export default function JobVersionHistoryPanel({
                     {/* Location — this version's own record; single field
                         first, else the cities from the locations list. */}
                     <td
-                      className="py-2.5 px-3 tf-td whitespace-nowrap max-w-[160px] truncate align-middle"
+                      className="tf-td tf-body whitespace-nowrap max-w-[160px] truncate"
                       title={locationText || ''}
                     >
                       {locationText || '—'}
@@ -763,7 +753,7 @@ export default function JobVersionHistoryPanel({
                     {/* Work Mode / Type — stacked: employment type over remote
                         mode, from this version's own record. A missing half
                         simply drops out; nothing is invented. */}
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className="tf-td whitespace-nowrap">
                       <div className="tf-body">
                         {detail?.employment_type ? formatEmploymentType(detail.employment_type) : '—'}
                       </div>
@@ -775,7 +765,7 @@ export default function JobVersionHistoryPanel({
                     </td>
                     {/* Posted On / By — one column, date over author, so the
                         table stays narrower without dropping either fact. */}
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className="tf-td whitespace-nowrap">
                       <div className="tf-body">
                         {postedOn ? formatISTDate(postedOn) : '—'}
                       </div>
@@ -783,7 +773,7 @@ export default function JobVersionHistoryPanel({
                         {detail?.created_by_name || '—'}
                       </div>
                     </td>
-                    <td className="py-2.5 px-3 tf-td whitespace-nowrap align-middle">
+                    <td className="tf-td tf-body whitespace-nowrap">
                       {lastUpdated ? formatISTDate(lastUpdated) : '—'}
                     </td>
                     </>)}
@@ -794,7 +784,7 @@ export default function JobVersionHistoryPanel({
                       const scoredByLoaded = Object.prototype.hasOwnProperty.call(versionScoredBy, version.id);
                       const info = versionScoredBy[version.id];
                       return (
-                        <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                        <td className="tf-td whitespace-nowrap">
                           {info ? (
                             <div className="tf-body">
                               <div className="truncate max-w-[170px]" title={info.name}>
@@ -805,14 +795,14 @@ export default function JobVersionHistoryPanel({
                               </div>
                             </div>
                           ) : (
-                            <span className="text-sm text-gray-400 dark:text-slate-500">
+                            <span className="tf-body-muted">
                               {scoredByLoaded ? 'Not scored yet' : '—'}
                             </span>
                           )}
                         </td>
                       );
                     })()}
-                    <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                    <td className="tf-td whitespace-nowrap">
                       <span className="inline-flex items-center gap-1.5 tf-body">
                         <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                         {/* Resumes scored against this version. Dash only while
@@ -822,7 +812,7 @@ export default function JobVersionHistoryPanel({
                       </span>
                     </td>
                     {extraColumns.map(({ label, render }) => (
-                      <td key={label} className="py-2.5 px-3 whitespace-nowrap align-middle">
+                      <td key={label} className="tf-td whitespace-nowrap">
                         {render(versionJob)}
                       </td>
                     ))}
@@ -833,7 +823,7 @@ export default function JobVersionHistoryPanel({
                          content sliding underneath never shows through; the
                          left hairline makes it read as floating over the
                          scrolling cells. */
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-[var(--raw-eff3f9)] shadow-[-1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_var(--raw-334155)]">
+                      <td className="tf-td whitespace-nowrap sticky right-0 z-[5] bg-[var(--raw-eff3f9)] shadow-[-1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_var(--raw-334155)]">
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           {renderAction(versionJob)}
                         </div>

@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
  *
  * Used by the Job Details Assessment Result and AI Interview Result tabs.
  * Mounted only while open, so each opening starts from `initialColumnIds`.
+ * With no `columns` (a file that is not a table — the AI interview chat
+ * transcript) it is just the format cards: no column count, no Columns box.
  */
 
 export interface ExportFormatOption<F extends string> {
@@ -33,10 +35,12 @@ export interface ExportColumnsModalProps<F extends string> {
   formats: ExportFormatOption<F>[];
   format: F;
   onFormatChange: (format: F) => void;
-  /** Every column this table can export, in export order. */
-  columns: { id: string; label: string }[];
+  /** Every column this table can export, in export order. Omitted: no column picking. */
+  columns?: { id: string; label: string }[];
   /** The columns ticked when the popup opens (the table's Customize Columns). */
-  initialColumnIds: string[];
+  initialColumnIds?: string[];
+  /** What `recordCount` counts, singular / plural. Default record / records. */
+  recordNoun?: [string, string];
   exporting?: boolean;
   onExport: (columnIds: string[]) => void;
   onClose: () => void;
@@ -48,14 +52,16 @@ export default function ExportColumnsModal<F extends string>({
   formats,
   format,
   onFormatChange,
-  columns,
-  initialColumnIds,
+  columns = [],
+  initialColumnIds = [],
+  recordNoun = ['record', 'records'],
   exporting = false,
   onExport,
   onClose,
 }: ExportColumnsModalProps<F>) {
   const [picked, setPicked] = useState<Set<string>>(() => new Set(initialColumnIds));
 
+  const hasColumns = columns.length > 0;
   const exportColumnIds = columns.filter(col => picked.has(col.id)).map(col => col.id);
   const allExportColumnsOn = columns.every(col => picked.has(col.id));
   const toggleExportColumn = (id: string) =>
@@ -81,15 +87,15 @@ export default function ExportColumnsModal<F extends string>({
               <FileDown className="w-5 h-5 text-blue-600" />
             </div>
             <div className="min-w-0">
-              <h3 id="export-columns-title" className="text-lg font-bold text-gray-900">{title}</h3>
+              <h3 id="export-columns-title" className="tf-section-title">{title}</h3>
               <p className="tf-body-muted mt-1 flex flex-wrap items-center gap-1.5">
                 {recordCount != null && (
                   <>
-                    {recordCount} {recordCount === 1 ? 'record' : 'records'}
-                    <span className="w-1 h-1 rounded-full bg-blue-500" />
+                    {recordCount} {recordCount === 1 ? recordNoun[0] : recordNoun[1]}
+                    {hasColumns && <span className="w-1 h-1 rounded-full bg-blue-500" />}
                   </>
                 )}
-                {exportColumnIds.length} columns
+                {hasColumns && `${exportColumnIds.length} columns`}
               </p>
             </div>
           </div>
@@ -130,6 +136,7 @@ export default function ExportColumnsModal<F extends string>({
 
           {/* Columns included — picked here, per export; the file's header
               row is these names, in this order. */}
+          {hasColumns && (
           <div className="mt-4 p-4 bg-blue-50/60 rounded-xl">
             <div className="flex items-center justify-between gap-3 mb-3">
               <span className="flex items-center gap-2 text-sm font-bold text-blue-700">
@@ -144,14 +151,14 @@ export default function ExportColumnsModal<F extends string>({
                 {allExportColumnsOn ? 'Clear all' : 'Select all'}
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2">
+            <div className="tf-grid-2">
               {columns.map(col => (
                 <label key={col.id} className="flex items-center gap-2 tf-body cursor-pointer min-w-0">
                   <input
                     type="checkbox"
                     checked={picked.has(col.id)}
                     onChange={() => toggleExportColumn(col.id)}
-                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 shrink-0"
+                    className="tf-checkbox focus:ring-blue-500"
                   />
                   <span className="truncate" title={col.label}>{col.label}</span>
                 </label>
@@ -161,6 +168,7 @@ export default function ExportColumnsModal<F extends string>({
               <p className="mt-2 text-xs text-red-600">Select at least one column to export.</p>
             )}
           </div>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
@@ -169,7 +177,7 @@ export default function ExportColumnsModal<F extends string>({
             variant="primary"
             size="md"
             onClick={() => onExport(exportColumnIds)}
-            disabled={exporting || exportColumnIds.length === 0 || recordCount === 0}
+            disabled={exporting || (hasColumns && exportColumnIds.length === 0) || recordCount === 0}
             icon={exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           >
             Export

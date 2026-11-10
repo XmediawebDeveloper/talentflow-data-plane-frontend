@@ -1,9 +1,11 @@
 'use client';
 
 import Image from 'next/image';
+import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import JobIdBadge, { JOB_HEADLINE_ROW, JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import { ArrowUpDown, Sparkles, BarChart3, Search, SlidersHorizontal, Briefcase, ChevronDown, ChevronRight, Mail, Phone, MapPin, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Calendar, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown, CheckSquare, MinusSquare, Square, MinusCircle, ChevronsDownUp, ChevronsUpDown, Plus } from 'lucide-react';
+import { MobileRecordList, MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import { exportData, type ExportColumn } from '@/lib/utils/exportUtils';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
@@ -18,7 +20,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { SelectAllMenu, SortByControl } from '@/components/ui/select-all-menu';
+import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
@@ -28,7 +30,6 @@ import ScoredResumesTable, { renderInviteTargetItems, resolveInviteTargetState, 
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
-import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { isInvitableAssessment } from '@/lib/hooks/useJobInviteTargets';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import {
@@ -50,7 +51,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import NameAvatar from '@/components/ui/name-avatar';
 import ListPagination from './ListPagination';
-import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
+import { aiMatchService, MatchedCandidate, AIMatchSessionResponse, type AIMatchJobItem, type AIMatchStats, type AIMatchCandidateItem } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -63,6 +64,7 @@ import type { Resume } from '@/lib/types/types';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
+import { TeamMemberEmailBadge } from '@/components/ui/team-member-badge';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
@@ -83,6 +85,9 @@ import { DateField } from '@/components/ui/date-field';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -160,6 +165,28 @@ const JOB_SORT_OPTIONS: { value: JobSortKey; label: string }[] = [
   { value: 'no_match', label: 'Rating Below 7' },
 ];
 const isJobSortKey = (v: unknown): v is JobSortKey => JOB_SORT_OPTIONS.some(o => o.value === v);
+/** The two orders of a job-list sort, worded for the field (the phone Sort menu). */
+const jobSortOrderLabels = (field: JobSortKey): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'title' || field === 'jdId'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
+/* View by Candidates' Sort by — one list for the inline control and the phone Sort menu. */
+const CANDIDATE_SORT_OPTIONS: { value: CandidateSortKey; label: string }[] = [
+  { value: 'jobs', label: 'Matched Jobs' },
+  { value: 'score', label: 'Best Match' },
+  { value: 'name', label: 'Candidate Name' },
+  { value: 'scored', label: 'Scored' },
+  { value: 'titles', label: 'Job Titles' },
+  { value: 'date', label: 'Last Matched' },
+];
+const candidateSortOrderLabels = (field: CandidateSortKey): { desc: string; asc: string } =>
+  field === 'date'
+    ? { desc: 'Newest first', asc: 'Oldest first' }
+    : field === 'name' || field === 'titles'
+      ? { desc: 'Z → A', asc: 'A → Z' }
+      : { desc: 'Highest first', asc: 'Lowest first' };
 
 /* Same labels as Resume Scoring's filters: 'full_time' → "Full Time",
    and work mode mapped so "onsite" reads "On-site". */
@@ -180,6 +207,11 @@ interface MatchInviteRow {
   phone?: string;
   title?: string;
   resumeId?: string;
+  /** An archived resume can't be invited to anything until it's unarchived. */
+  isArchived?: boolean;
+  /** An existing team member's resume can't be invited to anything — same
+   *  lockout Resume Database enforces. */
+  isTenantUserEmail?: boolean;
 }
 
 /* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
@@ -187,7 +219,7 @@ interface MatchInviteRow {
 function MatchTableSkeleton({ cols, rows = 6 }: { cols: string[]; rows?: number }) {
   const gridStyle = { gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` };
   return (
-    <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 overflow-hidden">
+    <div className="tf-panel overflow-hidden">
       <div className="overflow-x-auto">
         {/* Header */}
         <div
@@ -388,6 +420,80 @@ interface CandidateMatchRow {
   jobs: Array<{ historyId: string; jobId: string; jobTitle: string; score: number; matchedAt: Date; matchedByName?: string; resumeVersion?: number; resumeId?: string; candidateId?: string }>;
 }
 
+/** A session this visit has seen: a matched-jobs row, or a candidate's job entry. */
+type KnownSession = AIMatchSessionResponse & { job_title?: string; fromJobPage?: boolean };
+
+/** A session (job row) as the history item every handler here works with. */
+function toHistoryItem(
+  s: Pick<KnownSession, 'id' | 'jd_id' | 'job_title' | 'jd_title' | 'search_query' | 'created_at' | 'total_matches' | 'run_by_name'>,
+): MatchHistory {
+  return {
+    id: s.id,
+    jobId: s.jd_id || '',
+    jobTitle: s.job_title || s.jd_title || s.search_query || 'Unknown Job',
+    matchedAt: new Date(s.created_at),
+    totalMatches: s.total_matches || 0,
+    matchedCandidates: [],
+    matchedByName: s.run_by_name || undefined,
+  };
+}
+
+/** A JD record (GET /jd shape, attached to each matched-jobs row) as this page's Job —
+ *  the same mapping the route uses for its own JD list. */
+function jdRecordToJob(jd: Record<string, any>): Job {
+  const mapped = mapJDToJob(jd as any);
+  return {
+    id: mapped.id,
+    title: mapped.title,
+    department: mapped.department,
+    location: mapped.location || '',
+    status: mapped.status,
+    applicants: mapped.applicants ?? 0,
+    employmentType: mapped.employmentType,
+    experience: mapped.experience,
+    jobId: mapped.job_id,
+    currentVersion: mapped.versionNumber ?? mapped.currentVersion,
+    publishCount: mapped.currentVersion,
+    industryType: mapped.industry_type,
+    remoteType: mapped.workMode,
+    postedBy: mapped.postedBy,
+    postedDate: mapped.postedDate,
+    creationMethod: mapped.creation_method,
+    salaryMin: mapped.salary_min,
+    salaryMax: mapped.salary_max,
+    salaryCurrency: mapped.salary_currency,
+    compensationType: mapped.compensation_type,
+  };
+}
+
+/** A server roll-up row (GET /ai-match/candidates) as the table's row. */
+function toCandidateRow(item: AIMatchCandidateItem): CandidateMatchRow {
+  const best = aiMatchService.toMatchedCandidate(item.best || ({} as any)) as MatchedCandidateWithVersions;
+  return {
+    key: item.key,
+    name: item.name || best.name,
+    title: item.title || best.title,
+    email: item.email || best.email,
+    phone: item.phone || best.phone,
+    location: item.location || best.location,
+    experience: best.experience,
+    resumeId: item.resume_id || best.resumeId,
+    bestScore: item.best_score,
+    best,
+    jobs: item.jobs.map(j => ({
+      historyId: j.history_id,
+      jobId: j.jd_id || '',
+      jobTitle: j.job_title,
+      score: j.score,
+      matchedAt: new Date(j.matched_at || 0),
+      matchedByName: j.matched_by_name || undefined,
+      resumeVersion: j.resume_version ?? undefined,
+      resumeId: j.resume_id || undefined,
+      candidateId: j.candidate_id,
+    })),
+  };
+}
+
 /** True only for the first call in a document that was loaded by a browser
  *  refresh — see the view restore in `useListStatePersistence` below. */
 let reloadChecked = false;
@@ -426,6 +532,10 @@ interface AITalentMatchPageProps {
    *  Versions" can paint instantly from data already in memory instead of
    *  re-fetching per version. See `getOptimisticAIMatchVersions`. */
   allMatchSessions?: AIMatchSessionResponse[];
+  /** False until the route's lazy JD list (Run AI Match picker) has loaded. */
+  jobsLoaded?: boolean;
+  /** Ask the route to load that JD list — only the Run / deep-link paths need it. */
+  onRequestJobs?: () => void;
   onSaveMatch?: (data: MatchHistory) => void;
   /** Background reconciliation after a match completes — see the route's own
    *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
@@ -435,12 +545,9 @@ interface AITalentMatchPageProps {
 }
 
 export default function AITalentMatchPage({
-  jobs,
-  matchHistory = [],
-  matchSessionCounts = {},
-  ratingBandCounts = null,
-  totalMatchedCandidatesCount = null,
-  allMatchSessions = [],
+  jobs: jobsProp,
+  jobsLoaded = true,
+  onRequestJobs,
   onSaveMatch,
   onMatchComplete,
   onSubmitToScoring,
@@ -479,6 +586,8 @@ export default function AITalentMatchPage({
     "You do not have permission to invite to an assessment from AI Talent Match (needs 'Invite to Assessment' under AI Talent Match and 'Invite Candidates' under Assessment)";
   const AI_INTERVIEW_INVITE_DENIED =
     "You do not have permission to invite to an AI interview from AI Talent Match (needs 'Invite to AI Interview' under AI Talent Match and 'Invite Candidates' under AI Interview)";
+  const ARCHIVED_ACTION_MESSAGE = 'This resume is archived — unarchive it first to use this action';
+  const TEAM_MEMBER_ACTION_MESSAGE = 'This email belongs to an existing team member. It cannot be used for any action.';
 
 
   /* 'details' used to be its own viewMode (the "Match Details" page) — it and
@@ -686,163 +795,11 @@ export default function AITalentMatchPage({
     await buildCandidateRows();
   };
 
-  // The roll-up itself, split out from the click handler so a restored
-  // 'candidates' view can rebuild its rows once match history has loaded —
-  // otherwise returning from a resume landed on an empty candidates table.
-  const buildCandidateRows = async ({ silent = false }: { silent?: boolean } = {}) => {
-    if (matchHistory.length === 0) {
-      setCandidateRows([]);
-      return;
-    }
-
-    setLoadingCandidateRows(true);
-    // Scored status spans every JD, so the per-JD `scoredResumeIds` set can't
-    // answer it — pull the tenant-wide scored list. Started alongside the
-    // session fetches (it used to run only after them, one page at a time),
-    // so the roll-up waits on the slower of the two rather than their sum.
-    const scoredIdsRequest = loadAllScoredResumeIds();
-    try {
-      // Every uncached session in ONE batch request (chunks of 200) — one
-      // GET /sessions/{id} per session was ~100 parallel requests that queued
-      // behind the browser's connection limit and stalled the whole page.
-      const uncached = matchHistory.filter(item => !historyCandidatesById[item.id] && item.totalMatches > 0);
-      const batched = new Map<string, MatchedCandidateWithVersions[]>();
-      if (uncached.length > 0) {
-        try {
-          const ids = uncached.map(item => item.id);
-          const chunks: string[][] = [];
-          for (let i = 0; i < ids.length; i += 200) chunks.push(ids.slice(i, i + 200));
-          const maps = await Promise.all(chunks.map(chunk => aiMatchService.getSessionsBatch(chunk)));
-          for (const map of maps) {
-            for (const [id, { candidates }] of map) batched.set(id, candidates as MatchedCandidateWithVersions[]);
-          }
-          if (batched.size > 0) {
-            setHistoryCandidatesById(prev => ({ ...prev, ...Object.fromEntries(batched) }));
-          }
-        } catch (error) {
-          // Older backend without the batch route: fall back to per-session below.
-          console.warn('[AITalentMatch] Session batch failed, falling back to per-session fetch:', error);
-        }
-      }
-      const perJob = await Promise.all(
-        matchHistory.map(async (item) => ({
-          item,
-          candidates: batched.get(item.id) ?? await loadHistoryCandidates(item, { silent }),
-        }))
-      );
-
-      const byKey = new Map<string, CandidateMatchRow>();
-      for (const { item, candidates } of perJob) {
-        for (const candidate of candidates || []) {
-          // Same key Resume Scoring's "View by Candidates" groups by — email
-          // first, so the same person collapses into one row even when a
-          // different job's match run scored a re-uploaded resume with a new
-          // resumeId. Keying on resumeId first (as this used to) meant two
-          // matches for the same person rarely shared a key, so this roll-up
-          // never actually collapsed anything and looked identical to the
-          // flat "All Resumes" list.
-          const key = (candidate.email || candidate.name || candidate.resumeId || '').trim().toLowerCase();
-          if (!key) continue;
-          const jobEntry = {
-            historyId: item.id,
-            jobId: item.jobId,
-            jobTitle: item.jobTitle,
-            score: candidate.matchScore ?? 0,
-            matchedAt: item.matchedAt,
-            // Who ran THAT match (the session's `run_by_name`), so the
-            // expanded per-job rows name a person instead of "System".
-            matchedByName: item.matchedByName,
-            // Same field ScoredResumesTable's own "Resume Version" column
-            // reads — this candidate's resume as of THIS match, not
-            // necessarily the resume's current version if it was re-uploaded
-            // since.
-            resumeVersion: candidate.resumeVersion,
-            resumeId: candidate.resumeId,
-            // The match record's own id — keys this row for an invite.
-            candidateId: candidate.id,
-          };
-          const existing = byKey.get(key);
-          if (existing) {
-            existing.jobs.push(jobEntry);
-            // The strongest match owns the row's detail columns — including
-            // resumeId, now that a row can span more than one resumeId (the
-            // same person re-uploaded/re-scored under different job runs).
-            if (jobEntry.score > existing.bestScore) {
-              existing.bestScore = jobEntry.score;
-              existing.best = candidate;
-              existing.resumeId = candidate.resumeId;
-            }
-          } else {
-            byKey.set(key, {
-              key,
-              name: candidate.name,
-              title: candidate.title,
-              email: candidate.email,
-              phone: candidate.phone,
-              location: candidate.location,
-              experience: candidate.experience,
-              resumeId: candidate.resumeId,
-              bestScore: jobEntry.score,
-              best: candidate,
-              jobs: [jobEntry],
-            });
-          }
-        }
-      }
-
-      // Most-matched first, then strongest match.
-      setCandidateRows(
-        [...byKey.values()].sort((a, b) => b.jobs.length - a.jobs.length || b.bestScore - a.bestScore)
-      );
-
-      const scored = await scoredIdsRequest;
-      setAllScoredResumeIds(scored.ids);
-      setScoredResumeIdsByJd(scored.byJd);
-    } finally {
-      setLoadingCandidateRows(false);
-    }
-  };
-
-  /** Every scored resume id in the tenant. Page 1 gives the total; the
-   *  remaining pages are fetched in parallel. Never rejects — an empty set just
-   *  shows every row as "Not Scored". */
-  const loadAllScoredResumeIds = async (): Promise<{ ids: Set<string>; byJd: Map<string, Map<string, string>> }> => {
-    const PAGE_SIZE = 100;
-    const ids = new Set<string>();
-    // Also per JD (version) id: resume id → its latest score id. "Scored for
-    // THIS job" — the View by Job rows' "N of M scored" chip, Scored Status
-    // column and View Scorecard read it.
-    const byJd = new Map<string, Map<string, string>>();
-    const latestAt = new Map<string, number>();
-    const collect = (items: Array<{ id?: string; resume_id?: string; jd_id?: string; created_at?: string }> = []) =>
-      items.forEach(item => {
-        if (!item.resume_id) return;
-        ids.add(item.resume_id);
-        if (item.jd_id && item.id) {
-          const at = new Date(item.created_at || 0).getTime() || 0;
-          const k = `${item.jd_id}::${item.resume_id}`;
-          if (latestAt.has(k) && (latestAt.get(k) ?? 0) >= at) return;
-          latestAt.set(k, at);
-          const map = byJd.get(item.jd_id) ?? new Map<string, string>();
-          map.set(item.resume_id, item.id);
-          byJd.set(item.jd_id, map);
-        }
-      });
-    try {
-      const first = await scoringService.getAllScoredResumes({ page: 1, page_size: PAGE_SIZE });
-      collect(first.items);
-      const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
-      const rest = await Promise.all(
-        Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
-          scoringService.getAllScoredResumes({ page: i + 2, page_size: PAGE_SIZE }))
-      );
-      rest.forEach(response => collect(response.items));
-    } catch (error) {
-      console.error('[AITalentMatch] Failed to load scored resumes for candidate roll-up:', error);
-      return { ids: new Set(), byJd: new Map() };
-    }
-    return { ids, byJd };
-  };
+  // The roll-up is server-paged (GET /ai-match/candidates via usePagedList
+  // below), and that query runs by itself whenever the view is open — so the
+  // old "build" step is a no-op kept for its call sites.
+  const candListRefreshRef = useRef<(() => void) | null>(null);
+  const buildCandidateRows = async (_opts: { silent?: boolean } = {}) => { /* see candList */ };
 
   // Helper to update URL params - use shallow routing to prevent full page reload
   const updateUrlParams = (params: { jdId?: string; view?: string }, options?: { replace?: boolean }) => {
@@ -912,37 +869,10 @@ export default function AITalentMatchPage({
   // View by Job's List / Grid switch (Resume Scoring's).
   const [jobListDisplayMode, setJobListDisplayMode] = useState<ListDisplayMode>('list');
   const [historySortOrder, setHistorySortOrder] = useState<'asc' | 'desc'>('desc');
-  // Phone / location / experience filter the candidates inside each match, so
-  // they only work once those candidates are loaded (see the effect below).
-  const hasCandidateLevelFilters =
-    historyFilterPhone !== '' ||
-    historyFilterLocation !== '' ||
-    historyFilterExpMin !== '' ||
-    historyFilterExpMax !== '';
-  const [resolvingHistoryCandidates, setResolvingHistoryCandidates] = useState(false);
-
-  // Candidate-level filters need every session's candidates, which load lazily
-  // per session. Pull them in when such a filter is switched on, so the filter
-  // applies to the whole list instead of only the sessions already opened.
-  useEffect(() => {
-    if (!hasCandidateLevelFilters || matchHistory.length === 0) return;
-    let cancelled = false;
-
-    const resolveAll = async () => {
-      const pending = matchHistory.filter(item => !historyCandidatesById[item.id]);
-      if (pending.length === 0) return;
-      setResolvingHistoryCandidates(true);
-      try {
-        await Promise.all(pending.map(item => loadHistoryCandidates(item)));
-      } finally {
-        if (!cancelled) setResolvingHistoryCandidates(false);
-      }
-    };
-
-    resolveAll();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasCandidateLevelFilters, matchHistory]);
+  // Phone / location / experience filter the candidates inside each match —
+  // applied server-side (GET /ai-match/jobs: a job stays when ANY of its
+  // candidates matches), so nothing has to be loaded first.
+  const resolvingHistoryCandidates = false;
 
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
@@ -1071,8 +1001,7 @@ export default function AITalentMatchPage({
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
-  const [candidateRows, setCandidateRows] = useState<CandidateMatchRow[]>([]);
-  const [loadingCandidateRows, setLoadingCandidateRows] = useState(false);
+  // candidateRows / loadingCandidateRows: derived from the paged candidates query below.
 
   // Rows whose job chips are expanded past the single-line "+N more" cutoff.
   const [expandedJobChips, setExpandedJobChips] = useState<Set<string>>(new Set());
@@ -1166,8 +1095,283 @@ export default function AITalentMatchPage({
     setResumeCurrentPage(1);
   }, [candidateSortBy, candidateSortOrder]);
 
+  /* ==== Server-paged landing ===============================================
+     Two calls on landing, in parallel (usePagedList):
+       GET /ai-match/stats?<job filters>          -> the cards + pill counts
+       GET /ai-match/jobs?page&page_size&sort...  -> ONE page of matched jobs
+     The server builds both from one filter function, so the Matched Jobs card
+     equals the list's total. The candidates view is its own paged query
+     (GET /ai-match/candidates) and only runs while that view is open.
+     Nothing downloads every session, every session's candidates or the
+     tenant's whole /scoring/all list any more. */
+  const debouncedHistoryPhone = useDebounce(historyFilterPhone, 300);
+  const debouncedHistoryLocation = useDebounce(historyFilterLocation, 300);
+  const jobsQuery = useMemo(() => ({
+    page: historyCurrentPage,
+    page_size: historyItemsPerPage,
+    sort_by: historySortBy as string,
+    sort_dir: historySortOrder,
+    search: historySearchQuery.trim() || undefined,
+    date_from: historyDateFrom || undefined,
+    date_to: historyDateTo || undefined,
+    min_matches: historyFilterMinMatches === '' ? undefined : historyFilterMinMatches,
+    job_location: historyJobLocation || undefined,
+    industry: historyIndustry || undefined,
+    matched_by: historyMatchedBy || undefined,
+    work_mode: historyWorkMode || undefined,
+    job_type: historyJobType || undefined,
+    cand_phone: debouncedHistoryPhone.trim() || undefined,
+    cand_location: debouncedHistoryLocation.trim() || undefined,
+    exp_min: historyFilterExpMin === '' ? undefined : historyFilterExpMin,
+    exp_max: historyFilterExpMax === '' ? undefined : historyFilterExpMax,
+    band: candidateRatingBand ?? undefined,
+  }), [
+    historyCurrentPage, historyItemsPerPage, historySortBy, historySortOrder, historySearchQuery,
+    historyDateFrom, historyDateTo, historyFilterMinMatches, historyJobLocation, historyIndustry,
+    historyMatchedBy, historyWorkMode, historyJobType, debouncedHistoryPhone, debouncedHistoryLocation,
+    historyFilterExpMin, historyFilterExpMax, candidateRatingBand,
+  ]);
+  const jobsList = usePagedList<AIMatchJobItem, AIMatchStats, typeof jobsQuery>({
+    name: 'ai-match-jobs',
+    query: jobsQuery,
+    fetchPage: (q) => aiMatchService.listMatchedJobs(q),
+    // The band is what the rating cards select — it never narrows the cards.
+    fetchStats: ({ band: _band, ...filters }) => aiMatchService.getStats(filters),
+  });
+  const matchStats = jobsList.stats;
+  const facets = matchStats?.facets;
+
+  /** This page of matched jobs (latest session per job), as the rows render them. */
+  const matchHistory: MatchHistory[] = useMemo(() => jobsList.items.map(toHistoryItem), [jobsList.items]);
+  const jobItemById = useMemo(() => new Map(jobsList.items.map(i => [i.id, i])), [jobsList.items]);
+
+  /* Every session this visit has seen (job pages, candidate rows, select-all),
+     so a click on a job that is not on the current page still resolves. */
+  const [knownSessions, setKnownSessions] = useState<Record<string, KnownSession>>({});
+  const rememberSessions = (list: KnownSession[]) => {
+    if (list.length === 0) return;
+    setKnownSessions(prev => {
+      const next = { ...prev };
+      // A job-page row is the full record; a candidate's job entry only fills gaps.
+      for (const s of list) next[s.id] = prev[s.id] && !s.fromJobPage ? { ...s, ...prev[s.id] } : { ...prev[s.id], ...s };
+      return next;
+    });
+  };
+  const allMatchSessions: AIMatchSessionResponse[] = useMemo(() => Object.values(knownSessions), [knownSessions]);
+  const findHistory = (historyId: string): MatchHistory | undefined =>
+    matchHistory.find(h => h.id === historyId)
+    ?? (knownSessions[historyId] ? toHistoryItem(knownSessions[historyId]) : undefined);
+  /** The job's LATEST known session (a job's history row). */
+  const findHistoryByJd = (jdId: string): MatchHistory | undefined => {
+    const onPage = matchHistory.find(h => h.jobId === jdId);
+    if (onPage) return onPage;
+    const latest = Object.values(knownSessions)
+      .filter(s => s.jd_id === jdId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    return latest ? toHistoryItem(latest) : undefined;
+  };
+
+  /* JD records: the route's lazy JD list (Run AI Match picker) plus every JD
+     the server attached to a matched-jobs row — so title / code / location /
+     version always resolve for the rows on screen (never "Unknown Job"). */
+  const [knownJdRecords, setKnownJdRecords] = useState<Record<string, Job>>({});
+  const jobs: Job[] = useMemo(() => {
+    const byId = new Map<string, Job>((jobsProp || []).map(j => [j.id, j]));
+    for (const j of Object.values(knownJdRecords)) if (!byId.has(j.id)) byId.set(j.id, j);
+    return Array.from(byId.values());
+  }, [jobsProp, knownJdRecords]);
+
+  /** Keep what a matched-jobs response carries: sessions, JD records, scored maps. */
+  const rememberJobItems = (items: AIMatchJobItem[]) => {
+    if (items.length === 0) return;
+    rememberSessions(items.map(i => ({ ...i, results: [], fromJobPage: true })));
+    const records = items.filter(i => i.jd).map(i => jdRecordToJob(i.jd as Record<string, any>));
+    if (records.length) setKnownJdRecords(prev => ({ ...prev, ...Object.fromEntries(records.map(r => [r.id, r])) }));
+    // "Scored for THIS job" — each row carries its own scored candidates.
+    setScoredResumeIdsByJd(prev => {
+      const next = new Map(prev ?? []);
+      for (const i of items) {
+        if (!i.jd_id) continue;
+        const m = new Map(next.get(i.jd_id) ?? []);
+        Object.entries(i.scored || {}).forEach(([resumeId, scoreId]) => m.set(resumeId, scoreId));
+        next.set(i.jd_id, m);
+      }
+      return next;
+    });
+  };
+  useEffect(() => {
+    rememberJobItems(jobsList.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobsList.items]);
+  /* A deep link (?jdId=…&view=results, or a JD page's "AI Talent Match
+     Results") may name a job that is not on the first page: look up just that
+     job's latest session. 'done' even on failure, so the view still opens. */
+  const [deepLinkLookups, setDeepLinkLookups] = useState<Record<string, 'pending' | 'done'>>({});
+  const lookUpJobByJd = (jdId: string) => {
+    if (deepLinkLookups[jdId]) return;
+    setDeepLinkLookups(prev => ({ ...prev, [jdId]: 'pending' }));
+    aiMatchService.listMatchedJobs({ jd_id: jdId, page: 1, page_size: 1 })
+      .then(res => rememberJobItems(res.items || []))
+      .catch(error => console.warn('[AITalentMatch] Deep-link job lookup failed:', error))
+      .finally(() => setDeepLinkLookups(prev => ({ ...prev, [jdId]: 'done' })));
+  };
+
+  /** Runs per job across its lineage (JD code), for "View Version History". */
+  const matchSessionCounts: Record<string, number> = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const i of jobsList.items) {
+      const key = (i.jd?.job_id as string | undefined) || i.jd_job_id || i.jd_id || i.search_query || 'unknown';
+      out[key] = i.lineage_session_count || 1;
+    }
+    return out;
+  }, [jobsList.items]);
+  const ratingBandCounts = matchStats ? { exact: matchStats.rating_exact, partial: matchStats.rating_partial } : null;
+  const totalMatchedCandidatesCount = matchStats ? matchStats.total_candidates : null;
+
+  /* View by Candidates — server-paged, only while that view is open. */
+  const debouncedCandidatePhone = useDebounce(candidateFilterPhone, 300);
+  const candidatesActive = viewMode === 'history' && (historyPageView === 'candidates' || historyPageView === 'resumes');
+  const candidatesQuery = useMemo(() => ({
+    page: candidateCurrentPage,
+    page_size: candidateItemsPerPage,
+    sort_by: candidateSortBy as string,
+    sort_dir: candidateSortOrder,
+    search: candidateSearchQuery.trim() || undefined,
+    location: candidateFilterLocation === 'all' ? undefined : candidateFilterLocation,
+    job: candidateFilterJob === 'all' ? undefined : candidateFilterJob,
+    min_score: candidateFilterMinScore ? candidateFilterMinScore : undefined,
+    multi_job: candidateFilterMultiJob || undefined,
+    phone: debouncedCandidatePhone.trim() || undefined,
+    exp_min: candidateFilterExpMin === '' ? undefined : candidateFilterExpMin,
+    exp_max: candidateFilterExpMax === '' ? undefined : candidateFilterExpMax,
+    date_from: candidateFilterDateFrom || undefined,
+    date_to: candidateFilterDateTo || undefined,
+    band: candidateRatingBand ?? undefined,
+  }), [
+    candidateCurrentPage, candidateItemsPerPage, candidateSortBy, candidateSortOrder, candidateSearchQuery,
+    candidateFilterLocation, candidateFilterJob, candidateFilterMinScore, candidateFilterMultiJob,
+    debouncedCandidatePhone, candidateFilterExpMin, candidateFilterExpMax, candidateFilterDateFrom,
+    candidateFilterDateTo, candidateRatingBand,
+  ]);
+  const candList = usePagedList<AIMatchCandidateItem, unknown, typeof candidatesQuery>({
+    name: 'ai-match-candidates',
+    query: candidatesQuery,
+    fetchPage: (q) => aiMatchService.listMatchedCandidates(q),
+    enabled: candidatesActive,
+  });
+  candListRefreshRef.current = candList.refresh;
+  const candidateRows: CandidateMatchRow[] = useMemo(() => candList.items.map(toCandidateRow), [candList.items]);
+  const loadingCandidateRows = candidatesActive && candList.loading;
+  /* Candidate rows seen this visit (pages + select-all), so a tick on a row
+     that is no longer on screen still feeds the bulk actions. */
+  const [candRowCache, setCandRowCache] = useState<Record<string, CandidateMatchRow>>({});
+  const rememberCandidateItems = (items: AIMatchCandidateItem[]) => {
+    if (items.length === 0) return;
+    const rows = items.map(toCandidateRow);
+    setCandRowCache(prev => ({ ...prev, ...Object.fromEntries(rows.map(r => [r.key, r])) }));
+    rememberSessions(items.flatMap(item => item.jobs.map((j): KnownSession => ({
+      id: j.history_id,
+      jd_id: j.jd_id || undefined,
+      job_title: j.job_title,
+      jd_title: j.job_title,
+      jd_job_id: j.jd_job_id || undefined,
+      jd_version_number: j.jd_version_number ?? undefined,
+      jd_status: j.jd_status || undefined,
+      total_matches: j.total_matches,
+      shortlisted: 0,
+      rejected: 0,
+      status: 'completed',
+      created_at: j.matched_at || new Date(0).toISOString(),
+      run_by_name: j.matched_by_name || undefined,
+      results: [],
+    }))));
+    setScoredResumeIdsByJd(prev => {
+      const next = new Map(prev ?? []);
+      for (const item of items) for (const j of item.jobs) {
+        if (!j.jd_id || !j.resume_id || !j.score_id) continue;
+        const m = new Map(next.get(j.jd_id) ?? []);
+        m.set(j.resume_id, j.score_id);
+        next.set(j.jd_id, m);
+      }
+      return next;
+    });
+    const scored = items.filter(i => i.is_scored && i.resume_id).map(i => i.resume_id as string);
+    if (scored.length) setAllScoredResumeIds(prev => new Set([...Array.from(prev), ...scored]));
+  };
+  useEffect(() => {
+    rememberCandidateItems(candList.items);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candList.items]);
+
+  /** Load (once) the candidates of these sessions, one batch request per 200,
+   *  for bulk actions / export over ticked jobs that were never expanded. */
+  const batchInFlightRef = useRef(new Set<string>());
+  const ensureSessionsLoaded = async (ids: string[]): Promise<Record<string, MatchedCandidateWithVersions[]>> => {
+    const have: Record<string, MatchedCandidateWithVersions[]> = {};
+    const missing: string[] = [];
+    for (const id of Array.from(new Set(ids))) {
+      if (historyCandidatesById[id]) have[id] = historyCandidatesById[id];
+      else if (!batchInFlightRef.current.has(id)) missing.push(id);
+    }
+    if (missing.length === 0) return have;
+    missing.forEach(id => batchInFlightRef.current.add(id));
+    const loaded: Record<string, MatchedCandidateWithVersions[]> = {};
+    let batchFailed = false;
+    try {
+      for (let i = 0; i < missing.length; i += 200) {
+        const map = await aiMatchService.getSessionsBatch(missing.slice(i, i + 200));
+        map.forEach(({ candidates }, id) => { loaded[id] = candidates as MatchedCandidateWithVersions[]; });
+      }
+    } catch (error) {
+      batchFailed = true;
+      console.warn('[AITalentMatch] Session batch failed:', error);
+    } finally {
+      missing.forEach(id => batchInFlightRef.current.delete(id));
+    }
+    // A session the server didn't return (deleted) has no candidates to load.
+    const failed = batchFailed ? [] : missing.filter(id => !loaded[id]);
+    if (Object.keys(loaded).length) setHistoryCandidatesById(prev => ({ ...prev, ...loaded }));
+    if (failed.length) setFailedHistorySessionIds(prev => new Set([...Array.from(prev), ...failed]));
+    return { ...have, ...loaded };
+  };
+  // Ticked jobs need their candidates for the bulk actions.
+  useEffect(() => {
+    const ids = [...Array.from(selectedJobKeys), ...Object.keys(partialJobRows)];
+    if (ids.length) void ensureSessionsLoaded(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedJobKeys]);
+
+  /** "Select all" = every row matching the filters, not just this page. */
+  const [selectingAll, setSelectingAll] = useState(false);
+  const selectAllMatchingJobs = async () => {
+    setSelectingAll(true);
+    try {
+      const res = await aiMatchService.listMatchedJobs({ ...jobsQuery, page: 1, page_size: 5000 });
+      rememberJobItems(res.items);
+      setSelectedJobKeys(new Set(res.items.filter(i => (i.total_matches || 0) > 0).map(i => i.id)));
+      setPartialJobRows({});
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, "Couldn't select every job. Please try again."));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+  const selectAllMatchingCandidates = async () => {
+    setSelectingAll(true);
+    try {
+      const res = await aiMatchService.listMatchedCandidates({ ...candidatesQuery, page: 1, page_size: 5000 });
+      rememberCandidateItems(res.items);
+      setSelectedCandKeys(new Set(res.items.map(i => i.key)));
+      setPartialCandJobs({});
+    } catch (error) {
+      toast.error(friendlyErrorMessage(error, "Couldn't select every candidate. Please try again."));
+    } finally {
+      setSelectingAll(false);
+    }
+  };
+
   const openCandidateMatch = (historyId: string) => {
-    const item = matchHistory.find(h => h.id === historyId);
+    const item = findHistory(historyId);
     if (!item) return;
     userChangedView.current = true;
     openMatchResults(item, item.jobId);
@@ -1225,7 +1429,7 @@ export default function AITalentMatchPage({
       toast.error(`${lock} — resumes can't be scored against it`);
       return;
     }
-    const item = matchHistory.find(h => h.id === job.historyId);
+    const item = findHistory(job.historyId);
     if (!item) {
       toast.error('Match session not found');
       return;
@@ -1277,7 +1481,7 @@ export default function AITalentMatchPage({
       toast.error('Candidate has no email on file');
       return;
     }
-    const item = matchHistory.find(h => h.id === job.historyId);
+    const item = findHistory(job.historyId);
     if (item) {
       setSelectedHistoryItem(item);
       setSelectedJob(item.jobId);
@@ -1592,7 +1796,7 @@ export default function AITalentMatchPage({
   const scorecardJd = searchParams.get(SCORECARD_JD_PARAM);
   const scorecardScoreId = searchParams.get(SCORECARD_SCORE_PARAM);
   const jobTitleOf = (jdId: string) =>
-    jobs.find(j => j.id === jdId)?.title || matchHistory.find(h => h.jobId === jdId)?.jobTitle || '';
+    jobs.find(j => j.id === jdId)?.title || findHistoryByJd(jdId)?.jobTitle || '';
   const scoreDetailView = scorecardJd && scorecardScoreId
     ? { jdId: scorecardJd, scoreId: scorecardScoreId, jobTitle: jobTitleOf(scorecardJd) }
     : null;
@@ -1682,8 +1886,6 @@ export default function AITalentMatchPage({
         jobTitle={jobTitle}
         jobId={jdId}
         jobCode={jobs.find(j => j.id === jdId)?.jobId}
-        assessmentConfigured={inviteTargets.hasAssessment(jdId)}
-        aiInterviewConfigured={inviteTargets.hasAIInterview(jdId)}
         enableInternalAIInterviewInvite
         /* Row Invite -> Create / Send for this job — Job Details' popup. */
         onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, jdId, candidates, jobTitle)}
@@ -1812,77 +2014,9 @@ export default function AITalentMatchPage({
     },
   );
 
-  // Restored straight into the candidate roll-up: its rows are built on click,
-  // not fetched by the page load, so rebuild them once match history is in.
-  // Guarded on empty rows so it can't re-run over a roll-up that's already
-  // there, and it deliberately leaves the restored candidate search alone.
-  const rebuiltRestoredCandidatesRef = useRef(false);
-  useEffect(() => {
-    if (rebuiltRestoredCandidatesRef.current) return;
-    if (historyPageView !== 'candidates' && historyPageView !== 'resumes') return;
-    if (loadingCandidateRows || candidateRows.length > 0) return;
-    if (matchHistory.length === 0) return;
-    rebuiltRestoredCandidatesRef.current = true;
-    buildCandidateRows();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
-
-  /**
-   * Warm the "Match by Candidate" roll-up in the background, so switching to
-   * that tab shows rows instead of a spinner.
-   *
-   * Building it costs one request per match session, and none of them started
-   * until the tab was clicked — the slowest part of the page sat entirely on
-   * that click. Doing it while the user reads the Matched Jobs list moves the
-   * wait off the interaction. Per-session results land in
-   * `historyCandidatesById`, so opening a single job's results afterwards is
-   * served from the same cache.
-   *
-   * Silent: a failed session here must not toast, since the user never asked
-   * for this and one toast per session would bury the page.
-   *
-   * `prefetchedRef` caps it at one run — without it a failed build leaves the
-   * rows empty, the effect re-satisfies its own conditions, and it retries
-   * forever.
-   */
-  const prefetchedCandidateRowsRef = useRef(false);
-  useEffect(() => {
-    if (prefetchedCandidateRowsRef.current) return;
-    // Only from the history screen — the tab lives there, and elsewhere this
-    // would compete with whatever the user actually opened.
-    if (viewMode !== 'history') return;
-    // Already on one of the roll-up tabs: the effect above owns that case.
-    if (historyPageView === 'candidates' || historyPageView === 'resumes') return;
-    if (matchHistory.length === 0) return;
-    if (loadingCandidateRows || candidateRows.length > 0) return;
-
-    prefetchedCandidateRowsRef.current = true;
-    void buildCandidateRows({ silent: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, historyPageView, matchHistory.length, loadingCandidateRows, candidateRows.length]);
-
-  /**
-   * A finished match run adds a session, which makes a roll-up built before it
-   * stale. Now that the tab reuses its rows instead of rebuilding on every
-   * open, that staleness would stick for the rest of the session — so drop the
-   * rows and release both build guards, and whichever path runs next (prefetch
-   * if the user is elsewhere, the restore effect if they're on the tab) builds
-   * again from the fuller history.
-   *
-   * Keyed on the set of session ids, not the count: re-running a match on a
-   * job that already has one replaces its entry (same length, new session),
-   * and the later server refetch swaps the optimistic id for the real one —
-   * neither changes the length, so a count key never rebuilt for them.
-   */
-  const historySessionKey = matchHistory.map(item => item.id).sort().join('|');
-  const candidateRowsHistoryKeyRef = useRef(historySessionKey);
-  useEffect(() => {
-    if (candidateRowsHistoryKeyRef.current === historySessionKey) return;
-    candidateRowsHistoryKeyRef.current = historySessionKey;
-    setCandidateRows([]);
-    prefetchedCandidateRowsRef.current = false;
-    rebuiltRestoredCandidatesRef.current = false;
-  }, [historySessionKey]);
+  // The candidate roll-up is a server-paged query (candList above) that runs
+  // whenever that view is open — restored, prefetched or clicked alike — so
+  // the old build/prefetch/rebuild effects are gone.
 
   useEffect(() => {
     if (historyListScrollRequest === 0) return;
@@ -1940,11 +2074,9 @@ export default function AITalentMatchPage({
     });
     if (settled.length === 0) return;
     settled.forEach(id => myScoringBatches.current.delete(id));
-    void (async () => {
-      const scored = await loadAllScoredResumeIds();
-      setAllScoredResumeIds(scored.ids);
-      setScoredResumeIdsByJd(scored.byJd);
-    })();
+    // The paged lists carry their own scored flags — re-read them.
+    jobsList.refresh();
+    candList.refresh();
     scoreDetailRequests.current.clear();
     setScoreDetailsByJd({});
     setScoredRefreshTick(t => t + 1);
@@ -1954,7 +2086,7 @@ export default function AITalentMatchPage({
   useEffect(() => {
     const hydrateSelectedHistory = async () => {
       if (viewMode === 'results' && selectedJob && matchedCandidates.length === 0) {
-        const historyItem = matchHistory.find(item => item.jobId === selectedJob);
+        const historyItem = findHistoryByJd(selectedJob);
         if (!historyItem || historyItem.totalMatches <= 0) return;
 
         const candidates = await loadHistoryCandidates(historyItem);
@@ -1967,7 +2099,7 @@ export default function AITalentMatchPage({
     };
 
     hydrateSelectedHistory();
-  }, [viewMode, selectedHistoryItem, selectedJob, matchedCandidates.length, matchHistory, historyCandidatesById]);
+  }, [viewMode, selectedHistoryItem, selectedJob, matchedCandidates.length, matchHistory, knownSessions, historyCandidatesById]);
 
   // Handle attachments click - fetch real versions
   const handleAttachmentsClick = async (candidate: MatchedCandidateWithVersions) => {
@@ -2043,8 +2175,17 @@ export default function AITalentMatchPage({
     const preselectedJobId = urlJdId || sessionJobId;
 
     if (!preselectedJobId) return;
-    // Wait for jobs to be loaded before processing
-    if (jobs.length === 0) return;
+    // Wait for the route's JD list (loaded on demand — the landing doesn't need it).
+    if (!jobsLoaded) {
+      onRequestJobs?.();
+      return;
+    }
+    // Results for a job that isn't on the loaded page: fetch that one job first.
+    const wantsResults = urlView === 'results' || urlView === 'details' || showResultsOnly;
+    if (wantsResults && !findHistoryByJd(preselectedJobId) && deepLinkLookups[preselectedJobId] !== 'done') {
+      lookUpJobByJd(preselectedJobId);
+      return;
+    }
 
     // Clear sessionStorage if we used it
     if (sessionJobId) {
@@ -2075,7 +2216,7 @@ export default function AITalentMatchPage({
       return;
     } else if (shouldShowResults) {
       // User clicked "AI Talent Match Results" - show existing results or empty state
-      const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
+      const existingMatch = findHistoryByJd(preselectedJobId);
 
       if (existingMatch) {
         const existingCandidates = getResolvedHistoryCandidates(existingMatch);
@@ -2108,7 +2249,12 @@ export default function AITalentMatchPage({
         setShowMatchingPanel(true);
       }, 300);
     }
-  }, [jobs, matchHistory, searchParams]);
+  }, [jobs, jobsLoaded, matchHistory, knownSessions, deepLinkLookups, searchParams]);
+
+  // Run AI Match / results / matching need the JD picker list; the landing doesn't.
+  useEffect(() => {
+    if (viewMode !== 'history' && !jobsLoaded) onRequestJobs?.();
+  }, [viewMode, jobsLoaded, onRequestJobs]);
 
   const publishedJobs = jobs.filter(j => j.status === 'Published' || j.status === 'Active');
   const selectedJobData = jobs.find(j => j.id === selectedJob);
@@ -2337,7 +2483,14 @@ export default function AITalentMatchPage({
      3. Its published screen links back with `?resume_invite=1`; here the
         ticks come back, the job is re-checked, and the invite opens for the
         same candidates. Nothing published → ticks back, no invite. */
-  const inviteTargets = useAllJobInviteTargets(viewMode === 'history' || viewMode === 'results');
+  /* No tenant-wide assessment / AI-interview walk here. This page used to
+     page through every /assessments and /ai-interview/configs on landing
+     (useAllJobInviteTargets) only to hand two "configured" flags to the
+     expanded score table and the scorecard — both of which invite through
+     this page's Create / Send popup (onOpenInviteDialog), where those flags
+     gate nothing: the popup itself offers Create when the job has none and
+     re-checks the job when it opens. Permission, plan and JD/resume locks
+     (jobLockFor, inviteGateFor) still gate every entry. */
   /** A JD's status, capitalised ('Published', 'Disabled', 'Archived', …), from
    *  whichever source has it. `jobs` starts from the user's OWN JDs (my-jds),
    *  so in a tenant where someone else created the job it can be missing —
@@ -2389,6 +2542,7 @@ export default function AITalentMatchPage({
       request={createSendRequest}
       onClose={() => setCreateSendRequest(null)}
       inviteGate={inviteGateFor}
+      openOn="talent-match"
     />
   );
   const peopleIn = (rows: MatchInviteRow[]) =>
@@ -2402,6 +2556,8 @@ export default function AITalentMatchPage({
     phone: c.phone,
     title: c.title,
     resumeId: c.resumeId,
+    isArchived: c.isArchived,
+    isTenantUserEmail: c.isTenantUserEmail,
   });
   /** Open Create / Send for `rows` (one job) — Job Details' popup, with the
    *  candidates who have an email (one per address). */
@@ -2427,6 +2583,11 @@ export default function AITalentMatchPage({
    *  when its job has no AI Assessment / AI Interview yet. */
   const renderRowInviteItems = (row: MatchInviteRow, view: 'job' | 'candidates' | 'results', jobTitle?: string) => {
     const rowJobLock = jobLockFor(row.jobId, jobTitle);
+    // An archived resume, or an existing team member's, blocks every invite —
+    // same as the resume detail page / Resume Database.
+    const rowLock = row.isTenantUserEmail
+      ? TEAM_MEMBER_ACTION_MESSAGE
+      : row.isArchived ? ARCHIVED_ACTION_MESSAGE : rowJobLock;
     const guardEmail = (): boolean => {
       if (row.email) return true;
       toast.error('Candidate has no email on file');
@@ -2442,11 +2603,12 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAssessmentFromMatch,
           deniedReason: ASSESSMENT_INVITE_DENIED,
-          // A Disabled / Archived JD: nothing can be created or sent for it.
-          extraDisabled: !!rowJobLock,
-          extraDisabledReason: rowJobLock ?? undefined,
+          // A Disabled / Archived JD, or an archived resume: nothing can be
+          // created or sent for it.
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAssessmentFromMatch || rowJobLock) {
+            if (!canInviteAssessmentFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
@@ -2460,15 +2622,15 @@ export default function AITalentMatchPage({
           itemClass: actionsMenuItemClass,
           allowed: canInviteAIInterviewFromMatch,
           deniedReason: AI_INTERVIEW_INVITE_DENIED,
-          extraDisabled: !!rowJobLock,
-          extraDisabledReason: rowJobLock ?? undefined,
+          extraDisabled: !!rowLock,
+          extraDisabledReason: rowLock ?? undefined,
           onInvite: (e) => {
-            if (!canInviteAIInterviewFromMatch || rowJobLock) {
+            if (!canInviteAIInterviewFromMatch || rowLock) {
               e.preventDefault();
               return;
             }
             if (!guardEmail()) return;
-            const item = matchHistory.find(h => h.id === row.historyId);
+            const item = findHistory(row.historyId);
             if (item) {
               setSelectedHistoryItem(item);
               setSelectedJob(item.jobId);
@@ -2505,7 +2667,7 @@ export default function AITalentMatchPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
-    if (!handoffReturn || handoffCheckedRef.current || matchHistory.length === 0) return;
+    if (!handoffReturn || handoffCheckedRef.current || jobsList.loading) return;
     handoffCheckedRef.current = true;
     const h = handoffReturn;
     clearInviteHandoff();
@@ -2528,8 +2690,10 @@ export default function AITalentMatchPage({
       const keys = new Set(h.scoreIds);
       const sessionIds = Array.from(new Set(h.scoreIds.map(k => k.split('::')[0])));
       const perSession = await Promise.all(sessionIds.map(async (sid) => {
-        const item = matchHistory.find(m => m.id === sid);
-        if (!item) return [] as MatchInviteRow[];
+        // The session may not be on the loaded page — its id is all the load needs.
+        const item: MatchHistory = findHistory(sid) ?? {
+          id: sid, jobId: h.jdId, jobTitle: h.jdTitle || '', matchedAt: new Date(), totalMatches: 1, matchedCandidates: [],
+        };
         const candidates = await loadHistoryCandidates(item, { silent: true });
         return candidates.map(c => toInviteRow(item.id, item.jobId, c)).filter(r => keys.has(r.key));
       }));
@@ -2543,7 +2707,7 @@ export default function AITalentMatchPage({
       openInviteForRows(h.kind, h.jdId, rows);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handoffReturn, matchHistory.length]);
+  }, [handoffReturn, jobsList.loading]);
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
     const candidates: MatchedCandidateWithVersions[] = viewMode === 'results'
@@ -2670,80 +2834,10 @@ export default function AITalentMatchPage({
     return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
   };
 
-  const filteredHistory = matchHistory.filter(item => {
-    const query = historySearchQuery.trim().toLowerCase();
-    const jobCode = jobs.find(j => j.id === item.jobId)?.jobId || '';
-    const matchesSearch = query === '' ||
-      item.jobTitle.toLowerCase().includes(query) ||
-      jobCode.toLowerCase().includes(query);
-
-    // Compare calendar days, not instants: `new Date('2026-08-03')` is midnight
-    // UTC, so an instant-comparison drops everything matched later that day.
-    const matchedDay = toLocalDateKey(item.matchedAt);
-    const matchesDateFrom = !historyDateFrom || matchedDay >= historyDateFrom;
-    const matchesDateTo = !historyDateTo || matchedDay <= historyDateTo;
-
-    const matchesMinMatches = historyFilterMinMatches === '' ||
-      (item.totalMatches || 0) >= historyFilterMinMatches;
-
-    // Candidate-level filters: keep the job if ANY of its candidates matches.
-    // Candidates load per session on demand, so a session whose list has not
-    // arrived yet stays visible while the loader below fetches it — otherwise
-    // the filter would silently pass every job (the old `length === 0` check).
-    const resolvedCandidates = historyCandidatesById[item.id] ?? item.matchedCandidates;
-    const matchesCandidateFilters = !hasCandidateLevelFilters || !resolvedCandidates
-      ? true
-      : resolvedCandidates.some(candidate => {
-          const matchesPhone = historyFilterPhone === '' ||
-            (!!candidate.phone && (
-              candidate.phone.toLowerCase().includes(historyFilterPhone.toLowerCase()) ||
-              candidate.phone.replace(/[^0-9]/g, '').includes(historyFilterPhone.replace(/[^0-9]/g, ''))
-            ));
-          const matchesLocation = historyFilterLocation === '' ||
-            (!!candidate.location && candidate.location.toLowerCase().includes(historyFilterLocation.toLowerCase()));
-          // "5-7 years" / "5+ yrs" / "Fresher" — take the first number, and treat
-          // "no number" as unknown so a range filter excludes it rather than
-          // counting it as zero years.
-          const years = parseExperienceYears(candidate.experience);
-          const matchesExpMin = historyFilterExpMin === '' || (years !== null && years >= historyFilterExpMin);
-          const matchesExpMax = historyFilterExpMax === '' || (years !== null && years <= historyFilterExpMax);
-          return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
-        });
-
-    // Job-level filters, read off the job's own record.
-    const jd = jobs.find(j => j.id === item.jobId);
-    const matchesJobLocation = !historyJobLocation || jd?.location === historyJobLocation;
-    const matchesIndustry = !historyIndustry || jd?.industryType === historyIndustry;
-    const matchesMatchedBy = !historyMatchedBy || (item.matchedByName || 'System') === historyMatchedBy;
-    const matchesWorkMode = !historyWorkMode || jd?.remoteType === historyWorkMode;
-    const matchesJobType = !historyJobType || jd?.employmentType === historyJobType;
-
-    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters &&
-      matchesJobLocation && matchesIndustry && matchesMatchedBy && matchesWorkMode && matchesJobType;
-  });
-
-  const sortedHistory = [...filteredHistory].sort((a, b) => {
-    const direction = historySortOrder === 'asc' ? 1 : -1;
-    // How many of a job's candidates fall in one rating band.
-    const bandCount = (item: MatchHistory, band: RatingBand) =>
-      (historyCandidatesById[item.id] ?? []).filter(c => matchBandForRating(toMatchRating(c.matchScore ?? 0)) === band).length;
-    switch (historySortBy) {
-      case 'matches':
-        return ((a.totalMatches || 0) - (b.totalMatches || 0)) * direction;
-      case 'title':
-        return a.jobTitle.localeCompare(b.jobTitle) * direction;
-      case 'jdId': {
-        const code = (item: MatchHistory) => jobs.find(j => j.id === item.jobId)?.jobId || '';
-        return code(a).localeCompare(code(b), undefined, { numeric: true, sensitivity: 'base' }) * direction;
-      }
-      case 'exact':
-      case 'partial':
-      case 'no_match':
-        return (bandCount(a, historySortBy) - bandCount(b, historySortBy)) * direction;
-      default:
-        return (new Date(a.matchedAt).getTime() - new Date(b.matchedAt).getTime()) * direction;
-    }
-  });
+  // Search, filters, the rating pill, sort and paging all run server-side
+  // (GET /ai-match/jobs, see jobsQuery): `matchHistory` is already the page.
+  const filteredHistory = matchHistory;
+  const sortedHistory = matchHistory;
 
   // Search sits outside the panel, so — like job-openings — it is not counted.
   const activeFiltersCount = historySearch.activeFilterCount;
@@ -2806,9 +2900,9 @@ export default function AITalentMatchPage({
     const detail = scoreDetailsByJd[scoreDetailView.jdId]?.[scoreDetailView.scoreId];
     if (!detail) {
       return (
-        <main className="flex-1 bg-slate-50">
+        <main className="tf-page">
           <div className="mx-auto w-full max-w-[1400px]">
-            <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <div className="tf-page-sheet">
               <PageBreadcrumb
                 className="mb-4 md:mb-6"
                 items={[
@@ -2818,7 +2912,7 @@ export default function AITalentMatchPage({
                 ]}
               />
               {scoreDetailsByJd[scoreDetailView.jdId] ? (
-                <div className="tf-card-desc">
+                <div className="tf-body-secondary">
                   This score could not be found.{' '}
                   <button type="button" onClick={close} className="text-brand-blue hover:underline">Back to AI Talent Match</button>
                 </div>
@@ -2858,8 +2952,6 @@ export default function AITalentMatchPage({
             onNext: idx < scoreNavList.length - 1 ? () => moveScoreDetail(scoreNavList[idx + 1]) : undefined,
           };
         })()}
-        assessmentConfigured={inviteTargets.hasAssessment(scoreDetailView.jdId)}
-        aiInterviewConfigured={inviteTargets.hasAIInterview(scoreDetailView.jdId)}
         breadcrumbItems={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'AI Talent Match', onClick: close },
@@ -2873,9 +2965,9 @@ export default function AITalentMatchPage({
 
   if (viewMode === 'matching') {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="tf-page-sheet min-h-[calc(100dvh-7rem)]">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={[
@@ -2890,8 +2982,8 @@ export default function AITalentMatchPage({
                   <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
                     <XCircle className="w-6 h-6 text-destructive" />
                   </div>
-                  <h2 className="tf-section-title mb-2">Matching failed</h2>
-                  <p className="tf-card-desc mb-4">{matchError}</p>
+                  <h2 className="tf-section-title sm:text-lg mb-2">Matching failed</h2>
+                  <p className="tf-body-secondary mb-4">{matchError}</p>
                   <Button variant="primary" size="md" onClick={() => selectedJob && handleRunAIMatch(selectedJob)} disabled={!selectedJob}>
                     Run AI Match
                   </Button>
@@ -2939,84 +3031,16 @@ export default function AITalentMatchPage({
     // client-side tally stays as a fallback for when that prop isn't
     // available, and is still what powers the roll-up table itself once
     // the tab is opened.
-    const totalMatchedCandidatesReady = totalMatchedCandidatesCount !== null || (!loadingCandidateRows &&
-      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0)));
-    const totalMatchedCandidates = totalMatchedCandidatesCount ?? candidateRows.length;
+    // Every count comes from GET /ai-match/stats (same filters as the jobs list).
+    const totalMatchedCandidatesReady = totalMatchedCandidatesCount !== null;
+    const totalMatchedCandidates = totalMatchedCandidatesCount ?? 0;
+    const topStatsReady = matchStats !== null;
 
-    // Every session's candidates load in individually (in the background — see
-    // the prefetch effect above), so the rating-band counts below fill in one
-    // job at a time rather than all at once. Rendering the count as each one
-    // lands made "Top Match Rating (10)"/"Top Match Rating (9-7)" visibly count
-    // up (1, 2, 3, ...) as sessions resolved. Holding the real number back
-    // until every session has resolved means the tiles show only their final,
-    // correct value.
-    const topStatsReady = matchHistory.every(
-      item => (item.totalMatches || 0) <= 0 ||
-        historyCandidatesById[item.id] !== undefined ||
-        failedHistorySessionIds.has(item.id)
-    );
-
-    // Candidate roll-up search matches the person or any job they matched.
+    // Candidate roll-up: search / filters / pill / sort / paging run server-side
+    // (GET /ai-match/candidates) — `candidateRows` is already the page.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
-    const filteredCandidateRows = candidateRows.filter(row => {
-      const matchesSearch = !candidateQuery ||
-        row.name?.toLowerCase().includes(candidateQuery) ||
-        row.email?.toLowerCase().includes(candidateQuery) ||
-        row.title?.toLowerCase().includes(candidateQuery) ||
-        row.jobs.some(job => job.jobTitle?.toLowerCase().includes(candidateQuery));
-
-      const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
-      const matchesJob = candidateFilterJob === 'all' || row.jobs.some(job => job.jobTitle === candidateFilterJob);
-      const matchesScore = toMatchRating(row.bestScore) >= candidateFilterMinScore;
-      const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
-
-      const matchesPhone = candidateFilterPhone === '' ||
-        (!!row.phone && (
-          row.phone.toLowerCase().includes(candidateFilterPhone.toLowerCase()) ||
-          row.phone.replace(/[^0-9]/g, '').includes(candidateFilterPhone.replace(/[^0-9]/g, ''))
-        ));
-
-      // Unknown experience is excluded by a range filter rather than read as 0.
-      const years = parseExperienceYears(row.experience);
-      const matchesExpMin = candidateFilterExpMin === '' || (years !== null && years >= candidateFilterExpMin);
-      const matchesExpMax = candidateFilterExpMax === '' || (years !== null && years <= candidateFilterExpMax);
-
-      // Compare calendar days against the candidate's most recent match.
-      const lastMatchedDay = row.jobs.reduce((latest, job) => {
-        const key = toLocalDateKey(job.matchedAt);
-        return key > latest ? key : latest;
-      }, '');
-      const matchesDateFrom = !candidateFilterDateFrom || lastMatchedDay >= candidateFilterDateFrom;
-      const matchesDateTo = !candidateFilterDateTo || lastMatchedDay <= candidateFilterDateTo;
-
-      // The rating pill: candidates with at least one match in that band.
-      const matchesBand = !candidateRatingBand ||
-        row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === candidateRatingBand);
-
-      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesMultiJob &&
-        matchesPhone && matchesExpMin && matchesExpMax && matchesDateFrom && matchesDateTo && matchesBand;
-    });
-
-    const sortedCandidateRows = [...filteredCandidateRows].sort((a, b) => {
-      const direction = candidateSortOrder === 'asc' ? 1 : -1;
-      if (candidateSortBy === 'score') return (a.bestScore - b.bestScore) * direction;
-      if (candidateSortBy === 'name') return (a.name || '').localeCompare(b.name || '') * direction;
-      if (candidateSortBy === 'date') {
-        const lastOf = (row: CandidateMatchRow) =>
-          row.jobs.reduce((latest, job) => Math.max(latest, new Date(job.matchedAt).getTime()), 0);
-        return (lastOf(a) - lastOf(b)) * direction;
-      }
-      if (candidateSortBy === 'scored') {
-        // Job versions scored in Resume Scoring; ties → more matched versions first.
-        const scoredOf = (row: CandidateMatchRow) => row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length;
-        return (scoredOf(a) - scoredOf(b)) * direction || b.jobs.length - a.jobs.length;
-      }
-      if (candidateSortBy === 'titles') {
-        const titlesOf = (row: CandidateMatchRow) => new Set(row.jobs.map(j => j.jobTitle).filter(Boolean)).size;
-        return (titlesOf(a) - titlesOf(b)) * direction || b.jobs.length - a.jobs.length;
-      }
-      return (a.jobs.length - b.jobs.length) * direction;
-    });
+    const filteredCandidateRows = candidateRows;
+    const sortedCandidateRows = candidateRows;
 
     /** A View by Candidates column header that sorts the table (click again to flip). */
     const candidateSortHeader = (key: CandidateSortKey, label: string, align: 'left' | 'center' = 'left') => {
@@ -3046,10 +3070,7 @@ export default function AITalentMatchPage({
       );
     };
 
-    const paginatedCandidateRows = sortedCandidateRows.slice(
-      (candidateCurrentPage - 1) * candidateItemsPerPage,
-      candidateCurrentPage * candidateItemsPerPage,
-    );
+    const paginatedCandidateRows = sortedCandidateRows;
 
     // "All Resumes": the same candidateRows, un-collapsed back into one row
     // per (candidate, job) match — the flat list the roll-up above dedupes
@@ -3071,7 +3092,7 @@ export default function AITalentMatchPage({
     const topRatingPartialCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'partial'
     ).length;
-    const statsReady = ratingBandCounts !== null || topStatsReady;
+    const statsReady = topStatsReady;
     const displayedExactCount = ratingBandCounts?.exact ?? topRatingExactCount;
     const displayedPartialCount = ratingBandCounts?.partial ?? topRatingPartialCount;
 
@@ -3121,12 +3142,9 @@ export default function AITalentMatchPage({
     );
 
     // Options come from the loaded rows, so only real values are offered.
-    const candidateLocations = Array.from(
-      new Set(candidateRows.map(row => row.location).filter(Boolean) as string[])
-    ).sort();
-    const candidateJobTitles = Array.from(
-      new Set(candidateRows.flatMap(row => row.jobs.map(job => job.jobTitle)).filter(Boolean))
-    ).sort();
+    // Options for every matched job / candidate, not just this page (stats facets).
+    const candidateLocations = facets?.candidate_locations ?? [];
+    const candidateJobTitles = facets?.job_titles ?? [];
 
     const candidateFiltersCount = candidateSearch.activeFilterCount;
     const candidateFiltersApplied = candidateSearch.isNarrowed;
@@ -3161,7 +3179,7 @@ export default function AITalentMatchPage({
         return;
       }
       const group = selectedAllResumeJobGroups[0];
-      const item = group && matchHistory.find(h => h.id === group.historyId);
+      const item = group && findHistory(group.historyId);
       if (!item) return;
       const candidates = await loadHistoryCandidates(item);
       const ids = group.entries
@@ -3200,7 +3218,7 @@ export default function AITalentMatchPage({
       const jobIds = Array.from(new Set(selectedAllResumeJobGroups.map(g => g.jobId)));
       const oneJobId = jobIds.length === 1 ? jobIds[0] : null;
       if (oneJobId) {
-        const item = matchHistory.find(h => h.id === selectedAllResumeJobGroups[0].historyId);
+        const item = findHistory(selectedAllResumeJobGroups[0].historyId);
         if (item) {
           setSelectedHistoryItem(item);
           setSelectedJob(item.jobId);
@@ -3211,6 +3229,7 @@ export default function AITalentMatchPage({
         job: oneJobId ? inviteDialogJobOf(oneJobId) : undefined,
         candidates,
         inviteGate: inviteGateFor(kind),
+        openOn: 'talent-match',
       });
     };
 
@@ -3280,11 +3299,23 @@ export default function AITalentMatchPage({
     const jobLoaded = (item: MatchHistory) =>
       (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined || failedHistorySessionIds.has(item.id);
     const jobCandidates = (item: MatchHistory): MatchedCandidateWithVersions[] => historyCandidatesById[item.id] ?? [];
-    const jobTally = (item: MatchHistory) =>
-      jobCandidates(item).reduce(
+    // A job's band tally: the server's counts for a row on this page, else
+    // counted from its loaded candidates.
+    const jobTally = (item: MatchHistory): Record<RatingBand, number> => {
+      const row = jobItemById.get(item.id);
+      if (row) return { exact: row.exact_count, partial: row.partial_count, no_match: row.no_match_count };
+      return jobCandidates(item).reduce(
         (acc, c) => { acc[bandOf(c)] += 1; return acc; },
         { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
       );
+    };
+    /** "N of M scored" for a job row: the server row's counts, else its loaded candidates. */
+    const scoredCountOf = (item: MatchHistory): { scored: number; total: number } => {
+      const row = jobItemById.get(item.id);
+      if (row) return { scored: row.scored_count, total: row.result_count };
+      const all = jobCandidates(item);
+      return { scored: all.filter(c => !!scoreIdFor(item.jobId, c.resumeId)).length, total: all.length };
+    };
     const jobCandidatesInBand = (item: MatchHistory) =>
       candidateRatingBand ? jobCandidates(item).filter(c => bandOf(c) === candidateRatingBand) : jobCandidates(item);
 
@@ -3293,31 +3324,27 @@ export default function AITalentMatchPage({
     // to show the server's band counts and the runs' totals first, but those
     // count differently (every match result vs. each job's latest session),
     // so the pills jumped from one number to another once the tally landed.
-    const loadedTally = matchHistory.reduce(
-      (acc, item) => {
-        const t = jobTally(item);
-        acc.exact += t.exact; acc.partial += t.partial; acc.no_match += t.no_match;
-        return acc;
-      },
-      { exact: 0, partial: 0, no_match: 0 } as Record<RatingBand, number>,
-    );
-    const pillCounts: Record<RatingBand | 'all', number | null> = topStatsReady
-      ? { all: loadedTally.exact + loadedTally.partial + loadedTally.no_match, ...loadedTally }
+    const pillCounts: Record<RatingBand | 'all', number | null> = matchStats
+      ? { all: matchStats.all_matches, exact: matchStats.rating_exact, partial: matchStats.rating_partial, no_match: matchStats.rating_no_match }
       : { all: null, exact: null, partial: null, no_match: null };
 
     /* View by Job under a rating pill: only jobs with such a match. A job
        whose candidates haven't loaded yet stays listed — an unloaded list
        would otherwise hide every job. */
-    const bandHistory = candidateRatingBand
-      ? sortedHistory.filter(item => !jobLoaded(item) || jobTally(item)[candidateRatingBand] > 0)
-      : sortedHistory;
-    const pageHistory = bandHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage);
+    // The server already applied the pill and paged: this is the page.
+    const bandHistory = sortedHistory;
+    const pageHistory = sortedHistory;
     // A run that matched nobody has nothing to tick.
-    const jobKeys = bandHistory.filter(item => (item.totalMatches || 0) > 0).map(item => item.id);
     const pageJobKeys = pageHistory.filter(item => (item.totalMatches || 0) > 0).map(item => item.id);
+    // Select all = every job matching the filters (selectAllMatchingJobs).
+    const jobKeys = Array.from(selectedJobKeys);
+    const jobsMatchingTotal = jobsList.total;
     const isJobPartlySelected = (k: string) => !selectedJobKeys.has(k) && (partialJobRows[k]?.length ?? 0) > 0;
-    const allJobsSelected = jobKeys.length > 0 && jobKeys.every(k => selectedJobKeys.has(k));
-    const tickedJobs = bandHistory.filter(item => selectedJobKeys.has(item.id) || isJobPartlySelected(item.id));
+    const allJobsSelected = jobsMatchingTotal > 0 && selectedJobKeys.size >= jobsMatchingTotal;
+    const tickedJobs = Array.from(new Set([...Array.from(selectedJobKeys), ...Object.keys(partialJobRows)]))
+      .filter(k => selectedJobKeys.has(k) || isJobPartlySelected(k))
+      .map(k => findHistory(k))
+      .filter((item): item is MatchHistory => !!item);
     const selectedJobCount = tickedJobs.length;
     // The candidates the Actions run on: every one of a ticked job (rating
     // pill applied), or just the ticked ones of a partly ticked job.
@@ -3344,9 +3371,12 @@ export default function AITalentMatchPage({
     ];
     /** Export `exportRows` — each row's match record, from its session. */
     const handleExportRows = async (format: 'csv' | 'xlsx', picked?: string[]) => {
+      // Every selected row's session, loaded (batched) before the file is written —
+      // a selection can span jobs that were never opened, or not on this page.
+      const loaded = await ensureSessionsLoaded((exportRows ?? []).map(r => r.historyId));
       const rows = (exportRows ?? []).flatMap(r => {
-        const item = matchHistory.find(h => h.id === r.historyId);
-        const c = (historyCandidatesById[r.historyId] ?? []).find(x => `${r.historyId}::${x.id}` === r.key);
+        const item = findHistory(r.historyId);
+        const c = (loaded[r.historyId] ?? historyCandidatesById[r.historyId] ?? []).find(x => `${r.historyId}::${x.id}` === r.key);
         if (!item || !c) return [];
         return [{
           jdCode: jobs.find(j => j.id === item.jobId)?.jobId || '-',
@@ -3380,11 +3410,18 @@ export default function AITalentMatchPage({
       job: CandidateMatchRow['jobs'][number],
       jobScoreId: string | undefined,
       candScoreNav: ScoreRef[],
-    ) => (
+    ) => {
+      // An existing team member's resume: every action is disabled except
+      // View Scorecard, same as Resume Database.
+      const teamLocked = !!row.best?.isTenantUserEmail;
+      // An archived resume can't be scored either — same lockout the invites use.
+      const archivedLocked = !!row.best?.isArchived;
+      return (
       <>
         <DropdownMenuItem
-          className={actionsMenuItemClass}
-          disabled={!job.resumeId}
+          className={`${actionsMenuItemClass} ${teamLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={!job.resumeId || teamLocked}
+          title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
           onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
         >
           <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -3401,13 +3438,13 @@ export default function AITalentMatchPage({
           </DropdownMenuItem>
         ) : (
           <DropdownMenuItem
-            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            // A Disabled / Archived JD can't be scored against.
-            disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
+            className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || archivedLocked || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+            disabled={!job.resumeId || teamLocked || archivedLocked || (canRunScoring && !!jobLockFor(job.jobId))}
             aria-disabled={!canRunScoring || undefined}
-            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+            title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : archivedLocked ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
             onSelect={(e) => {
-              if (!canRunScoring || jobLockFor(job.jobId)) {
+              if (!canRunScoring || teamLocked || archivedLocked || jobLockFor(job.jobId)) {
                 e.preventDefault();
                 return;
               }
@@ -3429,12 +3466,15 @@ export default function AITalentMatchPage({
             phone: row.phone,
             title: row.title,
             resumeId: job.resumeId,
+            isArchived: row.best?.isArchived,
+            isTenantUserEmail: row.best?.isTenantUserEmail,
           },
           'candidates',
           job.jobTitle,
         )}
       </>
-    );
+      );
+    };
 
     const candRowsOf = (row: CandidateMatchRow, only?: Set<string>): MatchInviteRow[] =>
       bandJobsOf(row.jobs)
@@ -3448,6 +3488,8 @@ export default function AITalentMatchPage({
           phone: row.phone,
           title: row.title,
           resumeId: j.resumeId,
+          isArchived: row.best?.isArchived,
+          isTenantUserEmail: row.best?.isTenantUserEmail,
         }));
     /* Job Titles cell: the first two titles and a "+N more" chip; a click
        opens a small popup listing every title under "All (N)", each with how
@@ -3474,7 +3516,7 @@ export default function AITalentMatchPage({
                 <span key={title} className="block tf-body">{title}</span>
               ))}
               {hidden > 0 && (
-                <span className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 whitespace-nowrap">
+                <span className="tf-badge mt-1 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                   +{hidden} more
                 </span>
               )}
@@ -3482,11 +3524,11 @@ export default function AITalentMatchPage({
           </PopoverTrigger>
           <PopoverContent
             align="start"
-            className="w-80 p-0 overflow-hidden"
+            className="w-80 tf-fit-screen p-0 overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-3 py-2 bg-gray-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase tracking-wide text-gray-600 dark:text-slate-300">
+              <span className="tf-caption uppercase tracking-wide">
                 All ({titles.length})
               </span>
               <span className="tf-meta">
@@ -3510,11 +3552,17 @@ export default function AITalentMatchPage({
       );
     };
 
+    // "All" = every candidate matching the filters (candList.total), not the page.
     const candKeys = sortedCandidateRows.map(r => r.key);
+    const candMatchingTotal = candList.total;
     const pageCandKeys = paginatedCandidateRows.map(r => r.key);
     const isCandPartly = (k: string) => !selectedCandKeys.has(k) && (partialCandJobs[k]?.length ?? 0) > 0;
-    const allCandsSelected = candKeys.length > 0 && candKeys.every(k => selectedCandKeys.has(k));
-    const tickedCands = sortedCandidateRows.filter(r => selectedCandKeys.has(r.key) || isCandPartly(r.key));
+    const allCandsSelected = candMatchingTotal > 0 && selectedCandKeys.size >= candMatchingTotal;
+    // Ticked rows may sit on other pages: read them from the rows seen this visit.
+    const tickedCands = Array.from(new Set([...Array.from(selectedCandKeys), ...Object.keys(partialCandJobs)]))
+      .filter(k => selectedCandKeys.has(k) || isCandPartly(k))
+      .map(k => candidateRows.find(r => r.key === k) ?? candRowCache[k])
+      .filter((r): r is CandidateMatchRow => !!r);
     const candViewSelectedRows: MatchInviteRow[] = tickedCands.flatMap(r =>
       candRowsOf(r, selectedCandKeys.has(r.key) ? undefined : new Set(partialCandJobs[r.key] ?? [])));
 
@@ -3532,7 +3580,7 @@ export default function AITalentMatchPage({
       if (count === 0) return null;
       const itemFor = (jdId: string) => {
         const r = rows.find(x => x.jobId === jdId);
-        return r ? matchHistory.find(h => h.id === r.historyId) : undefined;
+        return r ? findHistory(r.historyId) : undefined;
       };
       const guard = (): boolean => {
         if (loading) { toast.info('Candidates are still loading — try again in a moment'); return false; }
@@ -3563,12 +3611,16 @@ export default function AITalentMatchPage({
       // outright, whatever the permission, with that as the reason — this
       // list has no JobActionLock provider (Job Details' own) around it.
       const selectionJobLock = resolveSelectionJobLock(targets);
-      const assessmentAllowed = canInviteAssessmentFromMatch && !selectionJobLock;
-      const assessmentReason = selectionJobLock ?? ASSESSMENT_INVITE_DENIED;
-      const interviewAllowed = canInviteAIInterviewFromMatch && !selectionJobLock;
-      const interviewReason = selectionJobLock ?? AI_INTERVIEW_INVITE_DENIED;
+      // Any archived resume in the selection blocks scoring and both invites
+      // outright too — same lockout the per-row menus use.
+      const selectionArchivedCount = rows.filter(r => r.isArchived).length;
+      const selectionLock = selectionJobLock ?? (selectionArchivedCount > 0 ? ARCHIVED_ACTION_MESSAGE : null);
+      const assessmentAllowed = canInviteAssessmentFromMatch && !selectionLock;
+      const assessmentReason = selectionLock ?? ASSESSMENT_INVITE_DENIED;
+      const interviewAllowed = canInviteAIInterviewFromMatch && !selectionLock;
+      const interviewReason = selectionLock ?? AI_INTERVIEW_INVITE_DENIED;
       return (
-        <div className="mt-3 flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
+        <StickyBulkBar className="mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2 animate-in fade-in slide-in-from-top-1 duration-200">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
@@ -3597,18 +3649,18 @@ export default function AITalentMatchPage({
                   <ClipboardList className="w-4 h-4 text-gray-400 mt-0.5" />
                   <span className="min-w-0">
                     <span className="block">Score Resumes</span>
-                    <span className="block text-2xs text-gray-400 normal-case">Select candidates from one job to score them</span>
+                    <span className="block tf-micro-hint normal-case">Select candidates from one job to score them</span>
                   </span>
                 </DropdownMenuItem>
               ) : (
               <DropdownMenuItem
-                className={`${actionsMenuItemClass} ${!canRunScoring || selectionJobLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                className={`${actionsMenuItemClass} ${!canRunScoring || selectionLock ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
                 aria-disabled={!canRunScoring || undefined}
-                // A Disabled / Archived JD can't be scored against.
-                disabled={canRunScoring && !!selectionJobLock}
-                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionJobLock ?? undefined}
+                // A Disabled / Archived JD, or an archived resume in the selection, can't be scored against.
+                disabled={canRunScoring && !!selectionLock}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : selectionLock ?? undefined}
                 onSelect={(e) => {
-                  if (!canRunScoring || selectionJobLock) {
+                  if (!canRunScoring || selectionLock) {
                     e.preventDefault();
                     return;
                   }
@@ -3651,10 +3703,7 @@ export default function AITalentMatchPage({
                   if (guard()) {
                     // Candidates view rows come from every session — make
                     // sure each is loaded before the file is written.
-                    rows.forEach(r => {
-                      const item = matchHistory.find(h => h.id === r.historyId);
-                      if (item) void loadHistoryCandidates(item, { silent: true });
-                    });
+                    void ensureSessionsLoaded(rows.map(r => r.historyId));
                     setExportRows(rows);
                   }
                 }}
@@ -3717,7 +3766,7 @@ export default function AITalentMatchPage({
             <X className="w-4 h-4" />
             Clear
           </button>
-        </div>
+        </StickyBulkBar>
       );
     };
 
@@ -3743,9 +3792,12 @@ export default function AITalentMatchPage({
       { id: 'no_match', label: 'Rating Below 7', count: pillCounts.no_match },
     ];
     const isCandidatesView = historyPageView === 'candidates' || historyPageView === 'resumes';
+    /* Phones (globals.css, `.tf-jobs-toolbar`): the rating pills become the Job
+       Openings list's underlined status tabs and View by its full-width
+       segmented row — as Resume Scoring. From sm unchanged. */
     const viewPills = (
-      <div className="flex items-center gap-2 flex-wrap">
-        <div role="group" aria-label="Filter by match rating" className="flex items-center gap-2 flex-wrap">
+      <div className="tf-jobs-contents flex items-center gap-2 flex-wrap">
+        <div role="group" aria-label="Filter by match rating" className="tf-jobs-status-tabs flex items-center gap-2 flex-wrap">
           {ratingFilters.map(f => {
             const active = candidateRatingBand === f.id;
             return (
@@ -3774,12 +3826,12 @@ export default function AITalentMatchPage({
 
         <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
 
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap">View by</span>
+        <div className="tf-jobs-method flex w-full sm:w-auto items-center gap-2">
+          <span className="tf-label whitespace-nowrap">View by</span>
           <div
             role="radiogroup"
             aria-label="View by"
-            className="relative grid grid-cols-2 h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
+            className="relative grid grid-cols-2 flex-1 sm:flex-none h-9 p-1 rounded-lg bg-brand-blue/5 ring-1 ring-brand-blue/10"
           >
             <span
               aria-hidden
@@ -3803,11 +3855,11 @@ export default function AITalentMatchPage({
                 role="radio"
                 aria-checked={view.active}
                 onClick={view.open}
-                className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
+                className={`relative z-10 inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 rounded-md text-sm font-medium whitespace-nowrap transition-colors duration-300 ${
                   view.active ? 'text-brand-blue' : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
                 }`}
               >
-                <view.icon className="w-4 h-4" />
+                <view.icon className="hidden sm:block w-4 h-4" />
                 {view.label}
               </button>
             ))}
@@ -3818,9 +3870,9 @@ export default function AITalentMatchPage({
 
     return (
       <>
-      <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
+      <main ref={rootRef} className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         {/* The candidate roll-up is an in-page view on this same route, so the
             trail stays at the module level — no extra step is added. */}
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Talent Match' }]} />
@@ -3831,13 +3883,13 @@ export default function AITalentMatchPage({
           title="AI Talent Match"
           description="Review jobs with AI-matched candidates and their results"
           actions={
-            <div className="flex items-center gap-2 flex-wrap sm:justify-end">
+            <div className="flex w-full items-center gap-2 flex-wrap sm:w-auto sm:justify-end">
               {onBack && (
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={onBack}
-                  className="px-2"
+                 
                   aria-label="Back to Dashboard" title="Back to Dashboard"
                 >
                   <ArrowLeft className="w-4 h-4" />
@@ -3856,8 +3908,8 @@ export default function AITalentMatchPage({
                 }}
                 aria-disabled={!canRunAiMatch}
                 title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
-                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
-                icon={<Sparkles className="w-4 h-4" />}
+                /* Full width on phones, like Job Openings' Create New Job and Resume Scoring's Score Resumes. */
+                className={`w-full sm:w-auto ${(!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               >
                 Run AI Match
               </Button>
@@ -3890,15 +3942,14 @@ export default function AITalentMatchPage({
           /* The chip under each count, as the JD cards carry "N versions" and
              Resume Scoring's "N candidates". */
           const StatChip = ({ count, unit, units = `${unit}s` }: { count: number; unit: string; units?: string }) => (
-            <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+            <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
               {count.toLocaleString()} {count === 1 ? unit : units}
             </span>
           );
           // Distinct candidates holding a match in the band — only once the
           // candidate roll-up is in, so the chip never shows a false 0.
-          const rowsLoaded = !loadingCandidateRows && candidateRows.length > 0;
-          const peopleInBand = (band: RatingBand) =>
-            candidateRows.filter(row => row.jobs.some(job => matchBandForRating(toMatchRating(job.score)) === band)).length;
+          const rowsLoaded = matchStats !== null;
+          const peopleInBand = (band: RatingBand) => matchStats?.candidates_by_band?.[band] ?? 0;
           return (
         <div className="mb-4 sm:mb-5">
         <StatsCardGrid className="mb-0">
@@ -3908,9 +3959,9 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={History}
             label="Matched Jobs"
-            value={matchHistory.length.toLocaleString()}
+            value={matchStats ? matchStats.matched_jobs.toLocaleString() : statLoading}
             sparkline={false}
-            title={`${matchHistory.length.toLocaleString()} jobs have AI Talent Match results`
+            title={`${(matchStats?.matched_jobs ?? 0).toLocaleString()} jobs have AI Talent Match results`
               + (totalMatchedCandidatesReady ? `, matching ${totalMatchedCandidates.toLocaleString()} different candidates` : '')
               + '. Click to view by job.'}
             onClick={() => openHistoryListView()}
@@ -3978,7 +4029,9 @@ export default function AITalentMatchPage({
           <div>
             <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-            <div className="mb-4">
+            {/* Phones / tablets: the Job Openings list's toolbar card and phone
+                line layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
+            <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
               <ListToolbar
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
@@ -3987,7 +4040,7 @@ export default function AITalentMatchPage({
                 searchPlaceholder="Search candidates by name, email or job..."
                 controlsFollowSearch
                 leadingActions={
-                  <>
+                  <div className="tf-jobs-filter-pills contents">
                     <SearchableSelect
                       className="w-full sm:w-52"
                       value={candidateFilterJob === 'all' ? '' : candidateFilterJob}
@@ -4008,7 +4061,7 @@ export default function AITalentMatchPage({
                       searchPlaceholder="Search..."
                       ariaLabel="Filter by minimum match"
                     />
-                  </>
+                  </div>
                 }
                 onToggleFilters={() => {
                   setShowCandidateFilters(!showCandidateFilters);
@@ -4019,30 +4072,26 @@ export default function AITalentMatchPage({
                 onClearFilters={clearCandidateFilters}
                 className="mb-0"
               >
+                {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
+                <div className="tf-jobs-sort contents">
                 <SortByControl
                   value={candidateSortBy}
                   order={candidateSortOrder}
-                  options={[
-                    { value: 'jobs' as const, label: 'Matched Jobs' },
-                    { value: 'score' as const, label: 'Best Match' },
-                    { value: 'name' as const, label: 'Candidate Name' },
-                    { value: 'scored' as const, label: 'Scored' },
-                    { value: 'titles' as const, label: 'Job Titles' },
-                    { value: 'date' as const, label: 'Last Matched' },
-                  ]}
+                  options={CANDIDATE_SORT_OPTIONS}
                   onChange={(v) => setCandidateSortBy(v)}
                   onToggleOrder={() => setCandidateSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'))}
                 />
+                </div>
                 <ListViewToggle
                   value={matchDisplayMode}
                   onChange={setDisplayModeEverywhere}
-                  className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
+                  className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px] !border-brand-blue/10"
                 />
               </ListToolbar>
 
               {showCandidateFilters && (
-                <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
+                  <div className="tf-grid-4">
                     {candidateLocations.length > 0 && (
                       <div>
                         <label className="block tf-label mb-1.5">Location</label>
@@ -4061,7 +4110,7 @@ export default function AITalentMatchPage({
 
                     <div>
                       <label className="block tf-label mb-1.5">Job Count</label>
-                      <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
+                      <label className="tf-panel flex items-center gap-2 px-3 py-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={candidateFilterMultiJob}
@@ -4079,7 +4128,7 @@ export default function AITalentMatchPage({
                         value={candidateFilterPhone}
                         onChange={(e) => candidateSearch.setFilter('phone', e.target.value)}
                         placeholder="Full or partial number"
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                        className="tf-input"
                       />
                     </div>
 
@@ -4115,7 +4164,7 @@ export default function AITalentMatchPage({
                           placeholder="Min"
                           min={0}
                           aria-label="Minimum experience in years"
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                          className="tf-input"
                         />
                         <input
                           type="number"
@@ -4124,7 +4173,7 @@ export default function AITalentMatchPage({
                           placeholder="Max"
                           min={0}
                           aria-label="Maximum experience in years"
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                          className="tf-input"
                         />
                       </div>
                     </div>
@@ -4147,13 +4196,14 @@ export default function AITalentMatchPage({
 
               {/* Row 2: Select All, the rating pills and View by toggle, Expand
                   all — the same row View by Job has. */}
-              <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+              <div className="tf-jobs-row2 mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
                 {candKeys.length > 0 && (
                   <>
+                    <div className="tf-jobs-select">
                     <SelectAllMenu
                       selectedCount={tickedCands.length}
                       pageCount={pageCandKeys.length}
-                      totalCount={candKeys.length}
+                      totalCount={candMatchingTotal}
                       noun="candidates"
                       allSelected={allCandsSelected}
                       onSelectPage={() => {
@@ -4164,16 +4214,25 @@ export default function AITalentMatchPage({
                           return next;
                         });
                       }}
-                      onSelectAll={() => {
-                        setSelectedCandKeys(new Set(candKeys));
-                        setPartialCandJobs({});
-                      }}
+                      onSelectAll={() => { void selectAllMatchingCandidates(); }}
                       onClear={clearCandSelection}
                     />
+                    </div>
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                   </>
                 )}
                 {viewPills}
+                {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+                {candKeys.length > 0 && (
+                  <PhoneSortMenu<CandidateSortKey>
+                    value={candidateSortBy}
+                    order={candidateSortOrder}
+                    options={CANDIDATE_SORT_OPTIONS}
+                    orderLabels={candidateSortOrderLabels}
+                    onChange={(v) => setCandidateSortBy(v)}
+                    onOrderChange={setCandidateSortOrder}
+                  />
+                )}
                 {pageCandKeys.length > 0 && (() => {
                   const allOpen = pageCandKeys.every(k => expandedCandidateGroups.has(k));
                   return (
@@ -4187,10 +4246,12 @@ export default function AITalentMatchPage({
                         })
                       }
                       aria-pressed={allOpen}
-                      className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                      title={allOpen ? 'Collapse all' : 'Expand all'}
+                      /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                      className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
                     >
                       {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                      {allOpen ? 'Collapse all' : 'Expand all'}
+                      <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
                     </button>
                   );
                 })()}
@@ -4205,14 +4266,14 @@ export default function AITalentMatchPage({
                  Latest Matched, Actions. */
               <MatchTableSkeleton cols={['w-6', 'w-32', 'w-24', 'w-28', 'w-24', 'w-16']} />
             ) : filteredCandidateRows.length === 0 ? (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
+              <div className="tf-panel p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
                   <User className="w-5 h-5" />
                 </div>
-                <h3 className="tf-section-title mb-2">
+                <h3 className="tf-section-title sm:text-lg mb-2">
                   {candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
                 </h3>
-                <p className="tf-card-desc max-w-md mx-auto">
+                <p className="tf-body-secondary max-w-md mx-auto">
                   {candidateFiltersApplied
                     ? 'Try a different name, job, location, or lower the minimum match.'
                     : 'Run AI Match on a job to see matched candidates here.'}
@@ -4231,12 +4292,12 @@ export default function AITalentMatchPage({
               <>
                 {/* No tf-table-shell height cap here: the page itself scrolls,
                     and each opened candidate's job list scrolls in its own box. */}
-                <div className={`${matchDisplayMode === 'grid' ? 'hidden' : 'hidden md:block'} rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden`}>
+                <div className={`${matchDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden`}>
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px]">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                         <tr>
-                          <th className="w-10 pl-4 pr-1 py-3 tf-th">
+                          <th className="tf-th-cell w-10 pl-4 pr-1 tf-th">
                             {(() => {
                               const allPage = pageCandKeys.length > 0 && pageCandKeys.every(k => selectedCandKeys.has(k));
                               return (
@@ -4263,7 +4324,7 @@ export default function AITalentMatchPage({
                           {candidateSortHeader('scored', 'Scored', 'center')}
                           {candidateSortHeader('titles', 'Job Titles')}
                           {candidateSortHeader('date', 'Latest Matched')}
-                          <th className="text-left py-3 px-4 tf-th">Actions</th>
+                          <th className="tf-th-cell text-left tf-th">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4289,7 +4350,7 @@ export default function AITalentMatchPage({
                                 aria-expanded={isExpanded}
                                 className={`cursor-pointer transition-colors ${candSelected ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50/70 dark:hover:bg-slate-800/40'}`}
                               >
-                                <td className="pl-4 pr-1 py-4 align-top">
+                                <td className="tf-td pl-4 pr-1 align-top">
                                   <button
                                     type="button"
                                     onClick={(e) => { e.stopPropagation(); handleSelectCand(row.key); }}
@@ -4307,7 +4368,7 @@ export default function AITalentMatchPage({
                                     )}
                                   </button>
                                 </td>
-                                <td className="px-4 py-4 align-top">
+                                <td className="tf-td align-top">
                                   <div className="flex items-start gap-3">
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-2 min-w-0">
@@ -4318,19 +4379,20 @@ export default function AITalentMatchPage({
                                           {row.name || 'Candidate'}
                                         </button>
                                         {row.best?.isArchived && <ResumeArchivedBadge />}
+                                        {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                                       </div>
                                       {row.email && <div className="tf-meta truncate">{row.email}</div>}
                                     </div>
                                   </div>
                                 </td>
-                                <td className="px-4 py-4 align-top">
-                                  <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
+                                <td className="tf-td align-top">
+                                  <span className="tf-badge bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30">
                                     {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
                                   </span>
                                 </td>
                                 {/* Scored — of the Job Versions beside it, how many this
                                     candidate has been scored against in Resume Scoring. */}
-                                <td className="px-4 py-4 align-top text-center whitespace-nowrap">
+                                <td className="tf-td align-top text-center whitespace-nowrap">
                                   {scoredResumeIdsByJd ? (() => {
                                     const scoredJobs = row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length;
                                     return (
@@ -4347,14 +4409,14 @@ export default function AITalentMatchPage({
                                     );
                                   })() : <span className="inline-block h-6 w-14 rounded-full bg-gray-100 dark:bg-slate-800 animate-pulse" aria-label="Loading" />}
                                 </td>
-                                <td className="px-4 py-4 align-top">
+                                <td className="tf-td align-top">
                                   {renderJobTitlesCell(row)}
                                 </td>
-                                <td className="px-4 py-4 align-top whitespace-nowrap">
-                                  <div className="text-sm text-gray-900 dark:text-slate-100">{formatISTDate(latestJob.matchedAt.toISOString())}</div>
+                                <td className="tf-td align-top whitespace-nowrap">
+                                  <div className="tf-body">{formatISTDate(latestJob.matchedAt.toISOString())}</div>
                                   <div className="tf-meta">{formatISTTime(latestJob.matchedAt.toISOString())}</div>
                                 </td>
-                                <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
+                                <td className="tf-td align-top" onClick={(e) => e.stopPropagation()}>
                                   <div className="flex items-center gap-1.5">
                                     {/* ▾ — opens or closes this candidate's matched jobs; first in
                                         Actions, as on Resume Scoring. */}
@@ -4394,11 +4456,11 @@ export default function AITalentMatchPage({
                                   <td colSpan={7} className="p-0 bg-gray-50/60 dark:bg-slate-800/30">
                                     <div className="px-4 sm:px-6 py-3">
                                       {/* The rows scroll inside this box; the header row stays put. */}
-                                      <div className="max-h-[360px] overflow-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                                      <div className="tf-panel max-h-[360px] overflow-auto">
                                       <table className="w-full min-w-[900px] table-auto">
                                         <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                                           <tr>
-                                            <th className="w-10 py-2 pl-4 pr-1" />
+                                            <th className="tf-th-cell w-10 pl-4 pr-1" />
                                             {innerJobSortHeader(row.key, 'rating', 'Match Rating', 'center', 'tf-sticky-col-left !bg-gray-50 dark:!bg-slate-800')}
                                             {innerJobSortHeader(row.key, 'jdId', 'JD ID', 'left')}
                                             {innerJobSortHeader(row.key, 'title', 'Job Title', 'left')}
@@ -4406,7 +4468,7 @@ export default function AITalentMatchPage({
                                             {innerJobSortHeader(row.key, 'scored', 'Scored Status', 'left')}
                                             {innerJobSortHeader(row.key, 'date', 'Matched By / Date', 'left')}
                                             {innerJobSortHeader(row.key, 'resumeVersion', 'Resume Version', 'center')}
-                                            <th className="text-left py-2 px-4 tf-th whitespace-nowrap tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
+                                            <th className="tf-th-cell text-left text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                                           </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4431,7 +4493,7 @@ export default function AITalentMatchPage({
                                                 title={jobScoreId ? (jobSummaryOpen ? 'Hide score' : 'Show score') : undefined}
                                                 className={`bg-white dark:bg-slate-900 ${jobScoreId ? 'cursor-pointer hover:bg-gray-50/70 dark:hover:bg-slate-800/40' : ''}`}
                                               >
-                                                <td className="py-2.5 pl-4 pr-1 align-middle" onClick={(e) => e.stopPropagation()}>
+                                                <td className="tf-td pl-4 pr-1" onClick={(e) => e.stopPropagation()}>
                                                   {(() => {
                                                     const ticked = candTickedJobIds.includes(job.historyId);
                                                     return (
@@ -4452,47 +4514,47 @@ export default function AITalentMatchPage({
                                                     );
                                                   })()}
                                                 </td>
-                                                <td className="text-center py-2.5 px-4 align-middle tf-sticky-col-left">
+                                                <td className="tf-td text-center tf-sticky-col-left">
                                                   <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                                                     {toMatchRating(job.score)}
                                                   </span>
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle whitespace-nowrap">
+                                                <td className="tf-td whitespace-nowrap">
                                                   {jobRecord?.jobId
                                                     ? <JobIdBadge className="inline-flex h-6 items-center">{jobRecord.jobId}</JobIdBadge>
-                                                    : <span className="text-sm text-gray-400">-</span>}
+                                                    : <span className="tf-body-muted">-</span>}
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle tf-td">{job.jobTitle}</td>
-                                                <td className="text-center py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
+                                                <td className="tf-td tf-body">{job.jobTitle}</td>
+                                                <td className="tf-td text-center whitespace-nowrap">
+                                                  <span className="tf-badge border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
                                                     v{jobVersion ?? 1}
                                                   </span>
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle whitespace-nowrap">
+                                                <td className="tf-td whitespace-nowrap">
                                                   {jobScoreId ? (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
+                                                    <span className="tf-badge bg-success-subtle text-success border border-success/20">
                                                       <CheckCircle2 className="w-3 h-3" />
                                                       Scored
                                                     </span>
                                                   ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
+                                                    <span className="tf-badge bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                                                       <XCircle className="w-3 h-3" />
                                                       Not Scored
                                                     </span>
                                                   )}
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle whitespace-nowrap">
+                                                <td className="tf-td whitespace-nowrap">
                                                   <div className="tf-body">{job.matchedByName || 'System'}</div>
                                                   <div className="tf-meta">
                                                     {formatISTDate(job.matchedAt.toISOString())} · {formatISTTime(job.matchedAt.toISOString())}
                                                   </div>
                                                 </td>
-                                                <td className="text-center py-2.5 px-4 align-middle whitespace-nowrap">
-                                                  <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
+                                                <td className="tf-td text-center whitespace-nowrap">
+                                                  <span className="tf-badge border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                                                     v{job.resumeVersion ?? 1}
                                                   </span>
                                                 </td>
-                                                <td className="py-2.5 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                                                <td className="tf-td tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                                                   <div className="inline-flex items-center gap-1.5">
                                                   <DropdownMenu>
                                                     <DropdownMenuTrigger asChild>
@@ -4530,7 +4592,7 @@ export default function AITalentMatchPage({
                                               </tr>
                                               {jobSummaryOpen && (
                                                 <tr className="bg-gray-50/60 dark:bg-slate-800/30">
-                                                  <td colSpan={9} className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                                  <td colSpan={9} className="tf-td" onClick={(e) => e.stopPropagation()}>
                                                     {renderScoreSummary(job.jobId, job.jobTitle, jobScoreId!, candScoreNav)}
                                                   </td>
                                                 </tr>
@@ -4566,7 +4628,7 @@ export default function AITalentMatchPage({
 
                 {/* Cards — the phone layout, and the Grid view at every width
                     (an opened card spans the full row). */}
-                <div className={matchDisplayMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start' : 'md:hidden space-y-3'}>
+                <div className={matchDisplayMode === 'grid' ? 'tf-grid-3 items-start' : 'tf-record-list lg:hidden'}>
                   {paginatedCandidateRows.map((row) => {
                     const isExpanded = expandedCandidateGroups.has(row.key);
                     const distinctTitles = Array.from(new Set(row.jobs.map(j => j.jobTitle).filter(Boolean))) as string[];
@@ -4575,16 +4637,7 @@ export default function AITalentMatchPage({
                     const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
                     const latestJob = sortedJobs[0];
 
-                    return (
-                      <div
-                        key={row.key}
-                        onClick={() => toggleCandidateGroupExpanded(row.key)}
-                        aria-expanded={isExpanded}
-                        className={`rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm cursor-pointer min-w-0 ${
-                          selectedCandKeys.has(row.key) ? 'border-brand-blue/40 !bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700'
-                        } ${matchDisplayMode === 'grid' && isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
-                      >
-                        <div className="flex items-start gap-3 mb-2">
+                          const selectBtn = (
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); handleSelectCand(row.key); }}
@@ -4600,50 +4653,22 @@ export default function AITalentMatchPage({
                               <Square className="w-4 h-4 text-gray-400" />
                             )}
                           </button>
-                          <div className="min-w-0 flex-1">
-                            {/* max-w-full: a button sizes to its text, so without it `truncate`
-                                never engaged and a long name ran past the card on a phone. */}
-                            <div className="flex items-center gap-2 min-w-0">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
-                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
-                              >
-                                {row.name || 'Candidate'}
-                              </button>
+                          );
+                            const nameBtn = (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); openCandidateResume(row, sortedCandidateRows); }}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                            >
+                              {row.name || 'Candidate'}
+                            </button>
+                            );
+                          const nameBadge = (row.best?.isArchived || row.best?.isTenantUserEmail) ? (
+                            <>
                               {row.best?.isArchived && <ResumeArchivedBadge />}
-                            </div>
-                            {row.email && <div className="tf-meta truncate">{row.email}</div>}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
-                            {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
-                          </span>
-                          {/* Scored — of this candidate's matched jobs, how many have been
-                              scored against that job in Resume Scoring. */}
-                          {scoredResumeIdsByJd && (
-                            <span className="tf-meta-strong">
-                              <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>{' '}
-                              {row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length} of {row.jobs.length}
-                            </span>
-                          )}
-                        </div>
-
-                        <div className="mb-2">
-                          {renderJobTitlesCell(row)}
-                        </div>
-
-                        {/* Footer (Resume Scoring's grid card): Latest Matched on the
-                            left, ▾ (open this candidate's jobs) and ⋮ on the right. */}
-                        <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex-1 min-w-0 tf-meta">
-                            <div className="text-gray-400 uppercase tracking-wide text-2xs">Latest Matched</div>
-                            <div className="truncate">
-                              <span className="text-gray-700 dark:text-slate-300">{formatISTDate(latestJob.matchedAt.toISOString())}</span>{' '}
-                              <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span>
-                            </div>
-                          </div>
+                              {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
+                            </>
+                          ) : null;
+                          const chevronBtn = (
                           <button
                             type="button"
                             onClick={() => toggleCandidateGroupExpanded(row.key)}
@@ -4654,6 +4679,8 @@ export default function AITalentMatchPage({
                           >
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                           </button>
+                          );
+                          const actionsMenu = (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button type="button" aria-label="Actions" title="Actions" className={ROW_ACTION_BUTTON_CLASS}>
@@ -4671,13 +4698,8 @@ export default function AITalentMatchPage({
                               </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
-                        </div>
-
-                        {/* The candidate's matched jobs, opened in place — the grid
-                            counterpart of the list's inner table: one card per job,
-                            each with its tick and its own ⋮ (Preview, Score /
-                            View Scorecard, invites). */}
-                        {isExpanded && (() => {
+                          );
+                        const expandedJobs = isExpanded && (() => {
                           const gridCandSelected = selectedCandKeys.has(row.key);
                           const gridAllJobIds = bandJobsOf(row.jobs).map(j => j.historyId);
                           const gridTickedJobIds = gridCandSelected ? gridAllJobIds : (partialCandJobs[row.key] ?? []);
@@ -4686,7 +4708,7 @@ export default function AITalentMatchPage({
                             .filter(r => r.scoreId);
                           return (
                           <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 cursor-default" onClick={(e) => e.stopPropagation()}>
-                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
+                            <div className="tf-grid-3">
                               {pageCandidateJobs(row.key, innerJobsOf(row.key, sortedJobs)).map(job => {
                                 const jobRecord = jobs.find(j => j.id === job.jobId);
                                 const jobScoreId = scoreIdFor(job.jobId, job.resumeId);
@@ -4719,8 +4741,8 @@ export default function AITalentMatchPage({
                                       <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5 min-w-0">
                                           {jobRecord?.jobId && <JobIdBadge>{jobRecord.jobId}</JobIdBadge>}
-                                          <span className="text-sm font-medium text-gray-800 dark:text-slate-200 truncate" title={job.jobTitle}>{job.jobTitle}</span>
-                                          <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 shrink-0">
+                                          <span className="tf-label truncate" title={job.jobTitle}>{job.jobTitle}</span>
+                                          <span className="tf-badge text-2xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30 shrink-0">
                                             v{jobRecord?.currentVersion ?? 1}
                                           </span>
                                         </div>
@@ -4729,12 +4751,12 @@ export default function AITalentMatchPage({
                                             {toMatchRating(job.score)}
                                           </span>
                                           {jobScoreId ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
+                                            <span className="tf-badge bg-success-subtle text-success border border-success/20">
                                               <CheckCircle2 className="w-3 h-3" />
                                               Scored
                                             </span>
                                           ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
+                                            <span className="tf-badge bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                                               <XCircle className="w-3 h-3" />
                                               Not Scored
                                             </span>
@@ -4775,7 +4797,108 @@ export default function AITalentMatchPage({
                             />
                           </div>
                           );
-                        })()}
+                        })();
+                    /* Phone / tablet list mode: the shared record card. The Grid view
+                       (a display option at every width) keeps its own card below. */
+                    if (matchDisplayMode !== 'grid') {
+                      return (
+                        <MobileRecordCard
+                          key={row.key}
+                          onClick={() => toggleCandidateGroupExpanded(row.key)}
+                          aria-expanded={isExpanded}
+                          selected={selectedCandKeys.has(row.key)}
+                          select={selectBtn}
+                          title={nameBtn}
+                          badges={nameBadge ?? undefined}
+                          meta={[{ icon: <Mail />, label: row.email || null }]}
+                          fields={[
+                            {
+                              label: 'Latest Matched',
+                              value: <>{formatISTDate(latestJob.matchedAt.toISOString())} <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span></>,
+                            },
+                          ]}
+                          footer={
+                            <>
+                              <MobileStatChip tone="info" icon={<Briefcase />}>
+                                {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                              </MobileStatChip>
+                              {/* Scored — of this candidate's matched jobs, how many have been
+                                  scored against that job in Resume Scoring. */}
+                              {scoredResumeIdsByJd && (
+                                <MobileStatChip tone="success" icon={<CheckCircle2 />}>
+                                  {row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length} of {row.jobs.length} Scored
+                                </MobileStatChip>
+                              )}
+                            </>
+                          }
+                          actions={<>{chevronBtn}{actionsMenu}</>}
+                        >
+                          <div className="mt-2">
+                            {renderJobTitlesCell(row)}
+                          </div>
+                          {expandedJobs}
+                        </MobileRecordCard>
+                      );
+                    }
+                    return (
+                      <div
+                        key={row.key}
+                        onClick={() => toggleCandidateGroupExpanded(row.key)}
+                        aria-expanded={isExpanded}
+                        className={`rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm cursor-pointer min-w-0 ${
+                          selectedCandKeys.has(row.key) ? 'border-brand-blue/40 !bg-brand-blue/[0.04]' : 'border-gray-200 dark:border-slate-700'
+                        } ${matchDisplayMode === 'grid' && isExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                      >
+                        <div className="flex items-start gap-3 mb-2">
+                          {selectBtn}
+                          <div className="min-w-0 flex-1">
+                            {/* max-w-full: a button sizes to its text, so without it `truncate`
+                                never engaged and a long name ran past the card on a phone. */}
+                            <div className="flex items-center gap-2 min-w-0">
+                              {nameBtn}
+                              {nameBadge}
+                            </div>
+                            {row.email && <div className="tf-meta truncate">{row.email}</div>}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="tf-badge bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30">
+                            {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                          </span>
+                          {/* Scored — of this candidate's matched jobs, how many have been
+                              scored against that job in Resume Scoring. */}
+                          {scoredResumeIdsByJd && (
+                            <span className="tf-meta">
+                              <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>{' '}
+                              {row.jobs.filter(j => !!scoreIdFor(j.jobId, j.resumeId)).length} of {row.jobs.length}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="mb-2">
+                          {renderJobTitlesCell(row)}
+                        </div>
+
+                        {/* Footer (Resume Scoring's grid card): Latest Matched on the
+                            left, ▾ (open this candidate's jobs) and ⋮ on the right. */}
+                        <div className="mt-1 flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                          <div className="flex-1 min-w-0 tf-meta">
+                            <div className="tf-micro-hint uppercase tracking-wide">Latest Matched</div>
+                            <div className="truncate">
+                              <span className="text-gray-700 dark:text-slate-300">{formatISTDate(latestJob.matchedAt.toISOString())}</span>{' '}
+                              <span className="text-gray-400">{formatISTTime(latestJob.matchedAt.toISOString())}</span>
+                            </div>
+                          </div>
+                          {chevronBtn}
+                          {actionsMenu}
+                        </div>
+
+                        {/* The candidate's matched jobs, opened in place — the grid
+                            counterpart of the list's inner table: one card per job,
+                            each with its tick and its own ⋮ (Preview, Score /
+                            View Scorecard, invites). */}
+                        {expandedJobs}
                       </div>
                     );
                   })}
@@ -4784,7 +4907,7 @@ export default function AITalentMatchPage({
                 <ListPagination
                   currentPage={candidateCurrentPage}
                   itemsPerPage={candidateItemsPerPage}
-                  totalItems={sortedCandidateRows.length}
+                  totalItems={candList.total}
                   onPageChange={setCandidateCurrentPage}
                   onItemsPerPageChange={setCandidateItemsPerPage}
                   itemLabel="candidates"
@@ -4800,7 +4923,7 @@ export default function AITalentMatchPage({
           <>
             <div ref={historyListSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+            <div className="tf-card p-3 sm:p-4 mb-4">
               <ListToolbar
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
@@ -4822,7 +4945,7 @@ export default function AITalentMatchPage({
                 }
               >
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-gray-500 dark:text-slate-400 hidden sm:inline">Sort by</span>
+                  <span className="tf-label hidden sm:inline">Sort by</span>
                   <div className="inline-flex items-center bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-full p-0.5 hover:border-brand-blue/30 transition-colors">
                     <FilterSelect
                       value={candidateSortBy}
@@ -4855,7 +4978,7 @@ export default function AITalentMatchPage({
                   row's right end via ml-auto, same treatment the single-job
                   results toolbar's own Score/Invite group uses. */}
               <div className="flex items-center gap-2 flex-wrap mb-3">
-                <span className="tf-card-desc">Show:</span>
+                <span className="tf-body-secondary">Show:</span>
                 {([
                   // This copy renders only while historyPageView === 'resumes' —
                   // see the "candidates" copy's comment for why the other two
@@ -4917,7 +5040,7 @@ export default function AITalentMatchPage({
                         void handleScoreSelectedAllResumes();
                       }}
                       aria-disabled={!canRunScoring}
-                      className={!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}
+                      className={`${(!canRunScoring ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
                       icon={<ClipboardList className="w-3.5 h-3.5" />}
                     >
@@ -4972,7 +5095,7 @@ export default function AITalentMatchPage({
                   for both, since "All Resumes" is that view's rows un-collapsed. */}
               {showCandidateFilters && (
                 <div className="pt-3 border-t border-brand-blue/10">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                  <div className="tf-grid-4">
                     {candidateLocations.length > 0 && (
                       <div>
                         <label className="block tf-label mb-1.5">Location</label>
@@ -5024,7 +5147,7 @@ export default function AITalentMatchPage({
 
                     <div>
                       <label className="block tf-label mb-1.5">Job Count</label>
-                      <label className="flex items-center gap-2 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg cursor-pointer bg-white dark:bg-slate-900">
+                      <label className="tf-panel flex items-center gap-2 px-3 py-2 cursor-pointer">
                         <input
                           type="checkbox"
                           checked={candidateFilterMultiJob}
@@ -5042,7 +5165,7 @@ export default function AITalentMatchPage({
                         value={candidateFilterPhone}
                         onChange={(e) => candidateSearch.setFilter('phone', e.target.value)}
                         placeholder="Full or partial number"
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                        className="tf-input"
                       />
                     </div>
 
@@ -5078,7 +5201,7 @@ export default function AITalentMatchPage({
                           placeholder="Min"
                           min={0}
                           aria-label="Minimum experience in years"
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                          className="tf-input"
                         />
                         <input
                           type="number"
@@ -5087,7 +5210,7 @@ export default function AITalentMatchPage({
                           placeholder="Max"
                           min={0}
                           aria-label="Maximum experience in years"
-                          className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900 placeholder:text-gray-400"
+                          className="tf-input"
                         />
                       </div>
                     </div>
@@ -5111,14 +5234,14 @@ export default function AITalentMatchPage({
                 cols={['w-6', 'w-20', 'w-28', 'w-24', 'w-28', 'w-20', 'w-20', 'w-24', 'w-16', 'w-24', 'w-20', 'w-20', 'w-16', 'w-20', 'w-16']}
               />
             ) : filteredAllResumeRows.length === 0 ? (
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
+              <div className="tf-panel p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
                   <FileText className="w-5 h-5" />
                 </div>
-                <h3 className="tf-section-title mb-2">
+                <h3 className="tf-section-title sm:text-lg mb-2">
                   {candidateFiltersApplied ? 'No resumes match your filters' : 'No matched resumes yet'}
                 </h3>
-                <p className="tf-card-desc max-w-md mx-auto">
+                <p className="tf-body-secondary max-w-md mx-auto">
                   {candidateFiltersApplied
                     ? 'Try a different name, job, location, or lower the minimum match.'
                     : 'Run AI Match on a job to see matched resumes here.'}
@@ -5132,7 +5255,7 @@ export default function AITalentMatchPage({
             ) : matchDisplayMode === 'grid' ? (
               <>
               {/* p-2 leaves room for each card's corner select seal. */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-2">
+              <div className="tf-grid-4 p-2">
                 {paginatedAllResumeRows.map(({ key, row, job }) => {
                   const scored = row.resumeId ? allScoredResumeIds.has(row.resumeId) : false;
                   return (
@@ -5161,6 +5284,7 @@ export default function AITalentMatchPage({
                           <div className="flex items-center gap-2 min-w-0">
                             <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
                             {row.best?.isArchived && <ResumeArchivedBadge />}
+                            {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                           </div>
                           <p className="tf-meta truncate">{row.email || '—'}</p>
                         </div>
@@ -5187,18 +5311,18 @@ export default function AITalentMatchPage({
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {scored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 border bg-success-subtle text-success-strong border-success-line rounded-full text-2xs font-medium">
+                          <span className="tf-badge bg-success-subtle text-success text-2xs">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
+                          <span className="tf-badge bg-gray-100 dark:bg-slate-800 tf-micro-hint">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
                         )}
                         {row.location && (
-                          <span className="text-2xs text-gray-500 dark:text-slate-500 truncate">{row.location}</span>
+                          <span className="tf-micro-hint truncate">{row.location}</span>
                         )}
                       </div>
 
@@ -5233,7 +5357,7 @@ export default function AITalentMatchPage({
               </>
             ) : (
               <>
-                <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+                <div className="hidden lg:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
                   <table className="w-full min-w-[1600px] table-auto">
                     <thead className="sticky top-0 z-10">
                       <tr>
@@ -5243,7 +5367,7 @@ export default function AITalentMatchPage({
                             on top of the first instead of beside it), so Match
                             Rating gets its own explicit offset equal to this
                             checkbox column's fixed width instead. */}
-                        <th className="w-12 px-3 py-3 align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8] tf-th">
+                        <th className="tf-th-cell w-12 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-0 z-[8] tf-th">
                           <input
                             type="checkbox"
                             aria-label="Select all"
@@ -5253,7 +5377,7 @@ export default function AITalentMatchPage({
                             }}
                           />
                         </th>
-                        <th className="text-center py-3 px-4 tf-th whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
+                        <th className="tf-th-cell text-center tf-th bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 sticky left-12 z-[8] shadow-[1px_0_0_0_var(--border)]">
                           Match Rating
                         </th>
                         {['Candidate Name', 'Email', 'Phone', 'Location', 'Job ID', 'Job Title', 'Job Version', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Resume Version', 'Attachments', 'Scored Status'].map((label) => (
@@ -5264,7 +5388,7 @@ export default function AITalentMatchPage({
                             {label}
                           </th>
                         ))}
-                        <th className="text-left py-3 px-4 tf-th whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col">
+                        <th className="tf-th-cell text-left tf-th bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 tf-sticky-col">
                           Actions
                         </th>
                       </tr>
@@ -5300,19 +5424,20 @@ export default function AITalentMatchPage({
                               {toMatchRating(job.score)}
                             </span>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <div className="flex items-center gap-3">
                               <NameAvatar name={row.name} fallback={row.email} size="md" />
                               <span className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline">
                                 {row.name || 'Unknown'}
                               </span>
                               {row.best?.isArchived && <ResumeArchivedBadge />}
+                              {row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}
                             </div>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {row.email ? row.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {(() => {
                               const numbers = splitPhoneNumbers(row.phone, 2);
                               return numbers.length > 0
@@ -5320,12 +5445,12 @@ export default function AITalentMatchPage({
                                 : <span className="text-gray-400 dark:text-slate-500">-</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {row.location ? row.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
                           {/* Job ID — the job this match ran against, its JD code
                               off the job record (the badge every list uses). */}
-                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {(() => {
                               // The job record first; the match session's own joined
                               // JD code covers a job outside the loaded job list.
@@ -5336,7 +5461,7 @@ export default function AITalentMatchPage({
                                 : <span className="text-gray-400 dark:text-slate-500">-</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-4 align-middle">
+                          <td className="tf-td">
                             <button
                               onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
                               className="block max-w-[220px] truncate text-sm text-gray-700 dark:text-slate-300 hover:text-brand-blue hover:underline text-left"
@@ -5347,20 +5472,20 @@ export default function AITalentMatchPage({
                           </td>
                           {/* Job Version — the matched JD version, the chip the
                               Match History popup's Job Version column draws. */}
-                          <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td text-center whitespace-nowrap">
                             {(() => {
                               const jobVersion = jobs.find(j => j.id === job.jobId)?.currentVersion
                                 ?? allMatchSessions.find(s => s.id === job.historyId)?.jd_version_number;
                               return jobVersion
                                 ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
+                                  <span className="tf-badge border bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30">
                                     v{jobVersion}
                                   </span>
                                 )
                                 : <span className="text-gray-400 dark:text-slate-500">-</span>;
                             })()}
                           </td>
-                          <td className="py-3 px-4 align-middle min-w-[220px] max-w-[260px]">
+                          <td className="tf-td min-w-[220px] max-w-[260px]">
                             {/* One chip shown in full, the rest collapse into
                                 "+N more" — flex-nowrap so a row with more/longer
                                 skills than another never grows taller than it. */}
@@ -5373,21 +5498,21 @@ export default function AITalentMatchPage({
                               />
                             </div>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {row.experience || '-'}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {formatUploadedBy(row.best.uploadedByName, row.best.uploadedBy)}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-td">
+                          <td className="tf-td whitespace-nowrap tf-body">
                             {row.best.uploadDate ? formatISTDate(row.best.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                           </td>
-                          <td className="text-center py-3 px-4 align-middle whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
+                          <td className="tf-td text-center whitespace-nowrap">
+                            <span className="tf-badge border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                               v{job.resumeVersion ?? 1}
                             </span>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             <Button
                               variant="secondary"
                               size="sm"
@@ -5398,20 +5523,20 @@ export default function AITalentMatchPage({
                               {row.best.attachmentCount || 1}
                             </Button>
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap">
+                          <td className="tf-td whitespace-nowrap">
                             {row.resumeId && allScoredResumeIds.has(row.resumeId) ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 border bg-success-subtle text-success-strong border-success-line rounded-full text-xs font-medium">
+                              <span className="tf-badge bg-success-subtle text-success">
                                 <CheckCircle className="w-3 h-3" />
                                 Scored
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
+                              <span className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500">
                                 <XCircle className="w-3 h-3" />
                                 Not Scored
                               </span>
                             )}
                           </td>
-                          <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                          <td className="tf-td whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button
@@ -5425,21 +5550,22 @@ export default function AITalentMatchPage({
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                                 <DropdownMenuItem
-                                  className={actionsMenuItemClass}
-                                  disabled={!job.resumeId}
+                                  className={`${actionsMenuItemClass} ${row.best?.isTenantUserEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!job.resumeId || row.best?.isTenantUserEmail}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                                   onSelect={() => job.resumeId && setPreviewResume({ id: job.resumeId, name: row.name || 'Resume' })}
                                 >
                                   <Eye className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  // A Disabled / Archived JD can't be scored against.
-                                  disabled={!job.resumeId || (canRunScoring && !!jobLockFor(job.jobId))}
+                                  className={`${actionsMenuItemClass} ${!canRunScoring || row.best?.isTenantUserEmail || row.best?.isArchived || jobLockFor(job.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                                  disabled={!job.resumeId || row.best?.isTenantUserEmail || row.best?.isArchived || (canRunScoring && !!jobLockFor(job.jobId))}
                                   aria-disabled={!canRunScoring || undefined}
-                                  title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(job.jobId) ?? undefined}
                                   onSelect={(e) => {
-                                    if (!canRunScoring || jobLockFor(job.jobId)) {
+                                    if (!canRunScoring || row.best?.isTenantUserEmail || row.best?.isArchived || jobLockFor(job.jobId)) {
                                       e.preventDefault();
                                       return;
                                     }
@@ -5451,21 +5577,33 @@ export default function AITalentMatchPage({
                                 </DropdownMenuItem>
                                 {/* Same two invites as View by Candidates' per-job menu. */}
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAssessmentFromMatch || row.best?.isTenantUserEmail || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isTenantUserEmail || row.best?.isArchived}
                                   aria-disabled={!canInviteAssessmentFromMatch || undefined}
-                                  title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAssessmentForJobMatch(row, job)}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isTenantUserEmail || row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAssessmentForJobMatch(row, job);
+                                  }}
                                 >
                                   <ClipboardList className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  disabled={!row.email}
+                                  className={`${actionsMenuItemClass} ${!canInviteAIInterviewFromMatch || row.best?.isTenantUserEmail || row.best?.isArchived ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  disabled={!row.email || row.best?.isTenantUserEmail || row.best?.isArchived}
                                   aria-disabled={!canInviteAIInterviewFromMatch || undefined}
-                                  title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
-                                  onSelect={() => inviteAIInterviewForJobMatch(row, job)}
+                                  title={row.best?.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : row.best?.isArchived ? ARCHIVED_ACTION_MESSAGE : !canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : !row.email ? 'Candidate has no email on file' : undefined}
+                                  onSelect={(e) => {
+                                    if (row.best?.isTenantUserEmail || row.best?.isArchived) {
+                                      e.preventDefault();
+                                      return;
+                                    }
+                                    inviteAIInterviewForJobMatch(row, job);
+                                  }}
                                 >
                                   <Video className="w-4 h-4 text-menu-icon-ai" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
@@ -5479,47 +5617,41 @@ export default function AITalentMatchPage({
                   </table>
                 </div>
 
-                {/* Mobile cards — the table is too wide below md */}
-                <div className="md:hidden space-y-3">
+                {/* Phone / tablet cards — the table is too wide below lg */}
+                <MobileRecordList>
                   {paginatedAllResumeRows.map(({ key, row, job }) => (
-                    <div
+                    <MobileRecordCard
                       key={key}
                       onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
-                      className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-start gap-2.5 min-w-0">
-                          {/* Select — the same per-row checkbox the grid cards and
-                              the desktop table have, so a resume can be picked for
-                              bulk score/invite from the list view on mobile too. */}
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${row.name || 'candidate'}`}
-                            checked={selectedAllResumeKeys.has(key)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => toggleAllResumeSelected(key)}
-                            className="mt-0.5 flex-shrink-0"
-                          />
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
-                              {row.best?.isArchived && <ResumeArchivedBadge />}
-                            </div>
-                            <div className="tf-meta truncate">{job.jobTitle}</div>
-                          </div>
-                        </div>
+                      selected={selectedAllResumeKeys.has(key)}
+                      /* Select — the same per-row checkbox the grid cards and
+                         the desktop table have, so a resume can be picked for
+                         bulk score/invite from the list view on mobile too. */
+                      select={
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.name || 'candidate'}`}
+                          checked={selectedAllResumeKeys.has(key)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleAllResumeSelected(key)}
+                          className="flex-shrink-0"
+                        />
+                      }
+                      title={<span className="flex items-center gap-2 min-w-0"><span className="text-blue-600 truncate">{row.name}</span>{row.best?.isArchived && <ResumeArchivedBadge />}{row.best?.isTenantUserEmail && <TeamMemberEmailBadge />}</span>}
+                      meta={[
+                        { icon: <Briefcase />, label: job.jobTitle || null },
+                        { icon: <Mail />, label: row.email ? <span className="break-all">{row.email}</span> : null },
+                        { icon: <Phone />, label: row.phone || null },
+                        { icon: <MapPin />, label: row.location || null },
+                      ]}
+                      footer={
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
                         </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta-strong">
-                        {row.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.email}</span></span>}
-                        {row.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{row.phone}</span>}
-                        {row.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{row.location}</span></span>}
-                      </div>
-                    </div>
+                      }
+                    />
                   ))}
-                </div>
+                </MobileRecordList>
 
                 <ListPagination
                   currentPage={resumeCurrentPage}
@@ -5543,8 +5675,10 @@ export default function AITalentMatchPage({
 
         {/* Row 1 — Resume Scoring's View by Job toolbar: Search (fills the
             row), Location and Industry inline, More Filters, Reset, Sort by,
-            List / Grid. No count badge — the pagination carries the totals. */}
-        <div className="mb-4">
+            List / Grid. No count badge — the pagination carries the totals.
+            Phones / tablets: the Job Openings list's toolbar card and phone line
+            layout (globals.css, `.tf-jobs-toolbar`), as Resume Scoring. */}
+        <div className="tf-jobs-toolbar tf-toolbar-card mb-4">
           <ListToolbar
             searchValue={historySearchQuery}
             onSearchChange={historySearch.setQuery}
@@ -5558,11 +5692,11 @@ export default function AITalentMatchPage({
             filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
             leadingActions={(() => {
-              const records = matchHistory.map(i => jobs.find(j => j.id === i.jobId)).filter(Boolean) as Job[];
-              const locations = [...new Set(records.map(j => j.location).filter(Boolean))] as string[];
-              const industries = [...new Set(records.map(j => j.industryType).filter(Boolean))] as string[];
+              // Options from every matched job (stats facets), not just this page.
+              const locations = facets?.job_locations ?? [];
+              const industries = facets?.industries ?? [];
               return (
-                <>
+                <div className="tf-jobs-filter-pills contents">
                   <SearchableSelect
                     className="w-full sm:w-48"
                     value={historyJobLocation}
@@ -5583,12 +5717,14 @@ export default function AITalentMatchPage({
                     searchPlaceholder="Search industry..."
                     ariaLabel="Filter by industry"
                   />
-                </>
+                </div>
               );
             })()}
             className="mb-0"
           >
+            {/* Phones sort from the Sort menu in row 2 (PhoneSortMenu). */}
             {sortedHistory.length > 0 && (
+              <div className="tf-jobs-sort contents">
               <SortByControl
                 value={historySortBy}
                 order={historySortOrder}
@@ -5596,26 +5732,26 @@ export default function AITalentMatchPage({
                 onChange={(v) => setHistorySortBy(v)}
                 onToggleOrder={() => setHistorySortOrder(o => (o === 'asc' ? 'desc' : 'asc'))}
               />
+              </div>
             )}
             <ListViewToggle
               value={jobListDisplayMode}
               onChange={setDisplayModeEverywhere}
-              className="h-9 [&>button]:p-[7px] !border-brand-blue/10"
+              className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px] !border-brand-blue/10"
             />
           </ListToolbar>
 
           {/* More Filters — Resume Scoring's boxed panel; Done rides the last
               row of fields. The controls commit as they change. */}
           {showHistoryFilters && (() => {
-            const records = matchHistory.map(i => jobs.find(j => j.id === i.jobId)).filter(Boolean) as Job[];
-            const workModes = [...new Set(records.map(j => j.remoteType).filter(Boolean))] as string[];
-            const jobTypes = [...new Set(records.map(j => j.employmentType).filter(Boolean))] as string[];
-            const matchedByNames = [...new Set(matchHistory.map(i => i.matchedByName || 'System'))].sort();
+            const workModes = facets?.work_modes ?? [];
+            const jobTypes = facets?.job_types ?? [];
+            const matchedByNames = facets?.matched_by ?? [];
             const selectCls = FIELD_SELECT_CLASS;
             const labelCls = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5';
             return (
-              <div className="mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              <div className="tf-jobs-filter-panel mt-3 bg-gray-50 dark:bg-slate-800/40 border border-gray-200 dark:border-slate-700/60 rounded-lg p-4">
+                <div className="tf-grid-3">
                   <div>
                     <label className={labelCls}>Matched By</label>
                     <FilterSelect
@@ -5736,13 +5872,14 @@ export default function AITalentMatchPage({
           {/* Row 2: Select All, the rating pills and View by toggle, Expand
               all (Actions and Clear get their own row once jobs are ticked)
               — Resume Scoring's View by Job. */}
-          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
-            {jobKeys.length > 0 && (
+          <div className="tf-jobs-row2 mt-3 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex flex-wrap items-center gap-2">
+            {(pageJobKeys.length > 0 || jobKeys.length > 0) && (
               <>
+                <div className="tf-jobs-select">
                 <SelectAllMenu
                   selectedCount={selectedJobCount}
                   pageCount={pageJobKeys.length}
-                  totalCount={jobKeys.length}
+                  totalCount={jobsMatchingTotal}
                   noun="jobs"
                   allSelected={allJobsSelected}
                   onSelectPage={() => {
@@ -5753,16 +5890,25 @@ export default function AITalentMatchPage({
                       return next;
                     });
                   }}
-                  onSelectAll={() => {
-                    setSelectedJobKeys(new Set(jobKeys));
-                    setPartialJobRows({});
-                  }}
+                  onSelectAll={() => { void selectAllMatchingJobs(); }}
                   onClear={clearJobSelection}
                 />
+                </div>
                 <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
               </>
             )}
             {viewPills}
+            {/* Phones: the Job Openings list's Sort menu (the inline Sort by hides). */}
+            {sortedHistory.length > 0 && (
+              <PhoneSortMenu<JobSortKey>
+                value={historySortBy}
+                order={historySortOrder}
+                options={JOB_SORT_OPTIONS}
+                orderLabels={jobSortOrderLabels}
+                onChange={(v) => setHistorySortBy(v)}
+                onOrderChange={setHistorySortOrder}
+              />
+            )}
             {pageJobKeys.length > 0 && (() => {
               const allOpen = pageJobKeys.every(k => expandedJobKeys.has(k));
               return (
@@ -5777,10 +5923,12 @@ export default function AITalentMatchPage({
                     });
                   }}
                   aria-pressed={allOpen}
-                  className={`${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
+                  title={allOpen ? 'Collapse all' : 'Expand all'}
+                  /* Phones: an icon square beside Sort, like the Job Openings list's Refresh. */
+                  className={`tf-jobs-refresh ${TOOLBAR_BUTTON_CLASS} sm:ml-auto`}
                 >
                   {allOpen ? <ChevronsDownUp className="w-4 h-4" /> : <ChevronsUpDown className="w-4 h-4" />}
-                  {allOpen ? 'Collapse all' : 'Expand all'}
+                  <span className="max-sm:sr-only">{allOpen ? 'Collapse all' : 'Expand all'}</span>
                 </button>
               );
             })()}
@@ -5810,6 +5958,8 @@ export default function AITalentMatchPage({
               const jobKey = item.id;
               const hasMatches = (item.totalMatches || 0) > 0;
               const loaded = jobLoaded(item);
+              // Tallies / scored chip read the server row; only the opened panel needs the candidates.
+              const summaryReady = loaded || jobItemById.has(item.id);
               const isJobExpanded = expandedJobKeys.has(jobKey);
               const isSelected = selectedJobKeys.has(jobKey);
               const isPartlySelected = isJobPartlySelected(jobKey);
@@ -5936,6 +6086,11 @@ export default function AITalentMatchPage({
                  inline) — the row's Actions cell and the card's footer. */
               const renderCandActions = (c: (typeof pagedCandidates)[number]) => {
                 const { inviteRow, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
+                // An existing team member's resume: every action is disabled
+                // except View Scorecard, same as Resume Database.
+                const teamLocked = !!c.isTenantUserEmail;
+                // An archived resume can't be scored either.
+                const archivedLocked = !!c.isArchived;
                 return (
                 <div className="inline-flex items-center gap-1.5">
                 <DropdownMenu>
@@ -5951,8 +6106,9 @@ export default function AITalentMatchPage({
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-60 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                     <DropdownMenuItem
-                      className={actionsMenuItemClass}
-                      disabled={!c.resumeId}
+                      className={`${actionsMenuItemClass} ${teamLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      disabled={!c.resumeId || teamLocked}
+                      title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                       onSelect={() => c.resumeId && setPreviewResume({ id: c.resumeId, name: c.name || 'Resume' })}
                     >
                       <Eye className="w-4 h-4 text-menu-icon-view" />
@@ -5970,13 +6126,13 @@ export default function AITalentMatchPage({
                       </DropdownMenuItem>
                     ) : (
                       <DropdownMenuItem
-                        className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                        // A Disabled / Archived JD can't be scored against.
-                        disabled={!c.resumeId || (canRunScoring && !!jobLockFor(item.jobId))}
+                        className={`${actionsMenuItemClass} ${!canRunScoring || teamLocked || archivedLocked || jobLockFor(item.jobId) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                        disabled={!c.resumeId || teamLocked || archivedLocked || (canRunScoring && !!jobLockFor(item.jobId))}
                         aria-disabled={!canRunScoring || undefined}
-                        title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
+                        title={teamLocked ? TEAM_MEMBER_ACTION_MESSAGE : archivedLocked ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(item.jobId) ?? undefined}
                         onSelect={(e) => {
-                          if (!canRunScoring || jobLockFor(item.jobId)) {
+                          if (!canRunScoring || teamLocked || archivedLocked || jobLockFor(item.jobId)) {
                             e.preventDefault();
                             return;
                           }
@@ -6050,7 +6206,7 @@ export default function AITalentMatchPage({
                               : <Square className="w-4 h-4 text-gray-400" />}
                             Select all
                           </button>
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 items-start">
+                          <div className="tf-grid-3 items-start">
                             {pagedCandidates.map(c => {
                               const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
                               return (
@@ -6086,6 +6242,7 @@ export default function AITalentMatchPage({
                                           {c.name || 'Candidate'}
                                         </button>
                                         {c.isArchived && <ResumeArchivedBadge />}
+                                        {c.isTenantUserEmail && <TeamMemberEmailBadge />}
                                       </div>
                                       {c.email && <div className="tf-meta truncate">{c.email}</div>}
                                     </div>
@@ -6100,7 +6257,7 @@ export default function AITalentMatchPage({
                                     <span>Experience: <span className="text-gray-700 dark:text-slate-300">{c.experience || '-'}</span></span>
                                     <span className="inline-flex items-center gap-1">
                                       Resume
-                                      <span className="inline-flex px-1.5 py-0.5 rounded-full text-2xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
+                                      <span className="tf-badge text-2xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                                         v{c.resumeVersion ?? 1}
                                       </span>
                                     </span>
@@ -6110,12 +6267,12 @@ export default function AITalentMatchPage({
                                       still bubbles its clicks to the card. */}
                                   <div className="mt-auto flex items-center justify-between gap-2" onClick={(e) => e.stopPropagation()}>
                                     {scored ? (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
+                                      <span className="tf-badge bg-success-subtle text-success border border-success/20">
                                         <CheckCircle2 className="w-3 h-3" />
                                         Scored
                                       </span>
                                     ) : (
-                                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
+                                      <span className="tf-badge bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                                         <XCircle className="w-3 h-3" />
                                         Not Scored
                                       </span>
@@ -6133,6 +6290,95 @@ export default function AITalentMatchPage({
                           </div>
                         </div>
                         );
+                        /* List mode below xl: the same candidates as the shared
+                           record card (phone / tablet). Grid mode keeps candCards. */
+                        const candRecordCards = (
+                        <div className="space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = allPageTicked
+                                ? tickedIds.filter(id => !pageIds.includes(id))
+                                : Array.from(new Set([...tickedIds, ...pageIds]));
+                              setJobRowSelection(jobKey, next, allIds);
+                            }}
+                            aria-label={allPageTicked ? 'Deselect these candidates' : 'Select these candidates'}
+                            className="inline-flex items-center gap-1.5 px-1 py-0.5 text-xs font-medium text-gray-600 dark:text-slate-400 hover:text-brand-blue rounded"
+                          >
+                            {allPageTicked
+                              ? <CheckSquare className="w-4 h-4 text-brand-blue" />
+                              : <Square className="w-4 h-4 text-gray-400" />}
+                            Select all
+                          </button>
+                          <div className="tf-record-list">
+                            {pagedCandidates.map(c => {
+                              const { ticked, scoreId, scored, summaryOpen, jobScoreNav } = candRowInfo(c);
+                              return (
+                                <MobileRecordCard
+                                  key={c.id}
+                                  onClick={scoreId ? () => toggleScoreSummary(item.jobId, item.jobTitle, scoreId) : undefined}
+                                  aria-expanded={scored ? summaryOpen : undefined}
+                                  tooltip={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
+                                  selected={ticked || summaryOpen}
+                                  select={
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); toggleCandTick(c); }}
+                                      aria-pressed={ticked}
+                                      aria-label={ticked ? 'Deselect candidate' : 'Select candidate'}
+                                      className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded flex-shrink-0"
+                                    >
+                                      {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
+                                    </button>
+                                  }
+                                  title={
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        openJobCandidateResume(item.jobId, item.jobTitle, c.resumeId, panelCandidates.map(x => x.resumeId));
+                                      }}
+                                      className="text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate max-w-full"
+                                      title={c.name}
+                                    >
+                                      {c.name || 'Candidate'}
+                                    </button>
+                                  }
+                                  badges={
+                                    <span className="tf-badge text-2xs border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
+                                      Resume v{c.resumeVersion ?? 1}
+                                    </span>
+                                  }
+                                  meta={[{ icon: <Mail />, label: c.email || null }]}
+                                  fields={[{ label: 'Experience', value: c.experience || '-' }]}
+                                  footer={
+                                    <>
+                                      <span
+                                        title="Rating"
+                                        className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(c.matchScore ?? 0)}`}
+                                      >
+                                        {toMatchRating(c.matchScore ?? 0)}
+                                      </span>
+                                      {scored ? (
+                                        <MobileStatChip tone="success" icon={<CheckCircle2 />}>Scored</MobileStatChip>
+                                      ) : (
+                                        <MobileStatChip tone="neutral" icon={<XCircle />}>Not Scored</MobileStatChip>
+                                      )}
+                                    </>
+                                  }
+                                  actions={renderCandActions(c)}
+                                >
+                                  {summaryOpen && (
+                                    <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 cursor-default" onClick={(e) => e.stopPropagation()}>
+                                      {renderScoreSummary(item.jobId, item.jobTitle, scoreId!, jobScoreNav)}
+                                    </div>
+                                  )}
+                                </MobileRecordCard>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        );
                         const candTable = (
                       <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
                         {/* The rows scroll inside this box; the header row stays put. */}
@@ -6140,7 +6386,7 @@ export default function AITalentMatchPage({
                           <table className="w-full min-w-[760px]">
                             <thead className="sticky top-0 z-20 bg-white dark:bg-slate-900 shadow-[0_1px_0_0_var(--border)]">
                               <tr>
-                                <th className="w-10 px-3 py-2.5 tf-th">
+                                <th className="tf-th-cell w-10 tf-th">
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -6160,9 +6406,9 @@ export default function AITalentMatchPage({
                                 {candSortHeader('rating', 'Rating', 'center')}
                                 {candSortHeader('candidate', 'Candidate', 'left')}
                                 {candSortHeader('experience', 'Experience', 'left')}
-                                <th className="text-center py-2.5 px-3 tf-th whitespace-nowrap">Resume Version</th>
+                                <th className="tf-th-cell text-center tf-th">Resume Version</th>
                                 {candSortHeader('scored', 'Scored Status', 'left')}
-                                <th className="text-right py-2.5 px-3 tf-th tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
+                                <th className="tf-th-cell text-right text-xs font-semibold text-gray-600 dark:text-slate-300 tf-sticky-col !bg-white dark:!bg-slate-900">Actions</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -6176,7 +6422,7 @@ export default function AITalentMatchPage({
                                     title={scored ? (summaryOpen ? 'Hide score' : 'Show score') : undefined}
                                     className={`${scored ? 'cursor-pointer' : ''} ${ticked ? 'bg-brand-blue/[0.04]' : 'hover:bg-gray-50/70 dark:hover:bg-slate-800/40'}`}
                                   >
-                                    <td className="px-3 py-2.5 align-middle">
+                                    <td className="tf-td">
                                       <button
                                         type="button"
                                         onClick={(e) => {
@@ -6191,12 +6437,12 @@ export default function AITalentMatchPage({
                                         {ticked ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
                                       </button>
                                     </td>
-                                    <td className="text-center px-3 py-2.5 align-middle">
+                                    <td className="tf-td text-center">
                                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(c.matchScore ?? 0)}`}>
                                         {toMatchRating(c.matchScore ?? 0)}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2.5 align-middle">
+                                    <td className="tf-td">
                                       <div className="flex items-center min-w-0">
                                         <div className="min-w-0">
                                           <div className="flex items-center gap-2 min-w-0">
@@ -6212,37 +6458,38 @@ export default function AITalentMatchPage({
                                               {c.name || 'Candidate'}
                                             </button>
                                             {c.isArchived && <ResumeArchivedBadge />}
+                                            {c.isTenantUserEmail && <TeamMemberEmailBadge />}
                                           </div>
                                           {c.email && <div className="tf-meta truncate max-w-[16rem]">{c.email}</div>}
                                         </div>
                                       </div>
                                     </td>
-                                    <td className="px-3 py-2.5 align-middle tf-td whitespace-nowrap">{c.experience || '-'}</td>
-                                    <td className="text-center px-3 py-2.5 align-middle whitespace-nowrap">
-                                      <span className="inline-flex px-2 py-0.5 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900/50">
+                                    <td className="tf-td tf-body whitespace-nowrap">{c.experience || '-'}</td>
+                                    <td className="tf-td text-center whitespace-nowrap">
+                                      <span className="tf-badge border bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700">
                                         v{c.resumeVersion ?? 1}
                                       </span>
                                     </td>
-                                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                    <td className="tf-td whitespace-nowrap">
                                       {scored ? (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-success-subtle text-success-strong border-success-line">
+                                        <span className="tf-badge bg-success-subtle text-success border border-success/20">
                                           <CheckCircle2 className="w-3 h-3" />
                                           Scored
                                         </span>
                                       ) : (
-                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs border bg-warning-subtle text-warning-strong border-warning-line">
+                                        <span className="tf-badge bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700">
                                           <XCircle className="w-3 h-3" />
                                           Not Scored
                                         </span>
                                       )}
                                     </td>
-                                    <td className="px-3 py-2.5 align-middle text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                                    <td className="tf-td text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                                       {renderCandActions(c)}
                                     </td>
                                   </tr>
                                   {summaryOpen && (
                                     <tr className="bg-gray-50/60 dark:bg-slate-800/30">
-                                      <td colSpan={7} className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                                      <td colSpan={7} className="tf-td" onClick={(e) => e.stopPropagation()}>
                                         {renderScoreSummary(item.jobId, item.jobTitle, scoreId!, jobScoreNav)}
                                       </td>
                                     </tr>
@@ -6257,7 +6504,7 @@ export default function AITalentMatchPage({
                         );
                         return (
                           <>
-                            <div className="xl:hidden">{candCards}</div>
+                            <div className="xl:hidden">{jobListDisplayMode === 'grid' ? candCards : candRecordCards}</div>
                             <div className="hidden xl:block">{jobListDisplayMode === 'grid' ? candCards : candTable}</div>
                           </>
                         );
@@ -6276,31 +6523,8 @@ export default function AITalentMatchPage({
                 </div>
               ) : null;
 
-              return { key: item.id, card: (
-                <div
-                  key={item.id}
-                  /* No lift on hover: the card grows when opened inline, and
-                     a translating card under the pointer reads as jumpy. */
-                  className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 ${hasMatches ? 'cursor-pointer' : ''} ${
-                    isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
-                  } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${
-                    jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''
-                  } ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
-                  // The row opens its candidates in place; the job title (and
-                  // the View Details button) still open the job's match results.
-                  onClick={() => { if (hasMatches) toggleRow(); }}
-                  aria-expanded={hasMatches ? isJobExpanded : undefined}
-                >
-                  <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' && !isJobExpanded ? 'flex-1' : 'sm:flex-row'}`}>
-                    <div className="flex-1 min-w-0 w-full">
-                      <div className="flex flex-wrap items-center gap-2 mb-2">
-                        {/* Checkbox + Job ID + Job Name: one nowrap line at
-                            every width — see JOB_HEADLINE_ROW. */}
-                        <div className={JOB_HEADLINE_ROW}>
-                        {/* Tick the job. Stops the click so it doesn't also
-                            open / close the row. */}
-                        {/* No candidates matched: the box stays, greyed and
-                            not selectable — nothing to act on. */}
+              const jobSelect = (
+                <>
                         {!hasMatches && (
                           <span
                             onClick={(e) => e.stopPropagation()}
@@ -6329,31 +6553,13 @@ export default function AITalentMatchPage({
                             )}
                           </button>
                         )}
-                        {jobData?.jobId && (
-                          <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jobData.jobId}>{jobData.jobId}</JobIdBadge>
-                        )}
-                        <h3
-                          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
-                          title={item.jobTitle}
-                          onClick={(e) => { e.stopPropagation(); openResults(); }}
-                        >
-                          {item.jobTitle}
-                        </h3>
-                        </div>
-                        {jobData?.currentVersion && (
-                          <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
-                            <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                            v{jobData.currentVersion}
-                          </span>
-                        )}
-                        {/* Status — only when it isn't the norm here
-                            (Published / Republished), as on Resume Scoring. */}
-                        {(() => {
-                          // jdStatusOf: also covers jobs missing from `jobs` (created by someone else).
-                          const raw = jdStatusOf(item.jobId) || 'published';
+                </>
+              );
+                        const jobStatusPill = jobData && (() => {
+                          const raw = jobData.status || 'published';
                           const label = getDisplayStatus(
                             raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase(),
-                            jobData?.publishCount,
+                            jobData.publishCount,
                           );
                           if (label === 'Published' || label === 'Republished') return null;
                           const tone = getStatusConfig(label);
@@ -6363,136 +6569,8 @@ export default function AITalentMatchPage({
                               {label}
                             </span>
                           );
-                        })()}
-                        {/* Match History moved into the row's ⋮ menu. */}
-                      </div>
-
-                      {/* "By: name  Matched: date" — Resume Scoring's meta
-                          line. The JD's own details are left to the Job
-                          Descriptions page. */}
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-card-desc mb-2">
-                        <span className="flex items-center gap-1">
-                          <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
-                          <span className="font-normal text-gray-500 dark:text-slate-400">{item.matchedByName || 'System'}</span>
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <span className="font-medium text-gray-700 dark:text-slate-300">Matched:</span>
-                          <span className="font-normal text-gray-500 dark:text-slate-400">
-                            {formatISTDate(item.matchedAt.toISOString())}, {formatISTTime(item.matchedAt.toISOString())}
-                          </span>
-                        </span>
-                        {/* How many of this run's matched candidates have been
-                            scored against this job in Resume Scoring. (Not the
-                            JD's "applicants", which counts every resume ever
-                            scored for the JD, matched by this run or not.) */}
-                        {hasMatches && loaded && scoredResumeIdsByJd && (() => {
-                          const scoredCount = allCandidates.filter(c => !!scoreIdFor(item.jobId, c.resumeId)).length;
-                          return (
-                            /* Same label / value look as "By:" and "Matched:" beside it. */
-                            <span
-                              className="flex items-center gap-1"
-                              title="Matched candidates already scored against this job in Resume Scoring"
-                            >
-                              <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>
-                              <span className="font-normal text-gray-500 dark:text-slate-400">{scoredCount} of {allCandidates.length}</span>
-                            </span>
-                          );
-                        })()}
-                        {/* A run that found nobody still counts as a matched
-                            job — it just says so. */}
-                        {!hasMatches && (
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-warning-subtle text-warning ring-1 ring-warning-line rounded-lg">
-                            <AlertCircle className="w-4 h-4" />
-                            No candidates matched
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Below sm: rating stack + actions stack vertically (full
-                        width) so the justify-end row can't overflow the card's
-                        left edge on a phone; sm+ keeps the side-by-side layout.
-                        In grid cards the outer row stays column (see above), so
-                        this block must self-align right or it hugs the left edge
-                        next to the title instead of sitting in the card's corner. */}
-                    <div className={`flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto ${
-                      jobListDisplayMode === 'grid' && !isJobExpanded ? 'sm:self-end' : ''
-                    }`}>
-                      {/* Rating 10 / 9 – 7 / Below 7, one below another — the
-                          Job Descriptions cards' Applicants / Assessed /
-                          Interviewed stack, in the rating colours. Under a
-                          rating pill the others are muted. Until the
-                          candidates load, the run's own total. */}
-                      {hasMatches && (
-                        <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
-                          {!loaded ? (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
-                              <FileText className="w-4 h-4" />
-                              {item.totalMatches} Matched
-                            </span>
-                          ) : ([
-                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
-                            { id: 'partial' as const, label: 'Rating 9 – 7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
-                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
-                          ]).map(({ id, label, count, Icon, cls }) => {
-                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
-                            return (
-                              <span
-                                key={id}
-                                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${
-                                  muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
-                                }`}
-                              >
-                                <Icon className="w-4 h-4" />
-                                <span className="tabular-nums">{count}</span> {label}
-                              </span>
-                            );
-                          })}
-                        </div>
-                      )}
-                      <div className="flex flex-col items-stretch gap-2">
-                        <div className="flex items-center gap-1.5 self-end">
-                          {renderJobActionsMenu('h-9 w-9')}
-                        </div>
-                        {hasMatches && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); toggleRow(); }}
-                            aria-expanded={isJobExpanded}
-                            title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
-                            className={`h-9 px-3 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center whitespace-nowrap border w-full ${
-                              isJobExpanded
-                                ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
-                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-900 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700'
-                            }`}
-                          >
-                            {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                        )}
-                        {/* Version history — switched OFF (SHOW_VERSIONS_PANEL);
-                            the History icon above covers every run. */}
-                        {SHOW_VERSIONS_PANEL && (matchSessionCounts[historyKey] || 0) > 1 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggleAIMatchVersionHistory(historyKey, item.jobId, item.id);
-                            }}
-                            aria-expanded={expandedHistoryJobId === item.id}
-                            className="h-9 px-3 rounded-lg text-sm font-medium flex items-center gap-1.5 justify-center w-full text-white bg-brand-blue hover:bg-brand-blue-2"
-                          >
-                            {expandedHistoryJobId === item.id ? 'Hide Versions' : 'View Versions'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  {inlineCandidatesPanel}
-
-                  {/* Version History — inline, below the row (not a popup): every
-                      match run across this job's whole lineage (every republished
-                      version), expanding in place the same way the Job Openings
-                      list expands its own version history. */}
-                  {SHOW_VERSIONS_PANEL && expandedHistoryJobId === item.id && (
+                        })();
+                  const versionsPanel = SHOW_VERSIONS_PANEL && expandedHistoryJobId === item.id && (
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60" onClick={(e) => e.stopPropagation()}>
                       {/* Same label/icon JobVersionHistoryPanel (Job Openings /
                           Resume Scoring) puts above its own version table — this
@@ -6501,7 +6579,7 @@ export default function AITalentMatchPage({
                           modules' version history reads as one pattern. */}
                       <div className="flex items-center gap-2 mb-2.5">
                         <FileText className="w-4 h-4 text-brand-blue" />
-                        <p className="tf-cell-name">Version History</p>
+                        <p className="tf-row-title">Version History</p>
                       </div>
                       <AIMatchVersionHistoryTable
                         loading={!hasHistoryVersionsToShow && loadingHistoryJobId === historyKey}
@@ -6557,7 +6635,292 @@ export default function AITalentMatchPage({
                         runMatchDisabledReason={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : undefined}
                       />
                     </div>
-                  )}
+                  );
+              /* List mode below xl: the shared record card (phone / tablet).
+                 The Grid view (a display option at every width) keeps `card`. */
+              const mobileCard = (
+                <MobileRecordCard
+                  key={item.id}
+                  // The row opens its candidates in place; the job title (and
+                  // the View Details button) still open the job's match results.
+                  onClick={hasMatches ? () => toggleRow() : undefined}
+                  aria-expanded={hasMatches ? isJobExpanded : undefined}
+                  selected={isSelected || isPartlySelected}
+                  className={isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : isJobExpanded ? 'border-brand-blue/40 dark:border-brand-blue/40' : undefined}
+                  select={jobSelect}
+                  idBadge={jobData?.jobId ? <JobIdBadge className={JOB_ID_BADGE_FIT} title={jobData.jobId}>{jobData.jobId}</JobIdBadge> : undefined}
+                  title={
+                    <span
+                      className="cursor-pointer hover:text-brand-blue transition-colors"
+                      title={item.jobTitle}
+                      onClick={(e) => { e.stopPropagation(); openResults(); }}
+                    >
+                      {item.jobTitle}
+                    </span>
+                  }
+                  badges={
+                    <>
+                      {jobData?.currentVersion && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
+                          v{jobData.currentVersion}
+                        </span>
+                      )}
+                      {jobStatusPill}
+                    </>
+                  }
+                  fields={[
+                    { label: 'By', value: item.matchedByName || 'System' },
+                    { label: 'Matched', value: `${formatISTDate(item.matchedAt.toISOString())}, ${formatISTTime(item.matchedAt.toISOString())}` },
+                    /* How many of this run's matched candidates have been
+                       scored against this job in Resume Scoring. */
+                    {
+                      label: 'Scored',
+                      value: hasMatches && summaryReady
+                        ? `${scoredCountOf(item).scored} of ${scoredCountOf(item).total}`
+                        : null,
+                    },
+                  ]}
+                  footer={
+                    !hasMatches ? (
+                      /* A run that found nobody still counts as a matched job — it just says so. */
+                      <MobileStatChip tone="warning" icon={<AlertCircle />}>No candidates matched</MobileStatChip>
+                    ) : !summaryReady ? (
+                      <MobileStatChip tone="info" icon={<FileText />}>{item.totalMatches} Matched</MobileStatChip>
+                    ) : (
+                      <>
+                        {([
+                          { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, tone: 'success' as const },
+                          { id: 'partial' as const, label: 'Rating 9 – 7', count: tally.partial, Icon: MinusCircle, tone: 'warning' as const },
+                          { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, tone: 'danger' as const },
+                        ]).map(({ id, label, count, Icon, tone }) => {
+                          // Under a rating pill the others are muted.
+                          const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                          return (
+                            <MobileStatChip key={id} tone={muted ? 'neutral' : tone} icon={<Icon />} className={`tf-verdict-chip${muted ? ' opacity-60' : ''}`}>
+                              <span className="tabular-nums">{count}</span> <span>{label}</span>
+                            </MobileStatChip>
+                          );
+                        })}
+                      </>
+                    )
+                  }
+                  actions={
+                    <>
+                      {/* View Details and Match History — the row's ⋮ menu, as on desktop. */}
+                      {renderJobActionsMenu('h-7 w-7')}
+                      {hasMatches && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); toggleRow(); }}
+                          aria-expanded={isJobExpanded}
+                          title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
+                          className={`inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs font-medium whitespace-nowrap transition-colors ${
+                            isJobExpanded
+                              ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
+                              : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700'
+                          }`}
+                        >
+                          {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      )}
+                      {/* Version history — switched OFF (SHOW_VERSIONS_PANEL). */}
+                      {SHOW_VERSIONS_PANEL && (matchSessionCounts[historyKey] || 0) > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleAIMatchVersionHistory(historyKey, item.jobId, item.id);
+                          }}
+                          aria-expanded={expandedHistoryJobId === item.id}
+                          className="tf-btn tf-btn-primary h-7 px-2 text-xs bg-brand-blue hover:bg-brand-blue-2 shadow-none"
+                        >
+                          {expandedHistoryJobId === item.id ? 'Hide Versions' : 'View Versions'}
+                        </button>
+                      )}
+                    </>
+                  }
+                >
+                  {inlineCandidatesPanel}
+                  {versionsPanel}
+                </MobileRecordCard>
+              );
+              return { key: item.id, mobileCard, card: (
+                <div
+                  key={item.id}
+                  /* No lift on hover: the card grows when opened inline, and
+                     a translating card under the pointer reads as jumpy. */
+                  className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 ${hasMatches ? 'cursor-pointer' : ''} ${
+                    isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
+                  } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${
+                    jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''
+                  } ${jobListDisplayMode === 'grid' && isJobExpanded ? 'md:col-span-2 xl:col-span-3' : ''}`}
+                  // The row opens its candidates in place; the job title (and
+                  // the View Details button) still open the job's match results.
+                  onClick={() => { if (hasMatches) toggleRow(); }}
+                  aria-expanded={hasMatches ? isJobExpanded : undefined}
+                >
+                  <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' && !isJobExpanded ? 'flex-1' : 'sm:flex-row'}`}>
+                    <div className="flex-1 min-w-0 w-full">
+                      <div className="flex flex-wrap items-center gap-2 mb-2">
+                        {/* Checkbox + Job ID + Job Name: one nowrap line at
+                            every width — see JOB_HEADLINE_ROW. */}
+                        <div className={JOB_HEADLINE_ROW}>
+                        {/* Tick the job. Stops the click so it doesn't also
+                            open / close the row. */}
+                        {/* No candidates matched: the box stays, greyed and
+                            not selectable — nothing to act on. */}
+                        {jobSelect}
+                        {jobData?.jobId && (
+                          <JobIdBadge className={`h-7 leading-6 ${JOB_ID_BADGE_FIT}`} title={jobData.jobId}>{jobData.jobId}</JobIdBadge>
+                        )}
+                        <h3
+                          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0 cursor-pointer hover:text-brand-blue transition-colors"
+                          title={item.jobTitle}
+                          onClick={(e) => { e.stopPropagation(); openResults(); }}
+                        >
+                          {item.jobTitle}
+                        </h3>
+                        </div>
+                        {jobData?.currentVersion && (
+                          <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
+                            <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
+                            v{jobData.currentVersion}
+                          </span>
+                        )}
+                        {/* Status — only when it isn't the norm here
+                            (Published / Republished), as on Resume Scoring. */}
+                        {jobStatusPill}
+                        {/* Match History moved into the row's ⋮ menu. */}
+                      </div>
+
+                      {/* "By: name  Matched: date" — Resume Scoring's meta
+                          line. The JD's own details are left to the Job
+                          Descriptions page. */}
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 tf-body-secondary mb-2">
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium text-gray-700 dark:text-slate-300">By:</span>
+                          <span className="font-normal text-gray-500 dark:text-slate-400">{item.matchedByName || 'System'}</span>
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="font-medium text-gray-700 dark:text-slate-300">Matched:</span>
+                          <span className="font-normal text-gray-500 dark:text-slate-400">
+                            {formatISTDate(item.matchedAt.toISOString())}, {formatISTTime(item.matchedAt.toISOString())}
+                          </span>
+                        </span>
+                        {/* How many of this run's matched candidates have been
+                            scored against this job in Resume Scoring. (Not the
+                            JD's "applicants", which counts every resume ever
+                            scored for the JD, matched by this run or not.) */}
+                        {hasMatches && summaryReady && (() => {
+                          const { scored: scoredCount, total: scoredOf } = scoredCountOf(item);
+                          return (
+                            /* Same label / value look as "By:" and "Matched:" beside it. */
+                            <span
+                              className="flex items-center gap-1"
+                              title="Matched candidates already scored against this job in Resume Scoring"
+                            >
+                              <span className="font-medium text-gray-700 dark:text-slate-300">Scored:</span>
+                              <span className="font-normal text-gray-500 dark:text-slate-400">{scoredCount} of {scoredOf}</span>
+                            </span>
+                          );
+                        })()}
+                        {/* A run that found nobody still counts as a matched
+                            job — it just says so. */}
+                        {!hasMatches && (
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-warning-subtle text-warning ring-1 ring-warning-line rounded-lg">
+                            <AlertCircle className="w-4 h-4" />
+                            No candidates matched
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Below sm: rating stack + actions stack vertically (full
+                        width) so the justify-end row can't overflow the card's
+                        left edge on a phone; sm+ keeps the side-by-side layout.
+                        In grid cards the outer row stays column (see above), so
+                        this block must self-align right or it hugs the left edge
+                        next to the title instead of sitting in the card's corner. */}
+                    <div className={`flex flex-col sm:flex-row sm:items-start sm:justify-end gap-3 sm:gap-6 flex-shrink-0 w-full sm:w-auto ${
+                      jobListDisplayMode === 'grid' && !isJobExpanded ? 'sm:self-end' : ''
+                    }`}>
+                      {/* Rating 10 / 9 – 7 / Below 7, one below another — the
+                          Job Descriptions cards' Applicants / Assessed /
+                          Interviewed stack, in the rating colours. Under a
+                          rating pill the others are muted. Until the
+                          candidates load, the run's own total. */}
+                      {hasMatches && (
+                        <div className="flex flex-col items-stretch gap-1.5 flex-shrink-0">
+                          {!summaryReady ? (
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap">
+                              <FileText className="w-4 h-4" />
+                              {item.totalMatches} Matched
+                            </span>
+                          ) : ([
+                            { id: 'exact' as const, label: 'Rating 10', count: tally.exact, Icon: CheckCircle2, cls: 'bg-success-subtle text-success-strong' },
+                            { id: 'partial' as const, label: 'Rating 9 – 7', count: tally.partial, Icon: MinusCircle, cls: 'bg-warning-subtle text-warning-strong' },
+                            { id: 'no_match' as const, label: 'Below 7', count: tally.no_match, Icon: XCircle, cls: 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300' },
+                          ]).map(({ id, label, count, Icon, cls }) => {
+                            const muted = !!candidateRatingBand && id !== candidateRatingBand;
+                            return (
+                              <span
+                                key={id}
+                                className={`flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs whitespace-nowrap transition-opacity ${
+                                  muted ? 'bg-gray-50 text-gray-400 opacity-60 dark:bg-slate-800/50 dark:text-slate-500' : cls
+                                }`}
+                              >
+                                <Icon className="w-4 h-4" />
+                                <span className="tabular-nums">{count}</span> {label}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <div className="flex flex-col items-stretch gap-2">
+                        <div className="flex items-center gap-1.5 self-end">
+                          {renderJobActionsMenu('h-9 w-9')}
+                        </div>
+                        {hasMatches && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleRow(); }}
+                            aria-expanded={isJobExpanded}
+                            title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"}
+                            className={`h-9 px-3 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center whitespace-nowrap border w-full ${
+                              isJobExpanded
+                                ? 'bg-gray-200 text-gray-900 border-gray-300 dark:bg-slate-700 dark:text-slate-50 dark:border-slate-600'
+                                : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200 hover:text-gray-900 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-700 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {isJobExpanded ? 'Hide Candidates' : 'View Candidates'}
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
+                          </button>
+                        )}
+                        {/* Version history — switched OFF (SHOW_VERSIONS_PANEL);
+                            the History icon above covers every run. */}
+                        {SHOW_VERSIONS_PANEL && (matchSessionCounts[historyKey] || 0) > 1 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleAIMatchVersionHistory(historyKey, item.jobId, item.id);
+                            }}
+                            aria-expanded={expandedHistoryJobId === item.id}
+                            className="tf-btn tf-btn-primary h-9 px-3 text-sm flex gap-1.5 w-full bg-brand-blue hover:bg-brand-blue-2 whitespace-normal shadow-none"
+                          >
+                            {expandedHistoryJobId === item.id ? 'Hide Versions' : 'View Versions'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {inlineCandidatesPanel}
+
+                  {/* Version History — inline, below the row (not a popup): every
+                      match run across this job's whole lineage (every republished
+                      version), expanding in place the same way the Job Openings
+                      list expands its own version history. */}
+                  {versionsPanel}
                 </div>
               ), row: (
                 /* List mode (xl+) — User-Management-uniform table row + an
@@ -6568,7 +6931,7 @@ export default function AITalentMatchPage({
                     onClick={() => { if (hasMatches) toggleRow(); }}
                     aria-expanded={hasMatches ? isJobExpanded : undefined}
                   >
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <td className="tf-td">
                       {hasMatches ? (
                         <button type="button" onClick={(e) => { e.stopPropagation(); handleSelectJob(jobKey); }} aria-pressed={isSelected ? true : isPartlySelected ? 'mixed' : false} aria-label={isSelected || isPartlySelected ? 'Deselect job' : 'Select job'} className="inline-flex p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded">
                           {isSelected ? <CheckSquare className="w-4 h-4 text-brand-blue" /> : isPartlySelected ? <MinusSquare className="w-4 h-4 text-brand-blue" /> : <Square className="w-4 h-4 text-gray-400" />}
@@ -6577,10 +6940,10 @@ export default function AITalentMatchPage({
                         <Square className="w-4 h-4 text-gray-300 dark:text-slate-600" />
                       )}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      {jobData?.jobId ? <JobIdBadge className="inline-flex h-7 items-center">{jobData.jobId}</JobIdBadge> : <span className="text-xs text-gray-400 dark:text-slate-500">—</span>}
+                    <td className="tf-td">
+                      {jobData?.jobId ? <JobIdBadge className="inline-flex h-7 items-center">{jobData.jobId}</JobIdBadge> : <span className="tf-hint">—</span>}
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
+                    <td className="tf-td">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <button type="button" onClick={(e) => { e.stopPropagation(); openResults(); }} className="text-sm font-semibold text-gray-900 dark:text-slate-50 hover:text-brand-blue transition-colors truncate max-w-[14rem] text-left" title={item.jobTitle}>
                           {item.jobTitle}
@@ -6605,16 +6968,16 @@ export default function AITalentMatchPage({
                         {/* Match History moved into the row's ⋮ menu. */}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className="tf-card-desc">{item.matchedByName || 'System'}</span>
+                    <td className="tf-td">
+                      <span className="tf-body-secondary">{item.matchedByName || 'System'}</span>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 whitespace-nowrap">
+                    <td className="tf-td whitespace-nowrap">
                       <div className="flex items-center gap-2 tf-body-muted">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
+                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}, {formatISTTime(item.matchedAt.toISOString())}
                       </div>
                     </td>
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className="tf-cell-name tabular-nums">{item.totalMatches}</span>
+                    <td className="tf-td">
+                      <span className="tf-row-title tabular-nums">{item.totalMatches}</span>
                     </td>
                     {/* Rating: one column per band (10 / 9–7 / Below 7), as Resume
                         Scoring's Exact / Partial / No Match columns. */}
@@ -6622,7 +6985,7 @@ export default function AITalentMatchPage({
                       <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-warning-subtle text-warning whitespace-nowrap"><AlertCircle className="w-3.5 h-3.5" />No match</span>
                       </td>
-                    ) : !loaded ? (
+                    ) : !summaryReady ? (
                       <td colSpan={3} className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 text-center">
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs bg-info-subtle text-info-strong whitespace-nowrap"><FileText className="w-3.5 h-3.5" />{item.totalMatches}</span>
                       </td>
@@ -6642,11 +7005,11 @@ export default function AITalentMatchPage({
                         );
                       })
                     )}
-                    <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 tf-sticky-col">
+                    <td className="tf-td tf-sticky-col">
                       {/* Expand first, then the ⋮ menu — same order as Resume Scoring. */}
                       <div className="flex items-center justify-center gap-1">
                         {hasMatches && (
-                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8 p-0">
+                          <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); toggleRow(); }} aria-label={isJobExpanded ? 'Hide candidates' : 'View candidates'} title={isJobExpanded ? 'Hide candidates' : "Show this job's candidates"} className="h-8 w-8">
                             <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isJobExpanded ? 'rotate-180' : ''}`} />
                           </Button>
                         )}
@@ -6656,7 +7019,7 @@ export default function AITalentMatchPage({
                   </tr>
                   {hasMatches && isJobExpanded && (
                     <tr className="bg-gray-50/60 dark:bg-slate-800/20">
-                      <td colSpan={10} className="px-3 sm:px-4 lg:px-6 pb-4 pt-0">{inlineCandidatesPanel}</td>
+                      <td colSpan={10} className="tf-td pb-4 pt-0">{inlineCandidatesPanel}</td>
                     </tr>
                   )}
                 </Fragment>
@@ -6666,8 +7029,8 @@ export default function AITalentMatchPage({
             <>
             {/* Below xl: rich cards (the 8-column table would need horizontal
                 scrolling). xl and up: honor the List / Grid toggle. */}
-            <div className="xl:hidden space-y-3">
-              {rowNodes.map(n => n.card)}
+            <div className="tf-record-list xl:hidden">
+              {rowNodes.map(n => (jobListDisplayMode === 'grid' ? n.card : n.mobileCard))}
             </div>
             <div className="hidden xl:block">
               {jobListDisplayMode === 'grid' ? (
@@ -6675,11 +7038,11 @@ export default function AITalentMatchPage({
                   {rowNodes.map(n => n.card)}
                 </div>
               ) : (
-                <div className="tf-table-shell overflow-x-auto bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+                <div className="tf-table-shell overflow-x-auto tf-card">
                   <table className="w-full">
                     <thead className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
                       <tr>
-                        <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 w-10" aria-hidden="true" />
+                        <th className="tf-th-cell w-10" aria-hidden="true" />
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th whitespace-nowrap">Job ID</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Job Title</th>
                         <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left tf-th">Matched By</th>
@@ -6701,17 +7064,19 @@ export default function AITalentMatchPage({
             <ListPagination
               currentPage={historyCurrentPage}
               itemsPerPage={historyItemsPerPage}
-              totalItems={bandHistory.length}
+              totalItems={jobsList.total}
               onPageChange={setHistoryCurrentPage}
               onItemsPerPageChange={setHistoryItemsPerPage}
               itemLabel="jobs"
             />
             </>
           );
-        })() : matchHistory.length === 0 ? (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+        })() : jobsList.loading ? (
+          <MatchTableSkeleton cols={['w-24', 'w-48', 'w-24', 'w-32', 'w-24']} rows={5} />
+        ) : (matchStats?.matched_jobs ?? 0) === 0 && !historySearch.isNarrowed && !candidateRatingBand ? (
+          <div className="tf-card">
             <EmptyState
-              icon={History}
+              icon={Sparkles}
               title="No Matching History Yet"
               description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
               action={{
@@ -6728,7 +7093,7 @@ export default function AITalentMatchPage({
             />
           </div>
         ) : (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <div className="tf-card">
             <EmptyState
               icon={Search}
               title="No Results Found"
@@ -6926,7 +7291,7 @@ export default function AITalentMatchPage({
                       {loadingHistoryJobId === modalKey ? 'Refreshing...' : 'Refresh'}
                     </span>
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setMatchHistoryModal(null)} className="px-2" aria-label="Close">
+                  <Button variant="secondary" size="sm" onClick={() => setMatchHistoryModal(null)} className="" aria-label="Close">
                     <X className="w-5 h-5" />
                   </Button>
                 </div>
@@ -6935,7 +7300,7 @@ export default function AITalentMatchPage({
               <div className="overflow-y-auto px-4 sm:px-6 py-4 flex-1">
                 {isLoadingModal ? (
                   <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div className="tf-grid-stats mb-3">
                       {Array.from({ length: 4 }).map((_, i) => (
                         <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
                           <div className="flex items-center gap-2 mb-1.5">
@@ -6965,14 +7330,14 @@ export default function AITalentMatchPage({
                   </>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                    <div className="tf-grid-stats mb-3">
                       {statCards.map(card => (
                         <div key={card.label} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
                           <div className="flex items-center gap-2 mb-1.5">
                             <div className={`h-7 w-7 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
                               <card.icon className={`w-3.5 h-3.5 ${card.iconColor}`} />
                             </div>
-                            <span className="tf-meta-strong">{card.label}</span>
+                            <span className="tf-meta">{card.label}</span>
                           </div>
                           <div className={`text-xl font-bold ${card.valueColor}`}>{card.value}</div>
                         </div>
@@ -7065,7 +7430,7 @@ export default function AITalentMatchPage({
                               onChange={(v) => setHistoryModalFilter(prev => ({ ...prev, dateFrom: v }))}
                               className="sm:w-[8.5rem]"
                             />
-                            <span className="text-xs text-gray-400 text-center sm:text-left sm:flex-shrink-0">to</span>
+                            <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                             <DateField
                               aria-label="Date range to"
                               value={historyModalFilter.dateTo}
@@ -7082,7 +7447,7 @@ export default function AITalentMatchPage({
                               size="sm"
                               type="button"
                               onClick={resetModalFilters}
-                              className="rounded-full"
+                             
                             >
                               <XCircle className="w-4 h-4" />
                               Reset
@@ -7092,7 +7457,7 @@ export default function AITalentMatchPage({
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+                    <div className="tf-grid-3 items-stretch">
                       {/* Version table — Rating Breakdown gives each version's
                           10 / 9-7 / Below 7 split alongside its candidate count.
                           Fixed height (not a cap) — matching the sidebar next
@@ -7102,28 +7467,28 @@ export default function AITalentMatchPage({
                           instead. The header is sticky within that scroll
                           area so it stays put while the body scrolls. */}
                       <div className="xl:col-span-2">
-                        <div className="hidden md:block overflow-auto h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
+                        <div className="hidden lg:block overflow-auto h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
                           <table className="w-full text-xs">
                             <thead className="sticky top-0 z-10">
                               <tr className="text-left bg-white dark:bg-slate-900">
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Version</th>
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Matched By</th>
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Date</th>
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Candidates</th>
-                                <th colSpan={3} className="py-1.5 px-3 tf-th text-center border-b border-gray-200 dark:border-slate-700">Rating Breakdown</th>
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom">Status</th>
-                                <th rowSpan={2} className="py-2.5 px-3 tf-th align-bottom text-right">Action</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Version</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Matched By</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Date</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Candidates</th>
+                                <th colSpan={3} className="tf-th-cell tf-th text-center border-b border-gray-200 dark:border-slate-700">Rating Breakdown</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom">Status</th>
+                                <th rowSpan={2} className="tf-th-cell tf-th align-bottom text-right">Action</th>
                               </tr>
                               <tr className="text-left bg-white dark:bg-slate-900">
-                                <th className="py-1.5 px-3 font-semibold text-success text-xs">10</th>
-                                <th className="py-1.5 px-3 font-semibold text-brand-orange-deep text-xs">9 – 7</th>
-                                <th className="py-1.5 px-3 font-semibold text-destructive text-xs">Below 7</th>
+                                <th className="tf-th-cell font-semibold text-success text-xs">10</th>
+                                <th className="tf-th-cell font-semibold text-brand-orange-deep text-xs">9 – 7</th>
+                                <th className="tf-th-cell font-semibold text-destructive text-xs">Below 7</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                               {filteredVersionRows.length === 0 ? (
                                 <tr>
-                                  <td colSpan={9} className="py-6 text-center text-gray-500 dark:text-slate-500">
+                                  <td colSpan={9} className="tf-td text-center text-gray-500 dark:text-slate-500">
                                     No match runs found for the selected filters.
                                   </td>
                                 </tr>
@@ -7134,34 +7499,34 @@ export default function AITalentMatchPage({
                                   : 'Unknown';
                                 return (
                                   <tr key={version.session.id} className="hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.06]">
-                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <td className="tf-td whitespace-nowrap">
                                       <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                         v{version.versionNumber}
                                       </span>
                                     </td>
-                                    <td className="py-2.5 px-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                                    <td className="tf-td whitespace-nowrap text-gray-700 dark:text-slate-300">
                                       <span className="inline-flex items-center gap-1.5 max-w-[11rem]" title={version.session.run_by_email || matchedBy}>
                                         <Sparkles className="w-3.5 h-3.5 text-brand-cyan flex-shrink-0" />
                                         <span className="truncate">{matchedBy}</span>
                                       </span>
                                     </td>
-                                    <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                    <td className="tf-td whitespace-nowrap text-gray-600 dark:text-slate-400">
                                       <div>{formatISTDate(version.lastMatchedAt)}</div>
                                       <div className="text-gray-400 dark:text-slate-600">{formatISTTime(version.lastMatchedAt)}</div>
                                     </td>
-                                    <td className="py-2.5 px-3">
+                                    <td className="tf-td">
                                       <span className="inline-flex px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">{candidateCount}</span>
                                     </td>
-                                    <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{v10}</td>
-                                    <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10">{v9to7}</td>
-                                    <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{vBelow7}</td>
-                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                    <td className="tf-td text-center font-semibold text-success bg-success-subtle/60">{v10}</td>
+                                    <td className="tf-td text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10">{v9to7}</td>
+                                    <td className="tf-td text-center font-semibold text-destructive bg-destructive-subtle/60">{vBelow7}</td>
+                                    <td className="tf-td whitespace-nowrap">
                                       <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-success' : 'text-gray-500'}`}>
                                         <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-success' : 'bg-gray-400'}`} />
                                         {statusLabel}
                                       </span>
                                     </td>
-                                    <td className="py-2.5 px-3 text-right">
+                                    <td className="tf-td text-right">
                                       {renderVersionActions(version.session)}
                                     </td>
                                   </tr>
@@ -7173,7 +7538,7 @@ export default function AITalentMatchPage({
 
                         {/* Mobile cards — the table above is too wide below md.
                             Same ~4-cards-then-scroll cap as the table. */}
-                        <div className="md:hidden space-y-2 overflow-y-auto max-h-[520px]">
+                        <div className="tf-record-list lg:hidden overflow-y-auto max-h-[520px]">
                           {filteredVersionRows.length === 0 ? (
                             <p className="text-center tf-meta py-4">
                               No match runs found for the selected filters.
@@ -7184,42 +7549,33 @@ export default function AITalentMatchPage({
                               ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
                               : 'Unknown';
                             return (
-                              <div key={version.session.id} className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 text-xs">
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                              <MobileRecordCard
+                                key={version.session.id}
+                                idBadge={
+                                  <span className="px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                     v{version.versionNumber}
                                   </span>
-                                  <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-success' : 'text-gray-500'}`}>
+                                }
+                                badges={
+                                  <span className={`inline-flex items-center gap-1.5 text-xs ${isCompleted ? 'text-success' : 'text-gray-500'}`}>
                                     <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-success' : 'bg-gray-400'}`} />
                                     {statusLabel}
                                   </span>
-                                </div>
-                                <div className="flex items-center justify-between text-gray-600 dark:text-slate-400 mb-2">
-                                  <span className="inline-flex items-center gap-1 min-w-0"><Sparkles className="w-3 h-3 text-brand-cyan flex-shrink-0" /><span className="truncate">{matchedBy}</span></span>
-                                  <span>{formatISTDate(version.lastMatchedAt)} · {formatISTTime(version.lastMatchedAt)}</span>
-                                </div>
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="text-gray-500 dark:text-slate-500">Candidates:</span>
-                                  <span className="font-semibold text-gray-900 dark:text-slate-100">{candidateCount}</span>
-                                </div>
-                                <div className="grid grid-cols-3 gap-2 mb-2 text-center">
-                                  <div className="rounded bg-success-subtle py-1">
-                                    <div className="font-semibold text-success">{v10}</div>
-                                    <div className="text-2xs text-gray-500 dark:text-slate-500">10</div>
-                                  </div>
-                                  <div className="rounded bg-orange-50 dark:bg-orange-500/10 py-1">
-                                    <div className="font-semibold text-brand-orange-deep">{v9to7}</div>
-                                    <div className="text-2xs text-gray-500 dark:text-slate-500">9–7</div>
-                                  </div>
-                                  <div className="rounded bg-destructive-subtle py-1">
-                                    <div className="font-semibold text-destructive">{vBelow7}</div>
-                                    <div className="text-2xs text-gray-500 dark:text-slate-500">Below 7</div>
-                                  </div>
-                                </div>
-                                <div className="flex justify-end">
-                                  {renderVersionActions(version.session)}
-                                </div>
-                              </div>
+                                }
+                                meta={[
+                                  { icon: <Sparkles className="text-brand-cyan" />, label: matchedBy },
+                                  { icon: <Calendar />, label: `${formatISTDate(version.lastMatchedAt)} · ${formatISTTime(version.lastMatchedAt)}` },
+                                ]}
+                                fields={[{ label: 'Candidates', value: candidateCount }]}
+                                footer={
+                                  <>
+                                    <MobileStatChip tone="success">{v10} Rating 10</MobileStatChip>
+                                    <MobileStatChip tone="warning">{v9to7} Rating 9–7</MobileStatChip>
+                                    <MobileStatChip tone="danger">{vBelow7} Below 7</MobileStatChip>
+                                  </>
+                                }
+                                actions={renderVersionActions(version.session)}
+                              />
                             );
                           })}
                         </div>
@@ -7228,16 +7584,16 @@ export default function AITalentMatchPage({
                             unfiltered (its own heading says so). */}
                         <div className="mt-4 rounded-xl border border-gray-200 dark:border-slate-700 p-4">
                           <div className="flex items-center justify-between mb-1">
-                            <h4 className="tf-subsection-title">Rating Distribution (All Versions)</h4>
+                            <h4 className="tf-row-title">Rating Distribution (All Versions)</h4>
                             <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                           </div>
                           <p className="tf-meta mb-3">Total candidates: {totalMatched}</p>
-                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-3">
+                          <div className="tf-grid-3">
                             {distributionRows.map(row => {
                               const pct = ratingPct(row.value);
                               return (
                                 <div key={row.label}>
-                                  <div className="flex items-center justify-between tf-meta-strong mb-1">
+                                  <div className="flex items-center justify-between tf-meta mb-1">
                                     <span>{row.label}</span>
                                     <span className={`font-medium ${row.textClass}`}>{row.value} ({pct}%)</span>
                                   </div>
@@ -7262,7 +7618,7 @@ export default function AITalentMatchPage({
                             <div className="w-8 h-8 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                               <PieChart className="w-4 h-4" />
                             </div>
-                            <span className="tf-cell-name truncate">Rating Breakdown</span>
+                            <span className="tf-row-title truncate">Rating Breakdown</span>
                           </div>
                           <FilterSelect
                             value={breakdownVersion ? String(breakdownVersion.session.id) : 'all'}
@@ -7384,7 +7740,7 @@ export default function AITalentMatchPage({
     const resultsJobTitle = selectedJobData?.title
       || resultsLineageEntry?.title
       || selectedHistoryItem?.jobTitle
-      || matchHistory.find(item => item.jobId === selectedJob)?.jobTitle
+      || findHistoryByJd(selectedJob)?.jobTitle
       || '';
     const resultsJobCode = selectedJobData?.jobId || resultsLineageEntry?.job_id;
     const resultsVersionNumber = resultsLineageEntry?.version_number ?? selectedJobData?.currentVersion;
@@ -7543,7 +7899,7 @@ export default function AITalentMatchPage({
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
-    const historyItemForSelectedJob = matchHistory.find(item => item.jobId === selectedJob);
+    const historyItemForSelectedJob = findHistoryByJd(selectedJob);
     const isLoadingResultsFromHistory =
       loadingHistorySessionId !== null &&
       (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
@@ -7583,9 +7939,9 @@ export default function AITalentMatchPage({
           onApply={applyResultColumns}
         />
       )}
-      <main className="flex-1 overflow-x-clip bg-slate-50">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={resumeTrail.active ? [
@@ -7624,7 +7980,7 @@ export default function AITalentMatchPage({
                   {/* JD ID badge before the title — the same badge the job list rows use. */}
                   {/* Wraps below sm (the pills drop under the name) and the name
                       wraps too — on one line a phone showed "Senior Full…". */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 mb-1 min-w-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 mb-2 sm:mb-1 min-w-0">
                     {resultsJobCode && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
@@ -7714,7 +8070,7 @@ export default function AITalentMatchPage({
                       </button>
                     )}
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 tf-meta-strong">
+                  <div className="flex flex-wrap items-center gap-2 tf-meta">
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
                       {matchedCandidates.length} matches
@@ -7728,11 +8084,11 @@ export default function AITalentMatchPage({
                         Matched by {selectedHistoryItem?.matchedByName || historyItemForSelectedJob?.matchedByName || 'System'}
                       </span>
                     </span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
+                    <span className="tf-badge bg-success-subtle text-success ring-1 ring-success-line">
                       <CheckCircle2 className="w-3 h-3" />
                       Complete
                     </span>
-                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/25">
+                    <span className="tf-badge hidden sm:inline-flex bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/25">
                       <Sparkles className="w-3 h-3" />
                       AI Talent Match • 0 units consumed
                     </span>
@@ -7748,7 +8104,7 @@ export default function AITalentMatchPage({
                   )}
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex flex-row items-center gap-2">
                 {/* Run Again — re-runs the match for this same JD version.
                     Not offered on a disabled or archived version. */}
                 {selectedJob && (
@@ -7767,7 +8123,7 @@ export default function AITalentMatchPage({
                       : !canRunAgainHere
                         ? `This version is ${resultsJobStatus} — switch to the latest version to run again`
                         : 'Run the match again for this job'}
-                    className={`w-full sm:w-auto ${!canRunAiMatch || !canRunAgainHere ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`min-w-0 flex-1 whitespace-nowrap sm:flex-none ${!canRunAiMatch || !canRunAgainHere ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>Run Again</span>
@@ -7784,7 +8140,7 @@ export default function AITalentMatchPage({
                     setMatchError(null);
                     router.push('/recruitment/ai-talent-match', { scroll: false });
                   }}
-                  className="w-full sm:w-auto h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium whitespace-nowrap"
+                  className="tf-btn tf-btn-primary min-w-0 flex-1 whitespace-nowrap sm:flex-none h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex text-sm"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>New AI Match</span>
@@ -7798,7 +8154,10 @@ export default function AITalentMatchPage({
               active count and Clear), the list actions, then the count badge.
               Rating, Scored Status, Experience and Sort live in the panel. */}
           {!isLoadingResultsFromHistory && matchedCandidates.length > 0 && (
-          <div className="mb-4 space-y-3">
+          /* Phones / tablets: the Job Openings list's toolbar card; phones get its
+             line layout (globals.css, `.tf-jobs-toolbar`): search · filter icon ·
+             List / Grid, the panel under it, then Actions on a line of its own. */
+          <div className="tf-jobs-toolbar tf-toolbar-card mb-4 space-y-3">
             <ListToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}
@@ -7911,15 +8270,14 @@ export default function AITalentMatchPage({
                 // Archived/Disabled → every Create/Send item below goes
                 // disabled with that as the reason, whatever the permission
                 // or the job's existing Assessment/AI Interview setup.
-                const jobLock = resolveSelectionJobLock(target);
+                const jobLockOnly = resolveSelectionJobLock(target);
+                // Any archived resume in the selection blocks scoring and
+                // both invites too — same lockout the per-row menus use.
+                const archivedCount = rows.filter(r => r.isArchived).length;
+                const jobLock = jobLockOnly ?? (archivedCount > 0 ? ARCHIVED_ACTION_MESSAGE : null);
                 const unitsShort = availableUnits !== null && selectedCandidates.length > availableUnits;
-                // Whether this job already has an AI Assessment / AI Interview
-                // set up: true → only Send applies, false → only Create applies,
-                // undefined (still loading) → neither is gated on it.
-                const asmtConfigured = inviteTargets.hasAssessment(selectedJob);
-                const intvConfigured = inviteTargets.hasAIInterview(selectedJob);
                 return (
-                  <>
+                  <div className="tf-jobs-actions-line contents">
                     <span aria-hidden className="hidden sm:block h-6 w-px bg-gray-300 dark:bg-slate-600 mx-1" />
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -7971,85 +8329,50 @@ export default function AITalentMatchPage({
                           <span className={MENU_ITEM_SCALE_CLASS}>Export</span>
                         </DropdownMenuItem>
                         <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {/* Assessment — Create and Send as separate items. The one
-                            that doesn't apply to this job (already set up → can't
-                            Create; not set up → nothing to Send) is disabled. */}
+                        {/* Create / Send — the one popup for both (it offers
+                            Create when the job has none yet, else Send). */}
                         {(() => {
-                          const createDisabled = !canInviteAssessmentFromMatch || asmtConfigured === true || !!jobLock;
-                          const sendDisabled = !canInviteAssessmentFromMatch || asmtConfigured === false || !!jobLock;
+                          const asmtDisabled = !canInviteAssessmentFromMatch || !!jobLock;
+                          const intvDisabled = !canInviteAIInterviewFromMatch || !!jobLock;
                           return (
                             <>
                               <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={createDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === true ? 'This job already has an assessment' : undefined}
+                                className={`${actionsMenuItemClass} ${asmtDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={asmtDisabled || undefined}
+                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
-                                  if (createDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('assessment', selectedJob, rows);
-                                }}
-                              >
-                                <Plus className="w-4 h-4 text-menu-icon-view" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Create Assessment</span>
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAssessmentFromMatch ? ASSESSMENT_INVITE_DENIED : jobLock ? jobLock : asmtConfigured === false ? 'No assessment set up for this job yet' : undefined}
-                                onSelect={(e) => {
-                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  if (asmtDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('assessment', selectedJob, rows);
                                 }}
                               >
                                 <ClipboardList className="w-4 h-4 text-menu-icon-view" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Send Assessment</span>
-                              </DropdownMenuItem>
-                            </>
-                          );
-                        })()}
-                        <DropdownMenuSeparator className="my-1 bg-gray-100" />
-                        {/* AI Interview — Create and Send as separate items, same rule. */}
-                        {(() => {
-                          const createDisabled = !canInviteAIInterviewFromMatch || intvConfigured === true || !!jobLock;
-                          const sendDisabled = !canInviteAIInterviewFromMatch || intvConfigured === false || !!jobLock;
-                          return (
-                            <>
-                              <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${createDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={createDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === true ? 'This job already has an AI interview' : undefined}
-                                onSelect={(e) => {
-                                  if (createDisabled) { e.preventDefault(); return; }
-                                  openInviteForRows('interview', selectedJob, rows);
-                                }}
-                              >
-                                <Plus className="w-4 h-4 text-menu-icon-ai" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Create AI Interview</span>
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send Assessment</span>
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                className={`${actionsMenuItemClass} ${sendDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
-                                aria-disabled={sendDisabled || undefined}
-                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock ? jobLock : intvConfigured === false ? 'No AI interview set up for this job yet' : undefined}
+                                className={`${actionsMenuItemClass} ${intvDisabled ? '!text-gray-400 opacity-60 cursor-not-allowed' : ''}`}
+                                aria-disabled={intvDisabled || undefined}
+                                title={!canInviteAIInterviewFromMatch ? AI_INTERVIEW_INVITE_DENIED : jobLock || undefined}
                                 onSelect={(e) => {
-                                  if (sendDisabled) { e.preventDefault(); return; }
+                                  if (intvDisabled) { e.preventDefault(); return; }
                                   openInviteForRows('interview', selectedJob, rows);
                                 }}
                               >
                                 <Video className="w-4 h-4 text-menu-icon-ai" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Send AI Interview</span>
+                                <span className={MENU_ITEM_SCALE_CLASS}>Create / Send AI Interview</span>
                               </DropdownMenuItem>
                             </>
                           );
                         })()}
                       </DropdownMenuContent>
                     </DropdownMenu>
-                  </>
+                  </div>
                 );
               })()}
-              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} className="h-9 [&>button]:p-[7px]" />
+              <ListViewToggle value={resultsDisplayMode} onChange={setDisplayModeEverywhere} className="tf-jobs-viewtoggle h-9 [&>button]:p-[7px]" />
             </ListToolbar>
 
             {selectedCandidates.length > 0 && availableUnits !== null && selectedCandidates.length > availableUnits && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg">
+              <div className="basis-full order-last flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg">
                 <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
                 <span className="text-xs text-brand-orange-deep font-medium">
                   Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
@@ -8078,8 +8401,8 @@ export default function AITalentMatchPage({
                 height={144}
                 className="mb-4 h-32 w-32 object-contain mx-auto sm:h-36 sm:w-36"
               />
-              <h3 className="tf-section-title mb-2">No AI Match Results Yet</h3>
-              <p className="tf-card-desc max-w-md mx-auto mb-4">
+              <h3 className="tf-section-title sm:text-lg mb-2">No AI Match Results Yet</h3>
+              <p className="tf-body-secondary max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
               <Button
@@ -8091,7 +8414,7 @@ export default function AITalentMatchPage({
                   handleRunAIMatch(selectedJob);
                 }}
                 aria-disabled={!canRunAiMatch}
-                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
+                className={`${(!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                 title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
               >
                 <Sparkles className="w-4 h-4" />
@@ -8099,13 +8422,15 @@ export default function AITalentMatchPage({
               </Button>
             </div>
           ) : (
-          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
+          /* Below lg the panel chrome is dropped so the cards sit straight on the page,
+             as on the JD details AI Talent Match tab (no card inside a card). */
+          <div className="tf-card-soft overflow-hidden max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:ring-0 max-lg:dark:bg-transparent">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden md:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
+            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
               <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
-                  <th className="w-12 px-4 py-3 tf-sticky-col-left tf-th">
+                  <th className="tf-th-cell w-12 tf-sticky-col-left tf-th">
                     <input
                       type="checkbox"
                       checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
@@ -8119,73 +8444,73 @@ export default function AITalentMatchPage({
                       className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
-                  <th className="px-4 py-3 text-center tf-th">
+                  <th className="tf-th-cell text-center tf-th">
                     Matched Rating
                   </th>
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Candidate Name
                   </th>
                   {isResultColumnVisible('email') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Email
                   </th>
                   )}
                   {isResultColumnVisible('phone') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Phone
                   </th>
                   )}
                   {isResultColumnVisible('location') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Location
                   </th>
                   )}
                   {isResultColumnVisible('jobTitle') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Job Title
                   </th>
                   )}
                   {isResultColumnVisible('jobVersion') && (
-                  <th className="px-4 py-3 text-center tf-th">
+                  <th className="tf-th-cell text-center tf-th">
                     Job Version
                   </th>
                   )}
                   {isResultColumnVisible('skills') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Skills
                   </th>
                   )}
                   {isResultColumnVisible('experience') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Experience
                   </th>
                   )}
                   {isResultColumnVisible('uploadedBy') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Uploaded By
                   </th>
                   )}
                   {isResultColumnVisible('uploadDate') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Uploaded Date
                   </th>
                   )}
                   {isResultColumnVisible('resumeVersion') && (
-                  <th className="px-4 py-3 text-center tf-th">
+                  <th className="tf-th-cell text-center tf-th">
                     Resume Version
                   </th>
                   )}
                   {isResultColumnVisible('attachments') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Attachments
                   </th>
                   )}
                   {isResultColumnVisible('scoredStatus') && (
-                  <th className="px-4 py-3 text-left tf-th">
+                  <th className="tf-th-cell text-left tf-th">
                     Scored Status
                   </th>
                   )}
-                  <th className="px-4 py-3 text-right tf-th tf-sticky-col">
+                  <th className="tf-th-cell text-right tf-th tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -8215,7 +8540,7 @@ export default function AITalentMatchPage({
                       }
                     }}
                   >
-                    <td className="px-4 py-4 tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                    <td className="tf-td tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedCandidates.includes(candidate.id)}
@@ -8223,26 +8548,26 @@ export default function AITalentMatchPage({
                         className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
                       />
                     </td>
-                    <td className="text-center px-4 py-4">
+                    <td className="tf-td text-center">
                       <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${rankBadgeClass(candidate.rank || 0)}`}>
                         {candidate.rank || '-'}
                       </span>
                     </td>
-                    <td className="px-4 py-4">
+                    <td className="tf-td">
                       <div className="flex items-center gap-3">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                         <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
+                          <div className="tf-row-name">{candidate.name || 'Unknown'}</div>
                         </div>
                       </div>
                     </td>
                     {isResultColumnVisible('email') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('phone') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       {(() => {
                         const numbers = splitPhoneNumbers(candidate.phone, 2);
                         return numbers.length > 0
@@ -8252,19 +8577,19 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('location') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('jobTitle') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       <span className="block max-w-[220px] truncate">
                         {resultsJobTitle || '-'}
                       </span>
                     </td>
                     )}
                     {isResultColumnVisible('jobVersion') && (
-                    <td className="text-center px-4 py-3">
+                    <td className="tf-td text-center">
                       {resultsVersionNumber ? (
                         <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                           v{resultsVersionNumber}
@@ -8275,7 +8600,7 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('skills') && (
-                    <td className="px-4 py-4 min-w-[220px] max-w-[260px]">
+                    <td className="tf-td min-w-[220px] max-w-[260px]">
                       {/* One chip shown in full, the rest collapse into "+N
                           more" — flex-nowrap so a row with more/longer skills
                           than another never grows taller than it. */}
@@ -8290,27 +8615,27 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('experience') && (
-                    <td className="px-4 py-3 tf-td">{candidate.experience}</td>
+                    <td className="tf-td tf-body">{candidate.experience}</td>
                     )}
                     {isResultColumnVisible('uploadedBy') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                     </td>
                     )}
                     {isResultColumnVisible('uploadDate') && (
-                    <td className="px-4 py-3 tf-td">
+                    <td className="tf-td tf-body">
                       {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     )}
                     {isResultColumnVisible('resumeVersion') && (
-                    <td className="text-center px-4 py-4">
-                      <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                    <td className="tf-td text-center">
+                      <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
                         v{candidate.resumeVersion || 1}
                       </span>
                     </td>
                     )}
                     {isResultColumnVisible('attachments') && (
-                    <td className="px-4 py-4">
+                    <td className="tf-td">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -8324,21 +8649,21 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('scoredStatus') && (
-                    <td className="px-4 py-4">
+                    <td className="tf-td">
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-success-subtle text-success-strong border-success-line">
+                        <span className="tf-badge bg-success-subtle text-success ring-1 ring-success-line">
                           <CheckCircle className="w-3 h-3" />
                           Scored
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
+                        <span className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
                           <XCircle className="w-3 h-3" />
                           Not Scored
                         </span>
                       )}
                     </td>
                     )}
-                    <td className="px-4 py-4 text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                    <td className="tf-td text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -8352,20 +8677,22 @@ export default function AITalentMatchPage({
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                           <DropdownMenuItem
-                            className={actionsMenuItemClass}
+                            className={`${actionsMenuItemClass} ${candidate.isTenantUserEmail ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            disabled={candidate.isTenantUserEmail}
+                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : undefined}
                             onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
                           >
                             <Eye className="w-4 h-4 text-menu-icon-view" />
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            className={`${actionsMenuItemClass} ${!canRunScoring || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            // A Disabled / Archived JD can't be scored against.
-                            disabled={!candidate.resumeId || (canRunScoring && !!jobLockFor(selectedJob))}
+                            className={`${actionsMenuItemClass} ${!canRunScoring || candidate.isTenantUserEmail || candidate.isArchived || jobLockFor(selectedJob) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            // A Disabled / Archived JD, an archived resume, or an existing team member's resume, can't be scored against.
+                            disabled={!candidate.resumeId || candidate.isTenantUserEmail || candidate.isArchived || (canRunScoring && !!jobLockFor(selectedJob))}
                             aria-disabled={!canRunScoring || undefined}
-                            title={!canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
+                            title={candidate.isTenantUserEmail ? TEAM_MEMBER_ACTION_MESSAGE : candidate.isArchived ? ARCHIVED_ACTION_MESSAGE : !canRunScoring ? 'You do not have permission to score resumes' : jobLockFor(selectedJob) ?? undefined}
                             onSelect={(e) => {
-                              if (!canRunScoring || jobLockFor(selectedJob)) {
+                              if (!canRunScoring || candidate.isTenantUserEmail || candidate.isArchived || jobLockFor(selectedJob)) {
                                 e.preventDefault();
                                 return;
                               }
@@ -8395,7 +8722,7 @@ export default function AITalentMatchPage({
                 email, rating), which job, contact details, skills, then the
                 upload / scoring facts and the View action in a footer. */}
             {resultsDisplayMode === 'grid' && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+            <div className="tf-grid-4 p-4">
               {paginatedCandidates.map((candidate) => {
                 const isSelected = selectedCandidates.includes(candidate.id);
                 const isScored = !!candidate.resumeId && scoredResumeIds.has(candidate.resumeId);
@@ -8432,7 +8759,7 @@ export default function AITalentMatchPage({
                       />
                       <NameAvatar name={candidate.name} fallback={candidate.email} size="lg" />
                       <div className="min-w-0 flex-1 pt-0.5">
-                        <p className="tf-cell-name truncate" title={candidate.name || 'Unknown'}>
+                        <p className="tf-row-title truncate" title={candidate.name || 'Unknown'}>
                           {candidate.name || 'Unknown'}
                         </p>
                         <p className="tf-meta truncate mt-0.5" title={candidate.email || ''}>
@@ -8443,13 +8770,13 @@ export default function AITalentMatchPage({
                         <span className={`inline-flex items-center justify-center w-9 h-9 rounded-full text-sm font-bold border ${rankBadgeClass(candidate.rank || 0)}`}>
                           {candidate.rank || '-'}
                         </span>
-                        <span className="text-2xs text-gray-400 dark:text-slate-500 mt-1">Rating</span>
+                        <span className="tf-micro-hint mt-1">Rating</span>
                       </div>
                     </div>
 
                     {/* Job */}
                     <div className="mt-4 flex items-center gap-2 min-w-0">
-                      <span className="text-xs text-gray-700 dark:text-slate-300 truncate" title={resultsJobTitle}>
+                      <span className="tf-meta truncate" title={resultsJobTitle}>
                         {resultsJobTitle || '-'}
                       </span>
                       {resultsVersionNumber && (
@@ -8460,7 +8787,7 @@ export default function AITalentMatchPage({
                     </div>
 
                     {/* Contact + experience, one per line */}
-                    <div className="mt-3 space-y-2 tf-meta-strong">
+                    <div className="mt-3 space-y-2 tf-meta">
                       <div className="flex items-center gap-2 min-w-0">
                         <Phone className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500 flex-shrink-0" />
                         <span className="truncate">{splitPhoneNumbers(candidate.phone, 1)[0] || '—'}</span>
@@ -8490,17 +8817,17 @@ export default function AITalentMatchPage({
                     <div className="mt-auto pt-4">
                       <div className="flex items-center justify-between gap-2 pt-3 border-t border-gray-100 dark:border-slate-800">
                         {isScored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-success-subtle text-success-strong border-success-line">
+                          <span className="tf-badge text-2xs bg-success-subtle text-success ring-1 ring-success-line">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
+                          <span className="tf-badge tf-micro-hint bg-gray-100 dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
                         )}
-                        <span className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={`Uploaded by ${formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}`}>
+                        <span className="tf-micro-hint truncate" title={`Uploaded by ${formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}`}>
                           {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
                           {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
                         </span>
@@ -8520,7 +8847,7 @@ export default function AITalentMatchPage({
                           onClick={(e) => { e.stopPropagation(); setSelectedVersionsCandidate(candidate); }}
                           title="Attachments"
                           aria-label={`Attachments (${candidate.attachmentCount || 1})`}
-                          className="inline-flex items-center gap-1 px-2.5 py-2 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                          className="tf-btn tf-btn-secondary gap-1 px-2.5 py-2 text-xs border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-normal justify-start"
                         >
                           <Paperclip className="w-3.5 h-3.5" />
                           {candidate.attachmentCount || 1}
@@ -8535,9 +8862,9 @@ export default function AITalentMatchPage({
 
             {/* List view's stand-in below md, where the table is too wide. */}
             {resultsDisplayMode === 'list' && (
-            <div className="md:hidden space-y-3 p-3">
+            <MobileRecordList>
               {paginatedCandidates.map((candidate) => (
-                <div
+                <MobileRecordCard
                   key={candidate.id}
                   onClick={() => {
                     if (candidate.resumeId) {
@@ -8555,82 +8882,91 @@ export default function AITalentMatchPage({
                       router.push(`/recruitment/resume-view/${candidate.resumeId}`);
                     }
                   }}
-                  className={`rounded-xl border p-3 shadow-sm cursor-pointer ${
-                    selectedCandidates.includes(candidate.id)
-                      ? 'bg-brand-blue/5 border-brand-blue/30'
-                      : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <input
-                        type="checkbox"
-                        checked={selectedCandidates.includes(candidate.id)}
-                        onChange={() => handleSelectCandidate(candidate.id)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
-                      />
-                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
-                      <div className="min-w-0">
-                        <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
-                        <div className="tf-meta truncate">
-                          {resultsJobTitle || '-'}
-                        </div>
-                      </div>
-                    </div>
-                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${rankBadgeClass(candidate.rank || 0)}`}>
-                      {candidate.rank || '-'}
-                    </span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 tf-meta-strong mb-2">
-                    {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}
-                    {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>}
-                    {candidate.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.location}</span></span>}
-                    {candidate.experience && <span>{candidate.experience}</span>}
-                  </div>
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    <SkillsList
-                      skills={candidate.skills}
-                      chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-                      moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                  selected={selectedCandidates.includes(candidate.id)}
+                  select={
+                    <input
+                      type="checkbox"
+                      checked={selectedCandidates.includes(candidate.id)}
+                      onChange={() => handleSelectCandidate(candidate.id)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
                     />
-                  </div>
-                  <div className="flex items-center justify-between gap-2 tf-meta">
-                    <span className="truncate">
-                      {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
-                      {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
+                  }
+                  title={
+                    <span className="flex min-w-0 items-center gap-2">
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
+                      <span className="min-w-0 break-words">{candidate.name || 'Unknown'}</span>
                     </span>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedVersionsCandidate(candidate);
-                        }}
-                        className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
-                      >
-                        <Paperclip className="w-3.5 h-3.5" />
-                        {candidate.attachmentCount || 1}
-                      </button>
-                      {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-success-subtle text-success-strong border-success-line">
-                          <CheckCircle className="w-3 h-3" />
-                          Scored
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border bg-warning-subtle text-warning-strong border-warning-line">
-                          <XCircle className="w-3 h-3" />
-                          Not Scored
-                        </span>
-                      )}
+                  }
+                  /* Status on the top row, as on the JD details tab card. */
+                  badges={<>
+                    {candidate.isArchived && <ResumeArchivedBadge />}
+                    {candidate.isTenantUserEmail && <TeamMemberEmailBadge />}
+                    {scoredResumeIds.has(candidate.resumeId) ? (
+                      <span className="tf-badge bg-success-subtle text-success">
+                        <CheckCircle className="w-3 h-3" />Scored
+                      </span>
+                    ) : (
+                      <span className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500">
+                        <XCircle className="w-3 h-3" />Not Scored
+                      </span>
+                    )}
+                  </>}
+                  meta={[
+                    { icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: resultsJobTitle || '-' },
+                    { icon: <Mail className="w-3.5 h-3.5 shrink-0" />, label: candidate.email ? <span className="break-all">{candidate.email}</span> : null },
+                  ]}
+                  fields={[
+                    { label: 'Experience', value: candidate.experience || '—' },
+                    { label: 'Location', value: candidate.location || '—' },
+                    { label: 'Phone', value: splitPhoneNumbers(candidate.phone, 1)[0] || '—' },
+                    {
+                      label: 'Uploaded',
+                      value: <>{formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}{candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}</>,
+                    },
+                  ]}
+                  footer={(() => {
+                    const band = matchBandForRating(candidate.rank || 0);
+                    return (
+                      <MobileStatChip tone={band === 'exact' ? 'success' : band === 'partial' ? 'warning' : 'danger'} icon={<Star className="w-3 h-3" />}>
+                        Rank {candidate.rank || '-'}
+                      </MobileStatChip>
+                    );
+                  })()}
+                  actions={
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedVersionsCandidate(candidate);
+                      }}
+                      title="Attachments"
+                      aria-label={`Attachments (${candidate.attachmentCount || 1})`}
+                      icon={<Paperclip className="w-3.5 h-3.5" />}
+                    >
+                      {candidate.attachmentCount || 1}
+                    </Button>
+                  }
+                >
+                  {candidate.skills && candidate.skills.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <SkillsList
+                        skills={candidate.skills}
+                        expandInline
+                        chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
+                        moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                      />
                     </div>
-                  </div>
-                </div>
+                  )}
+                </MobileRecordCard>
               ))}
-            </div>
+            </MobileRecordList>
             )}
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls — its own bordered card below lg, where the panel is dropped. */}
             {totalFilteredCandidates > 0 && (
+              <div className="max-lg:mt-3 max-lg:overflow-hidden max-lg:rounded-xl max-lg:border max-lg:border-gray-200 max-lg:dark:border-slate-700">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -8639,6 +8975,7 @@ export default function AITalentMatchPage({
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
               />
+              </div>
             )}
           </div>
           )}
@@ -8656,7 +8993,8 @@ export default function AITalentMatchPage({
 
       <AITalentMatchPageJobsList
         jobs={jobs}
-        matchHistory={matchHistory}
+        /* Jobs already matched that this visit has seen (pages, deep links). */
+        matchHistory={Object.values(knownSessions).filter(s => s.fromJobPage).map(toHistoryItem)}
         onSelectJob={(jobId) => {
           handleRunAIMatch(jobId);
         }}

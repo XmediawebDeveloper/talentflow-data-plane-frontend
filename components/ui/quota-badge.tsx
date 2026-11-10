@@ -59,7 +59,7 @@ export default function QuotaBadge({
       title={tooltip}
       aria-label={tooltip}
       className={cn(
-      'flex items-center gap-2 h-10 px-3 rounded-lg border cursor-default select-none',
+      'flex items-center gap-2 h-10 px-3 min-w-0 max-w-full overflow-hidden rounded-lg border cursor-default select-none',
       tone === 'danger'
         ? 'bg-red-50/60 border-red-200 dark:bg-red-950/20'
         : tone === 'warning'
@@ -81,7 +81,10 @@ export default function QuotaBadge({
           these appears per page, so the page itself already says which quota it
           is. It is kept as the tooltip/aria text so the meaning is still
           reachable rather than lost. */}
-      <div className="flex items-baseline gap-1 whitespace-nowrap">
+      {/* min-w-0 + truncate: in a narrow slot (a phone's half-row) the
+          words give way with "…" inside the box instead of running out of it
+          over the button beside it. The number never shrinks. */}
+      <div className="flex items-baseline gap-1 whitespace-nowrap min-w-0">
         {isUnlimited ? (
           <span className="text-sm font-semibold text-brand-blue leading-none">Unlimited</span>
         ) : availableUnits !== null ? (
@@ -96,10 +99,10 @@ export default function QuotaBadge({
             )}>
               {availableUnits.toLocaleString()}
             </span>
-            <span className="text-xs text-gray-500 dark:text-slate-400 leading-none">Units Left</span>
+            <span className="tf-meta leading-none truncate">Units Left</span>
           </>
         ) : (
-          <span className="text-xs text-gray-400 dark:text-slate-500 leading-none">Loading...</span>
+          <span className="tf-hint leading-none">Loading...</span>
         )}
       </div>
     </div>

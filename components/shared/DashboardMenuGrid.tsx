@@ -44,11 +44,11 @@ export default function DashboardMenuGrid() {
 
   return (
     <section aria-label="Workspace navigation" className="mb-6">
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="tf-grid-3">
         {sections.map((section) => (
           <div
             key={section.id}
-            className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]"
+            className="tf-card-soft p-4"
           >
             <h3 className="mb-3 text-2xs font-semibold uppercase tracking-wider text-gray-500">
               {section.label}

@@ -223,9 +223,9 @@ function DetailsContent() {
   );
 
   const wrapState = (children: React.ReactNode) => (
-    <main className="flex-1 bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {breadcrumb}
           {children}
         </div>
@@ -246,7 +246,7 @@ function DetailsContent() {
         </p>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
         >
           Back to Results
         </button>
@@ -260,7 +260,7 @@ function DetailsContent() {
         <div className="text-red-500 dark:text-red-400 text-base">No candidate selected</div>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
         >
           Back to Results
         </button>
@@ -274,7 +274,7 @@ function DetailsContent() {
         <div className="text-red-500 dark:text-red-400 text-base">{error}</div>
         <button
           onClick={handleBack}
-          className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+          className="tf-btn tf-btn-primary px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 whitespace-normal gap-0 font-normal"
         >
           Back to Results
         </button>
@@ -283,9 +283,9 @@ function DetailsContent() {
   }
 
   return (
-    <main className="flex-1 bg-slate-50">
+    <main className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className="tf-page-sheet">
           {breadcrumb}
       <CandidateResultDetails
         onBack={handleBack}
@@ -315,9 +315,9 @@ export default function CandidateResultDetailsPage() {
   return (
     <FeatureGate feature="assessment">
       <Suspense fallback={
-        <main className="flex-1 bg-slate-50">
+        <main className="tf-page">
           <div className="mx-auto w-full max-w-[1400px]">
-            <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <div className="tf-page-sheet">
               {/* Breadcrumb */}
               <div className="mb-4 md:mb-8 flex items-center gap-2">
                 <Skeleton className="h-3 w-16" />
@@ -343,9 +343,9 @@ export default function CandidateResultDetailsPage() {
               </div>
 
               {/* Info stat cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+              <div className="tf-grid-stats mb-6">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
+                  <div key={i} className="tf-panel p-4">
                     <Skeleton className="h-3 w-20 mb-3" />
                     <Skeleton className="h-6 w-16" />
                   </div>
@@ -355,7 +355,7 @@ export default function CandidateResultDetailsPage() {
               {/* Section cards */}
               <div className="space-y-6">
                 {Array.from({ length: 3 }).map((_, card) => (
-                  <div key={card} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+                  <div key={card} className="tf-panel p-5 sm:p-6">
                     <div className="flex items-center gap-2 mb-4">
                       <Skeleton className="h-9 w-9 rounded-lg" />
                       <Skeleton className="h-6 w-48" />

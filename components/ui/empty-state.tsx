@@ -63,7 +63,7 @@ export function EmptyState({
                       ? 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
                       : action.variant === 'secondary'
                       ? 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]'
-                      : 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md'
+                      : 'tf-btn-primary'
                   }
                 `}
               >

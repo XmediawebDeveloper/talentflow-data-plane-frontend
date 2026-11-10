@@ -34,6 +34,12 @@ export interface TeamStats {
   avg_members_per_team: number;
   /** Returned by /teams/stats; optional so older responses still type-check. */
   pending_invitations?: number;
+  /** Teams with no (resolvable) lead. Absent/null on older backends. */
+  teams_without_lead?: number | null;
+  /** Teams with no (resolvable) members. Absent/null on older backends. */
+  empty_teams?: number | null;
+  /** Active users in none of the visible teams. Absent/null on older backends. */
+  unassigned_users?: number | null;
 }
 
 // Team-Level Usage Visibility interfaces
@@ -287,7 +293,7 @@ class TeamService {
    * Get usage summary for a specific team
    * Role-Based Access:
    * - Owner: Can view any team's usage
-   * - Standard User/Viewer: Can only view their own team's usage
+   * - Viewer and other non-admin users: Can only view their own team's usage
    * - Billing Manager: No access
    */
   async getTeamUsage(teamId: string, days: number = 30): Promise<TeamUsageSummary> {
@@ -321,7 +327,7 @@ class TeamService {
 
   /**
    * Get usage summary for current user's teams
-   * Available for Standard Users and Viewers
+   * Available for Viewers and other non-admin users
    */
   async getMyTeamsUsage(fromDate?: string, toDate?: string): Promise<MyTeamsUsageSummary> {
     try {
@@ -380,6 +386,12 @@ class TeamService {
     if (eventType && eventType !== 'ALL') params.event_type = eventType;
     const response = await api.get('/teams/history', { params });
     return response.data;
+  }
+
+  /** Team id -> creator's name in one call (`GET /teams/creators`). Throws on older backends. */
+  async getTeamCreators(): Promise<Record<string, string>> {
+    const response = await api.get('/teams/creators');
+    return response.data?.creators || {};
   }
 }
 

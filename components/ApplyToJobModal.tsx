@@ -193,7 +193,7 @@ export default function ApplyToJobModal({
               <Briefcase className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <h2 className="tf-section-title">{modalTitle}</h2>
+              <h2 className="tf-section-title sm:text-lg tracking-tight">{modalTitle}</h2>
               {fixedJob && !description ? (
                 /* The fixed job, as every other page shows a job: the JD ID
                    badge, the title, then the version pill. */
@@ -201,7 +201,7 @@ export default function ApplyToJobModal({
                   {fixedJob.job_id && (
                     <JobIdBadge className="inline-flex h-6 items-center flex-shrink-0">{fixedJob.job_id}</JobIdBadge>
                   )}
-                  <span className="text-sm font-medium text-gray-700 dark:text-slate-300 truncate">{fixedJob.title}</span>
+                  <span className="tf-label truncate">{fixedJob.title}</span>
                   <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35 flex-shrink-0">
                     v{fixedJob.versionNumber ?? 1}
                   </span>
@@ -273,8 +273,8 @@ export default function ApplyToJobModal({
               <div className="flex items-start gap-2 sm:gap-3">
                 <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue mt-0.5 flex-shrink-0" />
                 <div>
-                  <h4 className="tf-subsection-title mb-1">Next Steps</h4>
-                  <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
+                  <h4 className="tf-row-title mb-1">Next Steps</h4>
+                  <ul className="tf-meta space-y-1">
                     {nextSteps ? (
                       <>
                         {nextSteps.map(step => <li key={step}>&bull; {step}</li>)}

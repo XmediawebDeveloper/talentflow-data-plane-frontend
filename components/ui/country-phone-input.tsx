@@ -191,5 +191,5 @@ function CountryFlag({ iso }: { iso: string }) {
       </svg>
     );
   }
-  return <span className="text-xs font-semibold text-gray-500 dark:text-slate-400">{iso}</span>;
+  return <span className="tf-caption">{iso}</span>;
 }

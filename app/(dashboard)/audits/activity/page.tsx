@@ -271,9 +271,9 @@ export default function ActivityLogsPage() {
   };
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+      <div className="tf-page-sheet">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs' }]} />
         <div className="mb-5 flex flex-col gap-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] sm:p-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-start gap-3">
@@ -282,7 +282,7 @@ export default function ActivityLogsPage() {
             </div>
             <div>
               <h1 className="tf-page-title">{activeTab === 'audit' ? 'Audit Logs' : 'Activity Logs'}</h1>
-              <p className="mt-0.5 tf-card-desc">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
+              <p className="mt-0.5 tf-body-secondary">{activeTab === 'audit' ? 'A detailed record of audited actions across your organization.' : 'A real-time view of recent system activity across your organization.'}</p>
             </div>
           </div>
           {activeTab === 'activity' && (
@@ -293,7 +293,7 @@ export default function ActivityLogsPage() {
                   onClick={fetchRecentActivity}
                   aria-label="Refresh activity"
                   icon={<RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />}
-                  className="px-3 sm:px-4"
+                  className="sm:px-4"
                 >
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
@@ -375,7 +375,7 @@ export default function ActivityLogsPage() {
                 onChange={(e) => { setSearch(e.target.value); setPage(1); }}
                 placeholder="Search user, action, entity or IP"
                 aria-label="Search activity"
-                className="h-10 w-full rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 pl-9 pr-3 text-sm text-gray-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                className="tf-input h-10 pl-9 pr-3"
               />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -412,7 +412,7 @@ export default function ActivityLogsPage() {
         )}
 
         {loading && logs.length === 0 ? (
-          <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="overflow-hidden tf-card-soft">
             <div className="flex items-center gap-2 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-3 sm:px-5 py-2.5">
               <Skeleton className="h-3.5 w-3.5 rounded" />
               <Skeleton className="h-3 w-28" />
@@ -443,7 +443,7 @@ export default function ActivityLogsPage() {
             <Button variant="primary" onClick={fetchRecentActivity}>Retry</Button>
           </div>
         ) : logs.length === 0 ? (
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="tf-card-soft">
             <EmptyState
               icon={Activity}
               title="No recent activity"
@@ -451,7 +451,7 @@ export default function ActivityLogsPage() {
             />
           </div>
         ) : filteredLogs.length === 0 ? (
-          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+          <div className="tf-card-soft">
             <EmptyState
               icon={Search}
               title="No matching activity"
@@ -466,9 +466,9 @@ export default function ActivityLogsPage() {
                 {/* Date divider */}
                 <div className="mb-3 flex items-center gap-2 px-1">
                   <Calendar className="h-3.5 w-3.5 shrink-0 text-brand-blue" />
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-slate-400">{date}</h3>
+                  <h3 className="tf-eyebrow">{date}</h3>
                   <span className="h-px flex-1 bg-gray-100 dark:bg-slate-700/60" />
-                  <span className="rounded-full bg-gray-100 dark:bg-slate-800 px-2 py-0.5 text-2xs font-medium tabular-nums text-gray-500 dark:text-slate-400">{dayLogs.length}</span>
+                  <span className="tf-badge bg-gray-100 dark:bg-slate-800 tf-micro-hint tabular-nums">{dayLogs.length}</span>
                 </div>
 
                 {/* Activity cards */}
@@ -481,7 +481,7 @@ export default function ActivityLogsPage() {
                     return (
                       <div
                         key={log.id}
-                        className="group rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3.5 sm:p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md"
+                        className="group tf-card-soft p-3.5 sm:p-4 transition-all hover:-translate-y-0.5 hover:border-brand-blue/20 hover:shadow-md"
                       >
                         <div className="flex items-start gap-2.5 sm:gap-4">
                           {/* Action icon tile — soft tinted */}
@@ -495,13 +495,13 @@ export default function ActivityLogsPage() {
                               <div className="min-w-0">
                                 {/* Line 1 — actor + role */}
                                 <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-                                  <span className="tf-cell-name">{log.user_name}</span>
+                                  <span className="tf-row-title">{log.user_name}</span>
                                   {log.actor_role && (
-                                    <span className="inline-flex items-center rounded-full bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-medium capitalize text-gray-500 dark:text-slate-400">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
+                                    <span className="tf-badge bg-gray-100 dark:bg-slate-800 tf-micro-hint capitalize">{log.actor_role.replace(/_/g, ' ').toLowerCase()}</span>
                                   )}
                                 </div>
                                 {/* Line 2 — action + entity */}
-                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 tf-card-desc max-sm:text-xs">
+                                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 tf-body-secondary max-sm:text-xs">
                                   <span>{log.action_label.toLowerCase()}</span>
                                   {log.entity_type && (
                                     <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/5 px-1.5 py-0.5 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/10">
@@ -517,11 +517,11 @@ export default function ActivityLogsPage() {
                                 <div className="shrink-0 cursor-default text-right">
                                   {getRelativeTime(log.created_at) ? (
                                     <>
-                                      <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{getRelativeTime(log.created_at)}</p>
-                                      <p className="whitespace-nowrap text-2xs text-gray-400 dark:text-slate-500">{formatISTTime(log.created_at)}</p>
+                                      <p className="whitespace-nowrap tf-caption">{getRelativeTime(log.created_at)}</p>
+                                      <p className="whitespace-nowrap tf-micro-hint">{formatISTTime(log.created_at)}</p>
                                     </>
                                   ) : (
-                                    <p className="whitespace-nowrap text-xs font-medium text-gray-700 dark:text-slate-300">{formatISTTime(log.created_at)}</p>
+                                    <p className="whitespace-nowrap tf-caption">{formatISTTime(log.created_at)}</p>
                                   )}
                                 </div>
                               </Tooltip>
@@ -546,7 +546,7 @@ export default function ActivityLogsPage() {
                             {(log.ip_address || log.total_session_duration != null || (log.error_origin && log.error_origin !== 'NONE') || log.refund_flag === 'YES') && (
                               <div className="mt-2 flex flex-wrap items-center gap-1.5">
                                 {log.ip_address && (
-                                  <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono text-2xs text-gray-500 dark:text-slate-400">
+                                  <span className="inline-flex items-center gap-1 rounded-md bg-gray-100 dark:bg-slate-800 px-1.5 py-0.5 font-mono tf-micro-hint">
                                     <Globe className="h-3 w-3" />
                                     {log.ip_address}
                                   </span>

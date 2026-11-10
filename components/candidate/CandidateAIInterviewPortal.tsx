@@ -295,6 +295,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // consent gate. Blocks accepting until they return to fullscreen so the
   // interview can never start outside fullscreen.
   const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
+  // Whether fullscreen was ever on during the final consent gate — picks the
+  // overlay wording: "you exited" only if they really did; otherwise the
+  // browser refused the automatic request and it is a plain "enter" step.
+  const [finalConsentFsWasOn, setFinalConsentFsWasOn] = useState(false);
   // "Hide the screen-share bar" gate (vision-LLM verified) shown before start.
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
@@ -1413,6 +1417,30 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     'video/webm',
   ];
 
+  /** Enter fullscreen right after the screen-share picker closes. Waits up to
+   *  ~1 s for the window to get focus back (a refused request — "TypeError:
+   *  not granted" — is what Edge/Chrome return while it hasn't), then tries,
+   *  and retries once. Never throws: the final consent gate re-asks with a
+   *  fresh click if this did not take. */
+  const enterFullscreenAfterPicker = async (): Promise<void> => {
+    const waitForFocus = (ms: number) => new Promise<void>((resolve) => {
+      if (document.hasFocus()) { resolve(); return; }
+      const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
+      const t = setTimeout(done, ms);
+      window.addEventListener('focus', done);
+    });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (isFullscreen()) return;
+      await waitForFocus(attempt === 0 ? 1000 : 400);
+      try {
+        await requestFullscreen();
+        return;
+      } catch {
+        await new Promise((r) => setTimeout(r, 250));
+      }
+    }
+  };
+
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
       video: {
@@ -1775,6 +1803,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
     }
 
+    // Fullscreen attempt started right after the picker closes (see below);
+    // awaited before leaving this handler instead of firing a second request.
+    let fullscreenAttempt: Promise<void> = Promise.resolve();
     // Step 1: Request screen recording BEFORE entering fullscreen.
     // Browsers (Chrome) exit fullscreen automatically to show the screen-share picker.
     // By requesting screen share first (while not in fullscreen) we avoid a second
@@ -1782,6 +1813,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     try {
       const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
+      // Ask for fullscreen THE MOMENT the picker closes — not after the
+      // recorder/mic setup below. The browser allows it only within a few
+      // seconds of the click; that setup took long enough on slower laptops
+      // that the later request was refused ("TypeError: not granted") and the
+      // candidate got the "Return to Fullscreen" overlay instead.
+      // Edge (and Chrome) also refuse it with "not granted" while the window
+      // has not got focus back from the closing picker, even though the click
+      // still counts — so wait for focus, and retry once.
+      fullscreenAttempt = enterFullscreenAfterPicker();
       // Build a combined stream: screen video + mixed audio (tab + mic)
       const recordingStream = await buildRecordingStreamWithAudio(screenStream);
       const screenMime = SCREEN_MIME_TYPES
@@ -1930,7 +1970,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
 
     // Step 2: Now enter fullscreen — screen-share picker is already done so no exit/re-entry cycle.
-    try { await requestFullscreen(); } catch { /* proceed anyway */ }
+    await fullscreenAttempt; // never throws; final consent re-asks if it failed
 
     // Screen is shared and we're in fullscreen. Show the final in-fullscreen
     // consent gate ("Not allowed during the interview" + "Yes, I accept")
@@ -2770,10 +2810,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   useEffect(() => {
     if (step !== 'final_consent') return;
     const ev = getFullscreenChangeEvent();
-    const sync = () => setFinalConsentFsExited(!isFullscreen());
+    const sync = () => {
+      const on = isFullscreen();
+      if (on) setFinalConsentFsWasOn(true);
+      setFinalConsentFsExited(!on);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F11') { try { e.preventDefault(); } catch { /* ignore */ } }
     };
+    setFinalConsentFsWasOn(false); // fresh arrival on the gate
     sync();
     document.addEventListener(ev, sync);
     window.addEventListener('keydown', onKey, true);
@@ -2841,14 +2886,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           {/* Illustration: this device ←→ lock ←→ the other active device */}
           <div className="relative flex items-center justify-center gap-2 sm:gap-3 mb-4 sm:mb-6 overflow-hidden py-3 sm:py-4" aria-hidden>
             {laptop('blue')}
-            <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#1e3a6e] -mt-2 sm:-mt-4" />
             <div className="relative shrink-0 w-[72px] h-[72px] sm:w-24 sm:h-24 md:w-32 md:h-32 rounded-full border border-amber-200 dark:border-amber-500/30 flex items-center justify-center">
               <div className="w-[54px] h-[54px] sm:w-[72px] sm:h-[72px] md:w-24 md:h-24 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center">
                 <Lock className="w-7 h-7 sm:w-9 sm:h-9 md:w-11 md:h-11 text-gray-900 fill-amber-400" strokeWidth={2} />
               </div>
               <span className="absolute bottom-0 sm:bottom-1 md:bottom-3 left-1/2 -translate-x-1/2 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-red-500 text-white text-sm font-bold flex items-center justify-center ring-2 ring-white dark:ring-slate-700">!</span>
             </div>
-            <div className="hidden min-[400px]:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
+            <div className="hidden xs:block w-4 sm:w-10 md:w-14 border-t-2 border-dashed border-[#f07a8c] -mt-2 sm:-mt-4" />
             {laptop('red')}
           </div>
 
@@ -2872,7 +2917,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   <Clock className="md:hidden w-4 h-4 shrink-0 text-amber-500" strokeWidth={2.5} />
                   Session releases automatically
                 </p>
-                <p className="tf-card-desc leading-snug">
+                <p className="tf-body-secondary leading-snug">
                   If you already closed the other session, you don&apos;t need to do anything.
                   This page will unlock automatically once the previous session is released.
                 </p>
@@ -3114,7 +3159,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <Mail className="w-5 h-5 text-gray-400 shrink-0" />
             <div>
               <p className="tf-meta">Sending OTP to</p>
-              <p className="text-sm font-medium text-gray-800">{maskedEmail}</p>
+              <p className="tf-label">{maskedEmail}</p>
             </div>
           </div>
 
@@ -3200,7 +3245,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
                 Entire Screen Required
               </h1>
-              <p className="tf-card-desc mb-5 text-center">
+              <p className="tf-body-secondary mb-5 text-center">
                 {screenShareDeclinedReason || SCREEN_SHARE_REQUIRED_MESSAGE}
               </p>
               <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 mb-6">
@@ -3218,7 +3263,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   handleFullscreenReady();
                 }}
                 disabled={startSubmitting}
-                className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
+                className="tf-btn tf-btn-destructive w-full flex bg-destructive hover:bg-destructive font-semibold py-4 rounded-xl text-base disabled:opacity-70 shadow-lg whitespace-normal"
               >
                 {startSubmitting ? (
                   <><Loader2 className="w-5 h-5 animate-spin" />Requesting Permission...</>
@@ -3236,11 +3281,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 {/* ═══ LEFT: what this is ═══ */}
                 <div className="rounded-2xl bg-gradient-to-b from-brand-sky/70 dark:from-brand-blue/10 to-brand-sky/20 dark:to-brand-blue/10 p-4 flex flex-col min-w-0">
                   <div className="flex items-center justify-center lg:justify-start gap-2 flex-wrap">
-                    <span className="inline-flex items-center gap-1.5 tf-cell-name">
+                    <span className="inline-flex items-center gap-1.5 tf-row-title">
                       <ShieldCheck className="w-5 h-5 text-brand-blue" />
                       AI Interview
                     </span>
-                    <span className="text-xs font-medium text-brand-blue bg-white/80 dark:bg-slate-900/80 px-2.5 py-1 rounded-full">
+                    <span className="tf-badge text-brand-blue bg-white/80 dark:bg-slate-900/80">
                       Secure &amp; Proctored
                     </span>
                   </div>
@@ -3269,7 +3314,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   </div>
 
                   <h1 className="text-xl md:text-2xl font-bold text-gray-900 text-center">Enter Fullscreen Mode</h1>
-                  <p className="mt-1.5 tf-card-desc text-center leading-relaxed">
+                  <p className="mt-1.5 tf-body-secondary text-center leading-relaxed">
                     This AI interview runs in fullscreen with Entire Screen sharing and active proctoring, to ensure a focused, fair and secure interview experience.
                   </p>
 
@@ -3280,7 +3325,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                       </span>
                       <div className="min-w-0">
                         <p className="text-xs font-semibold text-brand-blue">Your Privacy is Protected</p>
-                        <p className="text-2xs text-gray-600 mt-0.5 leading-relaxed">
+                        <p className="tf-micro-hint mt-0.5 leading-relaxed">
                           Your screen, camera and audio are used only for this interview&apos;s proctoring.
                         </p>
                       </div>
@@ -3291,29 +3336,29 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 {/* ═══ RIGHT: what to do + what's not allowed ═══ */}
                 <div className="flex flex-col gap-4 min-w-0">
                   {/* ── What you need to do ── */}
-                  <section className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <section className="tf-panel p-4">
                     <div className="flex items-center gap-3">
                       <span className="w-9 h-9 rounded-full bg-success text-white flex items-center justify-center flex-shrink-0">
                         <Check className="w-5 h-5" strokeWidth={3} />
                       </span>
                       <div>
-                        <h2 className="text-base font-bold text-gray-900 leading-tight">What you need to do</h2>
+                        <h2 className="tf-section-title leading-tight">What you need to do</h2>
                         <p className="tf-meta">Please follow the guidelines below to continue.</p>
                       </div>
                     </div>
-                    <ul className="mt-3 grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                    <ul className="tf-grid-4 mt-3">
                       {([
                         { icon: Monitor, title: 'Select Entire Screen', text: 'Share your entire screen only. Window or Current Tab is not allowed.' },
                         { icon: Shield, title: 'Keep screen sharing active', text: 'Screen sharing is required to prevent malpractice.' },
                         { icon: Eye, title: 'Stay in fullscreen mode', text: 'Browser navigation will be hidden while you are in the interview.' },
                         { icon: Focus, title: 'Keep this window in focus', text: 'Stay in fullscreen and keep this window in focus for the entire interview.' },
                       ]).map(({ icon: RuleIcon, title, text }) => (
-                        <li key={title} className="rounded-xl bg-white border border-gray-100 shadow-sm px-3 py-3.5 text-center">
+                        <li key={title} className="tf-card-soft px-3 py-3.5 text-center">
                           <span className="w-10 h-10 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto">
                             <RuleIcon className="w-5 h-5" />
                           </span>
-                          <p className="mt-2 text-xs font-semibold text-gray-900 leading-snug">{title}</p>
-                          <p className="mt-1 text-2xs text-gray-500 leading-relaxed">{text}</p>
+                          <p className="mt-2 tf-caption leading-snug">{title}</p>
+                          <p className="mt-1 tf-micro-hint leading-relaxed">{text}</p>
                         </li>
                       ))}
                     </ul>
@@ -3343,21 +3388,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                         : []),
                     ];
                     return (
-                      <section className="rounded-2xl border border-gray-200 bg-white p-4">
+                      <section className="tf-panel p-4">
                         <div className="flex items-center gap-3">
                           <span className="w-9 h-9 rounded-full bg-destructive text-white flex items-center justify-center flex-shrink-0">
                             <Ban className="w-5 h-5" />
                           </span>
                           <div className="min-w-0 flex-1">
-                            <h2 className="text-base font-bold text-gray-900 leading-tight">Actions not allowed</h2>
+                            <h2 className="tf-section-title leading-tight">Actions not allowed</h2>
                             <p className="tf-meta">The following actions are prohibited during the interview.</p>
                           </div>
-                          <span className="hidden sm:inline-flex items-center gap-1 text-2xs font-semibold text-destructive bg-white ring-1 ring-destructive-line px-2 py-0.5 rounded-full flex-shrink-0">
+                          <span className="tf-badge hidden sm:inline-flex text-2xs text-destructive bg-white ring-1 ring-destructive-line flex-shrink-0">
                             <Eye className="w-3 h-3" />
                             Monitored
                           </span>
                         </div>
-                        <ul className="mt-3 grid grid-cols-1 min-[400px]:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                        <ul className="tf-grid-4 mt-3">
                           {tiles.map(({ icon: BanIcon, text }, i) => (
                             <li key={i} className="rounded-xl bg-white border border-destructive-line/60 shadow-sm px-3 py-3.5 text-center">
                               <span className="w-10 h-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mx-auto">
@@ -3374,8 +3419,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                                 <NoteIcon className="w-4 h-4" />
                               </span>
                               <div className="min-w-0">
-                                <p className="text-xs font-semibold text-gray-900 leading-snug">{text}</p>
-                                <p className="mt-0.5 text-2xs text-gray-500 leading-relaxed">{note}</p>
+                                <p className="tf-caption leading-snug">{text}</p>
+                                <p className="mt-0.5 tf-micro-hint leading-relaxed">{note}</p>
                               </div>
                             </li>
                           ))}
@@ -3416,9 +3461,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                     type="checkbox"
                     checked={rulesConsent}
                     onChange={(e) => setRulesConsent(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 shrink-0 rounded border-gray-300 accent-brand-blue cursor-pointer"
+                    className="tf-checkbox mt-0.5 accent-brand-blue"
                   />
-                  <span className="text-xs text-gray-700 leading-relaxed">
+                  <span className="tf-meta leading-relaxed">
                     I have read and understood the interview rules and the actions that are not allowed.
                     I consent to Entire Screen sharing and active proctoring for the duration of this interview.
                   </span>
@@ -3433,7 +3478,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   }}
                   disabled={startSubmitting || !rulesConsent}
                   title={!rulesConsent ? 'Please accept the consent above to continue' : undefined}
-                  className="w-full md:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white font-semibold py-2.5 px-5 rounded-lg transition-all text-sm disabled:opacity-60 disabled:cursor-not-allowed shadow-md shadow-brand-blue/20"
+                  className="tf-btn tf-btn-primary w-full md:w-auto flex-shrink-0 flex bg-brand-blue hover:bg-brand-blue-2 font-semibold py-2.5 px-5 text-sm disabled:opacity-60 shadow-md shadow-brand-blue/20 whitespace-normal"
                 >
                   {startSubmitting ? (
                     <><Loader2 className="w-4 h-4 animate-spin" />Starting Interview...</>
@@ -3443,7 +3488,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 </button>
                 {/* Why it's disabled — a title tooltip never shows on touch. */}
                 {!rulesConsent && !startSubmitting && (
-                  <p className="text-2xs text-gray-500 text-center md:text-right">Tick the consent box to enable this button.</p>
+                  <p className="tf-micro-hint text-center md:text-right">Tick the consent box to enable this button.</p>
                 )}
                 </div>
               </div>
@@ -3466,7 +3511,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           <h1 className="text-2xl md:text-[1.75rem] font-bold text-gray-900 mb-1 text-center">
             Before we begin
           </h1>
-          <p className="tf-card-desc mb-3 text-center max-w-4xl mx-auto">
+          <p className="tf-body-secondary mb-3 text-center max-w-4xl mx-auto">
             You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
@@ -3476,25 +3521,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Do not refresh this page — it drops screen sharing and restarts setup.
           </div>
 
-          <div className="rounded-2xl border border-gray-200 bg-white overflow-hidden mb-3">
+          <div className="tf-panel overflow-hidden mb-3">
             <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 border-b border-gray-200">
               <span className="w-7 h-7 rounded-full bg-destructive text-white flex items-center justify-center flex-shrink-0">
                 <AlertTriangle className="w-4 h-4" />
               </span>
-              <h2 className="text-base font-bold text-gray-900">Not allowed during the interview</h2>
+              <h2 className="tf-section-title">Not allowed during the interview</h2>
             </div>
             {/* Each card is a 3-row subgrid (icons · heading · description)
                 sharing the list's row tracks, so across a row every heading
                 takes the tallest heading's height: descriptions start on the
                 same line and the cards end level. The card's own gap-y-0
                 keeps the list's row gap from opening up inside it. */}
-            <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 p-2.5">
+            <ul className="tf-grid-4 p-2.5">
               {FINAL_CONSENT_RULES.map(({ key, title, text, icons }) => (
-                <li key={key} className="grid grid-rows-subgrid row-span-3 gap-y-0 rounded-xl bg-white border border-gray-100 shadow-sm px-3.5 py-3">
+                <li key={key} className="tf-card-soft grid grid-rows-subgrid row-span-3 gap-y-0 px-3.5 py-3">
                   <div className="h-10 mb-2 flex items-center gap-1.5">
                     {icons}
                   </div>
-                  <div className="tf-cell-name leading-snug">{title}</div>
+                  <div className="tf-row-title leading-snug">{title}</div>
                   <div className="tf-meta mt-0.5 leading-relaxed">{text}</div>
                 </li>
               ))}
@@ -3545,9 +3590,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <Maximize2 className="w-8 h-8 text-warning" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
-              <p className="tf-card-desc mb-6">
-                You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.
+              <h2 className="text-xl font-bold text-gray-900 mb-2">{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}</h2>
+              <p className="tf-body-secondary mb-6">
+                {finalConsentFsWasOn
+                  ? 'You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.'
+                  : 'Screen sharing is on. The interview runs in fullscreen — click below to switch to fullscreen and continue.'}
               </p>
               <button
                 onClick={async () => {
@@ -3556,7 +3603,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-warning hover:bg-warning text-white font-semibold py-3 rounded-xl transition-all"
               >
-                <Maximize2 className="w-4 h-4" />Return to Fullscreen
+                <Maximize2 className="w-4 h-4" />{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}
               </button>
             </div>
           </div>
@@ -3573,10 +3620,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           <div data-capture-decor className="w-10 h-10 bg-brand-blue/10 rounded-full flex items-center justify-center mx-auto mb-1.5">
             <Monitor className="w-5 h-5 text-brand-blue" />
           </div>
-          <h1 className="text-lg md:text-xl font-bold text-gray-900 mb-1 text-center">
+          <h1 className="tf-section-title md:text-xl mb-1 text-center">
             One last step — hide the sharing bar
           </h1>
-          <p className="tf-card-desc mb-2.5 text-center leading-relaxed max-w-2xl mx-auto">
+          <p className="tf-body-secondary mb-2.5 text-center leading-relaxed max-w-2xl mx-auto">
             Click <b className="text-gray-900">Hide</b> on the sharing bar at the bottom of your screen. Screen sharing stays on.
           </p>
 
@@ -3603,7 +3650,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 {/* The sharing bar */}
                 <div className="absolute left-1/2 -translate-x-1/2 bottom-14 w-[96%] max-w-sm flex items-center gap-2 bg-white rounded-lg shadow-lg px-2.5 py-2">
                   <span className="w-4 h-4 rounded-sm bg-brand-blue shrink-0" />
-                  <span className="text-xs text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
+                  <span className="tf-meta flex-1 truncate">This site is sharing your screen.</span>
                   <span className="text-2xs font-semibold text-white bg-brand-blue rounded-md px-1.5 py-1 shrink-0">Stop sharing</span>
                   <span className="relative shrink-0">
                     <span className="text-xs font-semibold text-brand-blue underline underline-offset-2 px-1.5 py-0.5 rounded-md ring-2 ring-brand-orange bg-brand-orange/10">Hide</span>
@@ -3633,7 +3680,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 { icon: MonitorCheck, title: 'Keep screen sharing ON', text: <>Hiding the bar only collapses it. Screen sharing will continue.</> },
                 { icon: ShieldCheck, title: 'Click Continue', text: <>We&apos;ll verify it and then start the interview.</> },
               ]).map(({ icon: StepIcon, title, text }, i) => (
-                <div key={title} className="flex items-center gap-2.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5">
+                <div key={title} className="tf-panel flex items-center gap-2.5 px-2.5 py-1.5">
                   <span className="w-6 h-6 rounded-full border border-brand-blue/20 bg-brand-blue/5 text-brand-blue text-xs font-bold flex items-center justify-center shrink-0">
                     {i + 1}
                   </span>
@@ -3641,8 +3688,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                     <StepIcon className="w-4 h-4" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 leading-snug">{title}</p>
-                    <p className="text-2xs text-gray-500 leading-snug">{text}</p>
+                    <p className="tf-caption leading-snug">{title}</p>
+                    <p className="tf-micro-hint leading-snug">{text}</p>
                   </div>
                 </div>
               ))}
@@ -3708,7 +3755,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               with the rest of the card. -mx/-mb cancel the card's padding; the
               13px tagline inset is unchanged. */}
           <div className="sticky bottom-0 z-10 -mx-4 md:-mx-6 -mb-4 md:-mb-5 px-4 md:px-6 py-3 rounded-b-2xl border-t border-gray-100 bg-white/95 dark:bg-slate-900/95 backdrop-blur flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-4">
-            <p className="flex items-center justify-center sm:justify-start gap-1.5 sm:pl-[13px] text-2xs text-gray-400 text-center sm:text-left">
+            <p className="flex items-center justify-center sm:justify-start gap-1.5 sm:pl-[13px] tf-micro-hint text-center sm:text-left">
               <span data-capture-decor className="w-4 h-4 flex items-center justify-center shrink-0">
                 <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
               </span>
@@ -3814,7 +3861,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400" />
             </div>
             <h2 className="text-xl font-bold text-gray-900 mb-2">Re-share your screen to continue</h2>
-            <p className="tf-card-desc mb-2">
+            <p className="tf-body-secondary mb-2">
               Your interview reconnected. To keep the screen recording in sync with your camera, please share your <span className="font-semibold">Entire Screen</span> again. Your interview will resume right after.
             </p>
             <p className="tf-body-muted mb-6">Window and Current Tab are not allowed.</p>
@@ -3863,7 +3910,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 <AlertTriangle className="w-8 h-8 text-destructive" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Screen Sharing Stopped</h2>
-              <p className="tf-card-desc mb-2">
+              <p className="tf-body-secondary mb-2">
                 Screen sharing is mandatory throughout the interview. This incident has been recorded as a violation.
               </p>
               <p className="text-sm text-destructive font-medium mb-6">
@@ -3872,7 +3919,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <button
                 onClick={handleReshareScreen}
                 disabled={resharing}
-                className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+                className="tf-btn tf-btn-destructive w-full flex bg-destructive hover:bg-destructive disabled:opacity-60 font-semibold py-3 rounded-xl whitespace-normal shadow-none"
               >
                 {resharing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
@@ -3880,7 +3927,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   <><Monitor className="w-4 h-4" />Re-share Entire Screen</>
                 )}
               </button>
-              <p className="text-xs text-gray-400 mt-4">
+              <p className="tf-hint mt-4">
                 If you continue to decline, the interview will be marked as suspicious.
               </p>
             </div>
@@ -3893,7 +3940,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
-              <p className="tf-card-desc mb-4">
+              <p className="tf-body-secondary mb-4">
                 Your interview is still running.
               </p>
               <div className="mb-5 rounded-xl border-2 border-warning bg-warning-subtle px-4 py-3">
@@ -3922,7 +3969,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
-              <p className="tf-card-desc mb-4">
+              <p className="tf-body-secondary mb-4">
                 Please return to fullscreen mode to continue your AI interview.
               </p>
 
@@ -3979,7 +4026,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               </p>
             </div>
           )}
-          <p className="tf-card-desc mb-4">
+          <p className="tf-body-secondary mb-4">
             As required by the proctoring policy, you must remain on the interview page in
             fullscreen for the entire session. This session has been recorded and flagged for review.
           </p>

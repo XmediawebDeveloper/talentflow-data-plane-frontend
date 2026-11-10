@@ -30,7 +30,7 @@ export default function TeamManagementSkeleton() {
         <Skeleton className="h-9 w-32 rounded-lg" />
       </div>
       <TeamStatsCards stats={EMPTY_TEAM_STATS} isLoading />
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="tf-grid-3">
         {[1, 2, 3, 4, 5, 6].map((index) => (
           <TeamCardSkeleton key={index} />
         ))}

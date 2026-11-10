@@ -1,12 +1,10 @@
 'use client';
 
 import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, FileDown, FileSpreadsheet, Download, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, RefreshCw, Layers, Radar } from 'lucide-react';
-import { ListBulkActions, useListSortSlot } from '@/components/ui/list-toolbar-slot';
+import { ListBulkActions, useListSortSlot, MasterListLayout } from '@/components/ui/list-toolbar-slot';
+import { PhoneSortMenu } from '@/components/ui/select-all-menu';
 import { readListSnapshot, writeListSnapshot, perfNote } from '@/lib/utils/listSnapshot';
 import { mapLimit } from '@/lib/utils/mapLimit';
-import { startWarmUp } from '@/lib/utils/warmUp';
-import { prefetchInterviewRows } from '@/components/ai-interview/AllInterviewsTable';
-import { prefetchAIResultRows } from '@/components/ai-interview/AIInterviewCandidateResults';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { collapseAIInterviewLineages } from '@/lib/utils/aiInterviewJobOrder';
 import { rememberAIInterviewPagerOrder, type AIInterviewPagerList } from '@/lib/utils/aiInterviewPagerList';
@@ -30,6 +28,7 @@ import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTIO
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { isValidCandidateName, NAME_FORMAT_ERROR } from '@/lib/utils/name';
@@ -38,11 +37,15 @@ import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIIntervie
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
 import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
-import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
+import dynamic from 'next/dynamic';
+/* Candidate results (with the evaluation report, recharts, jsPDF) open on a
+   click — loaded on demand, same as the Assessments screens. */
+const CandidateResultsView = dynamic(() => import('@/components/ai-interview/CandidateResultsView'), { ssr: false, loading: () => null });
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
-import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
+const AIInterviewCandidateResults = dynamic(() => import('@/components/ai-interview/AIInterviewCandidateResults'), { ssr: false, loading: () => null });
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import AIInterviewTrackInvitesModal from '@/components/AIInterviewTrackInvitesModal';
 import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter, inviteResult, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 import ExportColumnsModal from '@/components/ExportColumnsModal';
 import { downloadSessionReports, canTryReport } from '@/components/ai-interview/evaluation-dashboard/downloadSessionReport';
@@ -67,7 +70,8 @@ import {
 } from '@/components/ai-interview/ColumnFilterFields';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import { interviewResendExpiry } from '@/lib/utils/resendExpiry';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -92,6 +96,10 @@ import AllInterviewsTable, { VersionPill, AIInterviewJobStatusBadge, type BulkAc
 import AppModal from '@/components/ui/app-modal';
 import { resolveAIInterviewDraftResumeHref, aiInterviewConfigureHref, markUnsavedVersion } from '@/lib/utils/aiInterviewDraftResume';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { cachedList, listCacheKey } from '@/lib/utils/listCache';
+import { usePagedList } from '@/lib/hooks/usePagedList';
+import { useDebounce } from '@/lib/hooks/useDebounce';
+import type { AIConfigListQuery, AIConfigListFilters } from '@/lib/services/aiInterviewService';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
 
@@ -148,6 +156,10 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
 
 type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
+/* 'candidate-results' (Results) pages its own rows on the server
+   (GET /ai-interview/candidate-results) with every label it shows, so opening
+   it must not download the config list either. */
+const SERVER_PAGED_TABS: string[] = ['all', 'all-interviews', 'published', 'draft', 'archived', 'candidate-results'];
 const CONFIG_PAGE_SIZE = 10;
 /* Trigger classes for the filter panels' Dropdown (ui/filter-select) triggers. */
 const AI_FILTER_FIELD_CLASS = 'w-full sm:w-full px-3 sm:px-3 py-2 sm:py-2 rounded-lg sm:rounded-lg text-black dark:text-slate-100';
@@ -184,6 +196,7 @@ const listFilterKey = (v: Record<string, unknown>) =>
   JSON.stringify([v.activeTab, v.invitedOnly, v.modeFilter, v.statusFilter, v.searchQuery, v.sortBy, v.creatorFilter, v.dateFilter, v.customDateFrom, v.customDateTo]);
 
 export default function AIInterview() {
+  const resendInBackground = useBackgroundResend('interview');
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -206,13 +219,19 @@ export default function AIInterview() {
   const { available: aiInterviewAvailable, loading: planFeaturesLoading } = usePlanFeature('ai_interview');
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+  /* Tabs that page on the server — Total Jobs ('all', GET /configs?collapse=
+     lineage) and the flat All / Active / Draft / Archived tables — need no full
+     config list: their rows' jobs are read per page (loadConfigsForVisibleJobs).
+     Every other tab (Completed, Invitation Status, …) still reads the whole
+     list, once it is opened. */
+  const fullConfigListNeededRef = useRef(!SERVER_PAGED_TABS.includes(activeTab));
   // "AI Interview Published" success modal (was referenced in JSX but never
   // declared — pre-existing build error). Defaults hidden; no behavior change.
   const [showPublishedModal, setShowPublishedModal] = useState(false);
   const [publishedTitle, setPublishedTitle] = useState('');
-  // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
-  // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  // Lands on the Total card with the list open — same as Job Openings and
+  // Assessments. 'cards' stays in the type only so an old persisted snapshot parses.
+  const [pageView, setPageView] = useState<'cards' | 'list'>('list');
   /* ONE List/Card choice for every list tab (Total Jobs, All Interviews,
      Active/Draft/Archived, Candidate Results, Invitation Status, Activity
      Logs): switching on one tab switches them all, so the page reads the same
@@ -341,6 +360,17 @@ export default function AIInterview() {
   const [trackerBulkResendOpen, setTrackerBulkResendOpen] = useState(false);
   const [isTrackerBulkResending, setIsTrackerBulkResending] = useState(false);
   const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+  // One-click "Revoke pending invites" from the version row's 3-dot menu —
+  // distinct from the Track popup's checkbox-driven bulk revoke above: this
+  // one needs no manual selection, it revokes every INVITED/CONSENT_PENDING
+  // candidate on the config at once, mirroring the Assessment module's
+  // kebab-menu "Revoke pending invites" action.
+  const [revokePendingTarget, setRevokePendingTarget] = useState<AIInterviewResponse | null>(null);
+  const [revokePendingCount, setRevokePendingCount] = useState<number | null>(null);
+  /* The one pending candidate's email when only one link is pending — the
+     revoke popup then reads as that candidate's own (three-dot) revoke. */
+  const [revokePendingOneEmail, setRevokePendingOneEmail] = useState<string | null>(null);
+  const [isRevokingPending, setIsRevokingPending] = useState(false);
   // Edit invitation modal target — only ever set for a REVOKED invitation
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [editInviteForm, setEditInviteForm] = useState({ candidate_name: '', candidate_email: '' });
@@ -630,35 +660,44 @@ export default function AIInterview() {
   };
 
   // Load configs and stats
-  const loadAllConfigs = useCallback(async (): Promise<AIInterviewResponse[]> => {
-    const firstPage = await aiInterviewService.listConfigs({
-      page: 1,
-      page_size: CONFIG_FETCH_PAGE_SIZE,
-      compact: true,
-    });
-    if (firstPage.total <= firstPage.items.length) {
-      return firstPage.items;
-    }
-
-    const totalPages = Math.max(
-      1,
-      firstPage.total_pages || Math.ceil(firstPage.total / CONFIG_FETCH_PAGE_SIZE),
-    );
-
-    const remainingPages = await Promise.all(
-      Array.from({ length: totalPages - 1 }, (_, index) =>
-        aiInterviewService.listConfigs({
-          page: index + 2,
+  /* Every live config, pages of CONFIG_FETCH_PAGE_SIZE. Through the shared
+     list cache (lib/utils/listCache), so a visit soon after another one shares
+     its read; `fresh` (every load after the first) always asks the server. */
+  const loadAllConfigs = useCallback(async (fresh: boolean): Promise<AIInterviewResponse[]> => {
+    return cachedList(
+      listCacheKey('ai-configs|page-loop', { page_size: CONFIG_FETCH_PAGE_SIZE, compact: true }),
+      async () => {
+        const firstPage = await aiInterviewService.listConfigs({
+          page: 1,
           page_size: CONFIG_FETCH_PAGE_SIZE,
           compact: true,
-        })
-      )
-    );
+        });
+        if (firstPage.total <= firstPage.items.length) {
+          return firstPage.items;
+        }
 
-    return [
-      ...firstPage.items,
-      ...remainingPages.flatMap((page) => page.items),
-    ];
+        const totalPages = Math.max(
+          1,
+          firstPage.total_pages || Math.ceil(firstPage.total / CONFIG_FETCH_PAGE_SIZE),
+        );
+
+        const remainingPages = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            aiInterviewService.listConfigs({
+              page: index + 2,
+              page_size: CONFIG_FETCH_PAGE_SIZE,
+              compact: true,
+            })
+          )
+        );
+
+        return [
+          ...firstPage.items,
+          ...remainingPages.flatMap((page) => page.items),
+        ];
+      },
+      { fresh },
+    );
   }, []);
 
   /* Bumped by every loadArchivedConfigs run — tab switches, Refresh and the
@@ -668,12 +707,15 @@ export default function AIInterview() {
   /* When the archived list was last loaded, so a tab click does not download it
      all again (and re-render everything built on it) when it is seconds old. */
   const archivedLoadedAtRef = useRef(0);
-  const loadArchivedConfigs = useCallback(async () => {
+  /* `fresh: false` only from the first loadData — it may share a recent read
+     (lib/utils/listCache); tab clicks, Refresh and row actions ask the server. */
+  const loadArchivedConfigs = useCallback(async ({ fresh = true }: { fresh?: boolean } = {}) => {
+    if (!fullConfigListNeededRef.current) return;
     const seq = ++archivedSeqRef.current;
     try {
-      const result = await fetchAllRows((page_size, page) => aiInterviewService.listConfigs({ status: 'archived', page, page_size, compact: true }));
+      const items = await aiInterviewService.listAllConfigRows({ status: 'archived' }, fresh ? { fresh } : { reuseRecent: true });
       if (seq !== archivedSeqRef.current) return;
-      setArchivedConfigs(result.items);
+      setArchivedConfigs(items);
       archivedLoadedAtRef.current = Date.now();
     } catch (error) {
       console.error('Failed to load archived configs:', error);
@@ -703,7 +745,28 @@ export default function AIInterview() {
     /* The first load brings the archived configs in the same pass, so Total
        Jobs / Total Interviews appear once with archived included instead of
        showing the live-only figure and then jumping when they land. */
-    const archivedLoad = firstLoad ? loadArchivedConfigs() : null;
+    const archivedLoad = firstLoad ? loadArchivedConfigs({ fresh: false }) : null;
+    if (!fullConfigListNeededRef.current) {
+      /* Server-paged tab: the cards come from /configs/stats and the rows from
+         the paged list; nothing here downloads every config. A change re-reads
+         the jobs on screen (their versions feed the row menus). */
+      try {
+        const value = await aiInterviewService.getConfigStats();
+        if (isStale()) return;
+        setStats(value);
+        setInterviewedCount(typeof value.interview_sessions === 'number' ? value.interview_sessions : null);
+      } catch (error) {
+        console.error('Failed to load AI interview stats:', error);
+      } finally {
+        loadedConfigJobsRef.current.clear();
+        setVisibleJobsReloadTick((n) => n + 1);
+        if (!isStale()) {
+          hasLoadedRef.current = true;
+          setLoading(false);
+        }
+      }
+      return;
+    }
     try {
       // Remembered data already on screen: refresh quietly, no skeleton.
       if (firstLoad && remembered === null) setLoading(true);
@@ -714,20 +777,17 @@ export default function AIInterview() {
         (value) => ({ ok: true as const, value }),
         (error) => ({ ok: false as const, error }),
       );
-      // Same query Candidate Results loads; only the total is needed, so one row will do.
-      const interviewedRequest = aiInterviewService.list({ status: 'completed,terminated', page: 1, page_size: 1 }).then(
-        (value) => ({ ok: true as const, value }),
-        (error) => ({ ok: false as const, error }),
-      );
 
       let configItems: AIInterviewResponse[] = [];
       try {
-        configItems = await loadAllConfigs();
+        // Only the first load may share a recent read; every later run is a
+        // refresh (after a change, Refresh, a job status change) and asks the server.
+        configItems = await loadAllConfigs(!firstLoad);
       } catch (firstError) {
         // Retry once: this avoids a rare auth-refresh race where one concurrent
         // request refreshes the token and the sibling request needs one more hit.
         await new Promise((resolve) => window.setTimeout(resolve, 300));
-        configItems = await loadAllConfigs();
+        configItems = await loadAllConfigs(true);
       }
       if (isStale()) return;
       setConfigs(configItems);
@@ -737,14 +797,11 @@ export default function AIInterview() {
       if (statsRes.ok) setStats(statsRes.value);
       else console.error('Failed to load AI interview stats:', (statsRes as { error?: unknown }).error);
 
-      const interviewedRes = await interviewedRequest;
-      if (isStale()) return;
-      if (interviewedRes.ok) {
-        setInterviewedCount(typeof interviewedRes.value.total === 'number' ? interviewedRes.value.total : null);
-      } else {
-        console.error('Failed to load interviewed count:', (interviewedRes as { error?: unknown }).error);
-        setInterviewedCount(null);
-      }
+      /* Finished interviews (completed + terminated) come with the stats
+         (`interview_sessions`) — no separate list read for one total. */
+      setInterviewedCount(statsRes.ok && typeof statsRes.value.interview_sessions === 'number'
+        ? statsRes.value.interview_sessions
+        : null);
     } catch (error) {
       if (isStale()) return;
       // A failed refresh keeps the list already on screen; only a failed
@@ -769,14 +826,14 @@ export default function AIInterview() {
 
   /* The job badge reads each config's `jd_status`, which only arrives with the
      config list — so a job disabled / archived / re-enabled anywhere (this
-     tab, another tab, focus back on the window, or every 30s for another
-     user's change) quietly re-reads the list. The All Interviews table owns
-     its rows and keeps them live itself. */
+     tab or another tab: at once; tab visible again or another user's change:
+     throttled, see useJobStatusRefresh) quietly re-reads the list. The All
+     Interviews table owns its rows and keeps them live itself. */
   useJobStatusRefresh(() => {
     if (!hasLoadedRef.current) return;
     loadData();
     loadArchivedConfigs();
-  }, { pollMs: 30_000 });
+  });
 
   const loadSettings = useCallback(async () => {
     try {
@@ -812,7 +869,7 @@ export default function AIInterview() {
   const loadProcessingSessions = useCallback(async () => {
     setProcessingLoading(true);
     try {
-      const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page }));
+      const result = await fetchAllRows((page_size, page) => aiInterviewService.list({ status: 'in_progress', page_size, page, compact: true }));
       setProcessingSessions(result.items);
     } catch (error) {
       console.error('Failed to load processing sessions:', error);
@@ -832,24 +889,23 @@ export default function AIInterview() {
          directly keeps the numbers and the filtered table in step. */
       // A job-wide tracker sums the same four calls over each of its interviews.
       const ids = trackerScopeFor(configId)?.map((entry) => entry.config.id) ?? [configId];
-      const perConfig = await Promise.all(ids.map((id) => Promise.all([
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'invited' }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
-        aiInterviewService.getConfigInvitations(id, { page: 1, page_size: 1, compact: true, status: 'expired' }),
-      ])));
+      /* ONE request for every interview in scope (GET /ai-interview/
+         invitation-overview) — it used to be four page_size=1 calls PER
+         config. Same buckets, counted by the server per status. */
+      const overview = await aiInterviewService.getInvitationOverview(ids);
       if (seq !== overviewSeqRef.current) return;
-      const sum = (pick: (calls: (typeof perConfig)[number]) => number | undefined) =>
-        perConfig.reduce((acc, calls) => acc + (pick(calls) || 0), 0);
+      const rows = ids.map((id) => overview[id]).filter(Boolean);
+      const sum = (pick: (o: (typeof rows)[number]) => number | undefined) =>
+        rows.reduce((acc, o) => acc + (pick(o) || 0), 0);
       setInvitationOverview({
-        total: sum(([result]) => result.total),
-        invited: sum(([, invitedOnly]) => invitedOnly.total),
-        completed: sum(([result]) => result.completed),
-        inProgress: sum(([result]) => result.in_progress),
-        terminated: sum(([result]) => result.terminated),
-        cancelled: sum(([result]) => result.cancelled),
-        revoked: sum(([, , revokedOnly]) => revokedOnly.total),
-        expired: sum(([, , , expiredOnly]) => expiredOnly.total),
+        total: sum((o) => o.total),
+        invited: sum((o) => o.invited),
+        completed: sum((o) => o.completed),
+        inProgress: sum((o) => o.in_progress),
+        terminated: sum((o) => o.terminated),
+        cancelled: sum((o) => o.cancelled),
+        revoked: sum((o) => o.revoked),
+        expired: sum((o) => o.expired),
       });
     } catch (error) {
       /* Keep the last good numbers (or the placeholder): zeroing every card
@@ -1144,23 +1200,10 @@ export default function AIInterview() {
     loadAllInviteStatusesRef.current = loadAllInviteStatuses;
   }, [loadAllInviteStatuses]);
 
-  /* Warm-up: once the page's own load is done, load the other tabs' data in the
-     background, lightest first, so a click on any tab finds it ready instead of
-     starting from a skeleton. Each step is skipped quietly if it fails (the tab
-     then loads normally when opened). Runs once per visit. */
-  const warmedRef = useRef(false);
-  const cancelWarmUpRef = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    if (loading || warmedRef.current || configs.length === 0) return;
-    warmedRef.current = true;
-    cancelWarmUpRef.current = startWarmUp([
-      () => prefetchInterviewRows(),
-      () => prefetchAIResultRows(),
-      () => loadAllInviteStatusesRef.current(true),
-    ]);
-  }, [loading, configs.length]);
-  // Only leaving the page stops the warm-up (a re-render must not).
-  useEffect(() => () => cancelWarmUpRef.current?.(), []);
+  /* No background warm-up of the other tabs: it downloaded every interview
+     result (~21 MB), every invitation (~3.5 MB) and every config (~3.4 MB) on
+     each visit, whether or not those tabs were opened. Each tab loads its own
+     data when opened (and shows its remembered snapshot meanwhile). */
 
   useEffect(() => {
     if (activeTab === 'invitation-status') loadAllInviteStatusesRef.current();
@@ -1170,7 +1213,6 @@ export default function AIInterview() {
      popup (viewInvitationsConfig) and this tab can be the thing on screen
      when one of those actions completes, and each refreshes its own view. */
   const refreshAfterInviteAction = useCallback(async (configId?: string) => {
-    if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
     if (activeTab === 'invitation-status') await loadAllInviteStatuses();
     // The interview cards/tables carry invite counts too — refresh them with it.
     invalidateInviteCounts();
@@ -1264,7 +1306,10 @@ export default function AIInterview() {
   // Re-detect the scroll container when the two-step view flips (its height
   // changes drastically between the cards overview and the list).
   const rootRef = useScrollRestoration('ai-interviews', !loading, [pageView]);
-  useListStatePersistence(
+  /* True from the render carrying the restored tab / filters / page: the
+     server-paged Total Jobs list waits for it, so landing fetches its page
+     once with the restored state rather than with the defaults and again. */
+  const listStateRestored = useListStatePersistence(
     'ai-interviews',
     { activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
@@ -1301,7 +1346,7 @@ export default function AIInterview() {
       // follows to consume the skip, and it would swallow a real change.
       const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, statusFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
       restoredListKeyRef.current = restoredKey !== currentKey ? restoredKey : null;
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.pageView === 'list') setPageView(s.pageView);
       if ((s.listDisplayMode === 'list' || s.listDisplayMode === 'grid') && !isPhoneWidth()) setListDisplayMode(s.listDisplayMode);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
@@ -1384,14 +1429,6 @@ export default function AIInterview() {
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
 
-  useEffect(() => {
-    if (!viewInvitationsConfig) return;
-    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
-  }, [viewInvitationsConfig, trackerJobScope, trackerJobVersionFilter, trackerVersionFilter, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations, loadInvitationOverview]);
-  useTrackerPoll(!!viewInvitationsConfig, () => viewInvitationsConfig && Promise.all([
-    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, true),
-    loadInvitationOverview(viewInvitationsConfig.id),
-  ]));
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
@@ -1417,10 +1454,6 @@ export default function AIInterview() {
     });
   }, [inviteStatusRows]);
 
-  useEffect(() => {
-    if (!viewInvitationsConfig) return;
-    loadInvitationOverview(viewInvitationsConfig.id);
-  }, [viewInvitationsConfig, trackerJobScope, loadInvitationOverview]);
 
   /* Dismiss the 3-dot menu — the card's own in-flow menu (`menuRef`) and the
      version panel's portalled compact menu (`versionMenuRef`) share one open id,
@@ -1749,6 +1782,53 @@ export default function AIInterview() {
       router.push(aiInterviewConfigureHref(result.cloned_id, config.jd_id || ''));
     } catch (error: any) {
       toast.error(friendlyErrorMessage(error, "Couldn't duplicate AI interview. Please try again."));
+    }
+  };
+
+  /* One-click "Revoke pending invites" — opens the confirm modal and fetches
+     the eligible count up front, same two-step flow as Assessments'
+     handleOpenRevokeModal. */
+  const handleOpenRevokePendingModal = async (config: AIInterviewResponse) => {
+    if (blockIfJdDisabled(config)) return;
+    setOpenMenuId(null);
+    /* Count (and, for one link, whose it is) BEFORE opening: opening first
+       drew the many-links popup and then swapped it for the one-candidate
+       popup when the email landed — a visible flash. */
+    let count: number | null = null;
+    let oneEmail: string | null = null;
+    try {
+      count = await aiInterviewService.getRevokableInvitationsCount(config.id);
+      if (count === 1) {
+        /* Which candidate: the one invite the revoke would take — same rule. */
+        const res = await aiInterviewService.getConfigInvitations(config.id, { status: 'invited', page: 1, page_size: 50, compact: true }).catch(() => null);
+        oneEmail = res?.items?.find(isRevocableInvite)?.candidate_email || null;
+      }
+    } catch (err) {
+      console.error('Failed to fetch revokable invitations count:', err);
+      count = null;
+    }
+    setRevokePendingCount(count);
+    setRevokePendingOneEmail(oneEmail);
+    setRevokePendingTarget(config);
+  };
+
+  const confirmRevokePendingInvites = async () => {
+    if (!revokePendingTarget || isRevokingPending) return;
+    setIsRevokingPending(true);
+    try {
+      const result = await aiInterviewService.revokePendingInvitations(revokePendingTarget.id);
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
+      toast.success(
+        result.revoked_count > 0
+          ? `Revoked ${result.revoked_count} pending invite link(s).`
+          : 'No pending invites to revoke.'
+      );
+      setRevokePendingTarget(null);
+    } catch (error: any) {
+      toast.error(friendlyErrorMessage(error, "Couldn't revoke pending invites. Please try again."));
+    } finally {
+      setIsRevokingPending(false);
     }
   };
 
@@ -2111,6 +2191,97 @@ export default function AIInterview() {
   // Shared with the details page's Prev / Next (lib/utils/aiInterviewJobOrder).
   const collapsedConfigs = collapseAIInterviewLineages(filteredConfigs);
 
+  /* ── Total Jobs on the server ────────────────────────────────────────────
+     The landing tab pages its jobs on the server: GET /ai-interview/configs?
+     collapse=lineage (one row per job, the collapseAIInterviewLineages rule)
+     with the same filters the browser applied, and GET /configs/stats for the
+     same filters. Same pattern as the Assessments landing. */
+  const debouncedSearch = useDebounce(searchQuery, 300);
+  const serverTotalJobs = activeTab === 'all';
+  const dayKey = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const totalJobsFilters: AIConfigListFilters = {
+    status: statusFilter === 'all' ? 'all' : statusFilter,
+    search: debouncedSearch.trim() || undefined,
+    search_scope: debouncedSearch.trim() ? 'list' : undefined,
+    mode: modeFilter === 'all' ? undefined : modeFilter === 'timed' ? 'timed' : 'flexible',
+    created_by: creatorFilter === 'all' ? undefined : creatorFilter,
+    created_from: dateWindow ? dayKey(dateWindow.from) : undefined,
+    // The window's end is exclusive (start of the next day); the API's is inclusive.
+    created_to: dateWindow ? dayKey(new Date(dateWindow.to.getTime() - 86_400_000)) : undefined,
+    invited_only: invitedOnly || undefined,
+  };
+  const totalJobsQuery: AIConfigListQuery = {
+    ...totalJobsFilters,
+    collapse: 'lineage',
+    sort_by: sortBy === 'oldest' ? 'oldest' : 'newest',
+    status_first: sortBy === 'active' ? 'published' : sortBy === 'draft' ? 'draft' : undefined,
+    page: configListPage,
+    page_size: configListItemsPerPage,
+  };
+  const totalJobsPaged = usePagedList<AIInterviewResponse, unknown, AIConfigListQuery>({
+    name: 'ai-configs:total-jobs',
+    query: totalJobsQuery,
+    fetchPage: (q) => aiInterviewService.listConfigsPage(q).then((res) => ({ items: res.items || [], total: res.total ?? 0 })),
+    /* After the list state is restored, and only once the search has settled
+       (a restored search reaches `debouncedSearch` 300 ms later): one page
+       request on landing, for the state actually on screen. */
+    enabled: serverTotalJobs && listStateRestored && debouncedSearch === searchQuery,
+  });
+
+  /* Every version of the jobs on screen — one request per page of rows
+     (GET /configs?job=JD-1,JD-2,…&status=all) — merged into `configs` /
+     `archivedConfigs`. The row figures, version panels, Track target and the
+     row menus' gates (latest version, version cap, sibling draft) read those,
+     so they answer for the rows shown without the tenant's whole list. */
+  const loadedConfigJobsRef = useRef(new Set<string>());
+  const [visibleJobsReloadTick, setVisibleJobsReloadTick] = useState(0);
+  const mergeConfigRows = useCallback((incoming: AIInterviewResponse[], replaceJobs?: Set<string>) => {
+    if (incoming.length === 0 && !replaceJobs?.size) return;
+    const apply = (prev: AIInterviewResponse[], wantArchived: boolean) => {
+      const kept = replaceJobs?.size ? prev.filter((c) => !replaceJobs.has(c.jd_short_id || '')) : prev;
+      const byId = new Map(kept.map((c) => [c.id, c]));
+      for (const c of incoming) {
+        if ((c.status === 'archived') === wantArchived) byId.set(c.id, c);
+        else byId.delete(c.id);
+      }
+      return Array.from(byId.values());
+    };
+    setConfigs((prev) => apply(prev, false));
+    setArchivedConfigs((prev) => apply(prev, true));
+  }, []);
+  const loadConfigsForVisibleJobs = useCallback(async (rows: AIInterviewResponse[]) => {
+    if (fullConfigListNeededRef.current) return; // the full list is loaded already
+    mergeConfigRows(rows);
+    const jobs = Array.from(new Set(rows.map((r) => r.jd_short_id).filter((j): j is string => !!j)))
+      .filter((j) => !loadedConfigJobsRef.current.has(j));
+    if (jobs.length === 0) return;
+    jobs.forEach((j) => loadedConfigJobsRef.current.add(j));
+    try {
+      const res = await aiInterviewService.listConfigsPage({ status: 'all', job: jobs.join(','), page: 1, page_size: 500 });
+      mergeConfigRows(res.items || [], new Set(jobs));
+    } catch (error) {
+      jobs.forEach((j) => loadedConfigJobsRef.current.delete(j));
+      console.error('Failed to load interviews for the jobs on screen:', error);
+    }
+  }, [mergeConfigRows]);
+  useEffect(() => {
+    if (!serverTotalJobs || totalJobsPaged.items.length === 0) return;
+    void loadConfigsForVisibleJobs(totalJobsPaged.items);
+  }, [serverTotalJobs, totalJobsPaged.items, loadConfigsForVisibleJobs, visibleJobsReloadTick]);
+
+  /* Switching to a tab that still reads the whole list loads it then. */
+  useEffect(() => {
+    const need = !SERVER_PAGED_TABS.includes(activeTab);
+    const was = fullConfigListNeededRef.current;
+    fullConfigListNeededRef.current = need;
+    if (need && !was && hasLoadedRef.current) {
+      void loadData();
+      void loadArchivedConfigs();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
   /* Which list the details page's Prev / Next walk — the list on screen:
        Grouped (Total Jobs): its jobs, one stop per job, so the counter reads
          the job count shown here;
@@ -2276,11 +2447,20 @@ export default function AIInterview() {
     return best;
   };
 
-  const configTotalPages = Math.max(1, Math.ceil(collapsedConfigs.length / configListItemsPerPage));
-  const paginatedConfigs = collapsedConfigs.slice(
-    (configListPage - 1) * configListItemsPerPage,
-    configListPage * configListItemsPerPage,
-  );
+  /* Still waiting for Total Jobs' first page — also while the request is held
+     for the restore / a restored search to settle, so that wait shows the
+     skeleton rather than a one-render "no jobs" flash. */
+  const totalJobsWaiting = totalJobsPaged.loading
+    || (totalJobsPaged.items.length === 0 && (!listStateRestored || debouncedSearch !== searchQuery));
+  /* Total Jobs: the server's page and total; other grouped tabs page here. */
+  const groupedListTotal = serverTotalJobs ? totalJobsPaged.total : collapsedConfigs.length;
+  const configTotalPages = Math.max(1, Math.ceil(groupedListTotal / configListItemsPerPage));
+  const paginatedConfigs = serverTotalJobs
+    ? totalJobsPaged.items
+    : collapsedConfigs.slice(
+      (configListPage - 1) * configListItemsPerPage,
+      configListPage * configListItemsPerPage,
+    );
 
   /* The job cards' Completed figure: completed-session counts for every
      interview in the lineage of each job ON THIS PAGE — fetched as the page
@@ -2482,13 +2662,18 @@ export default function AIInterview() {
                 left: Math.max(8, menuAnchor.right - 208),
               }}
             >
-              <button
-                onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
-                className={VERSION_MENU_ITEM_CLASS}
-              >
-                <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
-                <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-              </button>
+              {/* Not on a Draft: a draft is opened through Continue Editing
+                  below, on the Configure page it is still being built on —
+                  the Assessments View Details rule. */}
+              {config.status !== 'draft' && (
+                <button
+                  onClick={() => { router.push(interviewDetailsHref(config.id)); setOpenMenuId(null); }}
+                  className={VERSION_MENU_ITEM_CLASS}
+                >
+                  <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
+                  <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                </button>
+              )}
               {/* Continue Editing — moved here from the job row, which now
                   reports the job as a whole, as the Assessments Job List does.
                   A disabled job lists the same items as a live one, greyed with
@@ -2624,6 +2809,40 @@ export default function AIInterview() {
                   </button>
                 );
               })()}
+              {/* Revoke pending invites — one click, no manual selection,
+                  unlike the Track popup's checkbox-driven bulk revoke.
+                  Mirrors the Assessments kebab-menu action: only meaningful
+                  once at least one invite exists, and repeatable (unlike
+                  Assessment's one-shot invite batch, an AI Interview config
+                  can be shared with new candidates at any time, so there is
+                  no "already revoked" permanent seal here — the confirm
+                  modal's live count simply reads 0 once nothing is pending). */}
+              {isPublished && hasBeenShared && (() => {
+                const revokeBlocked = jdLocked
+                  ? jdLockReason
+                  : !canInviteAIInterviews
+                    ? 'You do not have permission to invite candidates'
+                    : '';
+                return (
+                  <button
+                    onClick={() => {
+                      if (revokeBlocked) return;
+                      void handleOpenRevokePendingModal(config);
+                    }}
+                    disabled={jdLocked}
+                    aria-disabled={!!revokeBlocked}
+                    title={revokeBlocked || 'Revoke every invite not yet opened by its candidate'}
+                    className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                      revokeBlocked
+                        ? 'text-gray-400 cursor-not-allowed'
+                        : 'text-destructive'
+                    }`}
+                  >
+                    <Ban className={`w-4 h-4 flex-shrink-0 ${revokeBlocked ? 'text-gray-300' : ''}`} />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Revoke pending invites</span>
+                  </button>
+                );
+              })()}
               <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               {/* No Archive on a Draft — the Assessments rule: an unpublished
                   version has nothing to archive; it is deleted instead. */}
@@ -2716,23 +2935,12 @@ export default function AIInterview() {
     : inviteStatusRows.filter((inv) =>
         selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at && !isInviteJdDisabled(inv));
 
-  /* A fresh link to each invitation, one at a time — each send emails a
-     candidate, and a failure on one must not stop the rest. Shared by the
-     Invitation Status tab's and the Track popup's bulk Resend. */
-  const resendInvitesInBulk = async (targets: any[]) => {
-    let sent = 0;
-    let failedCount = 0;
-    for (const inv of targets) {
-      try {
-        await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
-        sent++;
-      } catch (error) {
-        console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
-        failedCount++;
-      }
-    }
-    if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
-    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+  /* A fresh link to each invitation — as a background send (bulk invite
+     job, mode resend) that carries on when this page closes and shows in
+     the round progress icon. Shared by the Invitation Status tab's and the
+     Track popup's bulk Resend. */
+  const resendInvitesInBulk = async (targets: { id: string }[]) => {
+    await resendInBackground(targets);
   };
 
   const handleStatusBulkResend = async () => {
@@ -2785,7 +2993,9 @@ export default function AIInterview() {
   /* The grouped job list hands its jobs, in the order shown (sort, search and
      filters applied), to the details page's Prev / Next. */
   const groupedPagerList = isConfigListTab && !showUngroupedList ? GROUPED_PAGER_LIST[activeTab] : undefined;
-  const groupedPagerIds = collapsedConfigs.map((c) => c.id).join(',');
+  /* On the server-paged Total Jobs tab only the page on screen is known here,
+     so Prev / Next walks that page. */
+  const groupedPagerIds = (serverTotalJobs ? paginatedConfigs : collapsedConfigs).map((c) => c.id).join(',');
   useEffect(() => {
     if (!groupedPagerList || loading) return;
     rememberAIInterviewPagerOrder(groupedPagerList, groupedPagerIds ? groupedPagerIds.split(',') : []);
@@ -2854,7 +3064,7 @@ export default function AIInterview() {
   const configRowsSkeleton = (
     <>
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="@container/ai-row p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
+                <div key={i} className="tf-card-soft @container/ai-row p-3 sm:p-4">
                   <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
                     <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
                       <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
@@ -2864,7 +3074,7 @@ export default function AIInterview() {
                     <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
                       <Skeleton className="h-5 w-20 rounded-full" />
                     </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                    <div className="tf-grid-stats @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                       {Array.from({ length: 4 }).map((_, j) => (
                         <div key={j} className="space-y-1.5">
                           <Skeleton className="h-3 w-16" />
@@ -2879,9 +3089,9 @@ export default function AIInterview() {
   );
   if (loading) {
     return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <main className="tf-page">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl dark:shadow-black/40 dark:border dark:border-slate-700/60">
+          <div className="tf-page-sheet dark:shadow-black/40 dark:border dark:border-slate-700/60">
             <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
             {/* Header */}
             <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
@@ -2900,7 +3110,7 @@ export default function AIInterview() {
               </div>
             </div>
             {/* Stats cards */}
-            <div className="grid gap-2.5 sm:gap-3 mb-5 sm:mb-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+            <div className="tf-grid-stats-5 mb-5 sm:mb-8">
               {Array.from({ length: 5 }).map((_, i) => (
                 <div key={i} className="rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 bg-white dark:bg-slate-900 px-3.5 py-3.5 sm:px-4 sm:py-4">
                   <div className="flex items-start gap-2.5">
@@ -2936,11 +3146,11 @@ export default function AIInterview() {
     : 'neutral';
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+    <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
       {/* The page shell and this panel had no dark variants at all, so every
           card inside was painting a dark surface onto a white page. */}
-      <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl dark:shadow-black/40 dark:border dark:border-slate-700/60">
+      <div className="tf-page-sheet dark:shadow-black/40 dark:border dark:border-slate-700/60">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'AI Interviews' }]} />
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
@@ -2957,7 +3167,8 @@ export default function AIInterview() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 sm:gap-3 flex-wrap xl:flex-nowrap">
+          {/* Phones: the buttons stack full width, as the Job Openings header's. From sm unchanged. */}
+          <div className="flex max-sm:flex-col max-sm:items-stretch sm:items-center gap-2 sm:gap-3 sm:flex-wrap xl:flex-nowrap">
             {/* AI Interview Quota Card */}
             {totalUnits > 0 && (
               <QuotaBadge
@@ -2976,7 +3187,7 @@ export default function AIInterview() {
               }}
               aria-disabled={!canAccessHRQuestionBank}
               title={!canAccessHRQuestionBank ? 'You do not have permission to access the HR Question Bank' : ''}
-              className={`inline-flex items-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
+              className={`inline-flex items-center justify-center gap-1.5 h-10 border px-4 rounded-lg transition-all duration-200 text-sm font-medium shadow-sm ${
                 canAccessHRQuestionBank
                   ? 'border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5'
                   : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
@@ -2993,7 +3204,7 @@ export default function AIInterview() {
                 openInterviewInvite();
               }}
               aria-disabled={!canShareAIInterviews}
-              className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+              className={`${(!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               // Inline so it beats the secondary variant's border-[var(--border)];
               // matches the HR Question Bank button's border-brand-blue/30.
               style={{ borderColor: 'color-mix(in srgb, var(--brand-blue) 30%, transparent)' }}
@@ -3010,7 +3221,7 @@ export default function AIInterview() {
                 router.push('/recruitment/ai-interviews/jd-selection');
               }}
               aria-disabled={!canCreateAIInterviews}
-              className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+              className={`${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
               title={!canCreateAIInterviews ? 'You do not have permission to create AI interviews' : ''}
               icon={<Plus className="w-3.5 h-3.5" />}
             >
@@ -3032,21 +3243,26 @@ export default function AIInterview() {
           const totalJobs = new Set(
             allConfigs.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
           ).size;
+          /* From /configs/stats (the same WHERE the lists read), so a card
+             never depends on how much of the list is loaded. */
+          const statsJobs = stats?.total_jobs;
+          const statsConfigs = stats?.total_configs;
+          const statsActive = stats?.published_configs;
           const cards = [
             {
               label: 'Configured Jobs',
-              value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
+              value: statsJobs ?? (allConfigs.length ? totalJobs : 0),
               // Every config is one interview version, so the versions behind
               // the job count are the configs themselves (Total Interviews).
-              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
+              versions: (statsConfigs ?? allConfigs.length) as number | undefined,
               icon: Briefcase,
               tab: 'all' as TabKey,
               cardKey: 'jobs' as OverviewCardKey,
             },
             {
               label: 'Total Interviews',
-              value: allConfigs.length || (stats?.total_configs ?? 0),
-              versions: (allConfigs.length || (stats?.total_configs ?? 0)) as number | undefined,
+              value: statsConfigs ?? allConfigs.length,
+              versions: (statsConfigs ?? allConfigs.length) as number | undefined,
               icon: FileText,
               tab: 'all-interviews' as TabKey,
               cardKey: 'interviews' as OverviewCardKey,
@@ -3057,12 +3273,10 @@ export default function AIInterview() {
               // statuses (in_progress/scheduled/…) are still published configs
               // (see normalizeConfigStatus). Fall back to the backend stat only
               // before the config list has loaded.
-              value: configs.length
-                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
-                : (stats?.published_configs ?? 0),
-              versions: (configs.length
-                ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
-                : (stats?.published_configs ?? 0)) as number | undefined,
+              /* The backend counts candidate-flow statuses as Active too
+                 (normalizeConfigStatus's rule). */
+              value: statsActive ?? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length,
+              versions: (statsActive ?? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length) as number | undefined,
               icon: Globe,
               tab: 'published' as TabKey,
               cardKey: 'active' as OverviewCardKey,
@@ -3095,12 +3309,12 @@ export default function AIInterview() {
                   onClick={() => openListView(tab, { cardKey })}
                 >
                   {versions !== undefined && (
-                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                    <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                       {versions} {versions === 1 ? 'version' : 'versions'}
                     </span>
                   )}
                   {candidates !== undefined && (
-                    <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
+                    <span className="tf-badge mt-1.5 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
                       {candidates} {candidates === 1 ? 'candidate' : 'candidates'}
                     </span>
                   )}
@@ -3111,11 +3325,11 @@ export default function AIInterview() {
         })()}
 
         {pageView === 'list' && (
-        <>
+        <MasterListLayout>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {invitedOnly && (
         <div className="mb-4 flex items-center justify-end gap-2 flex-wrap">
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+          <span className="tf-badge gap-1.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
             <Users className="w-3 h-3" />
             Showing only configs with invitations
             <button
@@ -3142,14 +3356,19 @@ export default function AIInterview() {
             stray line above the pills; `[&>*:last-child:not(:first-child)]:mb-3`
             spaces an open filter panel off that rule the way the toolbar row's
             own mb-3 already does when it is alone. */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+        {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's lines —
+              ( search ............ ) (⚙) [≡ ⊞]
+              Configured Jobs 0  All Interviews 2  Act…   ← underlined tabs, scroll sideways
+                                         [⇅ Sort ▾] [↻]
+            From sm the card is unchanged. */}
+        <div className="tf-jobs-toolbar tf-card p-3 sm:p-4 mb-4">
 
         {/* Shared toolbar slot — every tab's search/filter row renders here:
             the config-list tabs' toolbar just below, and All Interviews /
             Candidate Results / Invitation Status / Activity Logs portal theirs
             in (see their `toolbarSlot` prop), so the search box sits in the
             same spot whichever tab is active. */}
-        <div ref={setToolbarSlotEl} className="empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
+        <div ref={setToolbarSlotEl} className="tf-jobs-slot empty:hidden mb-3 [&>*:last-child:not(:first-child)]:mb-3" />
 
         {isConfigListTab && !showUngroupedList && toolbarSlotEl && createPortal(
           <>
@@ -3172,7 +3391,7 @@ export default function AIInterview() {
                    takes the row below. */
                 <ListFilterPanel>
                     <div>
-                      <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="ai-interview-mode" className="block tf-caption mb-1.5">
                         Mode
                       </label>
                       <Dropdown
@@ -3188,7 +3407,7 @@ export default function AIInterview() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="ai-interview-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="ai-interview-creator" className="block tf-caption mb-1.5">
                         Created by
                       </label>
                       <Dropdown
@@ -3203,7 +3422,7 @@ export default function AIInterview() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="ai-interview-date" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="ai-interview-date" className="block tf-caption mb-1.5">
                         Created
                       </label>
                       <Dropdown
@@ -3222,7 +3441,7 @@ export default function AIInterview() {
                       />
                     </div>
                     <div>
-                      <label htmlFor="ai-interview-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                      <label htmlFor="ai-interview-status" className="block tf-caption mb-1.5">
                         Status
                       </label>
                       <Dropdown
@@ -3241,7 +3460,7 @@ export default function AIInterview() {
                     {dateFilter === 'custom' && (
                       <>
                         <div>
-                          <label htmlFor="ai-interview-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          <label htmlFor="ai-interview-created-from" className="block tf-caption mb-1.5">
                             Created from
                           </label>
                           <DateField
@@ -3252,7 +3471,7 @@ export default function AIInterview() {
                           />
                         </div>
                         <div>
-                          <label htmlFor="ai-interview-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                          <label htmlFor="ai-interview-created-to" className="block tf-caption mb-1.5">
                             Created to
                           </label>
                           <DateField
@@ -3272,22 +3491,20 @@ export default function AIInterview() {
 
         {/* Tabs — below the search row inside the same card, in the Job
             Descriptions page's status-pill row (no "Show:" label). */}
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-1.5 flex-wrap w-full">
+        <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
+        <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
+          {/* `contents` from sm (the row as before); on phones one underlined strip. */}
+          <div className="tf-jobs-status-tabs contents">
           {(() => {
-            // Same counts as the stat cards, so a pill and the card it
-            // mirrors cannot disagree.
-            const seen = new Set(configs.map((c) => c.id));
-            const everyConfig = [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
-            const jobCount = new Set(
-              everyConfig.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
-            ).size;
+            // Server counts (/configs/stats, the same shared WHERE the lists
+            // page with), as on Assessments. `configs` now holds only the
+            // pages loaded so far, so tallying it under-counted every pill.
             return [
-              { key: 'all', label: 'Configured Jobs', count: everyConfig.length ? jobCount : (stats?.total_configs ?? 0) },
-              { key: 'all-interviews', label: 'All Interviews', count: everyConfig.length || (stats?.total_configs ?? 0) },
-              { key: 'published', label: 'Active', count: configs.length ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length : (stats?.published_configs ?? 0) },
-              { key: 'draft', label: 'Draft', count: configs.length ? configs.filter((c) => c.status === 'draft').length : (stats?.draft_configs ?? 0) },
-              { key: 'archived', label: 'Archived', count: archivedConfigs.length || (stats?.archived_configs ?? 0) },
+              { key: 'all', label: 'Configured Jobs', count: stats?.total_jobs ?? 0 },
+              { key: 'all-interviews', label: 'All Interviews', count: stats?.total_configs ?? 0 },
+              { key: 'published', label: 'Active', count: stats?.published_configs ?? 0 },
+              { key: 'draft', label: 'Draft', count: stats?.draft_configs ?? 0 },
+              { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? 0 },
             ];
           })().map(tab => {
             const isActive = activeTab === tab.key;
@@ -3336,7 +3553,7 @@ export default function AIInterview() {
                 >
                   {tab.label}
                   {'count' in tab && (
-                    <span className={`ml-1 px-1 py-0.5 rounded text-[11px] font-semibold tabular-nums ${
+                    <span className={`ml-1 px-1 py-0.5 rounded text-xs font-semibold tabular-nums ${
                       isActive ? 'bg-white/20 text-white' : 'bg-white text-brand-blue ring-1 ring-brand-blue/15 dark:bg-slate-800'
                     }`}>
                       {tab.count.toLocaleString()}
@@ -3368,6 +3585,9 @@ export default function AIInterview() {
               );
             })}
           </div>
+          </div>
+          {/* Phones: Clear Sort, the Sort menu and Refresh on a line of their own, right. */}
+          <div className="tf-jobs-tools contents">
           {/* Clear Sort (portalled in by All Interviews) and Sort by — in the
               tabs line, just before Refresh, as Clear Sort sits on Assessments. */}
           <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
@@ -3378,29 +3598,41 @@ export default function AIInterview() {
               options carry their own direction (Newest / Oldest), so there is
               no order toggle. Only on the grouped job list, the one list it sorts. */}
           {(isConfigListTab || activeTab === 'all-interviews' || dateOnlySort) && (() => {
+            const sortOptions = [
+              { value: 'newest', label: 'Newest' },
+              { value: 'oldest', label: 'Oldest' },
+              ...(dateOnlySort ? [] : [
+                { value: 'active', label: 'Active first' },
+                { value: 'draft', label: 'Draft first' },
+              ]),
+            ];
+            const sortValue = dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy;
             const sortControl = (
-            <div className="flex items-center gap-2">
+            <div className="tf-jobs-sort flex items-center gap-2">
               <label htmlFor="ai-interview-sort" className="tf-label whitespace-nowrap">Sort by</label>
               <div className="inline-flex items-center bg-brand-blue/5 rounded-lg p-1 transition-all">
                 <Dropdown
                   id="ai-interview-sort"
                   ariaLabel="Sort by"
-                  value={dateOnlySort ? (sortBy === 'oldest' ? 'oldest' : 'newest') : sortBy}
+                  value={sortValue}
                   onChange={(v) => setSortBy(v as typeof sortBy)}
                   className="w-auto sm:w-auto data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-2.5 sm:pl-2.5 pr-2 sm:pr-2 bg-transparent dark:bg-transparent border-0 shadow-none rounded-md sm:rounded-md text-gray-700 dark:text-slate-300 font-medium"
-                  options={[
-                    { value: 'newest', label: 'Newest' },
-                    { value: 'oldest', label: 'Oldest' },
-                    ...(dateOnlySort ? [] : [
-                      { value: 'active', label: 'Active first' },
-                      { value: 'draft', label: 'Draft first' },
-                    ]),
-                  ]}
+                  options={sortOptions}
                 />
               </div>
             </div>
             );
-            return sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl;
+            return (
+              <>
+                {sortSlotEl ? createPortal(sortControl, sortSlotEl) : sortControl}
+                {/* Phones: the Job Openings list's Sort menu beside Refresh (the inline Sort by hides). */}
+                <PhoneSortMenu
+                  value={sortValue}
+                  options={sortOptions}
+                  onChange={(v) => setSortBy(v as typeof sortBy)}
+                />
+              </>
+            );
           })()}
 
           {/* Refresh — right corner of the pill row. Refetches whichever tab
@@ -3417,15 +3649,16 @@ export default function AIInterview() {
             title="Refresh"
             aria-label="Refresh"
             icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
-            className="flex-shrink-0 !h-9 sm:ml-auto"
+            className="tf-jobs-refresh flex-shrink-0 !h-9 sm:ml-auto"
           >
             <span className="hidden 2xl:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
           )}
           </div>
+          </div>
         </div>
         {/* Actions (N) + Clear for ticked rows land on this third line. */}
-        <div data-list-bulk-slot className="empty:hidden mt-3 flex flex-wrap items-center gap-2" />
+        <div data-list-bulk-slot className="empty:hidden mt-3 max-sm:mt-0 basis-full order-last flex flex-wrap items-center gap-2" />
         </div>{/* closes toolbar card */}
 
         {/* Main Content. Like the Job Descriptions and Assessments pages, the
@@ -3440,13 +3673,13 @@ export default function AIInterview() {
             loading skeleton the page shrank under that scroll and the browser
             snapped back up to the stat cards. */}
         <div className={activeTab === 'settings'
-          ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5'
+          ? 'tf-card-soft'
           : '[&>div]:p-0 min-h-[calc(100dvh-11rem)]'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable seedConfigs={tableSeedConfigs} toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} defaultSort={sortBy} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable seedConfigs={tableSeedConfigs} toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} defaultSort={sortBy} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} displayMode={listDisplayMode} onDisplayModeChange={setListDisplayMode} bulkActions={interviewBulkActions} canExport={canExportAIInterviews} onExported={(info) => void aiInterviewService.logListExport(info)} onVisibleRowsChange={(rows) => { void loadConfigsForVisibleJobs(rows); }} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -3466,21 +3699,22 @@ export default function AIInterview() {
               bulkActions={interviewBulkActions}
               canExport={canExportAIInterviews}
               onExported={(info) => void aiInterviewService.logListExport(info)}
+              onVisibleRowsChange={(rows) => { void loadConfigsForVisibleJobs(rows); }}
             />
           )}
 
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
-              {isRefreshingTab ? (
+              {isRefreshingTab || (serverTotalJobs && totalJobsWaiting) ? (
                 <div
                   aria-busy="true"
                   aria-label="Refreshing jobs"
-                  className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}
+                  className={listDisplayMode === 'grid' ? 'tf-grid-3 items-start' : 'space-y-3'}
                 >
                   {configRowsSkeleton}
                 </div>
-              ) : collapsedConfigs.length === 0 ? (
+              ) : (serverTotalJobs ? (totalJobsWaiting ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
                     <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
@@ -3492,7 +3726,7 @@ export default function AIInterview() {
                       )}
                     </div>
                   </div>
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1.5 tracking-tight">
+                  <h3 className="tf-section-title mb-1.5 tracking-tight">
                     {searchQuery ? 'No matches found' : 'No AI interviews yet'}
                   </h3>
                   <p className="tf-body-muted mb-6 max-w-sm mx-auto">
@@ -3509,7 +3743,7 @@ export default function AIInterview() {
                         router.push('/recruitment/ai-interviews/jd-selection');
                       }}
                       aria-disabled={!canCreateAIInterviews}
-                      className={!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                      className={`${(!canCreateAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
                       title={!canCreateAIInterviews ? 'You do not have permission to create AI interviews' : ''}
                       icon={<Plus className="w-4 h-4" />}
                     >
@@ -3526,7 +3760,7 @@ export default function AIInterview() {
                 <>
                 {/* List: one full-width card per job. Card: the same cards in a
                     grid — each reflows by its own width (@container/ai-row). */}
-                <div className={listDisplayMode === 'grid' ? 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 items-start' : 'space-y-3'}>
+                <div className={listDisplayMode === 'grid' ? 'tf-grid-3 items-start' : 'space-y-3'}>
                   {paginatedConfigs.map((config) => {
                     const normalizedStatus = normalizeConfigStatus(config.status);
                     const statusPillStyles: Record<string, string> = {
@@ -3632,7 +3866,8 @@ export default function AIInterview() {
                                 <JobIdBadge className={JOB_ID_BADGE_FIT}>{config.jd_short_id}</JobIdBadge>
                               )}
                               <h3
-                                className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+                                /* Phones / tablets: the name in full (wraps), as the Job Openings card. */
+                                className="tf-row-name break-words lg:truncate min-w-0"
                                 title={config.jd_title || config.position || 'Untitled'}
                               >
                                 {config.jd_title || config.position || 'Untitled'}
@@ -3659,7 +3894,7 @@ export default function AIInterview() {
                               divided row once there is width for them. */}
                           <div className={listDisplayMode === 'grid' && openVersionsFor !== config.id
                             ? 'grid grid-cols-2 gap-x-2 gap-y-3'
-                            : 'grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
+                            : 'tf-grid-stats @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0'}>
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
@@ -3669,9 +3904,9 @@ export default function AIInterview() {
                               >
                                 <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                                  <span className="tf-cell-name">{value}</span>
+                                  <span className="tf-row-title">{value}</span>
                                 </div>
-                                <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+                                <p className="tf-micro-hint truncate mt-0.5">{label}</p>
                               </div>
                             ))}
                           </div>
@@ -3853,7 +4088,7 @@ export default function AIInterview() {
                                 }
                                 const mode = modeFromConfig(source.special_instructions, source.duration_minutes);
                                 return (
-                                  <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                  <span className="tf-row-name">
                                     {mode === 'fixed' ? 'Timed' : 'Conversational'}
                                   </span>
                                 );
@@ -3872,7 +4107,7 @@ export default function AIInterview() {
                                       <span
                                         key={`${round.type}-${index}`}
                                         title={ROUND_LABELS[round.type] || round.type}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                        className="tf-badge text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
                                       >
                                         {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
                                       </span>
@@ -3905,7 +4140,7 @@ export default function AIInterview() {
               <ListPagination
                 currentPage={configListPage}
                 itemsPerPage={configListItemsPerPage}
-                totalItems={collapsedConfigs.length}
+                totalItems={groupedListTotal}
                 onPageChange={setConfigListPage}
                 onItemsPerPageChange={setConfigListItemsPerPage}
                 /* The list is one card per job, but the stat cards and tab badges
@@ -3931,24 +4166,24 @@ export default function AIInterview() {
               ) : (
                 <div className="space-y-3">
                   {paginatedProcessingSessions.map((session) => (
-                    <div key={session.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl bg-white dark:bg-slate-900 gap-2 sm:gap-3 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all">
+                    <div key={session.id} className="tf-panel flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 gap-2 sm:gap-3 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all">
                       <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                         <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center flex-shrink-0">
                           <Play className="w-4 h-4 sm:w-5 sm:h-5 text-brand-orange-deep" />
                         </div>
                         <div className="min-w-0">
-                          <div className="font-medium text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
+                          <div className="tf-row-name sm:text-base truncate">{session.candidate_name || 'Unknown'}</div>
                           <div className="tf-body-muted truncate">{session.jd_title || session.position}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 sm:gap-4 flex-wrap text-sm pl-10 sm:pl-0">
                         <span className="text-gray-500 dark:text-slate-500">{getInterviewDuration(session.duration_minutes, (session as any).special_instructions)}</span>
                         {session.started_at && (
-                          <span className="text-xs text-gray-400 dark:text-slate-500">
+                          <span className="tf-hint">
                             Started {formatIST(session.started_at)}
                           </span>
                         )}
-                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                        <span className="tf-badge sm:px-2.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           In Progress
                         </span>
                       </div>
@@ -4027,16 +4262,16 @@ export default function AIInterview() {
                         <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
                             {['Select', 'Candidate', 'Timeline', 'Status', 'Score', 'Invite Source', 'CID', 'JD ID', 'Job Title', 'Job Version', 'Interview Version', 'Actions'].map((c) => (
-                              <th key={c} className="px-4 py-3 tf-th"><Skeleton className="h-3 w-20" /></th>
+                              <th key={c} className="tf-th-cell tf-th"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                           {Array.from({ length: 8 }).map((_, r) => (
                             <tr key={r}>
-                              <td className="px-4 py-4"><Skeleton className="h-4 w-4 rounded" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
-                              <td className="px-4 py-4">
+                              <td className="tf-td"><Skeleton className="h-4 w-4 rounded" /></td>
+                              <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                              <td className="tf-td">
                                 <div className="flex items-center gap-3">
                                   <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
                                   <div className="space-y-1.5">
@@ -4045,20 +4280,20 @@ export default function AIInterview() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-4 w-36" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-5 w-9 rounded-md" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
-                              <td className="px-4 py-4"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></td>
-                              <td className="px-4 py-4">
+                              <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                              <td className="tf-td"><Skeleton className="h-4 w-36" /></td>
+                              <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                              <td className="tf-td"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                              <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
+                              <td className="tf-td"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                              <td className="tf-td"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></td>
+                              <td className="tf-td">
                                 <div className="space-y-1.5">
                                   <Skeleton className="h-3 w-36" />
                                   <Skeleton className="h-3 w-28" />
                                 </div>
                               </td>
-                              <td className="px-4 py-4"><Skeleton className="h-8 w-8 rounded-md" /></td>
+                              <td className="tf-td"><Skeleton className="h-8 w-8 rounded-md" /></td>
                             </tr>
                           ))}
                         </tbody>
@@ -4079,7 +4314,7 @@ export default function AIInterview() {
                   <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                     <Mail className="w-7 h-7 text-brand-blue" />
                   </div>
-                  <h3 className="tf-card-title mb-1">No invitations sent yet</h3>
+                  <h3 className="tf-section-title mb-1">No invitations sent yet</h3>
                   <p className="tf-body-muted max-w-md mx-auto">
                     Invite candidates to an AI interview and their status appears here.
                   </p>
@@ -4410,7 +4645,7 @@ export default function AIInterview() {
                            candidate and CID are what the search box is for,
                            and Timeline is covered by the Invited date range. */
                         <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                          <div className="tf-grid-4">
                             <SearchableSelect
                               label="Job"
                               value={inviteStatusColumnFilters.job}
@@ -4434,7 +4669,7 @@ export default function AIInterview() {
                               value={inviteStatusColumnFilters.result} onChange={(v) => updateColumnFilter('result', v)}
                               options={RESULT_FILTER_OPTIONS} />
                             <div>
-                              <label htmlFor="ai-invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              <label htmlFor="ai-invite-status-filter" className="block tf-caption mb-1.5">
                                 Status
                               </label>
                               <Dropdown
@@ -4446,7 +4681,7 @@ export default function AIInterview() {
                               />
                             </div>
                             <div>
-                              <label htmlFor="ai-invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              <label htmlFor="ai-invite-sent-from" className="block tf-caption mb-1.5">
                                 Invited from
                               </label>
                               <DateField
@@ -4457,7 +4692,7 @@ export default function AIInterview() {
                               />
                             </div>
                             <div>
-                              <label htmlFor="ai-invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              <label htmlFor="ai-invite-sent-to" className="block tf-caption mb-1.5">
                                 Invited to
                               </label>
                               <DateField
@@ -4555,11 +4790,11 @@ export default function AIInterview() {
 
                       <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
                         <div className="flex items-center gap-2.5 sm:gap-3">
-                          <span className="tf-card-desc whitespace-nowrap">Completion rate</span>
+                          <span className="tf-body-secondary whitespace-nowrap">Completion rate</span>
                           <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
                             <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
                           </div>
-                          <span className="tf-cell-name tabular-nums">{completionRate}%</span>
+                          <span className="tf-row-title tabular-nums">{completionRate}%</span>
                         </div>
                         <span className="tf-meta whitespace-nowrap">
                           {completedCount.toLocaleString()} of {totalInvites.toLocaleString()} completed
@@ -4609,9 +4844,12 @@ export default function AIInterview() {
                         tab's ticked rows that can still be revoked. Each is
                         revoked on its own, so one link that already changed
                         state doesn't block the rest. */}
-                    <ConfirmationDialog
+                    <RevokeLinkModal
                       isOpen={statusBulkRevokeOpen}
-                      onClose={() => { if (!isBulkRevoking) setStatusBulkRevokeOpen(false); }}
+                      kind="interview"
+                      bulk={{ scope: 'selected', count: revocableSelectedRows.length, skippedCount: selectedStatusRows.length - revocableSelectedRows.length }}
+                      targets={revocableSelectedRows.map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._config_title, version: inv._interview_version, email: inv.candidate_email }))}
+                      onCancel={() => { if (!isBulkRevoking) setStatusBulkRevokeOpen(false); }}
                       onConfirm={async () => {
                         const targets = revocableSelectedRows;
                         if (targets.length === 0) { setStatusBulkRevokeOpen(false); return; }
@@ -4632,18 +4870,7 @@ export default function AIInterview() {
                           setStatusBulkRevokeOpen(false);
                         }
                       }}
-                      /* Same shape as the bulk Resend confirmation: a question,
-                         one sentence saying what happens, and the count on the
-                         confirm button — no per-candidate list. */
-                      title="Revoke invitations for selected candidates?"
-                      description={`The interview link for ${revocableSelectedRows.length} selected candidate${revocableSelectedRows.length === 1 ? '' : 's'} will stop working immediately.${
-                        revocableSelectedRows.length < selectedStatusRows.length
-                          ? ` ${selectedStatusRows.length - revocableSelectedRows.length} selected invitation${selectedStatusRows.length - revocableSelectedRows.length === 1 ? ' is' : 's are'} not Invited or In Progress and will be left as ${selectedStatusRows.length - revocableSelectedRows.length === 1 ? 'it is' : 'they are'}.`
-                          : ''
-                      }`}
-                      confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${revocableSelectedRows.length}`}
-                      cancelText="Cancel"
-                      variant="danger"
+                      isLoading={isBulkRevoking}
                     />
 
                     {/* Export — format, then the columns to include (all ticked
@@ -4698,10 +4925,10 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
-                    className={`pb-2 sm:pb-3 text-sm border-b-2 transition-colors ${
+                    className={`tf-tab-line ${
                       settingsSubTab === sub.key
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                        ? 'tf-tab-line-active'
+                        : ''
                     }`}
                   >
                     {sub.label}
@@ -4813,7 +5040,7 @@ export default function AIInterview() {
                             </p>
                           </div>
                           <label className="flex items-center gap-3 cursor-pointer">
-                            <span className="tf-card-desc">Master Toggle</span>
+                            <span className="tf-body-secondary">Master Toggle</span>
                             <div className="relative">
                               <input
                                 type="checkbox"
@@ -4830,7 +5057,7 @@ export default function AIInterview() {
 
                         {proctoringEnabled && (
                           <div className="space-y-4">
-                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300">Security Features</h4>
+                            <h4 className="tf-label">Security Features</h4>
                             {[
                               { key: 'webcam_monitoring', label: 'Webcam Monitoring', icon: Camera, desc: 'Monitor candidate via webcam during interview' },
                               { key: 'screen_recording', label: 'Screen Recording', icon: Monitor, desc: 'Record candidate screen during interview' },
@@ -4839,11 +5066,11 @@ export default function AIInterview() {
                               { key: 'browser_lockdown', label: 'Browser Lockdown', icon: Shield, desc: 'Lock browser to interview window only' },
                               { key: 'ai_cheating_prevention', label: 'AI Cheating Prevention', icon: Brain, desc: 'Detect AI-generated responses' },
                             ].map(({ key, label, icon: Icon, desc }) => (
-                              <div key={key} className="flex items-center justify-between p-2.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl bg-white dark:bg-slate-900 gap-2 hover:border-brand-blue/30 transition-colors">
+                              <div key={key} className="tf-panel flex items-center justify-between p-2.5 sm:p-3 gap-2 hover:border-brand-blue/30 transition-colors">
                                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                   <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
-                                    <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
+                                    <div className="tf-label">{label}</div>
                                     <div className="tf-meta hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
@@ -4856,32 +5083,32 @@ export default function AIInterview() {
                               </div>
                             ))}
 
-                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Thresholds</h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                            <h4 className="tf-label mt-4 sm:mt-6">Thresholds</h4>
+                            <div className="tf-grid-3">
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Max Tab Switches</label>
+                                <label className="block tf-meta mb-1">Max Tab Switches</label>
                                 <input
                                   type="number"
                                   value={proctoringSettings.max_tab_switches}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_tab_switches: parseInt(e.target.value) || 3 }))}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                  className="tf-input"
                                   min={1}
                                   max={20}
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Max Violations</label>
+                                <label className="block tf-meta mb-1">Max Violations</label>
                                 <input
                                   type="number"
                                   value={proctoringSettings.max_violations}
                                   onChange={(e) => setProctoringSettings(prev => ({ ...prev, max_violations: parseInt(e.target.value) || 5 }))}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                  className="tf-input"
                                   min={1}
                                   max={50}
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">Recording retention</label>
+                                <label className="block tf-meta mb-1">Recording retention</label>
                                 <div className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg tf-body bg-gray-50 dark:bg-slate-800">
                                   Viewable {proctoringSettings.view_days} days · Deleted after {proctoringSettings.retention_days} days
                                 </div>
@@ -4889,11 +5116,11 @@ export default function AIInterview() {
                               </div>
                             </div>
 
-                            <h4 className="text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
-                            <p className="text-2xs text-gray-500 dark:text-slate-500 mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                            <h4 className="tf-label mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
+                            <p className="tf-micro-hint mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
+                            <div className="tf-grid-3">
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                                <label className="block tf-meta mb-1">
                                   Low Risk ≤ <span className="font-semibold text-success">{proctoringSettings.violation_low_threshold} pts</span>
                                 </label>
                                 <input
@@ -4907,13 +5134,13 @@ export default function AIInterview() {
                                       violation_medium_threshold: Math.max(prev.violation_medium_threshold, val + 1),
                                     }));
                                   }}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                  className="tf-input"
                                   min={1}
                                   max={proctoringSettings.violation_medium_threshold - 1}
                                 />
                               </div>
                               <div>
-                                <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
+                                <label className="block tf-meta mb-1">
                                   Medium Risk ≤ <span className="font-semibold text-warning">{proctoringSettings.violation_medium_threshold} pts</span>
                                 </label>
                                 <input
@@ -4923,13 +5150,13 @@ export default function AIInterview() {
                                     const val = Math.max(proctoringSettings.violation_low_threshold + 1, parseInt(e.target.value) || proctoringSettings.violation_low_threshold + 1);
                                     setProctoringSettings(prev => ({ ...prev, violation_medium_threshold: val }));
                                   }}
-                                  className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                  className="tf-input"
                                   min={proctoringSettings.violation_low_threshold + 1}
                                 />
                               </div>
                               <div className="flex flex-col justify-end pb-1">
                                 <p className="text-xs text-destructive font-medium">High Risk &gt; {proctoringSettings.violation_medium_threshold} pts</p>
-                                <p className="text-2xs text-gray-400 dark:text-slate-500 mt-1">Automatically calculated from Medium threshold</p>
+                                <p className="tf-micro-hint mt-1">Automatically calculated from Medium threshold</p>
                               </div>
                             </div>
                           </div>
@@ -4948,7 +5175,7 @@ export default function AIInterview() {
             </div>
           )}
         </div>
-        </>
+        </MasterListLayout>
         )}
       </div>
       </div>
@@ -4960,421 +5187,45 @@ export default function AIInterview() {
         </div>
       )}
 
-      {/* Invite Status Tracking — same dialog the Assessments page uses, down to
-          the clickable stat row, the table shell and the footer pagination. The
-          list itself is <AIInterviewInviteTable>, shared with the Job Details
-          tracker so both entry points show identical columns and action rules. */}
+      {/* Invite Status Tracking — the shared tracker popup (the one Job Details
+          opens): one interview, or every interview of a job from its job row. */}
       {viewInvitationsConfig && (() => {
-        /* Any row a bulk Revoke OR a bulk Resend can act on gets a checkbox —
-           same rule as the Assessments tracker — regardless of which stat
-           card filter is currently active. "Select All" only ever targets
-           the CURRENT page — the list is server-paginated. Which bulk BUTTON
-           appears depends on the ticked selection being uniformly one
-           status-class or the other (see allTrackerRevocable /
-           allTrackerResendable below); a mixed Invited+Expired selection
-           shows neither — an action valid for one status must never be
-           applied to the other. A disabled or archived job's tracker is
-           view-only, so it has no bulk mode at all. */
-        const trackerJdLockReason = jdActionLockReason(viewInvitationsConfig.jd_status);
-        const trackerJdLocked = !!trackerJdLockReason;
-        // The interview CONFIG itself archived (its own status) — independent
-        // of trackerJdLocked, which only looks at the job. Same lock, so Copy
-        // Link / Revoke / Edit / Resend stay visible but disabled.
-        const trackerConfigArchived = isInterviewConfigArchived(viewInvitationsConfig.status);
-        const trackerActionsLocked = trackerJdLocked || trackerConfigArchived;
-        const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
-        const isTrackerBulkActionable = (inv: any) => isRevocableInvite(inv) || isTrackerResendable(inv);
-        const selectableIds = trackerActionsLocked ? [] : invitations.filter(isTrackerBulkActionable).map((inv) => inv.id);
-        const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id));
-        const allTrackerRevocable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isRevocableInvite);
-        const allTrackerResendable = trackerSelectedRows.length > 0 && trackerSelectedRows.every(isTrackerResendable);
-        const allSelectableOnPageSelected =
-          selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
-        const toggleSelectAll = () =>
-          setSelectedInviteIds(() => (allSelectableOnPageSelected ? new Set<string>() : new Set(selectableIds)));
-        const toggleSelectOne = (id: string) =>
-          setSelectedInviteIds((prev) => {
-            const next = new Set(prev);
-            if (next.has(id)) next.delete(id);
-            else next.add(id);
-            return next;
-          });
-
-        /* Two different loading states, because they have to look different.
-           With no rows yet (first open, or a filter that emptied the list) the
-           spinner is the whole body, which is right - there is nothing for it
-           to sit over. With rows already on screen and a re-read in flight
-           (Refresh, a page turn, a filter change) the rows stay put and the
-           spinner rides over them: swapping a full list for a `py-12` spinner
-           collapsed the body to a fraction of its height, and the
-           content-driven, vertically-centred dialog jumped with it. */
-        const invitesInitialLoading = loadingInvitations && invitations.length === 0;
-        const invitesRefreshVeil = loadingInvitations && invitations.length > 0;
-
-        const filtersActive = hasActiveInviteFilters(inviteFilters);
-        const startIndex = invitationTotal === 0 ? 0 : (invitationPage - 1) * INVITATION_PAGE_SIZE + 1;
-        const endIndex = Math.min(invitationPage * INVITATION_PAGE_SIZE, invitationTotal);
-        const invitationResultsLabel = filtersActive
-          ? `${invitationTotal} matching candidate${invitationTotal === 1 ? '' : 's'}`
-          : `Showing ${startIndex} to ${endIndex} of ${invitationTotal} invites`;
-
-        const completionRate = invitationOverview && invitationOverview.total > 0
-          ? Math.round((invitationOverview.completed / invitationOverview.total) * 100)
-          : 0;
-        // Until the counts land each card shows a dash, not a false 0.
-        const overviewValue = (pick: (o: NonNullable<typeof invitationOverview>) => number) =>
-          (invitationOverview ? pick(invitationOverview) : '—');
-
-        const pageBtn =
-          'px-2 sm:px-3 py-1 sm:py-1.5 text-sm border border-gray-200 dark:border-slate-700 ' +
-          'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
-          'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
-
+        const config = viewInvitationsConfig;
+        const jdLockReason = jdActionLockReason(config.jd_status);
+        const configArchived = isInterviewConfigArchived(config.status);
+        const inviteBlockedReason = !canInviteAIInterviews ? 'You do not have permission to invite candidates'
+          : jdLockReason ?? (configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : '');
+        const allConfigs = [...configs, ...archivedConfigs];
         return (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
-            {/* Height is content-driven with a viewport cap, not a fixed dvh: a
-                three-invite list on a large monitor used to stretch the dialog the
-                full screen with empty space under the rows. The list absorbs the
-                overflow once the cap engages, so a long list still scrolls inside
-                the dialog on a 320px phone. */}
-            <div
-              /* Width is fixed by the breakpoint ladder and no state touches
-                 it; height is what moved, so only height is pinned, and only
-                 while a refresh is in flight. */
-              {...invitesHeightLock.dialogProps}
-              className={TRACKER_DIALOG_PANEL_CLASS}>
-              {/* Header */}
-              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                      <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h2 className="text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
-                        <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
-                        <span className="sm:hidden">Invite Status</span>
-                      </h2>
-                      {/* JD ID, then the job title. */}
-                      <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
-                        {viewInvitationsConfig.jd_short_id && (
-                          <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
-                        )}
-                        <span className="truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</span>
-                        {/* Opened from a version row, the table has no version
-                            columns — the header names the version instead. */}
-                        {!trackerShowVersions && (
-                          <span className="-ml-0.5 flex items-center gap-3 flex-shrink-0 whitespace-nowrap">
-                            {/* The job version reads as part of the title: "App development - V1". */}
-                            <span className="inline-flex items-center gap-1.5">
-                              -
-                              <VersionPill kind="job" version={viewInvitationsConfig.jd_version ?? 1} />
-                            </span>
-                            <span className="inline-flex items-center gap-1.5">
-                              Interview Version -
-                              <VersionPill
-                                kind="interview"
-                                version={interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs])}
-                              />
-                            </span>
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
-                  {/* Refetches the live statuses in place — the popup stays
-                      open, the icon spins while the request runs, and the
-                      handler's guard drops repeat clicks until it settles. */}
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleRefreshInvitations}
-                    disabled={isRefreshingInvites || loadingInvitations}
-                    title="Fetch the latest invite statuses"
-                    aria-label="Refresh"
-                    icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshingInvites ? 'animate-spin' : ''}`} />}
-                  >
-                    {/* The label swaps to "Refreshing..." mid-request, and the
-                        longer word used to widen the button and shove the
-                        close X sideways. The span reserves the wider word's
-                        width in both states, so the header never moves. */}
-                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
-                      {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
-                    </span>
-                  </Button>
-                </div>
-              </div>
-
-              {/* Stat row doubles as the status filter. Counts come from
-                  loadInvitationOverview, which queries unfiltered — selecting a
-                  bucket narrows the table without collapsing the other cards. */}
-              <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
-                activeStatus={inviteFilters.status}
-                onSelect={(status) => {
-                  setInviteFilters({ ...inviteFilters, status });
-                  setInvitationPage(1);
-                }}
-                cards={[
-                  { key: 'all', label: 'Total', Icon: Users, value: overviewValue((o) => o.total), ...INVITE_CARD_TONES.slate },
-                  { key: 'invited', label: 'Invited', Icon: Mail, value: overviewValue((o) => o.invited), ...INVITE_CARD_TONES.blue },
-                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: overviewValue((o) => o.inProgress), ...INVITE_CARD_TONES.orange },
-                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overviewValue((o) => o.completed), ...INVITE_CARD_TONES.green },
-                  { key: 'expired', label: 'Expired', Icon: Clock, value: overviewValue((o) => o.expired), ...INVITE_CARD_TONES.orange },
-                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: overviewValue((o) => o.terminated), ...INVITE_CARD_TONES.red },
-                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: overviewValue((o) => o.revoked), ...INVITE_CARD_TONES.indigo },
-                ]}
-              />
-
-              <InviteFilterBar
-                filters={inviteFilters}
-                onChange={(nextFilters) => {
-                  setInviteFilters(nextFilters);
-                  setInvitationPage(1);
-                }}
-                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
-                searchPlaceholder="Search by candidate name or email..."
-                extraSelects={[
-                  /* Same Source / Result pair as every other Track popup, so the bar
-                     keeps their one-row layout. Versions read per row in the table. */
-                  {
-                    key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: trackerSourceFilter,
-                    options: INVITE_SOURCE_FILTER_OPTIONS,
-                    onChange: (value) => { setTrackerSourceFilter(value); setInvitationPage(1); },
-                  },
-                  {
-                    key: 'result', ariaLabel: 'Result', anyLabel: 'All Results', value: trackerResultFilter,
-                    options: RESULT_FILTER_OPTIONS,
-                    onChange: (value) => { setTrackerResultFilter(value); setInvitationPage(1); },
-                  },
-                ]}
-                onClearExtras={() => { setTrackerJobVersionFilter(''); setTrackerVersionFilter(''); setTrackerSourceFilter(''); setTrackerResultFilter(''); }}
-              />
-
-              {/* Bulk selection bar, and — on the same row, straight across
-                  from Select All — the completion-rate badge that used to be
-                  its own card in the stat row above. Gated on the FIRST load,
-                  not on every load: this bar disappearing and reappearing
-                  during a Refresh was one more height change in the stack of
-                  them, and its contents come from `invitations`, which a
-                  refresh keeps. */}
-              {!invitesInitialLoading && (
-                <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-                  {selectableIds.length > 0 ? (
-                    <button
-                      type="button"
-                      onClick={toggleSelectAll}
-                      className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
-                    >
-                      <span
-                        role="checkbox"
-                        aria-checked={allSelectableOnPageSelected}
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                          allSelectableOnPageSelected
-                            ? 'bg-brand-blue border-brand-blue'
-                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                        }`}
-                      >
-                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
-                      </span>
-                      Select All ({selectableIds.length})
-                    </button>
-                  ) : (
-                    <span />
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    {/* Uniform selection's bulk action — never both at once. */}
-                    {allTrackerRevocable && (
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => setBulkRevokeConfirmOpen(true)}
-                        disabled={isBulkRevoking}
-                        title="Revoke the selected candidates' interview links"
-                        icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
-                      >
-                        {isBulkRevoking ? 'Revoking…' : `Revoke (${trackerSelectedRows.length})`}
-                      </Button>
-                    )}
-                    {allTrackerResendable && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setTrackerBulkResendOpen(true)}
-                        disabled={isTrackerBulkResending}
-                        title="Resend a fresh link to the selected expired invitations"
-                        icon={isTrackerBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                      >
-                        {isTrackerBulkResending ? 'Sending…' : `Resend (${trackerSelectedRows.length})`}
-                      </Button>
-                    )}
-                  </div>
-                  <ConfirmationDialog
-                    isOpen={trackerBulkResendOpen}
-                    onClose={() => { if (!isTrackerBulkResending) setTrackerBulkResendOpen(false); }}
-                    onConfirm={async () => {
-                      const targets = trackerSelectedRows.filter(isTrackerResendable);
-                      if (targets.length === 0) { setTrackerBulkResendOpen(false); return; }
-                      setIsTrackerBulkResending(true);
-                      try {
-                        await resendInvitesInBulk(targets);
-                        setSelectedInviteIds(new Set());
-                        await refreshInvitationsView(viewInvitationsConfig.id);
-                      } finally {
-                        setIsTrackerBulkResending(false);
-                        setTrackerBulkResendOpen(false);
-                      }
-                    }}
-                    title="Resend invitations to selected candidates?"
-                    description={`A fresh interview link will be emailed to ${trackerSelectedRows.length} selected candidate${trackerSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-                    confirmText={isTrackerBulkResending ? 'Sending…' : `Yes, resend to ${trackerSelectedRows.length}`}
-                    cancelText="Cancel"
-                    variant="info"
-                  />
-                </div>
-              )}
-
-              {/* Candidate list. overflow-hidden, not overflow-auto: the table
-                  shell (or the mobile card stack) inside is the single vertical
-                  scroller. Two nested scrollers meant this one won, scrolling the
-                  sticky header and pinned Actions column away with the rows. */}
-              {/* `relative` so the refresh veil below covers exactly this body
-                  without joining its flow - an overlay adds no height, which is
-                  the whole point of it. */}
-              <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
-                <AIInterviewInviteTable
-                  invitations={invitations}
-                  jdDisabled={trackerJdLocked}
-                  configArchived={trackerConfigArchived}
-                  /* Only the FIRST load may swap the rows for a spinner, when
-                     there are no rows to swap. Re-reading rows that are already
-                     on screen leaves them exactly where they are - the table
-                     collapsing to a `py-12` spinner and back is what made this
-                     dialog jump on Refresh. */
-                  isLoading={invitesInitialLoading}
-                  hasActiveFilters={filtersActive}
-                  emptyHint={'Use the "Send via Email" button to invite candidates'}
-                  jobVersion={trackerShowVersions && !trackerJobScope ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
-                  interviewVersion={trackerShowVersions && !trackerJobScope ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
-                  showRowVersions={!!trackerJobScope}
-                  selectedIds={trackerActionsLocked ? undefined : selectedInviteIds}
-                  onToggleSelect={trackerActionsLocked ? undefined : toggleSelectOne}
-                  isSelectable={isTrackerBulkActionable}
-                  /* A disabled OR archived job keeps these callbacks wired —
-                     same as an archived CONFIG — so the table greys the
-                     actions out via `jdDisabled`/`configArchived` above
-                     instead of dropping them from the menu entirely (that
-                     used to make Copy Link the only surviving item, since
-                     it isn't gated by these callbacks). */
-                  onResend={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setResendInviteTarget(inv); }}
-                  onEdit={(inv) => {
-                    if (blockIfInviteJdDisabled(inv)) return;
-                    setEditInviteForm({
-                      candidate_name: inv.candidate_name || '',
-                      candidate_email: inv.candidate_email || '',
-                    });
-                    setEditInviteTarget(inv);
-                  }}
-                  onRevoke={(inv) => { if (blockIfInviteJdDisabled(inv)) return; setRevokeInviteTarget(inv); }}
-                  onViewDetails={(inv) => openCandidateResultRoute(inv, invitations)}
-                  resendingId={resendingEmailFor}
-                  revokingId={revokingInviteFor}
-                />
-
-                {/* Re-reading rows that are already on screen. The list keeps
-                    its exact size and place; this only tints it and says why,
-                    and it takes the clicks so nobody acts on a row that is
-                    about to be replaced. */}
-                {invitesRefreshVeil && (
-                  <div
-                    className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
-                    aria-live="polite"
-                  >
-                    <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
-                      <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
-                      Refreshing invite statuses...
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Footer. Stacks on phones: the count line plus four page buttons,
-                  Invite More and Close overflowed a 320px row. First/Last drop out
-                  below sm — Prev/Next and the indicator are enough there. */}
-              <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
-                  {invitationResultsLabel}
-                </p>
-                <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
-                  {invitationTotalPages > 1 && (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <span className="tf-card-desc whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={invitationTotalPages}
-                          value={goToInvitationPage}
-                          onChange={(e) => setGoToInvitationPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitGoToInvitationPage();
-                            }
-                          }}
-                          onBlur={commitGoToInvitationPage}
-                          aria-label="Go to page"
-                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                        />
-                      </div>
-                      <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
-                        Prev
-                      </button>
-                      <span className="px-1 sm:px-2 tf-card-desc whitespace-nowrap">
-                        Page {invitationPage} of {invitationTotalPages}
-                      </span>
-                      <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
-                        Next
-                      </button>
-                    </>
-                  )}
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
-                    Cancel
-                  </Button>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    disabled={trackerActionsLocked}
-                    title={
-                      !canInviteAIInterviews
-                        ? 'You do not have permission to invite candidates'
-                        : trackerJdLockReason ?? (trackerConfigArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : undefined)
-                    }
-                    onClick={() => {
-                      if (!canInviteAIInterviews) return;
-                      if (blockIfJdDisabled(viewInvitationsConfig)) return;
-                      if (trackerConfigArchived) {
-                        toast.error(INTERVIEW_ARCHIVED_ACTION_MESSAGE);
-                        return;
-                      }
-                      // The popup reopens this tracker when it closes.
-                      const cfg = viewInvitationsConfig;
-                      setViewInvitationsConfig(null);
-                      openInterviewInvite(cfg, true);
-                    }}
-                    aria-disabled={!canInviteAIInterviews}
-                    className={!canInviteAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
-                    icon={<Send className="w-3.5 h-3.5" />}
-                  >
-                    Invite More
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AIInterviewTrackInvitesModal
+            isOpen
+            onClose={() => setViewInvitationsConfig(null)}
+            configId={config.id}
+            jdTitle={config.jd_title || config.position || ''}
+            jdShortId={config.jd_short_id}
+            /* From a version row the header names the version and the table
+               has no version columns; from a job row the columns are there. */
+            jobVersion={config.jd_version ?? 1}
+            interviewVersion={interviewVersionOrdinal(config, allConfigs)}
+            hideVersionDetails={!trackerShowVersions}
+            hideJobVersionFilter={!trackerShowVersions}
+            scope={trackerJobScope?.map((entry) => ({
+              configId: entry.config.id,
+              jobVersion: entry.jobVersion,
+              interviewVersion: entry.interviewVersion,
+            }))}
+            jdDisabled={!!jdLockReason}
+            configArchived={configArchived}
+            refreshSignal={refreshSignal}
+            onViewResult={(inv, rows) => openCandidateResultRoute(inv, rows)}
+            onChanged={() => refreshAfterInviteAction()}
+            onInviteMore={inviteBlockedReason ? undefined : () => {
+              // The tracker reopens when the invite popup closes.
+              setViewInvitationsConfig(null);
+              openInterviewInvite(config, true);
+            }}
+            inviteMoreDeniedReason={inviteBlockedReason || undefined}
+          />
         );
       })()}
 
@@ -5407,6 +5258,19 @@ export default function AIInterview() {
         jdDisabled={isJdDisabled(deleteTarget?.jd_status)}
         onConfirm={confirmDeleteConfig}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* One-click "Revoke pending invites" from the version row's menu —
+          invalidates only INVITED / CONSENT_PENDING links. Candidates who
+          have reached system check or further are deliberately not touched. */}
+      <RevokeLinkModal
+        isOpen={!!revokePendingTarget}
+        kind="interview"
+        bulk={{ scope: 'pending', count: revokePendingCount, targetName: revokePendingTarget?.jd_title || revokePendingTarget?.position || undefined }}
+        targets={revokePendingTarget ? [{ jobCode: revokePendingTarget.jd_short_id, jobTitle: revokePendingTarget.jd_title || revokePendingTarget.position, version: interviewVersionOrdinal(revokePendingTarget, [...configs, ...archivedConfigs]), email: revokePendingOneEmail }] : undefined}
+        onCancel={() => { if (!isRevokingPending) setRevokePendingTarget(null); }}
+        onConfirm={confirmRevokePendingInvites}
+        isLoading={isRevokingPending}
       />
 
       {/* Version History's eye icon — read-only Review & Publish peek. */}
@@ -5460,8 +5324,8 @@ export default function AIInterview() {
             </p>
             {skipped.length > 0 && (
               <div className="mt-3 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 p-3">
-                <p className="text-xs font-semibold text-gray-600 dark:text-slate-300 mb-1">Skipped</p>
-                <ul className="space-y-0.5 text-xs text-gray-600 dark:text-slate-400">
+                <p className="tf-caption mb-1">Skipped</p>
+                <ul className="space-y-0.5 tf-meta">
                   {skipped.map((s) => (
                     <li key={s.reason}>{s.count} skipped — {s.reason}</li>
                   ))}
@@ -5473,9 +5337,12 @@ export default function AIInterview() {
       })()}
 
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={!!resendInviteTarget}
-        onClose={() => { if (resendingEmailFor !== resendInviteTarget?.id) setResendInviteTarget(null); }}
+        kind="interview"
+        email={resendInviteTarget?.candidate_email}
+        expiry={resendInviteTarget ? interviewResendExpiry(resendInviteTarget) : null}
+        onCancel={() => { if (resendingEmailFor !== resendInviteTarget?.id) setResendInviteTarget(null); }}
         onConfirm={async () => {
           const inv = resendInviteTarget;
           if (!inv) return;
@@ -5483,6 +5350,7 @@ export default function AIInterview() {
           try {
             await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
             toast.success(`New invitation link sent to ${inv.candidate_email}`);
+            setSelectedInviteIds(new Set());
             // refresh invitations list so the new expires_at/status is reflected
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
@@ -5498,53 +5366,8 @@ export default function AIInterview() {
             setResendInviteTarget(null);
           }
         }}
-        title="Invalidate old link & send new invitation?"
-        description={
-          resendInviteTarget
-            ? `A fresh interview link will be emailed to ${resendInviteTarget.candidate_email}. The previous link will stop working immediately.`
-            : ''
-        }
-        confirmText={resendingEmailFor && resendingEmailFor === resendInviteTarget?.id ? 'Sending…' : 'Yes, send new link'}
-        cancelText="Cancel"
-        variant="info"
-      >
-        {resendInviteTarget && (() => {
-          /* Anchor on the last send, mirroring the backend: on a second resend
-             created_at would make the window "expiry minus creation" and the
-             preview would promise a longer validity than the server grants. */
-          const sentAnchor = resendInviteTarget.invitation_sent_at || resendInviteTarget.created_at;
-          const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
-          const expiresMs = resendInviteTarget.expires_at ? new Date(resendInviteTarget.expires_at).getTime() : NaN;
-          let durationMs = 24 * 60 * 60 * 1000;
-          if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
-            durationMs = expiresMs - createdMs;
-          }
-          const newExpiry = new Date(Date.now() + durationMs);
-          const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
-          let durationLabel: string;
-          if (totalMinutes >= 60 * 24) {
-            const days = Math.round(totalMinutes / (60 * 24));
-            durationLabel = days === 1 ? '1 day' : `${days} days`;
-          } else if (totalMinutes >= 60) {
-            const hours = Math.round(totalMinutes / 60);
-            durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
-          } else {
-            durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
-          }
-          return (
-            <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-xl p-3 text-sm">
-              <p className="text-brand-orange-deep font-medium mb-1">New link expiry</p>
-              <p className="text-brand-orange-deep">
-                Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
-                <strong>{formatIST(newExpiry.toISOString())}</strong>.
-              </p>
-              <p className="text-brand-orange-deep/80 text-xs mt-2">
-                Same duration as the original invitation.
-              </p>
-            </div>
-          );
-        })()}
-      </ConfirmationDialog>
+        isLoading={!!(resendingEmailFor && resendingEmailFor === resendInviteTarget?.id)}
+      />
 
       {/* Revoke confirmation — flips status to REVOKED; old link stops working immediately */}
       <RevokeLinkModal
@@ -5560,6 +5383,7 @@ export default function AIInterview() {
           try {
             await aiInterviewService.revokeInvitation(inv.id);
             toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+            setSelectedInviteIds(new Set());
             await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
             toast.error(friendlyErrorMessage(err, "Couldn't revoke invitation. Please try again."));
@@ -5573,9 +5397,12 @@ export default function AIInterview() {
       {/* Bulk revoke confirmation — revokes every checked invitation. Each one is
           revoked independently via the same single-revoke endpoint, so one
           candidate's link having already changed state doesn't block the rest. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={bulkRevokeConfirmOpen}
-        onClose={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
+        kind="interview"
+        bulk={{ scope: 'selected', count: selectedInviteIds.size }}
+        targets={invitations.filter((inv) => selectedInviteIds.has(inv.id) && isRevocableInvite(inv)).map((inv) => ({ jobCode: viewInvitationsConfig?.jd_short_id, jobTitle: viewInvitationsConfig?.jd_title || viewInvitationsConfig?.position, version: (inv as AIInterviewResponse & { _interview_version?: number })._interview_version ?? (viewInvitationsConfig ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined), email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevoking) setBulkRevokeConfirmOpen(false); }}
         onConfirm={async () => {
           const targets = invitations.filter((inv) => selectedInviteIds.has(inv.id) && isRevocableInvite(inv));
           if (targets.length === 0) { setBulkRevokeConfirmOpen(false); return; }
@@ -5601,12 +5428,7 @@ export default function AIInterview() {
             setBulkRevokeConfirmOpen(false);
           }
         }}
-        /* Same shape as the bulk Resend confirmation — no per-candidate list. */
-        title="Revoke invitations for selected candidates?"
-        description={`The interview link for ${selectedInviteIds.size} selected candidate${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedInviteIds.size}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevoking}
       />
 
       {/* Edit invitation modal — only reachable while the invitation is REVOKED */}
@@ -5624,8 +5446,8 @@ export default function AIInterview() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-              <h3 className="tf-section-title">Edit Invitation</h3>
-              <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="px-2">
+              <h3 className="tf-section-title sm:text-lg tracking-tight">Edit Invitation</h3>
+              <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="">
                 <X className="w-5 h-5" />
               </Button>
             </div>
@@ -5634,13 +5456,13 @@ export default function AIInterview() {
                 Update the candidate's details below. Saving will send them a fresh invitation link automatically.
               </p>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+                <label className="block tf-caption mb-1">Candidate name</label>
                 <input
                   type="text"
                   value={editInviteForm.candidate_name}
                   onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_name: e.target.value }))}
                   aria-invalid={editInviteNameError ? 'true' : undefined}
-                  className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                  className={`w-full px-3 h-9 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                     editInviteNameError
                       ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
@@ -5651,13 +5473,13 @@ export default function AIInterview() {
                 )}
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+                <label className="block tf-caption mb-1">Candidate email</label>
                 <input
                   type="email"
                   value={editInviteForm.candidate_email}
                   onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_email: e.target.value }))}
                   aria-invalid={editInviteEmailError ? 'true' : undefined}
-                  className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                  className={`w-full px-3 h-9 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
                     editInviteEmailError
                       ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
                       : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'

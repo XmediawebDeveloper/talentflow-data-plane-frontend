@@ -47,7 +47,7 @@ export default function NoResumesEmptyState({
           empty string (the Archived Resumes folder) drops the paragraph
           entirely rather than leaving a blank line. */}
       {description && (
-        <p className="mt-2.5 max-w-sm text-sm leading-relaxed text-gray-500 sm:text-base">
+        <p className="mt-2.5 max-w-sm tf-body-muted leading-relaxed sm:text-base">
           {description}
         </p>
       )}

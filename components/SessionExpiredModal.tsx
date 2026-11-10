@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Lock, ShieldCheck } from 'lucide-react';
 import { SESSION_EXPIRED_EVENT, ACCESS_RESTRICTED_EVENT, performSessionLogout } from '@/lib/services/api';
+import { forceNavigate } from '@/lib/utils/forcedNavigation';
 
 export default function SessionExpiredModal() {
   const [isVisible, setIsVisible] = useState(false);
@@ -18,11 +19,21 @@ export default function SessionExpiredModal() {
       setIsVisible(false);
     };
 
+    // Signed in again in another tab — this tab's tokens are stale, so pick up
+    // the new session by reloading rather than leaving the modal up.
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'accessToken' && e.newValue && document.getElementById('session-expired-title')) {
+        forceNavigate(window.location.href);
+      }
+    };
+
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
     window.addEventListener(ACCESS_RESTRICTED_EVENT, handleAccessRestricted);
+    window.addEventListener('storage', handleStorage);
     return () => {
       window.removeEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
       window.removeEventListener(ACCESS_RESTRICTED_EVENT, handleAccessRestricted);
+      window.removeEventListener('storage', handleStorage);
     };
   }, []);
 
@@ -75,7 +86,7 @@ export default function SessionExpiredModal() {
           <button
             onClick={performSessionLogout}
             autoFocus
-            className="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+            className="tf-btn tf-btn-primary w-full flex px-4 py-3 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-normal"
           >
             <Lock className="w-4 h-4" strokeWidth={2} />
             Log In Again

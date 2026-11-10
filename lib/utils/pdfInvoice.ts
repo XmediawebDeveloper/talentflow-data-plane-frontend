@@ -147,7 +147,7 @@ export function billToFromAuth(
  * Fill in the legal details here — every empty field (and the SAC column /
  * Place of supply when `sac` / `placeOfSupply` are empty) is simply omitted.
  */
-const SELLER = {
+export const SELLER = {
   name: 'TalentFlow',
   address: [] as string[],
   email: '',
@@ -372,7 +372,7 @@ function integerInWords(n: number): string {
 }
 
 /** 6490.5 → "Rupees Six Thousand Four Hundred Ninety and Fifty Paise Only". */
-function amountInWords(amount: number): string {
+export function amountInWords(amount: number): string {
   const paiseTotal = Math.round(Math.abs(amount) * 100);
   const rupees = Math.floor(paiseTotal / 100);
   const paise = paiseTotal % 100;

@@ -68,7 +68,7 @@ export default function ArchiveAssessmentModal({ isOpen, target, onConfirm, onCa
               <h2 id="archive-assessment-title" className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
                 Archive Assessment?
               </h2>
-              <p className="mt-1.5 text-sm sm:text-base text-gray-600 dark:text-slate-400">
+              <p className="mt-1.5 tf-body-secondary sm:text-base">
                 Move this assessment to the Archived tab.
               </p>
             </div>

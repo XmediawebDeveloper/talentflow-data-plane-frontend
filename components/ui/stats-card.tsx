@@ -80,10 +80,11 @@ const TONES = {
   },
   neutral: {
     container:
-      'border-brand-blue/15 bg-white shadow-sm shadow-slate-950/5 hover:border-brand-blue/35 hover:shadow-md dark:border-brand-blue/25 dark:bg-slate-900 dark:hover:border-brand-blue/40',
+      'border-brand-blue/15 bg-white shadow-sm shadow-slate-950/5 hover:border-brand-blue/60 hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:border-brand-blue/25 dark:bg-slate-900 dark:hover:border-brand-blue/50 dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)]',
     radial: 'bg-transparent',
+    // The dashboard Quick Access "liquid glass" chip, brand blue.
     icon:
-      'bg-brand-blue/5 text-gray-700 ring-brand-blue/15 dark:bg-brand-blue/10 dark:ring-brand-blue/25 dark:text-slate-300',
+      'bg-gradient-to-br from-brand-blue/35 via-brand-blue/15 to-brand-blue/[0.04] text-brand-blue ring-brand-blue/25 shadow-brand-blue/25 dark:text-blue-300',
     sparkText: 'text-gray-400',
     sparkId: 'spark-neutral',
   },
@@ -158,12 +159,17 @@ export function StatsCard({
         <div className="flex min-w-0 items-start gap-2.5">
           <div
             className={cn(
-              'flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ring-1 shadow-sm',
+              'relative flex h-9 w-9 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl ring-1 shadow-sm transition-transform duration-200 group-hover:scale-105',
               t.icon,
               active && 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30',
             )}
           >
-            <Icon className="h-4.5 w-4.5" />
+            {/* Glass layers, as on the dashboard Quick Access chips: specular
+                highlight, light pooling under the glass, and a lit top rim. */}
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-white/15 to-transparent dark:from-transparent dark:via-transparent" />
+            <span aria-hidden="true" className="pointer-events-none absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-white/40 blur-lg dark:bg-transparent" />
+            <span aria-hidden="true" className="pointer-events-none absolute inset-0 rounded-xl shadow-[inset_0_1px_0_rgba(255,255,255,0.75),inset_0_-6px_12px_-8px_rgba(15,23,42,0.25)] dark:shadow-[inset_0_1px_0_rgba(148,163,184,0.18),inset_0_-6px_12px_-8px_rgba(0,0,0,0.45)]" />
+            <Icon className="relative h-4.5 w-4.5" />
           </div>
           <div className="min-w-0">
             <p className="text-xs lg:text-sm font-medium text-slate-700 dark:text-slate-300">{label}</p>
@@ -244,5 +250,6 @@ export function StatsCardGrid({
           // never leaves a single orphan on a tablet.
           ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
           : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4';
-  return <div className={cn('grid gap-2.5 sm:gap-3 mb-5', colClass, className)}>{children}</div>;
+  // `tf-stats-2up` (globals.css): phones show the tiles two per row, icon above the text.
+  return <div className={cn('tf-stats-2up grid gap-2.5 sm:gap-3 mb-5', colClass, className)}>{children}</div>;
 }

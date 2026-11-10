@@ -1351,7 +1351,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
   const StatusBadge = ({ status }: { status: CheckStatus['status'] }) => {
     switch (status) {
       case 'pending':
-        return <span className="text-xs font-medium text-gray-400">Pending</span>;
+        return <span className="tf-caption">Pending</span>;
       case 'checking':
         return <Loader2 className="w-5 h-5 text-brand-blue animate-spin" />;
       case 'success':
@@ -1409,7 +1409,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
               </div>
             </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-5 items-start">
+          <div className="tf-grid-split items-start">
             {/* Camera Preview */}
             <div>
               <h2 className={`${T_SECTION} mb-3`}>Camera Preview</h2>
@@ -1480,7 +1480,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace }: SystemCheckPr
                       <Icon className="w-4.5 h-4.5" />
                     </span>
                     <div className="flex-1 min-w-[8rem]">
-                      <p className="tf-cell-name">{label}</p>
+                      <p className="tf-row-title">{label}</p>
                       <p className="tf-meta [overflow-wrap:anywhere]">{check.message}</p>
                     </div>
                     <div className="flex shrink-0 ml-auto items-center gap-2">

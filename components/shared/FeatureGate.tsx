@@ -69,7 +69,7 @@ export default function FeatureGate({
             <Lock className="w-5 h-5 text-gray-400" />
           </div>
           <div className="flex-1">
-            <h3 className="text-sm font-medium text-gray-900 mb-1">
+            <h3 className="tf-row-name mb-1">
               {meta.name} — Not Available
             </h3>
             <p className="tf-body-muted mb-3">

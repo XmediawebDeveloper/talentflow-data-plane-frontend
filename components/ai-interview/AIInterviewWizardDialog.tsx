@@ -83,10 +83,10 @@ export default function AIInterviewWizardDialog({
               <Brain className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight min-w-0 truncate">
+              <h2 className="tf-section-title sm:text-xl tracking-tight min-w-0 truncate">
                 Configure AI Interview
               </h2>
-              <p className="tf-card-desc min-w-0 flex items-center gap-1.5 flex-wrap">
+              <p className="tf-body-secondary min-w-0 flex items-center gap-1.5 flex-wrap">
                 {jdCode && <JobIdBadge className="flex-shrink-0">{jdCode}</JobIdBadge>}
                 <span className="min-w-0 break-words">{jdTitle || 'this job'}</span>
               </p>
