@@ -44,6 +44,7 @@ import {
   type ServerMatchStatus,
 } from '@/lib/services/bulkInviteService';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 const PAGE_SIZE = 50;
 
@@ -938,7 +939,14 @@ export default function ServerCandidatePicker({
     }
   };
   const rowActions = (id: string, name: string, where: 'my-resumes' | 'internal-db' | 'archived'): ResumeRowAction[] => [
-    { key: 'download', label: 'Download Resume', icon: <Download className="w-4 h-4 text-menu-icon-download" />, onSelect: () => void downloadResume(id, name) },
+    {
+      key: 'download',
+      label: 'Download Resume',
+      icon: <Download className="w-4 h-4 text-menu-icon-download" />,
+      // Viewing isn't downloading (2026-11-10).
+      disabledReason: canDownloadResume({ isTenantAdmin, hasPermissionCode, own: where !== 'internal-db' }) ? null : DOWNLOAD_BLOCKED_MESSAGE,
+      onSelect: () => void downloadResume(id, name),
+    },
     ...(where === 'archived' ? [{
       key: 'unarchive',
       label: 'Unarchive Resume',

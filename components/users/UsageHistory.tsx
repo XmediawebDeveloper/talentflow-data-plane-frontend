@@ -1545,7 +1545,7 @@ function RefundsTab({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function UsageHistory() {
-  const { user, isTenantAdmin, hasPermission } = useAuth();
+  const { user, isTenantAdmin } = useAuth();
   const today = useMemo(() => new Date(), []);
   const defaultStartDate = useMemo(
     () => formatDateForInput(new Date(today.getFullYear(), today.getMonth(), 1)),
@@ -1640,11 +1640,10 @@ export default function UsageHistory() {
   );
 
   // ── Access guard ─────────────────────────────────────────────────────────
-  // Was isTenantAdmin-only, hiding this page from a non-owner admin who had
-  // been granted canViewUsage — the same permission lib/navigation/routeAccess.ts
-  // already declares for this exact route prefix ('/organization/usage'),
-  // and the same permission OrganizationTabs.tsx checks to show this tab.
-  if (!isTenantAdmin && !hasPermission('canViewUsage')) {
+  // Owner only (user decision 2026-11-10): the same rule as the route
+  // (lib/navigation/routeAccess.ts) and the tab (OrganizationTabs.tsx). The
+  // backend only serves company-wide usage to the owner.
+  if (!isTenantAdmin) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60dvh] text-center p-8">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 mb-4">

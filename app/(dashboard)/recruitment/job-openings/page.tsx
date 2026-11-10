@@ -120,7 +120,6 @@ export default function JobOpeningsPage() {
   const canUpdateJdHere = isTenantAdmin || hasPermission('canUpdateJD');
   const canAIMatchFromJd = isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('jd:ai_match'));
   const canScoreFromJd = isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('jd:add_applicants'));
-  const canManageMasters = hasPermission('canManageSettings');
 
   // "?view=list" is a one-shot instruction from the JD flow's "Go to All Jobs":
   // open the full list with every job showing, rather than the stat-tile overview
@@ -684,7 +683,8 @@ export default function JobOpeningsPage() {
         initialStatusFilter={activeFilter}
         forceListView={forceListView}
         configHref="/recruitment/job-openings/config"
-        configDisabled={!canManageMasters}
+        // Config opens for everyone (read-only without Manage Settings — the
+        // lists grey their own add / edit / delete), user decision 2026-11-10.
       />
 
       {/* Archive confirm — the same component the Job Details page renders, so

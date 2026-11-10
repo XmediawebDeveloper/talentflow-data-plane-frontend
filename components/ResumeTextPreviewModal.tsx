@@ -7,6 +7,8 @@ import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 interface ResumeTextPreviewModalProps {
   /** Resume (or version) id — a version is a resume record in its own right.
@@ -28,6 +30,10 @@ interface ResumeTextPreviewModalProps {
   localFile?: Blob;
   /** Replaces the id-based download — a local file downloads from memory. */
   onDownload?: () => void;
+  /** Whether the role may download this resume. Omitted: allowed unless the
+   *  role can't download any resume (e.g. Viewer) — lib/permissions/resumeDownload.ts.
+   *  Ignored for a caller-supplied onDownload (a local file). */
+  canDownload?: boolean;
   /** Stacking level for the overlay. Defaults to `z-50`, which sits above the
    *  page and ties with the z-50 dialogs this preview is usually opened from —
    *  a tie the preview wins because it renders after them. Callers whose own
@@ -94,9 +100,13 @@ export default function ResumeTextPreviewModal({
   documentUrl,
   localFile,
   onDownload,
+  canDownload: canDownloadProp,
   zIndexClassName = 'z-50',
   onClose,
 }: ResumeTextPreviewModalProps) {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10).
+  const canDownload = !!onDownload || (canDownloadProp ?? canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode }));
   /* A stored résumé is previewed from its actual file — PDF shown inline,
      Word rendered through docx-preview — fetched below via the `preview`
      endpoint (falling back to `download`). `extracted_text` is now only the
@@ -359,6 +369,7 @@ export default function ResumeTextPreviewModal({
   }, [resolvedDocxBlob, renderDocx]);
 
   const handleDownload = async () => {
+    if (!canDownload) return;
     if (onDownload) {
       onDownload();
       return;
@@ -408,7 +419,14 @@ export default function ResumeTextPreviewModal({
           {/* Nothing to download when there is neither a stored record nor a
               caller-supplied handler — an inert button would just lie. */}
           {(resumeId || onDownload) && (
-            <button type="button" onClick={handleDownload} className="tf-preview-btn" aria-label="Download" title="Download">
+            <button
+              type="button"
+              onClick={handleDownload}
+              aria-disabled={!canDownload}
+              className={`tf-preview-btn ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Download"
+              title={canDownload ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
+            >
               <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Download</span>
             </button>

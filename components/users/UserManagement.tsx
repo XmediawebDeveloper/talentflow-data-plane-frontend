@@ -35,6 +35,7 @@ import { RoleListItem } from '@/lib/types/rbac';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
+const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 import FilterSelect from '@/components/ui/filter-select';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -207,7 +208,9 @@ function resetUserSyncThrottle(): void {
 
 export default function UserManagement() {
   const router = useRouter();
-  const { user: currentUser, refreshUser, isLoading: authLoading, canManageUsers: authCanManageUsers, hasPermissionCode } = useAuth();
+  const { user: currentUser, refreshUser, isLoading: authLoading, canManageUsers: authCanManageUsers, hasPermissionCode, isTenantAdmin: isOwnerForSeats, hasPermission: hasPermissionForSeats } = useAuth();
+  // Buying seats needs Subscription & Billing Access (Upgrade Plan), same as the add-on API (2026-11-10).
+  const canBuySeats = isOwnerForSeats || hasPermissionForSeats('canUpgradePlan');
   const dialog = useGlobalDialog();
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
@@ -317,6 +320,7 @@ export default function UserManagement() {
     }
     if (isAtLimit) {
       if (isTrial) toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+      else if (!canBuySeats) toast.error(`User limit reached. ${SEATS_BLOCKED_MESSAGE}`);
       else setShowAddSeatsModal(true);
       return;
     }
@@ -1664,6 +1668,8 @@ export default function UserManagement() {
                 if (isAtLimit) {
                   if (isTrial) {
                     toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else if (!canBuySeats) {
+                    toast.error(`User limit reached. ${SEATS_BLOCKED_MESSAGE}`);
                   } else {
                     setShowAddSeatsModal(true);
                   }

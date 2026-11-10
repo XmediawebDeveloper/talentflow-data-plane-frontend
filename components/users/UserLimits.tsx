@@ -22,6 +22,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import AddSeatsModal from './AddSeatsModal';
+import { useAuth } from '@/components/providers/AuthProvider';
+
+const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 
 interface UserLimitsProps {
   onUpgradeClick?: () => void;
@@ -31,6 +34,10 @@ interface UserLimitsProps {
 }
 
 export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = false, refreshTrigger = 0 }: UserLimitsProps) {
+  // Buying seats is a billing action (2026-11-10): Subscription & Billing
+  // Access (Upgrade Plan), same as the add-on API.
+  const { isTenantAdmin: isOwnerForSeats, hasPermission: hasPermissionForSeats } = useAuth();
+  const canBuySeats = isOwnerForSeats || hasPermissionForSeats('canUpgradePlan');
   const router = useRouter();
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
@@ -139,7 +146,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               <Button
                 variant="primary"
                 size="sm"
+                aria-disabled={!canBuySeats}
+                title={canBuySeats ? undefined : SEATS_BLOCKED_MESSAGE}
+                style={!canBuySeats ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
+                  if (!canBuySeats) return;
                   if (onAddSeatsClick) {
                     onAddSeatsClick();
                   } else {
@@ -257,7 +268,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                 <Button
                   variant="primary"
                   size="sm"
+                  aria-disabled={!canBuySeats}
+                  title={canBuySeats ? undefined : SEATS_BLOCKED_MESSAGE}
+                  style={!canBuySeats ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                   onClick={() => {
+                    if (!canBuySeats) return;
                     if (onAddSeatsClick) {
                       onAddSeatsClick();
                     } else {
@@ -299,7 +314,11 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
               <Button
                 variant="primary"
                 size="sm"
+                aria-disabled={!canBuySeats}
+                title={canBuySeats ? undefined : SEATS_BLOCKED_MESSAGE}
+                style={!canBuySeats ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
                 onClick={() => {
+                  if (!canBuySeats) return;
                   if (onAddSeatsClick) {
                     onAddSeatsClick();
                   } else {
