@@ -214,10 +214,11 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
 const COMPACT_TIMELINE_LIMIT = 4;
 
 /** A candidate who reloads or reconnects lands on the system check again, and
- *  every visit is logged — seven back-to-back "System Check" rows filled the
- *  4-line cell and pushed "Invited" out of it. The compact cell keeps the
- *  first of each unbroken run (when the check began); the full history modal
- *  still lists every visit. */
+ *  every consent click (rules_acknowledged, final_accept) is logged as
+ *  ai_interview_consent — so back-to-back "System Check" rows piled up. Every
+ *  view (compact cell and full history) keeps only the first of each unbroken
+ *  run (when the check began); a System Check after a later event, e.g. a
+ *  resend, still shows. */
 const collapseRepeatedSystemChecks = (events: TimelineEntry[]): TimelineEntry[] =>
   events.filter((e, i) => !(e.label === 'System Check' && events[i - 1]?.label === 'System Check'));
 
@@ -253,10 +254,10 @@ export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; durati
 };
 
 /** "View full history" only earns its place once something is actually
- *  hidden from the compact cell — by the cap or the System Check collapse —
+ *  hidden from the compact cell by the 4-event cap —
  *  otherwise the link would open a modal identical to what's on screen. */
 export const hasMoreTimelineHistory = (inv: any, limit?: number): boolean =>
-  buildFullTimeline(inv, inv.timeline || []).length > timelineEvents(inv, limit).length;
+  collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).length > timelineEvents(inv, limit).length;
 
 /** Timeline labels that are a status of the invitation (Edited only records
  *  a change to it) — View History's Status column. */
@@ -278,7 +279,7 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
  *  whole audit trail (the "View full history" modal's source), oldest first. */
 export const loadInterviewHistory = async (inv: any): Promise<TimelineHistoryRow[]> => {
   const logs = await aiInterviewService.getSessionTimeline(inv.id);
-  return buildFullTimeline(inv, logs).map((entry) => ({
+  return collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)).map((entry) => ({
     ...entry,
     isStatus: TIMELINE_STATUS_LABELS.has(entry.label),
     description: TIMELINE_EVENT_DESCRIPTION[entry.label],
@@ -718,7 +719,7 @@ export default function AIInterviewInviteTable({
     setTimelineLoading(true);
     try {
       const logs = await aiInterviewService.getSessionTimeline(inv.id);
-      setTimelineEntries(buildFullTimeline(inv, logs));
+      setTimelineEntries(collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)));
     } catch (err: any) {
       setTimelineError(err?.message || 'Failed to load history');
     } finally {
