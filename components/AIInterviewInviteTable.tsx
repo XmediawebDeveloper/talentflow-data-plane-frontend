@@ -10,8 +10,9 @@ import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
+import { JobVersionStatusPill, jobLockKindOf } from '@/components/jobs/JobLockNotice';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import InviteStatusChip from '@/components/ui/invite-status-chip';
@@ -33,6 +34,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -214,10 +216,11 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
 const COMPACT_TIMELINE_LIMIT = 4;
 
 /** A candidate who reloads or reconnects lands on the system check again, and
- *  every visit is logged — seven back-to-back "System Check" rows filled the
- *  4-line cell and pushed "Invited" out of it. The compact cell keeps the
- *  first of each unbroken run (when the check began); the full history modal
- *  still lists every visit. */
+ *  every consent click (rules_acknowledged, final_accept) is logged as
+ *  ai_interview_consent — so back-to-back "System Check" rows piled up. Every
+ *  view (compact cell and full history) keeps only the first of each unbroken
+ *  run (when the check began); a System Check after a later event, e.g. a
+ *  resend, still shows. */
 const collapseRepeatedSystemChecks = (events: TimelineEntry[]): TimelineEntry[] =>
   events.filter((e, i) => !(e.label === 'System Check' && events[i - 1]?.label === 'System Check'));
 
@@ -253,10 +256,10 @@ export const InviteTimelineLines = ({ inv, duration, limit }: { inv: any; durati
 };
 
 /** "View full history" only earns its place once something is actually
- *  hidden from the compact cell — by the cap or the System Check collapse —
+ *  hidden from the compact cell by the 4-event cap —
  *  otherwise the link would open a modal identical to what's on screen. */
 export const hasMoreTimelineHistory = (inv: any, limit?: number): boolean =>
-  buildFullTimeline(inv, inv.timeline || []).length > timelineEvents(inv, limit).length;
+  collapseRepeatedSystemChecks(buildFullTimeline(inv, inv.timeline || [])).length > timelineEvents(inv, limit).length;
 
 /** Timeline labels that are a status of the invitation (Edited only records
  *  a change to it) — View History's Status column. */
@@ -278,7 +281,7 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
  *  whole audit trail (the "View full history" modal's source), oldest first. */
 export const loadInterviewHistory = async (inv: any): Promise<TimelineHistoryRow[]> => {
   const logs = await aiInterviewService.getSessionTimeline(inv.id);
-  return buildFullTimeline(inv, logs).map((entry) => ({
+  return collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)).map((entry) => ({
     ...entry,
     isStatus: TIMELINE_STATUS_LABELS.has(entry.label),
     description: TIMELINE_EVENT_DESCRIPTION[entry.label],
@@ -683,6 +686,10 @@ export default function AIInterviewInviteTable({
   expandableRows = false,
   displayMode = 'list',
 }: AIInterviewInviteTableProps) {
+  // Resend / Edit / Revoke need AI Interviews "Invite" (2026-11-10): a
+  // view-only role (Viewer) could resend expired links.
+  const { isTenantAdmin: isOwnerForInvites, hasPermissionCode: hasCodeForInvites } = useAuth();
+  const canInviteRows = isOwnerForInvites || hasCodeForInvites('ai_interview:invite');
   const selectable = !!onToggleSelect;
   /* Row height: tighter when the table grows to its rows (autoHeight). */
   const cellY = autoHeight ? 'py-2' : 'py-3';
@@ -701,7 +708,10 @@ export default function AIInterviewInviteTable({
       else next.add(id);
       return next;
     });
-  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
+  /* A row's own job version Disabled or Archived locks it too (job-wide
+     trackers span versions, so this is per row). */
+  const rowJdArchived = (inv: { _jd_status?: string | null; jd_status?: string | null } | null | undefined): boolean => String(inv?._jd_status ?? inv?.jd_status ?? '').toLowerCase() === 'archived';
+  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status) || rowJdArchived(inv);
 
   /* Full action-log modal — fetched on demand per row, never eagerly for the
      whole page, so opening the tracker doesn't fire one audit-trail request
@@ -718,7 +728,7 @@ export default function AIInterviewInviteTable({
     setTimelineLoading(true);
     try {
       const logs = await aiInterviewService.getSessionTimeline(inv.id);
-      setTimelineEntries(buildFullTimeline(inv, logs));
+      setTimelineEntries(collapseRepeatedSystemChecks(buildFullTimeline(inv, logs)));
     } catch (err: any) {
       setTimelineError(err?.message || 'Failed to load history');
     } finally {
@@ -732,8 +742,9 @@ export default function AIInterviewInviteTable({
     const actions: RowAction[] = [];
     const locked = rowLocked(inv);
     const lockedProps = locked
-      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
+      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : !jdDisabled && rowJdArchived(inv) ? JD_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
       : {};
+    const noInviteProps = !canInviteRows ? { disabled: true, title: "You can view invitations, but your role can't resend, edit or revoke them" } : {};
 
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
@@ -755,6 +766,7 @@ export default function AIInterviewInviteTable({
         disabled: resendingId === inv.id,
         iconClassName: 'text-menu-icon-share',
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     if (onEdit && canEdit(inv)) {
@@ -766,6 +778,7 @@ export default function AIInterviewInviteTable({
         title: 'Edit candidate details and send',
         iconClassName: 'text-menu-icon-edit',
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     if (onRevoke && isRevocableInvite(inv)) {
@@ -779,6 +792,7 @@ export default function AIInterviewInviteTable({
         destructive: true,
         busy: revokingId === inv.id,
         ...lockedProps,
+        ...noInviteProps,
       });
     }
     return actions;
@@ -920,7 +934,7 @@ export default function AIInterviewInviteTable({
               )}
               {(cardJobVersion != null || cardInterviewVersion != null) && (
                 <div className="flex items-center gap-1.5 tf-micro-hint">
-                  {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} /></>}
+                  {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} />{jobLockKindOf(inv._jd_status) && <JobVersionStatusPill status={jobLockKindOf(inv._jd_status)!} />}</>}
                   {cardInterviewVersion != null && <><span className="ml-1">Interview</span><VersionPill kind="interview" version={cardInterviewVersion} /></>}
                 </div>
               )}
@@ -1127,7 +1141,7 @@ export default function AIInterviewInviteTable({
           vertical scroller, which is what keeps the sticky header and the pinned
           Actions column in place. */}
       <div
-        className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? '' : 'tf-table-shell--fill flex-1 min-h-0'}`}
+        className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? 'overscroll-y-auto' : 'tf-table-shell--fill flex-1 min-h-0'}`}
         style={autoHeight ? { maxHeight: 'none' } : undefined}
       >
         {/* Auto layout, not table-fixed: columns size to their own content and the
@@ -1214,9 +1228,10 @@ export default function AIInterviewInviteTable({
                   ),
                 },
                 {
-                  // Every milestone on its own line, oldest first. align-top so
-                  // the first line sits level with the other columns.
-                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
+                  // Every milestone on its own line, oldest first. Centred like
+                  // the other columns, so a lone "Invited" line is not stuck at
+                  // the top of a taller row.
+                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
                   content: (
                     <div className="tf-meta">
                       {events.length > 0 ? (
@@ -1289,7 +1304,13 @@ export default function AIInterviewInviteTable({
                 ...((showJobColumn || jobVersion != null || showRowVersions) ? [{
                   id: 'jobVersion' as const, label: 'Job Version', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (jobVersion ?? inv._jd_version) != null
-                    ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                    ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                        {/* Only a Disabled / Archived job version gets its status. */}
+                        {jobLockKindOf(inv._jd_status) && <JobVersionStatusPill status={jobLockKindOf(inv._jd_status)!} />}
+                      </span>
+                    )
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
                 }] : []),
                 ...((showJobColumn || interviewVersion != null || showRowVersions) ? [{

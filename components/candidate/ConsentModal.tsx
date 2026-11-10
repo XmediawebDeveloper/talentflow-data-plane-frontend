@@ -201,7 +201,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                 </h3>
                 <span className="tf-meta">— this assessment is monitored to keep it fair</span>
               </div>
-              <ul className="tf-grid-stats-5">
+              <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
                 {proctoringFeatures.map((feature, index) => (
                   <li key={index} className="rounded-lg bg-brand-cyan/5 ring-1 ring-brand-cyan/15 px-3 py-2.5">
                     <p className="flex items-center gap-1.5 tf-row-title">

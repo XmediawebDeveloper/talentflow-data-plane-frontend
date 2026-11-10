@@ -279,7 +279,10 @@ function CompanySizeField({
 
 export default function CompanyProfilePage() {
   const router = useRouter();
-  const { tenant } = useAuth();
+  const { tenant, isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing needs Settings view; CHANGING the profile needs Settings Access
+  // (settings:general), same as the server (2026-11-10). Viewer: read-only.
+  const canEditProfile = isTenantAdmin || hasPermissionCode('settings:general');
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -368,6 +371,7 @@ export default function CompanyProfilePage() {
   };
 
   const handleSave = async () => {
+    if (!canEditProfile) return;
     const errors = validate(companyData);
     if (Object.keys(errors).length > 0) {
       setValidationErrors(errors);
@@ -427,6 +431,7 @@ export default function CompanyProfilePage() {
   // Card "Edit"/"Update" links open edit mode scrolled to their section.
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const openEditAt = (id: string) => {
+    if (!canEditProfile) return;
     setScrollTarget(id);
     setIsEditing(true);
   };
@@ -542,9 +547,11 @@ export default function CompanyProfilePage() {
           {!isEditing && (
             <Button
               variant="primary"
-              onClick={() => setIsEditing(true)}
+              onClick={() => { if (canEditProfile) setIsEditing(true); }}
               icon={<Edit2 className="h-4 w-4" />}
-              className="shrink-0"
+              aria-disabled={!canEditProfile}
+              title={canEditProfile ? undefined : "You can view the company profile, but your role can't change it"}
+              className={`shrink-0 ${!canEditProfile ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <span className="hidden sm:inline">Edit Profile</span>
               <span className="sm:hidden">Edit</span>
@@ -634,8 +641,10 @@ export default function CompanyProfilePage() {
                 ) : !isEditing ? (
                   <button
                     type="button"
-                    onClick={() => setIsEditing(true)}
-                    className="font-semibold text-brand-blue hover:underline"
+                    onClick={() => { if (canEditProfile) setIsEditing(true); }}
+                    aria-disabled={!canEditProfile}
+                    title={canEditProfile ? undefined : "You can view the company profile, but your role can't change it"}
+                    className={`font-semibold text-brand-blue hover:underline ${!canEditProfile ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     Complete profile
                   </button>

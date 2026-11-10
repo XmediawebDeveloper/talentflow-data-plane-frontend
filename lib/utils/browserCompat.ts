@@ -234,6 +234,16 @@ export async function getUserMedia(
  * Request fullscreen with cross-browser support
  */
 export async function requestFullscreen(element: HTMLElement = document.documentElement): Promise<void> {
+  // Browsers grant fullscreen only right after a click. A click that first
+  // opens the screen-share picker has used that up by the time the picker
+  // closes, so the request would just be refused ("TypeError: not granted").
+  // Fail the same way callers already handle, without the doomed request;
+  // the next click (final consent / share-bar Continue) enters fullscreen.
+  const activation = (navigator as any).userActivation as { isActive?: boolean } | undefined;
+  if (activation && activation.isActive === false) {
+    console.info('[FULLSCREEN] No recent click to allow fullscreen — it will be entered on the next click');
+    throw new Error('FULLSCREEN_NEEDS_CLICK');
+  }
   try {
     if (element.requestFullscreen) {
       await element.requestFullscreen();
@@ -259,6 +269,10 @@ export async function requestFullscreen(element: HTMLElement = document.document
  * Exit fullscreen with cross-browser support
  */
 export async function exitFullscreen(): Promise<void> {
+  // Nothing to exit (already left, or the page is being torn down at the
+  // interview end): calling it anyway throws "Document not active", and the
+  // callers fire-and-forget, so that surfaced as an uncaught exception.
+  if (!isFullscreen()) return;
   try {
     if (document.exitFullscreen) {
       await document.exitFullscreen();
@@ -273,8 +287,9 @@ export async function exitFullscreen(): Promise<void> {
       await (document as any).msExitFullscreen();
     }
   } catch (error) {
-    console.error('[FULLSCREEN] Exit failed:', error);
-    throw error;
+    // Leaving fullscreen is best-effort (the browser also exits on page
+    // teardown); never let it reject into a fire-and-forget caller.
+    console.warn('[FULLSCREEN] Exit failed:', error);
   }
 }
 

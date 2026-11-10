@@ -701,8 +701,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
 
           {/* Pagination */}
           {data && data.total > limit && (
-            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200">
-              <div className="tf-body-secondary">
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-gray-200 max-sm:flex-col max-sm:justify-center max-sm:gap-2">
+              <div className="tf-body-secondary max-sm:text-center">
                 Showing {page * limit + 1} - {Math.min((page + 1) * limit, data.total)} of {data.total}
               </div>
               <div className="flex items-center gap-2 sm:gap-3">

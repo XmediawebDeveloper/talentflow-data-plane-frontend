@@ -2,7 +2,7 @@
 
 /**
  * MyConsumptionHistory Component
- * Standard User view: Shows only own consumption history
+ * Own consumption history (any signed-in user)
  */
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -461,7 +461,7 @@ export default function MyConsumptionHistory() {
         <div className="flex items-start gap-3">
           <User className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-blue-900">Standard User Access</p>
+            <p className="text-sm font-medium text-blue-900">Your Access</p>
             <p className="text-sm text-blue-700 mt-1">
               You can view your own consumption history and team summaries. For tenant-wide unit pool details and billing information, contact your Tenant Administrator.
             </p>

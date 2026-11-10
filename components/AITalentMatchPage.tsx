@@ -6973,7 +6973,7 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="tf-td whitespace-nowrap">
                       <div className="flex items-center gap-2 tf-body-muted">
-                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}
+                        <Calendar className="w-4 h-4 text-brand-cyan" />{formatISTDate(item.matchedAt.toISOString())}, {formatISTTime(item.matchedAt.toISOString())}
                       </div>
                     </td>
                     <td className="tf-td">
@@ -7980,7 +7980,7 @@ export default function AITalentMatchPage({
                   {/* JD ID badge before the title — the same badge the job list rows use. */}
                   {/* Wraps below sm (the pills drop under the name) and the name
                       wraps too — on one line a phone showed "Senior Full…". */}
-                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-1 mb-1 min-w-0">
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-x-2 gap-y-2 mb-2 sm:mb-1 min-w-0">
                     {resultsJobCode && (
                       <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{resultsJobCode}</JobIdBadge>
                     )}
@@ -8104,7 +8104,7 @@ export default function AITalentMatchPage({
                   )}
                 </div>
               </div>
-              <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="flex flex-row items-center gap-2">
                 {/* Run Again — re-runs the match for this same JD version.
                     Not offered on a disabled or archived version. */}
                 {selectedJob && (
@@ -8123,7 +8123,7 @@ export default function AITalentMatchPage({
                       : !canRunAgainHere
                         ? `This version is ${resultsJobStatus} — switch to the latest version to run again`
                         : 'Run the match again for this job'}
-                    className={`w-full sm:w-auto ${!canRunAiMatch || !canRunAgainHere ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    className={`min-w-0 flex-1 whitespace-nowrap sm:flex-none ${!canRunAiMatch || !canRunAgainHere ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
                     <RefreshCw className="w-4 h-4" />
                     <span>Run Again</span>
@@ -8140,7 +8140,7 @@ export default function AITalentMatchPage({
                     setMatchError(null);
                     router.push('/recruitment/ai-talent-match', { scroll: false });
                   }}
-                  className="tf-btn tf-btn-primary w-full sm:w-auto h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex text-sm"
+                  className="tf-btn tf-btn-primary min-w-0 flex-1 whitespace-nowrap sm:flex-none h-10 px-4 bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex text-sm"
                 >
                   <Sparkles className="w-4 h-4" />
                   <span>New AI Match</span>
@@ -8422,7 +8422,9 @@ export default function AITalentMatchPage({
               </Button>
             </div>
           ) : (
-          <div className="tf-card-soft overflow-hidden">
+          /* Below lg the panel chrome is dropped so the cards sit straight on the page,
+             as on the JD details AI Talent Match tab (no card inside a card). */
+          <div className="tf-card-soft overflow-hidden max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:ring-0 max-lg:dark:bg-transparent">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
             <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
@@ -8860,7 +8862,7 @@ export default function AITalentMatchPage({
 
             {/* List view's stand-in below md, where the table is too wide. */}
             {resultsDisplayMode === 'list' && (
-            <MobileRecordList className="p-3">
+            <MobileRecordList>
               {paginatedCandidates.map((candidate) => (
                 <MobileRecordCard
                   key={candidate.id}
@@ -8892,65 +8894,79 @@ export default function AITalentMatchPage({
                   }
                   title={
                     <span className="flex min-w-0 items-center gap-2">
-                      <NameAvatar name={candidate.name} fallback={candidate.email} size="sm" />
-                      <span className="truncate">{candidate.name || 'Unknown'}</span>
+                      <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
+                      <span className="min-w-0 break-words">{candidate.name || 'Unknown'}</span>
                     </span>
                   }
+                  /* Status on the top row, as on the JD details tab card. */
+                  badges={<>
+                    {candidate.isArchived && <ResumeArchivedBadge />}
+                    {candidate.isTenantUserEmail && <TeamMemberEmailBadge />}
+                    {scoredResumeIds.has(candidate.resumeId) ? (
+                      <span className="tf-badge bg-success-subtle text-success">
+                        <CheckCircle className="w-3 h-3" />Scored
+                      </span>
+                    ) : (
+                      <span className="tf-badge bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500">
+                        <XCircle className="w-3 h-3" />Not Scored
+                      </span>
+                    )}
+                  </>}
                   meta={[
-                    { icon: <Briefcase />, label: resultsJobTitle || '-' },
-                    { icon: <Mail />, label: candidate.email ? <span className="break-all">{candidate.email}</span> : null },
-                    { icon: <Phone />, label: candidate.phone || null },
-                    { icon: <MapPin />, label: candidate.location || null },
-                    { icon: <TrendingUp />, label: candidate.experience || null },
+                    { icon: <Briefcase className="w-3.5 h-3.5 shrink-0" />, label: resultsJobTitle || '-' },
+                    { icon: <Mail className="w-3.5 h-3.5 shrink-0" />, label: candidate.email ? <span className="break-all">{candidate.email}</span> : null },
                   ]}
                   fields={[
+                    { label: 'Experience', value: candidate.experience || '—' },
+                    { label: 'Location', value: candidate.location || '—' },
+                    { label: 'Phone', value: splitPhoneNumbers(candidate.phone, 1)[0] || '—' },
                     {
                       label: 'Uploaded',
                       value: <>{formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}{candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}</>,
                     },
                   ]}
-                  footer={
-                    <>
-                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${rankBadgeClass(candidate.rank || 0)}`}>
-                        {candidate.rank || '-'}
-                      </span>
-                      {scoredResumeIds.has(candidate.resumeId) ? (
-                        <MobileStatChip tone="success" icon={<CheckCircle />}>Scored</MobileStatChip>
-                      ) : (
-                        <MobileStatChip tone="neutral" icon={<XCircle />}>Not Scored</MobileStatChip>
-                      )}
-                    </>
-                  }
+                  footer={(() => {
+                    const band = matchBandForRating(candidate.rank || 0);
+                    return (
+                      <MobileStatChip tone={band === 'exact' ? 'success' : band === 'partial' ? 'warning' : 'danger'} icon={<Star className="w-3 h-3" />}>
+                        Rank {candidate.rank || '-'}
+                      </MobileStatChip>
+                    );
+                  })()}
                   actions={
-                    <button
-                      type="button"
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={(e) => {
                         e.stopPropagation();
                         setSelectedVersionsCandidate(candidate);
                       }}
                       title="Attachments"
                       aria-label={`Attachments (${candidate.attachmentCount || 1})`}
-                      className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 text-xs font-medium text-gray-700 dark:text-slate-300 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                      icon={<Paperclip className="w-3.5 h-3.5" />}
                     >
-                      <Paperclip className="w-3.5 h-3.5" />
                       {candidate.attachmentCount || 1}
-                    </button>
+                    </Button>
                   }
                 >
-                  <div className="mt-2 flex flex-wrap gap-1">
-                    <SkillsList
-                      skills={candidate.skills}
-                      chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
-                      moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                    />
-                  </div>
+                  {candidate.skills && candidate.skills.length > 0 && (
+                    <div className="mt-2 flex flex-wrap items-center gap-1">
+                      <SkillsList
+                        skills={candidate.skills}
+                        expandInline
+                        chipClassName="max-w-full px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 [overflow-wrap:anywhere]"
+                        moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                      />
+                    </div>
+                  )}
                 </MobileRecordCard>
               ))}
             </MobileRecordList>
             )}
 
-            {/* Pagination Controls */}
+            {/* Pagination Controls — its own bordered card below lg, where the panel is dropped. */}
             {totalFilteredCandidates > 0 && (
+              <div className="max-lg:mt-3 max-lg:overflow-hidden max-lg:rounded-xl max-lg:border max-lg:border-gray-200 max-lg:dark:border-slate-700">
               <Pagination
                 currentPage={currentPage}
                 totalPages={totalPages}
@@ -8959,6 +8975,7 @@ export default function AITalentMatchPage({
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
               />
+              </div>
             )}
           </div>
           )}

@@ -17,7 +17,8 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { Badge } from '@/components/ui/badge';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useUrlTab } from '@/lib/hooks/useUrlTab';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived } from '@/lib/services/aiInterviewService';
+import { JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
 import {
   interviewVersionOrdinal as storedInterviewVersionOrdinal,
   interviewDuplicateBlockedReason,
@@ -238,6 +239,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // A disabled JD keeps its interview visible but read-only: every action
   // below is blocked until the job is enabled again (the backend refuses too).
   const jdDisabled = isJdDisabled(config.jd_status);
+  /* Invitations need an active job version: Disabled OR Archived turns Invite
+     and the results' invite actions off (the rest of the page keeps its
+     Disabled-only rules). */
+  const jdArchived = String(config.jd_status || '').toLowerCase() === 'archived';
+  const inviteLocked = jdDisabled || jdArchived;
+  const inviteLockMessage = jdArchived ? JD_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE;
   /* In the URL (`?detailTab=`), so a refresh reopens the same tab; a link's
      own `initialTab` is the default. Moving to another version is a new URL
      without the param, so it opens on the requested tab again. Not in the
@@ -480,6 +487,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
       .catch(() => setJobVersions([]))
       .finally(() => setJobVersionsLoading(false));
   }, [config.jd_id]);
+  // A locked version's banner names the active versions: load the list then.
+  useEffect(() => {
+    if (inviteLocked) ensureJobVersionsLoaded();
+  }, [inviteLocked, ensureJobVersionsLoaded]);
 
   // Close the Job Version dropdown on an outside click.
   useEffect(() => {
@@ -1387,7 +1398,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           card, brand-blue border/ring, a solid ID pill + plain-weight title
           + status on row 1, and a quiet bulleted fact line ending on the
           mode/round/version chips on row 2. */}
-      {jdDisabled && (
+      {/* This interview's job version is Disabled / Archived: name it and the
+          versions invitations still work on (once the version list is in;
+          until then, or if it fails, the plain Disabled note). */}
+      {inviteLocked && jobVersions.length > 0 ? (
+        <div className="mb-4">
+          <JobVersionsLockBanner
+            locked={[{ version: config.jd_version ?? 1, status: jdArchived ? 'archived' : 'disabled' }]}
+            active={splitJobVersions(jobVersions).active}
+          />
+        </div>
+      ) : jdDisabled && (
         <div role="status" className="mb-4 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" aria-hidden="true" />
           <span>{JD_DISABLED_ACTION_MESSAGE} You can still view its details and results.</span>
@@ -1587,8 +1608,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   variant="primary"
                   size="sm"
                   onClick={() => {
-                    if (jdDisabled) {
-                      toast.error(JD_DISABLED_ACTION_MESSAGE);
+                    if (inviteLocked) {
+                      toast.error(inviteLockMessage);
                       return;
                     }
                     if (!canShareAIInterviews) return;
@@ -1607,9 +1628,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       onSent: () => refreshAfterInviteRef.current(),
                     });
                   }}
-                  aria-disabled={jdDisabled || !canShareAIInterviews}
-                  className={`${(jdDisabled || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                  title={jdDisabled ? JD_DISABLED_ACTION_MESSAGE : !canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  aria-disabled={inviteLocked || !canShareAIInterviews}
+                  className={`${(inviteLocked || !canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
+                  title={inviteLocked ? inviteLockMessage : !canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
                   icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
                   Invite
@@ -2438,7 +2459,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <AIInterviewResults
                 embedded
                 showStats
-                readOnly={jdDisabled}
+                readOnly={inviteLocked}
                 // This page is one interview version — the rows all share it.
                 hideVersionDetails
                 configId={config.id}
@@ -2464,7 +2485,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               configId={config.id}
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
-              jdDisabled={jdDisabled}
+              jdDisabled={inviteLocked}
               configArchived={isInterviewConfigArchived(config.status)}
               hideVersionDetails
               // Resend / revoke / edit here also change the activity list and

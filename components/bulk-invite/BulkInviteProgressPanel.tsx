@@ -1,8 +1,7 @@
 'use client';
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AlertCircle, AlertTriangle, Check, CheckCircle2, Copy, Hourglass, ListChecks, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Check, CheckCircle2, Copy, Hourglass, Loader2, Pause, Pencil, RotateCcw, Search, Send, SkipForward, Users, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
@@ -17,12 +16,6 @@ import {
 import { useOptionalBulkInviteProgress } from '@/contexts/BulkInviteProgressContext';
 import { formatTimeLeft } from '@/lib/services/bulkInviteService';
 import { useBulkInviteActions } from './useBulkInviteActions';
-import dynamic from 'next/dynamic';
-
-/* On demand: this panel is mounted from the dashboard layout, and both track
-   modals (with their invite tables and version panels) only open on a click. */
-const TrackInvitesModal = dynamic(() => import('@/components/TrackInvitesModal'), { ssr: false, loading: () => null });
-const AIInterviewTrackInvitesModal = dynamic(() => import('@/components/AIInterviewTrackInvitesModal'), { ssr: false, loading: () => null });
 
 const POLL_MS = 2000;
 /* Rows per page, from the standard pager's ladder. */
@@ -107,9 +100,6 @@ export default function BulkInviteProgressPanel({
   /* Bumped after Retry / Edit / Resume: the run is active again, so polling
      (which stops when it finishes) starts over. */
   const [pollKick, setPollKick] = useState(0);
-  /* "Track status" on a sent row: the tracker for this send's interview /
-     assessment, opened over this popup, filtered to that candidate. */
-  const [trackRow, setTrackRow] = useState<BulkInviteResultRow | null>(null);
   const active = !!job && isBulkInviteActive(job);
   const actions = useBulkInviteActions((fresh) => {
     setJob(fresh);
@@ -555,19 +545,10 @@ export default function BulkInviteProgressPanel({
                 </span>
               </span>
               <p className={`text-xs [overflow-wrap:anywhere] ${reasonColor}`}>{reasonText(r)}</p>
-              {/* Action — only a sent invite has a status to track */}
+              {/* Action — a sent invite only offers its link */}
               <div className="flex items-center gap-1.5 sm:justify-end">
                 {isSent ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => setTrackRow(r)}
-                      aria-label={`Track status for ${r.name || r.email}`}
-                      className="h-8 px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/30 bg-brand-blue/5 text-xs font-medium text-brand-blue hover:bg-brand-blue/10"
-                    >
-                      <ListChecks className="w-3.5 h-3.5" /> Track status
-                    </button>
-                    {r.link && (
+                  r.link ? (
                       <button
                         type="button"
                         onClick={async () => { await copyText(r.link as string, `Link for ${r.name || r.email}`); setCopiedId(r.id); }}
@@ -577,8 +558,9 @@ export default function BulkInviteProgressPanel({
                       >
                         {copiedId === r.id ? <Check className="w-3.5 h-3.5 text-success" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
-                    )}
-                  </>
+                  ) : (
+                    <span className="hidden sm:inline tf-meta">—</span>
+                  )
                 ) : canManage && (r.can_edit || r.can_retry) ? (
                   <>
                     {r.can_edit && (
@@ -657,31 +639,6 @@ export default function BulkInviteProgressPanel({
         </div>
       </AppModal>
 
-      {trackRow && typeof document !== 'undefined' && createPortal(
-        /* Portaled above the invite popup (its open animation's transform
-           would otherwise trap a fixed child) and above the results dialog. */
-        <div className="relative z-[80]">
-          {job.kind === 'interview' ? (
-            <AIInterviewTrackInvitesModal
-              isOpen
-              onClose={() => setTrackRow(null)}
-              configId={job.version_id}
-              jdTitle={job.version_label || 'AI Interview'}
-              hideJobVersionFilter
-              initialSearch={trackRow.email || trackRow.name || undefined}
-            />
-          ) : (
-            <TrackInvitesModal
-              isOpen
-              onClose={() => setTrackRow(null)}
-              jdId={job.jd_id}
-              jdTitle={job.version_label || 'Assessment'}
-              initialSearch={trackRow.email || trackRow.name || undefined}
-            />
-          )}
-        </div>,
-        document.body,
-      )}
 
     </div>
   );

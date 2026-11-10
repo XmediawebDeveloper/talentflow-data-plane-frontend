@@ -43,6 +43,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { usePagedList } from '@/lib/hooks/usePagedList';
+import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 interface SearchFilters {
   skills?: string[];
@@ -178,6 +179,8 @@ function toListRow(r: ApiResume): Resume {
 export default function InternalDatabaseView({ header }: { header?: ReactNode }) {
   const router = useRouter();
   const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10): needs Shared Database access.
+  const canDownloadShared = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: false });
   const { hasPlanFeature } = usePlanFeatures();
   // Plan-gated actions stay visible but disabled (hover: PLAN_LOCKED_MESSAGE),
   // never hidden — see usePlanLock.
@@ -1029,7 +1032,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
                     only shows while no search is narrowing it. */}
                 {totalResumes.toLocaleString()} Resumes
                 {!appliedSearchQuery && typeof totalIncludingVersions === 'number' && totalIncludingVersions > totalResumes && (
-                  <> ({totalIncludingVersions - totalResumes} versions)</>
+                  <span
+                    title={`${totalResumes.toLocaleString()} resumes + ${(totalIncludingVersions - totalResumes).toLocaleString()} older versions = ${totalIncludingVersions.toLocaleString()} stored (counted in Resume Storage)`}
+                  >
+                    {' '}(+{(totalIncludingVersions - totalResumes).toLocaleString()} {totalIncludingVersions - totalResumes === 1 ? 'version' : 'versions'})
+                  </span>
                 )}
               </span>
             </div>
@@ -1063,6 +1070,8 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             onAITalentMatchDisabled={isPlanLocked('ai_talent_match') || !(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
             onAITalentMatchDisabledReason={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? "You do not have permission to run AI talent match" : PLAN_LOCKED_MESSAGE}
             onDownload={handleBulkDownload}
+            onDownloadDisabled={!canDownloadShared}
+            onDownloadDisabledReason={DOWNLOAD_BLOCKED_MESSAGE}
             onDelete={() => handleDeleteResumes(selectedResumes)}
             onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
             onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -1140,6 +1149,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           onApplyToJobDisabled={isPlanLocked('resume_scoring') || !(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score')))}
           onApplyToJobDisabledReason={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:score'))) ? "You do not have permission to score resumes" : PLAN_LOCKED_MESSAGE}
           canShare={isTenantAdmin || hasPermissionCode('internal_db:share')}
+          canDownload={canDownloadShared}
           onDelete={(id) => handleDelete(id)}
           onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
           onDeleteDisabledReason="You do not have permission to delete resumes"
@@ -1278,6 +1288,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             setShowVersionHistory(false);
             setSelectedResumeForVersion(null);
           }}
+          canDownload={canDownloadShared}
           onDownload={async (versionId: string) => {
             try {
               toast.loading('Downloading resume...', { id: 'download' });

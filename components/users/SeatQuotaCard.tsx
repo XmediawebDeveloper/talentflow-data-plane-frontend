@@ -16,10 +16,13 @@ import {
 } from 'lucide-react';
 import { useQuota } from '@/contexts/QuotaContext';
 import AddSeatsModal from './AddSeatsModal';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+
+const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 
 interface SeatQuotaData {
   limit: number;
@@ -42,6 +45,10 @@ interface SeatQuotaCardProps {
 
 
 export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact = false, refreshTrigger = 0 }: SeatQuotaCardProps) {
+  // Buying seats is a billing action (2026-11-10): Subscription & Billing
+  // Access (Upgrade Plan), same as the add-on API.
+  const { isTenantAdmin: isOwnerForSeats, hasPermission: hasPermissionForSeats } = useAuth();
+  const canBuySeats = isOwnerForSeats || hasPermissionForSeats('canUpgradePlan');
   const { quotaData } = useQuota();
   const isTrial = quotaData?.is_trial ?? false;
   const [loading, setLoading] = useState(true);
@@ -274,7 +281,10 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setShowAddonModal(true)}
+              aria-disabled={!canBuySeats}
+              title={canBuySeats ? undefined : SEATS_BLOCKED_MESSAGE}
+              style={!canBuySeats ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}
+              onClick={() => { if (!canBuySeats) return; setShowAddonModal(true); }}
               icon={<Plus className="w-3 h-3 sm:w-3.5 sm:h-3.5" />}
             >
               Add Seats

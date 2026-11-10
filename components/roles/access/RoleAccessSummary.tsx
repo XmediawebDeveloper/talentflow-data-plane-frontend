@@ -3,6 +3,7 @@
 import React from 'react';
 import {
   SHOWN_MODULES,
+  MODULE_BY_ID,
   MODULE_GROUPS,
   accessCounts,
   describeModule,
@@ -27,7 +28,7 @@ const TONE_TILE = {
   none: 'bg-gray-100 text-gray-400 opacity-60 dark:bg-slate-800 dark:text-slate-500',
 } as const;
 
-function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule }) {
+function ModuleRow({ codes, module, autoBy = [] }: { codes: Set<string>; module: AccessModule; autoBy?: string[] }) {
   const d = describeModule(codes, module);
   const lt = levelText(d);
   // Name + level only. A short note appears only when the role differs from
@@ -42,6 +43,7 @@ function ModuleRow({ codes, module }: { codes: Set<string>; module: AccessModule
   });
   const notes: { text: string; warn?: boolean }[] = [];
   if (off.length) notes.push({ text: `Turned off: ${listText(off.map(offLabel))}`, warn: true });
+  if (autoBy.length && d.base !== 'none') notes.push({ text: `Turned on automatically for ${listText(autoBy)}` });
   if (d.extra.length) notes.push({ text: `Also: ${listText(d.extra.map((c) => (moduleOfCode(c)?.id === module.id ? shortLabel(c) : getPermissionLabel(c))))}` });
 
   return (
@@ -69,6 +71,8 @@ export interface RoleAccessSummaryProps {
   roleName: string;
   description?: string | null;
   eyebrow?: string;
+  /** Areas switched on automatically: { area_id: [areas that need it] }. */
+  auto?: Record<string, string[]>;
 }
 
 /**
@@ -77,7 +81,7 @@ export interface RoleAccessSummaryProps {
  * Used by Edit User, User details and Role details. Nothing in it is clickable:
  * access is changed only by editing the role.
  */
-export default function RoleAccessSummary({ codes, roleName, description, eyebrow = 'Access from role' }: RoleAccessSummaryProps) {
+export default function RoleAccessSummary({ codes, roleName, description, eyebrow = 'Access from role', auto }: RoleAccessSummaryProps) {
   const counts = accessCounts(codes);
   return (
     <div>
@@ -91,7 +95,12 @@ export default function RoleAccessSummary({ codes, roleName, description, eyebro
         <div key={group} className="mt-3.5">
           <div className="mb-0.5 text-[11.5px] font-semibold uppercase tracking-wider text-gray-400 dark:text-slate-500">{group}</div>
           {SHOWN_MODULES.filter((m) => m.group === group).map((m) => (
-            <ModuleRow key={m.id} codes={codes} module={m} />
+            <ModuleRow
+              key={m.id}
+              codes={codes}
+              module={m}
+              autoBy={(auto?.[m.id] ?? []).map((id) => MODULE_BY_ID[id]?.name).filter((n): n is string => !!n)}
+            />
           ))}
         </div>
       ))}

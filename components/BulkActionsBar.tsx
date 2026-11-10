@@ -35,6 +35,8 @@ interface BulkActionsBarProps {
   onDeleteDisabled?: boolean;
   onDeleteDisabledReason?: string;
   onDownload?: () => void;
+  onDownloadDisabled?: boolean;
+  onDownloadDisabledReason?: string;
   folders?: Folder[];
   onResumeScoring?: () => void;
   onAssessment?: () => void;
@@ -68,6 +70,8 @@ export default function BulkActionsBar({
   onDeleteDisabled,
   onDeleteDisabledReason,
   onDownload,
+  onDownloadDisabled,
+  onDownloadDisabledReason,
   folders,
   onResumeScoring,
   onAssessment,
@@ -515,9 +519,13 @@ export default function BulkActionsBar({
 
           {onDownload && (
             <button
-              onClick={onDownload}
-              className={actionBtn}
-              aria-label="Download" title="Download"
+              onClick={() => {
+                if (onDownloadDisabled) return;
+                onDownload();
+              }}
+              aria-disabled={!!onDownloadDisabled}
+              className={`${actionBtn} ${onDownloadDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Download" title={onDownloadDisabled ? (onDownloadDisabledReason || "Your role doesn't allow downloading resumes") : 'Download'}
             >
               <Download className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Download</span>

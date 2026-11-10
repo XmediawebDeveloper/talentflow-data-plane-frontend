@@ -6,6 +6,7 @@ import { X, Download, Clock, User, FileText, History, Briefcase, Eye, GitCompare
 import { ResumeVersion, Resume } from '@/lib/types/types';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 interface VersionHistoryModalProps {
   candidateName?: string;
@@ -15,6 +16,8 @@ interface VersionHistoryModalProps {
   onView?: (versionId: string) => void;
   onApplyToJob?: (versionId: string) => void;
   onDownload?: (versionId: string) => void;
+  /** False greys out the Download buttons (see-only roles). */
+  canDownload?: boolean;
   // Job-specific props
   isOpen?: boolean;
   jobTitle?: string;
@@ -43,6 +46,7 @@ export default function VersionHistoryModal({
   onView,
   onApplyToJob,
   onDownload,
+  canDownload = true,
   isOpen,
   jobTitle,
   versionHistory
@@ -348,6 +352,7 @@ export default function VersionHistoryModal({
                           )}
                           <button
                             onClick={async () => {
+                              if (!canDownload) return;
                               if (onDownload) {
                                 onDownload(version.id);
                               } else {
@@ -373,8 +378,9 @@ export default function VersionHistoryModal({
                               index === 0
                                 ? 'text-brand-blue hover:bg-brand-blue/10'
                                 : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
-                            }`}
-                            title="Download this version"
+                            } ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-disabled={!canDownload}
+                            title={canDownload ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
                           >
                             <Download className="w-4 h-4" />
                           </button>

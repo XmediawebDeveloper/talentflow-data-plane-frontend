@@ -84,6 +84,7 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
   { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
   { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
+  // Owner only; the tab (OrganizationTabs.tsx) and page (UsageHistory.tsx) say the same.
   { prefix: '/organization/usage-history', adminOnly: true },
   // Roles: Permissions & Roles View/Manage, or User Management (it assigns roles). Editing still needs Manage.
   { prefix: '/organization/role-management', permissions: ['canViewRoles', 'canManagePermissionsRoles', 'canManageUsers'] },

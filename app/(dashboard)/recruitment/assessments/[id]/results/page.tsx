@@ -43,7 +43,7 @@ export default function AssessmentResultsPage() {
      names `all` for both, which is the job read whole. The page renders the
      same view for either — these choose where its two selectors start. */
   const assessmentVersionScopeParam = searchParams.get('assessment_version');
-  const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canDownloadPDF = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download');
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
