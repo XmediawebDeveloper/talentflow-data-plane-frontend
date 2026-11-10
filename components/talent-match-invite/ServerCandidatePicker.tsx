@@ -402,7 +402,7 @@ export default function ServerCandidatePicker({
   const canUnarchive = !!isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canUploadMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
   // Folders: created with the upload permission, renamed with update — the page's rules.
-  const canUpdateMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:update');
+  const canUpdateMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
   const canDeleteMyResumes = !!isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const tabAccess: Record<InviteCandidateSourceTab, boolean> = {
     // AI Talent Match's own Invite permission for this kind, which the server

@@ -396,10 +396,13 @@ export async function prefetchInterviewRows(fixedStatus?: 'published' | 'draft' 
   await cachedList(listCacheKey(`${TABLE_CACHE_NAME}:page`, q), () => fetchInterviewPage(q), { ttlMs: LIST_CACHE_TTL_MS });
 }
 
-export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport = true, onExported, onVisibleRowsChange }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaultSort = 'newest', refreshSignal, fixedStatus, renderRowActions, expandableRows = false, displayMode = 'list', onDisplayModeChange, bulkActions, canExport: canExportProp, onExported, onVisibleRowsChange }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  // Omitted by a caller → the role's own AI Interviews Export permission
+  // (it used to default to true, i.e. allowed for everyone; 2026-11-10).
+  const canExport = canExportProp ?? (isTenantAdmin || hasPermissionCode('ai_interview:export'));
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
 
   const [search, setSearch] = useState('');

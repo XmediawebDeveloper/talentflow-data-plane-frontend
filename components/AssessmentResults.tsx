@@ -1305,8 +1305,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return entries.length ? entries.join(' | ') : '-';
   };
 
+  // canDownloadPDF: the role's Download Report permission (2026-11-10) — it was
+  // accepted but never read, so Viewer could download every report here.
   const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
-    return candidate.status === 'Completed' && candidate.scoring_status === 'completed';
+    return canDownloadPDF && candidate.status === 'Completed' && candidate.scoring_status === 'completed';
   };
 
   // Handle delete result
@@ -1608,6 +1610,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <DropdownMenuItem
             className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
             disabled={downloadingPDF === candidate.id || !canDownloadResultPdf(candidate)}
+            title={!canDownloadPDF ? "You can view this result, but your role can't download the report" : undefined}
             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
           >
             {downloadingPDF === candidate.id ? (

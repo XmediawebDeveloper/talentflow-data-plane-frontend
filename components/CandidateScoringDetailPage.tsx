@@ -253,7 +253,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // Viewing isn't downloading (2026-11-10).
   const canDownloadResumes = canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode });
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  // Scorecard download: Resume Scoring's own Download Scorecard code, not the
+  // generic legacy canExport flag (2026-11-10).
+  const canExport = isTenantAdmin || hasPermissionCode('scoring:download');
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // View JD tab: clicking the JD id/title asks before leaving this page for

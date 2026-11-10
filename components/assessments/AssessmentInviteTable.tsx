@@ -25,6 +25,7 @@ import {
   isRevocableInvitation,
   canResendInvite,
 } from '@/components/AssessmentInviteActions';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -236,6 +237,9 @@ export default function AssessmentInviteTable({
   onSubmitEmail,
   isSendingChangeEmail,
 }: AssessmentInviteTableProps) {
+  // Resend / Edit / Revoke need Assessments "Invite" (2026-11-10).
+  const { isTenantAdmin: isOwnerForInvites, hasPermissionCode: hasCodeForInvites } = useAuth();
+  const canInviteRows = isOwnerForInvites || hasCodeForInvites('assessments:invite');
   return (
     <>
       {isInitialLoading ? (
@@ -548,6 +552,7 @@ export default function AssessmentInviteTable({
                            Invite Status Tracking popup: Copy Link, View
                            Results/Details, Resend, Edit Email, Edit, Revoke. */
                         const actions = buildInvitationRowActions(invitation, {
+                          canInvite: canInviteRows,
                           onResend,
                           onEditEmail: onStartEditEmail,
                           onEdit,
@@ -575,6 +580,7 @@ export default function AssessmentInviteTable({
             const rowOpensDetails = canOpenResult(invitation);
             const isSelected = selectedIds.has(invitation.id);
             const actions = editingEmailId === invitation.id ? [] : buildInvitationRowActions(invitation, {
+              canInvite: canInviteRows,
               onResend,
               onEditEmail: onStartEditEmail,
               onEdit,

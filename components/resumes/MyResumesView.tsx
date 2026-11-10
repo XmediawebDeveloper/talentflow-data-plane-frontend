@@ -917,7 +917,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const { user, isTenantAdmin, hasPermission, hasPermissionCode, isLoading: authLoading } = useAuth();
   const canViewMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:read');
   const canUploadMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:upload') || hasPermissionCode('my_resumes:create');
-  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
+  // my_resumes:update isn't a role-editor code; Resume Upload Access (my_resumes:upload)
+  // covers folder rename / move too (2026-11-10).
+  const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update') || hasPermissionCode('my_resumes:upload');
   const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');

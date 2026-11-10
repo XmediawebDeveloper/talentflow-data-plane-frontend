@@ -497,7 +497,7 @@ export default function ResumeScoringPage({
   // ✅ RBAC: Get user permissions (bypass for tenant admin)
   const { user, isTenantAdmin, hasPermissionCode } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const canExport = isTenantAdmin || hasPermissionCode('scoring:export');
   // Resume Scoring's own export right — the same check ScoredResumesTable's
   // Export uses, so View by Job and View by Candidates gate it identically.
   const canExportScores = isTenantAdmin || hasPermissionCode('scoring:export');
@@ -3127,7 +3127,7 @@ export default function ResumeScoringPage({
                  above, reactively, once this flips true. */
               setIsBulkProgressMinimized(true);
             }}
-            onRetryFailed={async (item) => {
+            onRetryFailed={!canRunScoring ? undefined : async (item) => {
               try {
                 // Update item status to "Scoring in progress"
                 setProgressData(prev => prev.map(p =>
@@ -5142,7 +5142,7 @@ export default function ResumeScoringPage({
                  above, reactively, once this flips true. */
               setIsBulkProgressMinimized(true);
             }}
-            onRetryFailed={async (item) => {
+            onRetryFailed={!canRunScoring ? undefined : async (item) => {
               try {
                 // Update item status to "Scoring in progress"
                 setProgressData(prev => prev.map(p =>
@@ -5995,7 +5995,7 @@ export default function ResumeScoringPage({
                near showBulkProgressFromJob once this flips true. */
             setIsBulkProgressMinimized(true);
           }}
-          onRetryFailed={async (item) => {
+          onRetryFailed={!canRunScoring ? undefined : async (item) => {
             try {
               console.log('[Retry] Starting retry for:', item.candidateName, 'resumeId:', item.resumeId, 'jobId:', item.jobId);
 

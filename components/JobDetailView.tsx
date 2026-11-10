@@ -3363,7 +3363,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {onUnarchive && (
                   <Button
                     variant="primary"
-                    onClick={() => onUnarchive(job)}
+                    // Same lock as Archive (2026-11-10): it had none, so Viewer saw it enabled.
+                    onClick={() => { if (!archiveLocked) onUnarchive(job); }}
+                    aria-disabled={archiveLocked || undefined}
+                    className={archiveLocked ? 'opacity-60 cursor-not-allowed' : undefined}
+                    title={archiveLocked ? 'You do not have permission to unarchive job descriptions' : 'Unarchive this JD'}
                     icon={<ArchiveRestore className="w-4 h-4" />}
                   >
                     Unarchive
@@ -4528,7 +4532,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 jdVersion={job.versionNumber ?? null}
                 jobVersionScope={job.id}
                 assessmentVersionScope="all"
-                canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
+                canDownloadPDF={isTenantAdmin || hasPermissionCode('assessments:download_report')}
                 canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
                 formatCandidateName={formatCandidateFirstName}
                 /* Invite — beside More Filters, and on the no-results state. */
@@ -5177,7 +5181,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
              stays up and reloads its rows once the send lands. */
           refreshSignal={trackerRefreshSignal}
           inviteMoreDeniedReason="You do not have permission to invite candidates to an AI interview"
-          onInviteMore={canInviteToAIInterview ? () => {
+          onInviteMore={canInviteToAIInterview && canInviteJdAIInterview ? () => {
             const trackedId = trackAIInterviewConfig.id;
             setInviteDialog({
               kind: 'interview',

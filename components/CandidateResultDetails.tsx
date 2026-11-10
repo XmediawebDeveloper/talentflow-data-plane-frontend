@@ -9,6 +9,7 @@ import { proctoringService, ProctoringEvent, AssessmentShareBarCheck } from '@/l
 import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
@@ -194,6 +195,10 @@ export default function CandidateResultDetails({
   breadcrumbItems,
   onCandidateLoaded,
 }: CandidateResultDetailsProps) {
+  // Report download is an action (2026-11-10): Assessments "Download Report".
+  // Viewer (Assessments: Partial) sees the result but can't take the file.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canDownloadReport = isTenantAdmin || hasPermissionCode('assessments:download_report');
   const router = useRouter();
   /* The job, from this result — the header's job link and the View JD
      header alike. Inside that job's own Job Details page it closes this view
@@ -1287,7 +1292,10 @@ export default function CandidateResultDetails({
                     border weight, icon size, gap), which is what makes the two
                     line up rather than merely sit beside each other. */}
                 <button
+                  aria-disabled={!canDownloadReport}
+                  title={canDownloadReport ? undefined : "You can view this result, but your role can't download the report"}
                   onClick={async () => {
+                    if (!canDownloadReport) return;
                     // Single-candidate report PDF, built in the browser from the
                     // result this page already loaded, in the AI interview
                     // report's layout (lib/reports/assessmentReportPdf). Same
@@ -1326,7 +1334,7 @@ export default function CandidateResultDetails({
                       toast.error('Failed to export result PDF. Please try again.');
                     }
                   }}
-                  className="tf-btn tf-btn-primary px-3 sm:px-4 py-2 text-sm bg-brand-blue border border-brand-blue hover:bg-brand-blue-2 transition-colors flex gap-1.5 shadow-none"
+                  className={`tf-btn tf-btn-primary px-3 sm:px-4 py-2 text-sm bg-brand-blue border border-brand-blue hover:bg-brand-blue-2 transition-colors flex gap-1.5 shadow-none ${!canDownloadReport ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <Download className="w-4 h-4" />
                   <span>Report</span>
