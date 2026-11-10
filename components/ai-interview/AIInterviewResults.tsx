@@ -63,7 +63,8 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
 import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, InviteTimelineLines, hasMoreTimelineHistory, loadInterviewHistory } from '@/components/AIInterviewInviteTable';
 import { RESULTS_TIMELINE_LIMIT, TimelineHistoryDialog, ViewHistoryButton } from '@/components/ui/timeline-history-dialog';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 
 interface AIInterviewResultsProps {
   configId: string;
@@ -1325,25 +1326,23 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
         {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
             colours: red for revoke, brand blue for resend. */}
-        <ConfirmationDialog
+        <RevokeLinkModal
           isOpen={bulkAction === 'revoke'}
-          onClose={() => { if (!isBulkWorking) setBulkAction(null); }}
+          kind="interview"
+          bulk={{ scope: 'selected', count: revocableSelected.length }}
+          targets={revocableSelected.map((s) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: (s as ScopedSession)._interview_version ?? interviewVersion, email: s.candidate_email }))}
+          onCancel={() => { if (!isBulkWorking) setBulkAction(null); }}
           onConfirm={runBulkAction}
-          title="Revoke invitations for selected candidates?"
-          description={`The interview link for ${revocableSelected.length} selected candidate${revocableSelected.length === 1 ? '' : 's'} will stop working immediately.`}
-          confirmText={isBulkWorking ? 'Revoking…' : `Yes, revoke ${revocableSelected.length}`}
-          cancelText="Cancel"
-          variant="danger"
+          isLoading={isBulkWorking}
         />
-        <ConfirmationDialog
+        <ResendLinkModal
           isOpen={bulkAction === 'resend'}
-          onClose={() => { if (!isBulkWorking) setBulkAction(null); }}
+          kind="interview"
+          bulk={{ count: resendableSelected.length }}
+          targets={resendableSelected.map((s) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: (s as ScopedSession)._interview_version ?? interviewVersion, email: s.candidate_email }))}
+          onCancel={() => { if (!isBulkWorking) setBulkAction(null); }}
           onConfirm={runBulkAction}
-          title="Resend invitations to selected candidates?"
-          description={`A fresh interview link will be emailed to ${resendableSelected.length} selected candidate${resendableSelected.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-          confirmText={isBulkWorking ? 'Sending…' : `Yes, resend to ${resendableSelected.length}`}
-          cancelText="Cancel"
-          variant="info"
+          isLoading={isBulkWorking}
         />
 
         {/* Expanded filters — each field filters the list the moment it
@@ -2254,7 +2253,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="tf-panel p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="tf-body-secondary">
+              <span className="tf-body-secondary max-sm:text-center">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates

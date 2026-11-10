@@ -38,7 +38,7 @@ const WARNING_SECONDS = 60; // Show warning 60 seconds before logout
 
 export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: SessionTimeoutProviderProps) {
   const router = useRouter();
-  const [timeoutMinutes, setTimeoutMinutes] = useState(30); // Default 30 minutes
+  const [timeoutMinutes, setTimeoutMinutes] = useState(1440); // Default 24 hours
   const [isWarningVisible, setIsWarningVisible] = useState(false);
   const [remainingSeconds, setRemainingSeconds] = useState(WARNING_SECONDS);
 

@@ -1438,6 +1438,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       return (
                         <MobileRecordCard
                           key={ticket.id}
+                          className="tf-jdv-actions-inline"
                           onClick={openTicket}
                           idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticketNumber}</span>}
                           title={ticket.title}
@@ -2156,6 +2157,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       return (
                         <MobileRecordCard
                           key={ticket.id}
+                          className="tf-jdv-actions-inline"
                           onClick={openTicket}
                           idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticketNumber}</span>}
                           title={ticket.title}
@@ -3090,6 +3092,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {internalTickets.slice(0, 5).map(ticket => (
                       <MobileRecordCard
                         key={ticket.id}
+                        className="tf-jdv-actions-inline"
                         onClick={() => openInternal(ticket)}
                         idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticket_number}</span>}
                         title={ticket.title}
@@ -3330,6 +3333,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       return (
                         <MobileRecordCard
                           key={ticket.id}
+                          className="tf-jdv-actions-inline"
                           onClick={openTicket}
                           idBadge={<span className="inline-block max-w-full truncate tf-id-chip">{ticket.ticket_number}</span>}
                           title={ticket.title}

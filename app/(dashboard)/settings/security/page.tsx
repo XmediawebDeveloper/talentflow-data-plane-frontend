@@ -130,7 +130,7 @@ export default function SecurityPage() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [settings, setSettings] = useState<Partial<UserSettings>>({
     two_factor_enabled: false,
-    session_timeout_minutes: 30,
+    session_timeout_minutes: 1440,
   });
 
   // Password change state
@@ -864,7 +864,7 @@ export default function SecurityPage() {
           </div>
           <div className="relative" title={!canManage ? 'You do not have permission to manage security settings' : undefined}>
             <FilterSelect
-              value={settings.session_timeout_minutes?.toString() || '30'}
+              value={settings.session_timeout_minutes?.toString() || '1440'}
               onChange={(v) => {
                 if (!canManage) return;
                 handleSessionTimeoutChange(v);
@@ -877,6 +877,7 @@ export default function SecurityPage() {
                 { value: '60', label: '1 hour' },
                 { value: '120', label: '2 hours' },
                 { value: '480', label: '8 hours' },
+                { value: '1440', label: '24 hours' },
               ]}
               className={`w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2 sm:py-2 rounded-lg sm:rounded-lg border-gray-300 text-black disabled:opacity-50 ${!canManage ? 'opacity-50 cursor-not-allowed disabled:cursor-not-allowed' : ''}`}
             />

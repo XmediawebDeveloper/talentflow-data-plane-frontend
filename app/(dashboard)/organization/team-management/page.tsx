@@ -546,7 +546,7 @@ export default function TeamManagementPage() {
   const canViewUsageTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
   const canViewAnalyticsTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
 
-  // Inner view tabs — single source of truth so the mobile pill row and the
+  // Inner view tabs — single source of truth so the mobile slider and the
   // desktop underline row stay identical (labels, icons, permission gating).
   type InnerTabKey = 'teams' | 'usage' | 'analytics' | 'history';
   const innerTabs: { key: InnerTabKey; label: string; short: string; icon: typeof Users; enabled: boolean; denyMsg?: string }[] = [
@@ -806,8 +806,11 @@ export default function TeamManagementPage() {
                 {(() => {
                   const activeIndex = innerTabs.findIndex((t) => t.key === shownTab);
                   return (
+                    /* No role="tablist"/"tab" here, like the Teams / Chat slider in
+                       OrganizationTabs: the phone pill-tab CSS in globals.css restyles every
+                       [role=tab], which turned this slider into pills. */
                     <div
-                      role="tablist"
+                      role="group"
                       aria-label="Team management views"
                       className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10"
                       style={{ gridTemplateColumns: `repeat(${innerTabs.length}, minmax(0, 1fr))` }}
@@ -829,8 +832,7 @@ export default function TeamManagementPage() {
                           <button
                             key={t.key}
                             type="button"
-                            role="tab"
-                            aria-selected={active}
+                            aria-pressed={active}
                             aria-disabled={!t.enabled}
                             title={!t.enabled ? t.denyMsg : t.label}
                             onClick={() => selectInnerTab(t)}
@@ -853,11 +855,13 @@ export default function TeamManagementPage() {
                 })()}
               </div>
 
-              {/* Desktop (lg+): underline tabs */}
+              {/* Desktop (lg+): underline tabs. `max-lg:!hidden` because the phone pill-tab
+                  CSS in globals.css forces every [role=tablist] to display:flex, which
+                  showed this row under the slider as a second tab bar. */}
               <div
                 role="tablist"
                 aria-label="Team management views"
-                className="hidden overflow-x-auto scrollbar-hide tf-hide-native-scrollbar border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
+                className="hidden max-lg:!hidden overflow-x-auto scrollbar-hide tf-hide-native-scrollbar border-b border-gray-200 dark:border-slate-700 bg-gray-50/60 dark:bg-slate-800/40 px-2 sm:px-3 lg:flex"
               >
                 {innerTabs.map((t) => {
                   const Icon = t.icon;
