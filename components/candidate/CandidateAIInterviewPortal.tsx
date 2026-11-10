@@ -295,6 +295,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // consent gate. Blocks accepting until they return to fullscreen so the
   // interview can never start outside fullscreen.
   const [finalConsentFsExited, setFinalConsentFsExited] = useState(false);
+  // Whether fullscreen was ever on during the final consent gate — picks the
+  // overlay wording: "you exited" only if they really did; otherwise the
+  // browser refused the automatic request and it is a plain "enter" step.
+  const [finalConsentFsWasOn, setFinalConsentFsWasOn] = useState(false);
   // "Hide the screen-share bar" gate (vision-LLM verified) shown before start.
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
@@ -1782,6 +1786,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     try {
       const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
+      // Ask for fullscreen THE MOMENT the picker closes — not after the
+      // recorder/mic setup below. The browser allows it only within a few
+      // seconds of the click; that setup took long enough on slower laptops
+      // that the later request was refused ("TypeError: not granted") and the
+      // candidate got the "Return to Fullscreen" overlay instead.
+      if (!isFullscreen()) void requestFullscreen().catch(() => { /* final consent re-asks */ });
       // Build a combined stream: screen video + mixed audio (tab + mic)
       const recordingStream = await buildRecordingStreamWithAudio(screenStream);
       const screenMime = SCREEN_MIME_TYPES
@@ -2770,10 +2780,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   useEffect(() => {
     if (step !== 'final_consent') return;
     const ev = getFullscreenChangeEvent();
-    const sync = () => setFinalConsentFsExited(!isFullscreen());
+    const sync = () => {
+      const on = isFullscreen();
+      if (on) setFinalConsentFsWasOn(true);
+      setFinalConsentFsExited(!on);
+    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'F11') { try { e.preventDefault(); } catch { /* ignore */ } }
     };
+    setFinalConsentFsWasOn(false); // fresh arrival on the gate
     sync();
     document.addEventListener(ev, sync);
     window.addEventListener('keydown', onKey, true);
@@ -3545,9 +3560,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
                 <Maximize2 className="w-8 h-8 text-warning" />
               </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}</h2>
               <p className="tf-body-secondary mb-6">
-                You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.
+                {finalConsentFsWasOn
+                  ? 'You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.'
+                  : 'Screen sharing is on. The interview runs in fullscreen — click below to switch to fullscreen and continue.'}
               </p>
               <button
                 onClick={async () => {
@@ -3556,7 +3573,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 }}
                 className="w-full flex items-center justify-center gap-2 bg-warning hover:bg-warning text-white font-semibold py-3 rounded-xl transition-all"
               >
-                <Maximize2 className="w-4 h-4" />Return to Fullscreen
+                <Maximize2 className="w-4 h-4" />{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}
               </button>
             </div>
           </div>

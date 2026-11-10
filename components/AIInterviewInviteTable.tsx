@@ -1224,9 +1224,10 @@ export default function AIInterviewInviteTable({
                   ),
                 },
                 {
-                  // Every milestone on its own line, oldest first. align-top so
-                  // the first line sits level with the other columns.
-                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
+                  // Every milestone on its own line, oldest first. Centred like
+                  // the other columns, so a lone "Invited" line is not stuck at
+                  // the top of a taller row.
+                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
                   content: (
                     <div className="tf-meta">
                       {events.length > 0 ? (

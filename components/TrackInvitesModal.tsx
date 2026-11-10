@@ -956,8 +956,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                          way the Assessments page's Invite Status Tracking
                          table shows it. This used to print only the newest
                          with a "+N" counter, which hid the progression
-                         behind a tooltip. align-top so the first line sits
-                         level with the other columns' single line. */
+                         behind a tooltip. Centred like the other columns,
+                         so a lone "Invited" line is not stuck at the top. */
                       /* Invite Source — how this candidate was actually
                          invited, from the invitation's own resume_id. */
                       const inviteSourceCell = (
@@ -966,7 +966,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                         </td>
                       );
                       const timelineCell = (
-                      <td className={`tf-td ${tdY} align-top tf-meta whitespace-nowrap`}>
+                      <td className={`tf-td ${tdY} align-middle tf-meta whitespace-nowrap`}>
                         {(() => {
                           const events = timelineEvents(invitation, timelineLimit);
                           return (
