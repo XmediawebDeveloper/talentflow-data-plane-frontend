@@ -229,7 +229,9 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
   // Handle OTP paste
   const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    const paste = e.clipboardData.getData('text').trim();
+    // Digits only: the OTP email shows each digit in its own box, so a copy
+    // arrives as digits split by tabs, spaces or new lines.
+    const paste = e.clipboardData.getData('text').replace(/\D/g, '');
     if (!/^\d{6}$/.test(paste)) return;
 
     const newOtp = paste.split('');

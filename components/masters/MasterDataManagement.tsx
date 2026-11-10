@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ROW_ACTION_BUTTON_CLASS } from '@/components/ResultRowDetails';
 import { toast } from '@/components/ui/enhanced-toast';
+import { useAuth } from '@/components/providers/AuthProvider';
 import {
   masterDataService,
   ExperienceLevel,
@@ -79,6 +80,14 @@ const typeConfig = {
 };
 
 export default function MasterDataManagement({ type, embedded = false }: MasterDataManagementProps) {
+  // Everyone who can open Job Descriptions can SEE these lists; changing them
+  // needs Job Descriptions Access (edit JDs) or Manage Settings — the same rule
+  // the backend checks (user decision 2026-11-10). Viewer stays read-only.
+  // Exact codes, not the canManageSettings flag: that one is also on for
+  // anyone who can merely SEE Settings (Viewer), so it made Viewer editable.
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canEdit = isTenantAdmin || hasPermissionCode('jd:update') || hasPermissionCode('settings:general');
+  const lock = canEdit ? {} : { 'aria-disabled': true, title: "You can view this list, but your role can't change it", style: { opacity: 0.5, cursor: 'not-allowed' } };
   const [items, setItems] = useState<(ExperienceLevel | EducationLevel | IndustryType)[]>([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
@@ -159,6 +168,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   };
 
   const openCreateModal = () => {
+    if (!canEdit) return;
     setEditingItem(null);
     setFormData({
       code: '',
@@ -173,6 +183,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   };
 
   const openEditModal = (item: BaseItem) => {
+    if (!canEdit) return;
     setEditingItem(item);
     const experienceItem = item as ExperienceLevel;
     const educationItem = item as EducationLevel;
@@ -273,6 +284,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   };
 
   const handleDelete = async (id: number) => {
+    if (!canEdit) return;
     try {
       if (type === 'experience') {
         await masterDataService.deleteExperienceLevel(id);
@@ -297,6 +309,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
   // Delete can be a real, permanent removal without losing the ability to
   // park a level without discarding it.
   const handleToggleActive = async (item: BaseItem) => {
+    if (!canEdit) return;
     const nextActive = !item.is_active;
     setTogglingId(item.id);
     try {
@@ -358,6 +371,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
       <button
         onClick={openCreateModal}
         className="tf-btn tf-btn-primary shrink-0 bg-brand-blue px-4 py-2 text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors hover:bg-brand-blue-2 whitespace-normal"
+        {...lock}
       >
         <Plus className="h-4 w-4" />
         Add New
@@ -401,6 +415,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
           <button
             onClick={openCreateModal}
             className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+            {...lock}
           >
             <Plus className="h-4 w-4" />
             Add New
@@ -456,6 +471,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
             <button
               onClick={openCreateModal}
               className="tf-btn tf-btn-primary mt-5 rounded-xl bg-brand-blue px-4 py-2.5 text-sm shadow-md shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg whitespace-normal hover:bg-brand-blue"
+              {...lock}
             >
               <Plus className="h-4 w-4" />
               Add your first item
@@ -532,6 +548,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                             onClick={() => openEditModal(item)}
                             className="tf-btn tf-btn-secondary h-8 w-8 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue whitespace-normal gap-0 font-normal"
                             aria-label="Edit" title="Edit"
+                            {...lock}
                           >
                             <Edit2 className="h-4 w-4" />
                           </button>
@@ -545,6 +562,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                             }`}
                             aria-label={item.is_active ? 'Deactivate' : 'Activate'}
                             title={item.is_active ? 'Deactivate' : 'Activate'}
+                            {...lock}
                           >
                             {togglingId === item.id ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
@@ -555,9 +573,10 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                             )}
                           </button>
                           <button
-                            onClick={() => setShowDeleteConfirm(item.id)}
+                            onClick={() => { if (canEdit) setShowDeleteConfirm(item.id); }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
                             aria-label="Delete permanently" title="Delete permanently"
+                            {...lock}
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
@@ -570,11 +589,11 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                             </button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
+                            <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
                               <Edit2 className="h-4 w-4 text-menu-icon-edit" />
                               <span>Edit</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleToggleActive(item)}>
+                            <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleToggleActive(item)}>
                               {item.is_active ? (
                                 <PowerOff className="h-4 w-4 text-menu-icon-archive" />
                               ) : (
@@ -582,7 +601,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                               )}
                               <span>{item.is_active ? 'Deactivate' : 'Activate'}</span>
                             </DropdownMenuItem>
-                            <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-red-600" onSelect={() => setShowDeleteConfirm(item.id)}>
+                            <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-red-600" onSelect={() => setShowDeleteConfirm(item.id)}>
                               <Trash2 className="h-4 w-4 text-red-600" />
                               <span>Delete</span>
                             </DropdownMenuItem>
@@ -645,11 +664,11 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                       </button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                      <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
+                      <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => openEditModal(item)}>
                         <Edit2 className="h-4 w-4 text-menu-icon-edit" />
                         <span>Edit</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleToggleActive(item)}>
+                      <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer" onSelect={() => handleToggleActive(item)}>
                         {item.is_active ? (
                           <PowerOff className="h-4 w-4 text-menu-icon-archive" />
                         ) : (
@@ -657,7 +676,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                         )}
                         <span>{item.is_active ? 'Deactivate' : 'Activate'}</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-red-600" onSelect={() => setShowDeleteConfirm(item.id)}>
+                      <DropdownMenuItem disabled={!canEdit} className="flex items-center gap-2.5 px-4 py-2.5 text-sm cursor-pointer text-red-600" onSelect={() => setShowDeleteConfirm(item.id)}>
                         <Trash2 className="h-4 w-4 text-red-600" />
                         <span>Delete</span>
                       </DropdownMenuItem>

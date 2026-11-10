@@ -145,7 +145,9 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
   // Entry-point permissions (raw codes): starting AI Talent Match / scoring FROM a
   // job description needs the JD-level entry point as well as the main
   // permission — same rule as JobDetailView.
-  const { hasPermissionCode } = useAuth();
+  const { hasPermissionCode, isTenantAdmin } = useAuth();
+  // Viewing isn't downloading (2026-11-10): JD Export, same as the JD list.
+  const canDownloadJd = isTenantAdmin || hasPermissionCode('jd:export');
   const isAdminUser = user?.role === 'tenant_admin';
 
   // Get permissions for Quick Actions (using camelCase as per tenant.ts)
@@ -222,6 +224,7 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
   };
 
   const handleDownload = () => {
+    if (!canDownloadJd) return;
     if (job) {
       const content = `
 Job Title: ${job.title}
@@ -485,8 +488,9 @@ ${job.certifications?.join(', ') || 'N/A'}
                 variant="secondary"
                 size="sm"
                 onClick={handleDownload}
-               
-                aria-label="Download" title="Download"
+                className={!canDownloadJd ? 'opacity-50 cursor-not-allowed' : undefined}
+                aria-disabled={!canDownloadJd}
+                aria-label="Download" title={canDownloadJd ? 'Download' : "You can view this job description, but your role doesn't allow downloading it"}
               >
                 <Download className="w-5 h-5" />
               </Button>

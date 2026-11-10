@@ -37,6 +37,7 @@ import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 import { ResumeHeadline, ResumeLine } from '@/components/resumes/ResumeDocLine';
 import { formatLocationGroups } from '@/lib/utils/jobOpeningDisplay';
 import { Skeleton } from '@/components/ui/skeleton';
+import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -249,8 +250,12 @@ function byNewestVersion(a: any, b: any): number {
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10).
+  const canDownloadResumes = canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode });
   const { hasPlanFeature, isPlanLocked } = usePlanLock();
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  // Scorecard download: Resume Scoring's own Download Scorecard code, not the
+  // generic legacy canExport flag (2026-11-10).
+  const canExport = isTenantAdmin || hasPermissionCode('scoring:download');
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // View JD tab: clicking the JD id/title asks before leaving this page for
@@ -519,6 +524,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
   // Each version is its own resume record, so it downloads by its own id.
   const handleVersionDownload = async (version: any, versionNumber: number) => {
+    if (!canDownloadResumes) return;
     try {
       const { resumeService } = await import('@/lib/services/resumeService');
       const blob = await resumeService.download(version.id);
@@ -2807,8 +2813,9 @@ Best regards`);
                                 <button
                                   onClick={() => handleVersionDownload(version, versionNumber)}
                                   aria-label="Download this version"
-                                  title="Download this version"
-                                  className={`p-2 rounded-md transition-colors cursor-pointer ${
+                                  aria-disabled={!canDownloadResumes}
+                                  title={canDownloadResumes ? 'Download this version' : DOWNLOAD_BLOCKED_MESSAGE}
+                                  className={`p-2 rounded-md transition-colors ${canDownloadResumes ? 'cursor-pointer' : 'opacity-50 cursor-not-allowed'} ${
                                     isLatest
                                       ? 'text-brand-blue hover:bg-brand-blue/10'
                                       : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
@@ -3665,13 +3672,14 @@ Best regards`);
                     </div>
                     <button
                       type="button"
-                      className="tf-preview-btn"
+                      className={`tf-preview-btn ${!canDownloadResumes ? 'opacity-50 cursor-not-allowed' : ''}`}
                       onClick={() => handleVersionDownload(
                         { id: versionPreview.id, fileName: versionPreview.fileName },
                         versionPreview.versionNumber,
                       )}
                       aria-label="Download"
-                      title="Download"
+                      aria-disabled={!canDownloadResumes}
+                      title={canDownloadResumes ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
                     >
                       <Download className="w-4 h-4" />
                       <span className="hidden sm:inline">Download</span>

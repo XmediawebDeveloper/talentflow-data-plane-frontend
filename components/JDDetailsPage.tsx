@@ -464,8 +464,8 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="tf-body-muted">
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between max-sm:flex-col max-sm:justify-center max-sm:gap-2">
+                <div className="tf-body-muted max-sm:text-center">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, results.total)} of {results.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
@@ -764,8 +764,8 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
 
             {/* Pagination */}
             {totalPages > 1 && (
-              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-                <div className="tf-body-muted">
+              <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between max-sm:flex-col max-sm:justify-center max-sm:gap-2">
+                <div className="tf-body-muted max-sm:text-center">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, resumes.total)} of {resumes.total} results
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">

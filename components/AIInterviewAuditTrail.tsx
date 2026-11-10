@@ -784,8 +784,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
         </div>
 
         {/* Footer with Pagination */}
-        <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3">
-          <div className="tf-body-secondary">
+        <div className="p-4 bg-gray-50 border-t border-gray-200 flex flex-wrap items-center justify-between max-sm:justify-center gap-3">
+          <div className="tf-body-secondary max-sm:text-center">
             Showing {activities.length} of {total} activity entries
           </div>
           {total > pageSize && (

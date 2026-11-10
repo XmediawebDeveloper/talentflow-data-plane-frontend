@@ -211,8 +211,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     return 'Pending';
   };
 
+  // canDownloadPDF: the role's Download Report permission (2026-11-10) — it was
+  // accepted but never read, so Viewer could download every report here.
   const canDownloadResultPdf = (result: AssessmentResult): boolean => {
-    return getResultStatus(result) === 'Complete' && result.scoring_status === 'completed';
+    return canDownloadPDF && getResultStatus(result) === 'Complete' && result.scoring_status === 'completed';
   };
 
   // Helper: status badge colors
@@ -1107,9 +1109,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             variant="secondary"
                             size="sm"
                             onClick={() => handleDownloadPDF(result.id)}
-                            disabled={downloadingPDF === result.id}
+                            disabled={downloadingPDF === result.id || !canDownloadPDF}
                             className="w-9 h-9"
-                            title="Download PDF Report"
+                            title={canDownloadPDF ? 'Download PDF Report' : "You can view this result, but your role can't download the report"}
                             aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
                           >
                             {downloadingPDF === result.id ? (
@@ -1397,7 +1399,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     variant="secondary"
                     size="sm"
                     onClick={() => handleDownloadPDF(result.id)}
-                    disabled={downloadingPDF === result.id}
+                    disabled={downloadingPDF === result.id || !canDownloadPDF}
+                    title={canDownloadPDF ? undefined : "You can view this result, but your role can't download the report"}
                     icon={downloadingPDF === result.id ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : (

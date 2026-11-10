@@ -873,8 +873,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               })}
             </div>
             {total > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -1117,7 +1117,21 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                     };
                     const key = rowKey(row);
                     return (
-                      <tr key={key} className="transition-colors hover:bg-brand-blue/5">
+                      <tr
+                        key={key}
+                        /* Clicking anywhere on the row acts as View; the checkbox,
+                           links and action buttons keep their own behaviour.
+                           Clicks inside a portal (menu / download dialog) bubble
+                           through React but are not in this row's DOM — ignored. */
+                        onClick={(e) => {
+                          const t = e.target as HTMLElement;
+                          if (!e.currentTarget.contains(t)) return;
+                          if (t.closest('a, button, input, select, label, [role="button"], [role="menuitem"]')) return;
+                          if (window.getSelection()?.toString()) return; // selecting text, not opening
+                          openSession(row);
+                        }}
+                        className="transition-colors cursor-pointer hover:bg-brand-blue/5"
+                      >
                         <td className="tf-td w-12 tf-sticky-col-left">
                           <button
                             type="button"
@@ -1227,8 +1241,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
             </MobileRecordList>
 
             {total > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>

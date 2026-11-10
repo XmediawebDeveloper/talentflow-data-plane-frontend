@@ -2147,41 +2147,57 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         <td className={`${portaled ? 'w-px px-3' : 'px-4'} py-3 text-right whitespace-nowrap tf-sticky-col`} onClick={portaled ? (e) => e.stopPropagation() : undefined}>
-                          <>
-                          <ResultRowActions session={session} onView={() => handleViewDetails(session)} />
-                          {/* ⋮ beside View / Download: Create / Send Assessment |
-                              AI Interview — the Scored Resumes row's invite
-                              entries, for this row's candidate. Not in Job
-                              Details (portaled): there the toolbar's Actions
-                              covers Create / Send for the ticked rows. */}
-                          {onOpenInviteDialog && !portaled && (
-                            <span className="inline-flex ml-1.5 align-middle" onClick={(e) => e.stopPropagation()}>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    title="Actions"
-                                    aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
-                                    className="!w-8 !h-8 !px-0"
-                                  >
-                                    <MoreVertical className="w-4 h-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                                  <RowInviteItems
-                                    onInvite={(kind) => onOpenInviteDialog(kind, [{
-                                      id: session.resume_id || session.id,
-                                      name: session.candidate_name || '',
-                                      email: session.candidate_email || '',
-                                      resumeId: session.resume_id,
-                                    }])}
-                                  />
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </span>
-                          )}
-                          </>
+                          {/* Row ⋮ — View Details, Create / Send (not in Job
+                              Details, where the toolbar's Actions covers the
+                              ticked rows), Download Report. Same menu as the
+                              Assessment results row. */}
+                          <span className="inline-flex align-middle" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button
+                                  type="button"
+                                  className={portaled ? ROW_ACTION_BUTTON_CLASS : 'h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30'}
+                                  aria-label={`Actions for ${session.candidate_name || 'candidate'}`}
+                                  title="Actions"
+                                >
+                                  <MoreVertical className="w-4 h-4" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className={portaled ? ROW_MENU_CONTENT_CLASS : onOpenInviteDialog ? 'w-56' : 'w-48'}>
+                                <DropdownMenuItem className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'} onClick={() => handleViewDetails(session)}>
+                                  <Eye className="w-4 h-4 text-menu-icon-view" />
+                                  <span>View Details</span>
+                                </DropdownMenuItem>
+                                {onOpenInviteDialog && !portaled && (
+                                  <>
+                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                    <RowInviteItems
+                                      onInvite={(kind) => onOpenInviteDialog(kind, [{
+                                        id: session.resume_id || session.id,
+                                        name: session.candidate_name || '',
+                                        email: session.candidate_email || '',
+                                        resumeId: session.resume_id,
+                                      }])}
+                                    />
+                                    <DropdownMenuSeparator className="my-1 bg-gray-100" />
+                                  </>
+                                )}
+                                <DropdownMenuItem
+                                  className={portaled ? ROW_MENU_ITEM_CLASS : 'gap-2'}
+                                  disabled={!canDownloadReports || !canTryReport(session) || downloadingReportId === session.id}
+                                  title={!canDownloadReports ? AI_REPORT_DOWNLOAD_DENIED : !canTryReport(session) ? 'Report available once the interview is evaluated' : undefined}
+                                  onClick={() => handleDownloadReport(session.id)}
+                                >
+                                  {downloadingReportId === session.id ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+                                  ) : (
+                                    <Download className="w-4 h-4 text-menu-icon-download" />
+                                  )}
+                                  <span>Download Report</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </span>
                         </td>
                       </tr>
                       {/* The row's moved columns, in a nested table under it —
@@ -2237,7 +2253,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         {!isLoading && !isUnstarted && paginatedSessions.length > 0 && totalPages > 1 && (
           <div className="tf-panel p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <span className="tf-body-secondary">
+              <span className="tf-body-secondary max-sm:text-center">
                 Showing <span className="font-medium text-gray-900">{((currentPage - 1) * PAGE_SIZE) + 1}</span> to{' '}
                 <span className="font-medium text-gray-900">{Math.min(currentPage * PAGE_SIZE, totalSessions)}</span> of{' '}
                 <span className="font-medium text-gray-900">{totalSessions}</span> candidates

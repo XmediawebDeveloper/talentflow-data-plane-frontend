@@ -280,11 +280,13 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
     !tenant?.features || (tenant.features as Record<string, unknown>)[f] === true;
   const createSendDenied = (kind: InviteKind): string | null => {
     if (kind === 'assessment') {
-      if (!(isTenantAdmin || hasPermission('canCreateAssessments'))) return 'You do not have permission to create or send assessments';
+      // The JD's own "Invite to Assessment" plus the module's Create or Invite
+      // (same rule as the job page, JobDetailView canInviteJdAssessment; 2026-11-10).
+      if (!(isTenantAdmin || (hasPermissionCode('jd:invite_assessment') && (hasPermission('canCreateAssessments') || hasPermissionCode('assessments:invite'))))) return 'You do not have permission to create or send assessments';
       if (!featureOn('assessment')) return 'Assessments not enabled';
       return hasPlanFeature('assessment') ? null : PLAN_LOCKED_MESSAGE;
     }
-    if (!(isTenantAdmin || hasPermission('canCreateAIInterviews') || hasPermission('canInviteAIInterviews'))) return 'You do not have permission to create or send AI interviews';
+    if (!(isTenantAdmin || (hasPermissionCode('jd:invite_ai_interview') && (hasPermission('canCreateAIInterviews') || hasPermissionCode('ai_interview:invite'))))) return 'You do not have permission to create or send AI interviews';
     if (!featureOn('ai_interview')) return 'AI Interviews not enabled';
     return hasPlanFeature('ai_interview') ? null : PLAN_LOCKED_MESSAGE;
   };
@@ -1267,7 +1269,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                 </div>
               )}
               {(configHref || onCreateNew) && (
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                <div className="flex w-full flex-row items-center gap-2 sm:w-auto sm:justify-end">
                   {configHref && configDisabled && (
                     // Permission-locked: same Button, greyed out, tooltip only.
                     <Button
@@ -1276,7 +1278,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                       aria-disabled
                       onClick={() => { /* locked: tooltip only */ }}
                       title="You do not have permission to manage job configuration"
-                      className="w-full sm:w-auto opacity-50 cursor-not-allowed disabled:opacity-50"
+                      className="shrink-0 opacity-50 cursor-not-allowed disabled:opacity-50"
                     >
                       <Settings className="w-4 h-4" />
                       Config
@@ -1286,7 +1288,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                     // Config shares Create New Job's exact size/shape by using the
                     // same Button (size md). It stays `secondary` — a neutral nav
                     // action — against Create's `primary` CTA, per the design system.
-                    <Button asChild variant="secondary" size="md" className="w-full sm:w-auto">
+                    <Button asChild variant="secondary" size="md" className="shrink-0">
                       <Link href={configHref}>
                         <Settings className="w-4 h-4" />
                         Config
@@ -1301,7 +1303,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
                       aria-disabled={onCreateNewDisabled}
                       title={onCreateNewDisabled ? 'You do not have permission to create job descriptions' : undefined}
                       icon={<Plus className="w-4 h-4" />}
-                      className={`w-full sm:w-auto ${onCreateNewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                      className={`min-w-0 flex-1 sm:flex-none ${onCreateNewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Create New Job
                     </Button>
@@ -2741,7 +2743,7 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
           <div className="tf-card p-3 sm:p-4 mt-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
               {/* Left: Items per page selector and showing info */}
-              <div className="flex flex-wrap items-center gap-3 sm:gap-4">
+              <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 sm:gap-4">
                 <div className="flex items-center gap-2">
                   <span className="tf-body-secondary">Show:</span>
                   <FilterSelect

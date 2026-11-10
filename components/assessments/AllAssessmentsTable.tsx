@@ -1619,8 +1619,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         onToggle={() => toggleSelected(row.id)}
                         label={row.jobName}
                         selectionActive={selectedIds.size > 0}
+                        inline
                       />
-                      <div className="flex items-start justify-between gap-2">
+                      {/* Select seal and name on one line: the seal sits level with this row, pl-7 clears it. */}
+                      <div className="flex items-start justify-between gap-2 pl-7">
                         {/* Phones / tablets: the name in full (wraps), as the Job Openings card; "…" from lg. */}
                         <div className="min-w-0 flex-1 flex flex-wrap lg:flex-nowrap items-center gap-1.5">
                           <span
@@ -1928,9 +1930,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   </button>
                 }
                 idBadge={row.jobId ? <JobIdBadge>{row.jobId}</JobIdBadge> : undefined}
-                badges={<StatusBadge status={row.status} />}
+                /* The job's Disabled / Archived tag sits beside the status on the top
+                   row; in titleAddon it pulled the ⋮ menu up under the name. */
+                badges={<><StatusBadge status={row.status} />{jobBadge(row)}</>}
                 title={<span title={row.jobName}>{row.jobName}</span>}
-                titleAddon={jobBadge(row)}
                 actions={actionsCell(row)}
                 fields={[
                   { label: 'Job Version', value: <VersionPill kind="job" version={row.jobVersion} /> },

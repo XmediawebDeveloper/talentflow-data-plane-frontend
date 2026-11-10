@@ -65,7 +65,6 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     recruiter: 'Recruiter',
     viewer: 'Viewer',
     billing_manager: 'Billing',
-    standard_user: 'User',
   };
 
   // RBAC01-07: Extended role badge colors
@@ -74,7 +73,6 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
     recruiter: 'bg-brand-blue/10 text-brand-blue',
     viewer: 'bg-gray-100 text-gray-600',
     billing_manager: 'bg-brand-teal/10 text-brand-teal',
-    standard_user: 'bg-gray-100 text-gray-700',
   };
 
   // RBAC role checks
@@ -82,7 +80,6 @@ export default function Sidebar({ activeSection, onSectionChange, user, tenant }
   const isRecruiter = user?.role === 'recruiter';
   const isViewer = user?.role === 'viewer';
   const isBillingManager = user?.role === 'billing_manager';
-  const isStandardUser = user?.role === 'standard_user';
 
   // Check if user has a specific permission (supports both legacy and granular)
   const hasPermission = (permission?: string): boolean => {

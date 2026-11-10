@@ -11,7 +11,6 @@ const ROLE_LABELS: Record<string, string> = {
   recruiter: 'Recruiter',
   billing_manager: 'Billing Manager',
   viewer: 'Viewer',
-  standard_user: 'Standard User',
 };
 
 function timeOfDayGreeting(): string {

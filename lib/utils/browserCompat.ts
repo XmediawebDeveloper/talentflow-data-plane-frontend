@@ -234,6 +234,16 @@ export async function getUserMedia(
  * Request fullscreen with cross-browser support
  */
 export async function requestFullscreen(element: HTMLElement = document.documentElement): Promise<void> {
+  // Browsers grant fullscreen only right after a click. A click that first
+  // opens the screen-share picker has used that up by the time the picker
+  // closes, so the request would just be refused ("TypeError: not granted").
+  // Fail the same way callers already handle, without the doomed request;
+  // the next click (final consent / share-bar Continue) enters fullscreen.
+  const activation = (navigator as any).userActivation as { isActive?: boolean } | undefined;
+  if (activation && activation.isActive === false) {
+    console.info('[FULLSCREEN] No recent click to allow fullscreen — it will be entered on the next click');
+    throw new Error('FULLSCREEN_NEEDS_CLICK');
+  }
   try {
     if (element.requestFullscreen) {
       await element.requestFullscreen();

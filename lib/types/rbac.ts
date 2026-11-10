@@ -43,6 +43,9 @@ export interface RolePermission {
   action: string;
 }
 
+/** Role editor "Auto" marks: area id -> the area ids that needed it switched on. */
+export type AutoEnabledAreas = Record<string, string[]>;
+
 export interface RoleListItem {
   id: number;
   code: string;
@@ -59,6 +62,8 @@ export interface RoleListItem {
   permission_codes?: string[];
   /** First few people with this role. */
   holders?: RoleHolder[];
+  /** Areas the editor switched on automatically: { area_id: [areas that need it] }. */
+  auto_enabled_areas?: AutoEnabledAreas;
   updated_at?: string;
 }
 
@@ -107,6 +112,7 @@ export interface RoleCreateRequest {
   priority?: number;
   parent_role_id?: number;
   permission_ids: number[];
+  auto_enabled_areas?: AutoEnabledAreas;
   /** Duplicate Role: copy this role's access when permission_ids is empty. */
   source_role_id?: number;
 }
@@ -117,6 +123,7 @@ export interface RoleUpdateRequest {
   priority?: number;
   parent_role_id?: number;
   permission_ids?: number[];
+  auto_enabled_areas?: AutoEnabledAreas;
 }
 
 export interface UserRoleAssignmentRequest {

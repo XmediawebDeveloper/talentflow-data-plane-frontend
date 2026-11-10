@@ -230,6 +230,8 @@ export default function LegalCompliancePage() {
             {paginatedHistory.map((record) => (
               <MobileRecordCard
                 key={record.id}
+                /* 👁 View at the right end of the name line, as on the Support Tickets cards. */
+                className="tf-jdv-actions-inline"
                 badges={
                   <>
                     <span className="tf-badge bg-brand-blue/[0.06] text-brand-blue ring-1 ring-brand-blue/15">{record.terms_version}</span>
@@ -242,10 +244,9 @@ export default function LegalCompliancePage() {
                 title={record.terms_title || '—'}
                 actions={
                   TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
-                    <Button variant="secondary" size="sm" onClick={() => handleView(record)} className="text-xs">
-                      <Eye className="w-3.5 h-3.5" />
-                      View
-                    </Button>
+                    <button type="button" onClick={() => handleView(record)} title="View" aria-label={`View ${record.terms_title || 'document'}`} className="tf-icon-btn-outline">
+                      <Eye />
+                    </button>
                   ) : undefined
                 }
                 fields={[
