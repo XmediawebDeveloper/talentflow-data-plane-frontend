@@ -4218,8 +4218,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             it pins just below the sticky breadcrumb instead of under it. */}
         <div className="sticky top-[var(--crumb-h,0px)] z-20 border-b border-gray-200 bg-white py-3">
           <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
-              <div className="min-w-0 flex-1">
+            {/* Phones / tablets: search · Filter · Sort · List / Grid share line 1, as the
+                Job Openings toolbar (the buttons drop under the search only below
+                ~360px); Folder Filters takes its own line under them. */}
+            <div className="flex flex-wrap items-start gap-2 xl:flex-nowrap">
+              <div className="min-w-[6.5rem] flex-1 basis-0">
                 <UnifiedFolderResumeSearch
                   query={searchQuery}
                   onQueryChange={handleSearchChange}
@@ -4246,7 +4249,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               {/* Folders only. The resume filter that sat beside it is gone —
                   the search box and the Filter panel already narrow resumes. */}
               {viewMode === 'card' && (
-                <div className="grid w-full grid-cols-1 gap-2 xl:w-auto xl:min-w-[190px]">
+                <div className="order-last xl:order-none grid w-full grid-cols-1 gap-2 xl:w-auto xl:min-w-[190px]">
                   <ToolbarFilterSelect<CardFolderFilter>
                     label="Folder Filters"
                     value={cardFolderFilter}
@@ -4257,7 +4260,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-start gap-2 xl:w-auto">
+              <div className="flex flex-nowrap items-start gap-2 xl:w-auto">
                 <SearchFilterBarCompact
                   searchQuery={searchQuery}
                   onSearchChange={handleSearchChange}

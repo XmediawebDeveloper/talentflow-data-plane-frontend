@@ -3174,7 +3174,11 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* Page shell — the job-openings layout every dashboard page uses: a grey page area holding one white sheet.
      Dark values mirror the dark-mode layer (.dark .bg-slate-50 #111827, .dark .bg-white --surface). */
   .tf-page { @apply flex-1 overflow-x-clip bg-slate-50 dark:bg-[#111827]; }
-  .tf-page-sheet { @apply w-full bg-white rounded-2xl p-4 md:p-8 my-4 md:my-5 shadow-2xl dark:bg-[var(--surface)]; }
+  /* Phones, tablets and small laptops (<xl): the sheet runs edge to edge — no outer margin, corners or shadow. */
+  .tf-page-sheet { @apply w-full bg-white rounded-none xl:rounded-2xl p-4 md:p-8 my-0 xl:my-5 shadow-none xl:shadow-2xl dark:bg-[var(--surface)]; }
+  /* <xl the sheet has no margin, so the page behind it takes the sheet's colour —
+     no grey strip shows below a short sheet. */
+  .tf-page:has(.tf-page-sheet) { @apply max-xl:bg-white max-xl:dark:bg-[var(--surface)]; }
   .tf-page-pad { @apply p-4 md:p-8; }   /* page padding when there is no white sheet */
   .tf-badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap; }
 
@@ -3198,10 +3202,19 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* Pill / version dots hide under 400px so the top row fits one line on a 320px phone. */
   .tf-jd-card-dot     { @apply inline-block w-1.5 h-1.5 flex-shrink-0 rounded-full max-xs:hidden; }
   /* Name row: name on one line ("…" when long) + version dropdown, Edit / View / More on the right. */
-  .tf-jd-card-head    { @apply mt-2.5 flex items-center gap-2 min-w-0; }
-  .tf-jd-card-name    { @apply flex min-w-0 flex-1 items-center gap-2; }
-  .tf-jd-card-title   { @apply min-w-0 truncate text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
-  .tf-jd-card-actions { @apply ml-auto flex-shrink-0; }
+  /* Name on its own full line, shown in full (wraps, size unchanged); under it ONE line:
+     version chip on the left, Edit · View · ⋮ centred across the card. A 3-column grid
+     (1fr · auto · 1fr) keeps the buttons on the card's true centre whatever the chip's width. */
+  /* Version chip + action buttons grouped together on the left: "v2 ˅ [✎] [👁] [⋮]".
+     No column gap (an empty version column would push the buttons in); the chip carries its own spacing. */
+  .tf-jd-card-head    { @apply mt-2.5 grid grid-cols-[auto_auto_minmax(0,1fr)] items-center gap-x-0 gap-y-2 min-w-0; }
+  .tf-jd-card-head > .tf-jd-card-name > * { justify-self: start; margin-right: 0.5rem; }
+  .tf-jd-card-head > .tf-jd-card-name > :is(.tf-jd-card-title, .tf-jdv-title, .tf-jdv-title-wrap) { grid-column: 1 / -1; justify-self: stretch; margin-right: 0; }
+  .tf-jd-card-head > :is(.tf-jd-card-actions, .tf-jdv-actions) { grid-column: 2; }
+  .tf-jd-card-name    { @apply contents; }
+  .tf-jd-card-title   { @apply min-w-0 basis-full break-words text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
+  /* Beside the version chip, on the left — the four together (chip · Edit · View · ⋮). */
+  .tf-jd-card-actions { @apply flex-shrink-0; }
   /* Details + dates block. */
   .tf-jd-card-meta    { @apply mt-3; }
   /* Details flow on natural lines: each item stays whole, the line wraps between items. */
@@ -3226,7 +3239,8 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .tf-jd-card-version-open { @apply !border-brand-blue/30 !bg-brand-sky !text-brand-blue; }
 
   /* Version history on phones + tablets: one compact card per version. */
-  .tf-ver-list        { @apply space-y-2 rounded-xl border border-brand-blue/30 bg-brand-sky/40 p-1.5 xs:p-2 dark:border-brand-blue/40 dark:bg-slate-900; }
+  /* No outer border or padding: just the version cards, stacked. */
+  .tf-ver-list        { @apply space-y-2 p-0; }
   .tf-ver-card        { @apply relative rounded-lg border border-gray-200 bg-white p-2.5 xs:p-3 dark:border-slate-700 dark:bg-[var(--surface)]; }
   .tf-ver-card-latest { @apply border-brand-blue/40; }
   .tf-ver-card-selected { @apply border-brand-blue ring-1 ring-brand-blue/30; }
@@ -3256,6 +3270,8 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jd-card-actions > div > div > button { height: 1.75rem !important; width: 1.75rem !important; }
   }
   .tf-record-actions.tf-jdv-actions :is(button, a, [role="button"]):has(> svg:only-child):not([data-jdv-text]) {
+    /* Icon centred in its square, whatever padding / display the button brings. */
+    display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 0 !important;
     height: 2rem !important; width: 2rem !important; border-radius: 0.5rem !important; border-color: transparent !important;
     background-color: var(--color-gray-100) !important; color: var(--color-gray-600) !important;
   }
@@ -3549,6 +3565,29 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .dark .tf-detail-nav button { color: var(--color-slate-400) !important; }
     .dark .tf-detail-nav button[aria-current="page"] { color: #93c5fd !important; border-bottom-color: #2563eb; }
   }
+  /* ── Resume preview popup (candidate score page, shared ResumeTextPreviewModal) ─────────
+     Phones: a full-screen sheet; from sm the centred 2xl panel. A white header (icon tile,
+     title + badge, file name, square Download / Close), then the resume as a paper page on a
+     light mat. Section headings in brand blue with an accent bar. Font sizes unchanged. */
+  .tf-preview-overlay { @apply fixed inset-0 flex items-stretch sm:items-center justify-center bg-black/60 backdrop-blur-sm p-0 sm:p-6; }
+  .tf-preview-panel   { @apply flex h-[100dvh] sm:h-[90dvh] w-full sm:max-w-2xl flex-col overflow-hidden bg-white shadow-2xl sm:rounded-2xl dark:bg-[var(--surface)]; }
+  .tf-preview-head    { @apply flex flex-shrink-0 items-center gap-3 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 dark:border-slate-700 dark:bg-[var(--surface)]; }
+  .tf-preview-icon    { @apply flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15; }
+  .tf-preview-file    { @apply mt-0.5 flex min-w-0 items-center gap-1.5 [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:flex-shrink-0 [&>svg]:text-gray-400; }
+  .tf-preview-btn     { @apply inline-flex h-9 min-w-9 flex-shrink-0 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 text-sm font-medium text-gray-700 transition-colors hover:border-brand-blue/40 hover:text-brand-blue dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200; }
+  /* Same 16px side gutter as the header on phones, so the page edge lines up under the icon tile. */
+  .tf-preview-mat     { @apply flex-1 overflow-y-auto overflow-x-hidden bg-slate-100 px-4 py-4 sm:p-6 dark:bg-slate-900; }
+  .tf-resume-doc      { @apply mx-auto min-h-full min-w-0 max-w-2xl overflow-x-hidden rounded-xl bg-white p-5 text-left shadow-sm ring-1 ring-black/5 sm:p-8 dark:bg-[var(--surface)] dark:ring-white/10; }
+  .tf-resume-name     { @apply text-xl font-bold text-gray-900 break-words [overflow-wrap:anywhere] dark:text-[var(--text-primary)]; }
+  .tf-resume-headline { @apply mt-1 mb-2 flex flex-wrap gap-x-3 gap-y-0.5 text-sm font-medium text-brand-blue break-words [overflow-wrap:anywhere]; }
+  /* "|"-separated parts (contact details, headline): each a whole item, wrapping between items. */
+  .tf-resume-parts    { @apply flex flex-wrap gap-x-4 gap-y-1; }
+  .tf-resume-part     { @apply min-w-0 max-w-full [overflow-wrap:anywhere]; }
+  .tf-resume-section  { @apply mt-6 mb-2.5 flex items-center gap-2 border-b border-gray-200 pb-1.5 uppercase tracking-wide text-brand-blue break-words [overflow-wrap:anywhere] before:h-4 before:w-1 before:flex-shrink-0 before:rounded-full before:bg-brand-blue before:content-[''] dark:border-slate-700; }
+  .tf-resume-line     { @apply mb-1 text-sm leading-relaxed text-gray-700 break-words [overflow-wrap:anywhere] dark:text-slate-300; }
+  /* Drawn marker + hanging indent: wrapped bullet text lines up under its first word. */
+  .tf-resume-bullet   { @apply relative pl-5 before:absolute before:left-1.5 before:top-[0.6em] before:h-1.5 before:w-1.5 before:rounded-full before:bg-brand-blue/50 before:content-['']; }
+
   /* Track Invites popups on phones (TRACKER_DIALOG_PANEL_CLASS adds .tf-tracker-panel):
      the stat chips (three rows) and filters fill the height, and the card list — the one
      part allowed to shrink — got 0px with nothing to scroll to. Here the whole panel
@@ -3635,7 +3674,12 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   /* Top row: checkbox · ID · pills. Wraps (unlike the JD card's fixed pills) because a record's
      badges can be long — a skipped reason, an archived flag — and must never run past the card. */
   .tf-jdv-top         { @apply flex min-w-0 flex-wrap items-center gap-1.5 [&>*]:max-w-full; }
-  .tf-jdv-title       { @apply min-w-0 truncate text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)] [&_span:not(:has(*))]:truncate; }
+  .tf-jdv-title       { @apply min-w-0 basis-full break-words text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
+  /* A card whose checkbox sits on the name line keeps it beside the name. */
+  /* Checkbox + name on one full line (the name wraps beside the checkbox). */
+  .tf-jd-card-head > .tf-jd-card-name > .tf-jdv-name-line { grid-column: 1 / -1; justify-self: stretch; margin-right: 0; display: flex; align-items: flex-start; gap: 0.5rem; min-width: 0; }
+  .tf-jdv-name-line > .tf-jdv-select { margin-top: 0.2em; }
+  .tf-jdv-name-line > :is(.tf-jdv-title, .tf-jdv-title-wrap, .tf-jd-card-title) { flex: 1 1 0%; min-width: 0; }
   .tf-jdv-title-wrap  { @apply min-w-0 break-words text-base sm:text-lg font-bold leading-snug text-gray-900 dark:text-[var(--text-primary)]; }
   .tf-jdv-meta-item   { @apply inline-flex min-w-0 max-w-full items-center gap-1.5 [&>svg]:h-4 [&>svg]:w-4 [&>svg]:shrink-0 [&>svg:not([class*='text-'])]:text-gray-400; }
   .tf-jdv-fields      { @apply mt-3 flex flex-wrap gap-x-4 gap-y-1.5 text-xs; }
@@ -3650,7 +3694,7 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .tf-jdv-footer:has(> .tf-verdict-chip) { @apply flex-nowrap; }
   .tf-jdv-footer > .tf-verdict-chip { @apply min-w-0 flex-1 basis-0 max-sm:flex-col max-sm:gap-0 max-sm:px-1 max-sm:py-1.5 max-sm:whitespace-normal max-sm:text-center max-sm:leading-tight max-sm:[&>svg]:hidden; }
   /* Icon actions on the name row (JD card buttons); text actions on their own bottom row. */
-  .tf-jdv-actions     { @apply mt-0 ml-auto flex-shrink-0 flex-nowrap; }
+  .tf-jdv-actions     { @apply mt-0 ml-0 flex-shrink-0 flex-nowrap; }
   .tf-jdv-actions-below { @apply mt-3 ml-0 flex-wrap justify-end gap-2 [&>*]:shrink-0; }
   /* Count chips — "2 Scored" / "0 Assessed" / "0 Interviewed". Icons drop under 360px so three still fit a 320px phone. */
   .tf-stat-chip { @apply inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-xs [&>svg]:h-3.5 [&>svg]:w-3.5 [&>svg]:shrink-0 max-2xs:[&>svg]:hidden md:gap-1.5 md:px-2; }
@@ -3661,4 +3705,46 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   .tf-stat-chip-neutral { @apply bg-gray-100 text-gray-700 dark:bg-[var(--surface-hover)] dark:text-[var(--text-secondary)]; }
   /* 28px outlined icon button (eye / edit / ⋮), as on the job-openings card. */
   .tf-icon-btn-outline { @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 transition-colors hover:border-brand-blue/30 hover:text-brand-blue dark:bg-[var(--surface)] dark:border-[var(--border)] dark:text-[var(--text-muted)] [&>svg]:h-3.5 [&>svg]:w-3.5; }
+}
+
+/* ── Mobile compact + pill tabs (≤767px) ─────────────────────────────
+   1rem → 14px scales every rem-based Tailwind size (text, spacing, icons)
+   by ~12.5%. Inputs stay 16px on iOS so focusing doesn't zoom the page.
+   Tabs: every [role=tab] in the app becomes a pill with eased colour/shadow. */
+@media (max-width: 767px) {
+  html { font-size: 14px; }
+  @supports (-webkit-touch-callout: none) {
+    input, select, textarea { font-size: 16px; }
+  }
+
+  [role="tablist"] {
+    display: flex; gap: 4px; padding: 4px; height: auto; max-width: 100%;
+    border: 0; border-radius: 9999px; box-shadow: none;
+    background: color-mix(in srgb, var(--brand-blue) 7%, transparent);
+    overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+  }
+  [role="tablist"]::-webkit-scrollbar { display: none; }
+
+  [role="tab"] {
+    flex: 0 0 auto; height: auto; margin: 0; padding: 6px 12px;
+    border: 0; border-radius: 9999px; box-shadow: none;
+    background: transparent; font-size: 12px; line-height: 1.25; white-space: nowrap;
+    scroll-snap-align: start;
+    transition: background-color .28s cubic-bezier(.4,0,.2,1), color .28s cubic-bezier(.4,0,.2,1),
+                box-shadow .28s cubic-bezier(.4,0,.2,1), transform .15s ease;
+  }
+  [role="tab"]:active { transform: scale(.96); }
+  /* hide underline indicators used by the custom tab bars */
+  [role="tab"]::after, [role="tab"] > [class*="absolute"][class*="bottom-0"] { display: none; }
+
+  [role="tab"][aria-selected="true"], [role="tab"][data-state="active"] {
+    background: var(--brand-blue); color: #fff;
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-blue) 35%, transparent);
+  }
+  [role="tab"][aria-selected="true"] :is(span, svg):not([class*="bg-"]),
+  [role="tab"][data-state="active"] :is(span, svg):not([class*="bg-"]) { color: inherit; }
+}
+@media (max-width: 767px) and (prefers-reduced-motion: reduce) {
+  [role="tab"] { transition: none; }
 }

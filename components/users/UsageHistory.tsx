@@ -425,9 +425,9 @@ function AnalyticsCards({
   };
 
   return (
-    <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-4 pb-1 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0 sm:pb-0 lg:grid-cols-3 xl:grid-cols-5">
-      {/* Phones: a swipeable row (cards snap into place) instead of five
-          stacked cards; sm and up: the grid. */}
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* One card per row on phones, as the Job Openings stat cards; 2 / 3 / 5 as it widens.
+          (A sideways-swiping strip hid the later cards.) */}
       {/* RS, AS, AIU — use subscriptionUnits (dashboard) as primary, unit pool as fallback */}
       {unitTypes.map((type) => {
         const sub = subscriptionUnits?.[type as keyof typeof subscriptionUnits] as import('@/lib/services/dashboardService').UnitAvailability | undefined;
@@ -444,7 +444,7 @@ function AnalyticsCards({
         const barColor = getBarColor(pct);
 
         return (
-          <div key={type} className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div key={type} className="group tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className={`flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br ${tileGradient[type]} text-white shadow-sm ring-1 ring-white/10`}>
                 <Icon className="w-4 h-4" />
@@ -487,7 +487,7 @@ function AnalyticsCards({
         const pct = ru ? (ru.is_unlimited ? 0 : Math.min(100, Math.round(ru.percentage_used))) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-orange text-white shadow-sm shadow-brand-orange/25 ring-1 ring-white/10">
                 <FileText className="w-4 h-4" />
@@ -534,7 +534,7 @@ function AnalyticsCards({
         const pct = userLimits && !isUnlimited ? Math.min(100, Math.round(userLimits.usage_percentage)) : 0;
         const barColor = getBarColor(pct);
         return (
-          <div className="group w-[80%] shrink-0 snap-start sm:w-auto tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
+          <div className="group tf-card p-4 hover:shadow-md hover:border-brand-blue/40 hover:-translate-y-0.5 transition-all">
             <div className="flex items-start justify-between mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-blue-2 to-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                 <Users className="w-4 h-4" />

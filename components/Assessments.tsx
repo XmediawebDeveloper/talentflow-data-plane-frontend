@@ -1,6 +1,6 @@
 'use client';
 
-import JobIdBadge from '@/components/jobs/JobIdBadge';
+import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -122,7 +122,8 @@ import { toast } from 'sonner';
 import { useBackgroundResend } from '@/components/bulk-invite/useBackgroundResend';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { assessmentJobLockMessage, loadJobVersionLineages, jobVersionStatusesFrom, checkAssessmentJobLock, isJdDisabled } from '@/lib/utils/assessmentJobLock';
-import { jobLockBadgeFor } from '@/components/jobs/JobStatusBadge';
+import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import { Tooltip } from '@/components/ui/tooltip';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -132,7 +133,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import { useModuleQuota } from '@/contexts/QuotaContext';
 import Dropdown from '@/components/ui/filter-select';
 import { PhoneSortMenu } from '@/components/ui/select-all-menu';
-import AllAssessmentsTable, { VersionPill, AssessmentJobStatusBadge, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
+import AllAssessmentsTable, { VersionPill, type AssessmentRowAction } from '@/components/assessments/AllAssessmentsTable';
 import type { AssessmentResponse, AssessmentPageParams, AssessmentResultsPageFilters, AssessmentResultsPageQuery, AssessmentResultsPageStats } from '@/lib/services/assessmentService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import DraftAssessmentExistsModal from '@/components/assessments/DraftAssessmentExistsModal';
@@ -168,6 +169,13 @@ import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs
  *  rows themselves are the untyped shape `mapAssessmentFromApi` returns, so
  *  this names the three fields rather than widening to `any`. */
 type AssessmentLineageRef = { id: string; jd_id?: string };
+
+/** A locked job's badge in words, shown on its Configured Jobs row. */
+const JOB_LOCK_HINT: Record<JobStatusBadgeKind, string> = {
+  disabled: 'Job is disabled — enable it in Job Openings to send or edit.',
+  archived: 'Job is archived — its assessments are view only.',
+  draft: 'Job is in draft — publish the job to send assessments.',
+};
 
 /** The canonical "Go to [input] · Previous · page/total · Next" control from
  *  components/Pagination.tsx, reused inline for this file's popup footers
@@ -2202,7 +2210,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       case 'sent':
         return <InviteStatusChip kind="invited" />;
       default:
-        return <InviteStatusChip kind="link_created" title="Link created — no email sent yet" />;
+        return <InviteStatusChip kind="invited" title="Link created — no email sent yet" />;
     }
   };
 
@@ -5242,7 +5250,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             : status === 'Draft'
             ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
             : status === 'Archived'
-            ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+            ? 'bg-slate-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700'
             : status === 'Completed'
             ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
             : status === 'Paused'
@@ -5375,6 +5383,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       className={`@container/job-row relative p-3 sm:p-4 ${
         /* Card view: the open version history is a wide table — give it the whole row. */
         !selectMode && listDisplayMode === 'grid' && openVersionsFor === assessment.id ? 'col-span-full' : ''
+      } ${
+        /* Card view: every card in a grid row is as tall as the tallest, and
+           the extra space goes under the name, so the status, the four
+           numbers and View Versions line up across the row. */
+        !selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id ? 'flex flex-col' : ''
       } bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
         selected
           ? 'border-brand-blue/40 ring-brand-blue/30 bg-brand-blue/[0.03]'
@@ -5408,32 +5421,65 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           act on ONE assessment, and a job row is not one
           assessment - they are rendered per version inside View
           Versions, which already carried them. */}
-      <div className="flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4">
-        {/* Identity - icon, Job ID, title */}
-        <div className="flex items-center gap-2.5 min-w-0 @4xl/job-row:w-[360px] @4xl/job-row:flex-shrink-0">
-          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-            <Briefcase className="h-4 w-4 text-brand-blue" />
-          </div>
-          {assessment.jd_short_id && (
-            /* The Job Openings chip, not the solid blue one this
-               row used to carry - same JD id, one house style. */
-            <JobIdBadge className="flex-shrink-0">{assessment.jd_short_id}</JobIdBadge>
-          )}
-          <h3
-            className="tf-row-name truncate min-w-0"
-            title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
-          >
-            {assessment.job?.title || stripVersionFromTitle(assessment.title)}
-          </h3>
-          {(() => {
-            /* The linked job's own Disabled / Archived / Draft status, judged
-               on the whole job — the AI Interview card's badge. */
-            const kind = assessment.jd_id
-              ? jobLockBadgeFor(jobVersionStatusById[assessment.jd_id], jobLineageById[assessment.jd_id])
-              : null;
-            return kind ? <AssessmentJobStatusBadge kind={kind} /> : null;
-          })()}
-        </div>
+      <div className={`flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4 ${!selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id ? 'flex-1' : ''}`}>
+        {/* Identity - icon, then the job name on its own line with the Job ID
+            and the job's badge under it. On one line, the name was the only
+            part allowed to shrink, so on a 320px phone a badged job showed an
+            ID and "Disabled" but no name. */}
+        {(() => {
+          /* The linked job's own Disabled / Archived / Draft status, judged
+             on the whole job — the AI Interview card's badge. */
+          const lockKind = assessment.jd_id
+            ? jobLockBadgeFor(jobVersionStatusById[assessment.jd_id], jobLineageById[assessment.jd_id])
+            : null;
+          const jobTitle = assessment.job?.title || stripVersionFromTitle(assessment.title);
+          return (
+            <div className={`flex items-start sm:items-center gap-2.5 min-w-0 @4xl/job-row:w-[360px] @4xl/job-row:flex-shrink-0 ${!selectMode && listDisplayMode === 'grid' && openVersionsFor !== assessment.id ? 'flex-1' : ''}`}>
+              <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                <Briefcase className="h-4 w-4 text-brand-blue" />
+              </div>
+              <div className="min-w-0 flex-1">
+                {/* Tablet and up: one line, "JD-102  Job title  [Disabled]".
+                    Phones: the name on its own line first, the ID and badge
+                    under it. The name keeps at least 8rem; where the line
+                    can't hold all three, the badge wraps rather than the name
+                    being squeezed away. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
+                  <h3
+                    className="order-1 basis-full sm:order-2 sm:basis-0 sm:flex-1 sm:min-w-[8rem] tf-row-name break-words lg:truncate"
+                    title={jobTitle}
+                  >
+                    {jobTitle}
+                  </h3>
+                  {assessment.jd_short_id && (
+                    /* The Job Openings chip, not the solid blue one this
+                       row used to carry - same JD id, one house style. */
+                    <JobIdBadge className={`order-2 sm:order-1 ${JOB_ID_BADGE_FIT}`} title={assessment.jd_short_id}>{assessment.jd_short_id}</JobIdBadge>
+                  )}
+                  {lockKind && (
+                    /* Tablet and up: the badge explains itself on hover.
+                       `title=""` drops the badge's own native tooltip so the
+                       two don't show at once. */
+                    <span className="order-3 flex-shrink-0">
+                      <Tooltip content={JOB_LOCK_HINT[lockKind]}>
+                        <JobStatusBadge kind={lockKind} title="" />
+                      </Tooltip>
+                    </span>
+                  )}
+                </div>
+                {/* Phones only: the badge's meaning in words, since a phone
+                    has no hover for its tooltip, and a first-time user needs
+                    the reason Share / Edit are greyed and what to do. */}
+                {lockKind && (
+                  <p className="sm:hidden mt-2 flex items-start gap-1.5 rounded-md bg-gray-50 dark:bg-slate-800/60 px-2 py-1.5 text-xs text-gray-600 dark:text-slate-400">
+                    <Lock className="w-3.5 h-3.5 mt-px flex-shrink-0" />
+                    {JOB_LOCK_HINT[lockKind]}
+                  </p>
+                )}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Status of the job's newest assessment - the row's
             representative, unchanged from before. */}
@@ -6118,7 +6164,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                does it scroll, inside the menu, with overscroll
                contained so reaching the end does not chain into
                the page. */
-            className={`fixed w-52 max-w-[calc(100vw-1rem)] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] overflow-y-auto ${
+            className={`fixed w-52 max-w-[calc(100vw-1rem)] bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-200 dark:border-slate-700 py-1 z-[9999] overflow-y-auto ${
               variant === 'compact'
                 ? 'overscroll-contain scroll-smooth [&>button]:py-1.5 [&>div]:my-0.5'
                 : 'max-h-[70dvh]'
@@ -6202,7 +6248,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     buttonDisabled
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-gray-700'
+                      : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Copy className={`w-4 h-4 flex-shrink-0 ${buttonDisabled ? 'text-gray-300' : 'text-menu-icon-download'}`} />
@@ -6242,7 +6288,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     revokeDisabled
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-destructive'
+                      : 'text-destructive hover:bg-gray-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Ban className={`w-4 h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
@@ -6250,7 +6296,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
-            <div className="border-t border-gray-100 my-1"></div>
+            <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             {/* Draft assessments hide Activate/Archive — drafts
                 go through the configure-page Publish button,
                 and an unpublished row has nothing meaningful
@@ -6269,7 +6315,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 aria-disabled={unarchiveOff}
                 title={!canDeleteAssessment ? 'You do not have permission to unarchive assessments' : (unarchiveJobLocked ?? '')}
                 className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
-                  unarchiveOff ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 dark:text-slate-300'
+                  unarchiveOff ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                 }`}
               >
                 <ArchiveRestore className={`w-4 h-4 flex-shrink-0 ${unarchiveOff ? 'text-gray-300' : 'text-menu-icon-archive'}`} />
@@ -6286,7 +6332,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 aria-disabled={!canUpdateAssessment}
                 title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
                 className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
-                  canUpdateAssessment ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 cursor-not-allowed opacity-60'
+                  canUpdateAssessment ? 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800' : 'text-gray-400 cursor-not-allowed opacity-60'
                 }`}
               >
                 <Play className={`w-4 h-4 flex-shrink-0 ${canUpdateAssessment ? 'text-menu-icon-activate' : 'text-gray-300'}`} />
@@ -6307,15 +6353,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                 archiveOff
                   ? 'text-gray-400 cursor-not-allowed opacity-60'
-                  : 'text-gray-700'
+                  : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
+              <Archive className={`w-4 h-4 flex-shrink-0 ${archiveOff ? 'text-gray-300' : 'text-menu-icon-archive'}`} />
               <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
             </button>
             );
             })()}
-            {assessment.status !== 'Archived' && (
+            {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
               <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             )}
             {assessment.status !== 'Archived' && (() => {
@@ -6341,7 +6387,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                     isDisabled
                       ? 'text-gray-400 cursor-not-allowed opacity-60'
-                      : 'text-destructive'
+                      : 'text-destructive hover:bg-gray-50 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
@@ -6755,6 +6801,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 availableUnits={availableUnits}
                 totalUnits={totalUnits}
                 isUnlimited={isUnlimited}
+                /* Phones: its own full row, so the number and "Units Left"
+                   have room instead of squeezing into half of one. */
+                className="max-sm:col-span-2"
               />
             )}
             {/* RBAC: always shown; greyed with a tooltip without access. */}
@@ -7173,7 +7222,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {assessmentListNarrowed && !isLoading && (
                 <p className="mt-3 tf-body-secondary">
                   <span className="font-semibold text-gray-900 dark:text-slate-50">{assessmentResultCount}</span>
-                  {' '}assessment{assessmentResultCount === 1 ? '' : 's'} match
+                  {' '}job{assessmentResultCount === 1 ? '' : 's'} match
                   {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
                 </p>
               )}
@@ -7552,8 +7601,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <ChevronDown className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500 flex items-center justify-between gap-2">
+                              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white dark:!bg-slate-900 !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100 dark:[&_[role=menuitem][data-highlighted]]:!bg-slate-800 dark:[&_[role=menuitem]:hover]:!bg-slate-800">
+                                <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800/60 border-b border-gray-100 dark:border-slate-700/60 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 flex items-center justify-between gap-2">
                                   <span>{selectedResultRows.length.toLocaleString()} selected</span>
                                   {/* Select every row matching the search / filters, across pages. */}
                                   {selectedResultKeys.size < total && (
@@ -7878,7 +7927,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   the order the Invitation Status rows and the
                                   All Assessments table both put them in. */}
                               <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>
-                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD Title</span></th>
+                              <th className="tf-th-cell text-left tf-th"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Role</span></th>
                               {/* The three version columns sit next to JD
                                   Title so the job, the version of it, the
                                   version of the assessment sat against it and
@@ -7929,7 +7978,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     </div>
                                   </td>
                                   <td className="tf-td tf-body-secondary whitespace-nowrap">
-                                    <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '-'}</span>
+                                    <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '—'}</span>
                                   </td>
                                   <td className="tf-td">
                                     {renderInviteBadgeForStatus(
@@ -7955,7 +8004,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           <span>Completed: {formatIST(result.completed_at)}</span>
                                         </div>
                                       )}
-                                      {!result.started_at && !result.completed_at && <span>-</span>}
+                                      {!result.started_at && !result.completed_at && <span>—</span>}
                                       {/* Duration is the Timeline's last line, not a column of its own. */}
                                       {formatTimeSpent(result.time_spent_seconds) !== '-' && (
                                         <div className="flex items-center gap-2 whitespace-nowrap">
@@ -7968,7 +8017,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="tf-td whitespace-nowrap">
                                     <div className="flex items-center gap-2 tf-body-secondary">
                                       <Calendar className="w-4 h-4" />
-                                      {result.completed_at ? formatISTDate(result.completed_at) : '-'}
+                                      {result.completed_at ? formatISTDate(result.completed_at) : '—'}
                                     </div>
                                   </td>
                                   {/* Invite Source — how this candidate was
@@ -7978,12 +8027,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" />
                                   </td>
                                   <td className="tf-td tf-body-secondary whitespace-nowrap">
-                                    {result.candidate_phone || '-'}
+                                    {result.candidate_phone || '—'}
                                   </td>
                                   <td className="tf-td whitespace-nowrap">
-                                    <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
-                                      {result.candidate_display_id || '-'}
-                                    </span>
+                                    {result.candidate_display_id ? (
+                                      <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                        {result.candidate_display_id}
+                                      </span>
+                                    ) : <span className="tf-body-secondary">—</span>}
                                   </td>
                                   {/* Job ID — the shared `JobIdBadge`, which is
                                       the one definition of this identifier in
@@ -8166,7 +8217,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         totalItems={total}
                         onPageChange={setCompletedCandidatesPage}
                         onItemsPerPageChange={setCompletedCandidatesPageSize}
-                        itemLabel="candidates"
+                        itemLabel="results"
                       />
                     </>
                   )}
@@ -8493,8 +8544,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <ChevronDown className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100">
-                                <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 text-2xs font-semibold uppercase tracking-wide text-gray-500">
+                              <DropdownMenuContent align="start" className="w-64 overflow-hidden !rounded-lg !bg-white dark:!bg-slate-900 !pt-0 !pb-1 !px-0 !shadow-xl [&_[role=menuitem][data-highlighted]]:!bg-gray-100 [&_[role=menuitem]:hover]:!bg-gray-100 dark:[&_[role=menuitem][data-highlighted]]:!bg-slate-800 dark:[&_[role=menuitem]:hover]:!bg-slate-800">
+                                <div className="px-4 py-2 bg-gray-50 dark:bg-slate-800/60 border-b border-gray-100 dark:border-slate-700/60 text-2xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                                   {selectedInviteRows.length.toLocaleString()} selected
                                 </div>
                                 <DropdownMenuItem
@@ -8623,7 +8674,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* Summary + status filter row */}
                       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 sm:mb-5">
                         <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] self-start">
-                          {Array.from({ length: 4 }).map((_, i) => (
+                          {Array.from({ length: 7 }).map((_, i) => (
                             <div key={i} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px]">
                               <Skeleton className="h-3.5 w-3.5 rounded" />
                               <Skeleton className="h-3.5 w-16" />
@@ -8639,19 +8690,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                       {/* Invitations card */}
                       <div className="tf-card overflow-hidden">
-                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 sm:gap-3">
-                            <Skeleton className="h-5 w-24" />
-                            <Skeleton className="h-6 w-16 rounded-full" />
-                          </div>
-                          <Skeleton className="h-8 w-24 rounded-lg" />
-                        </div>
                         <div className="min-h-[320px] overflow-auto tf-table-shell">
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 <th className="tf-th-cell w-12"><Skeleton className="h-4 w-4 rounded" /></th>
-                                {['Candidate', 'Timeline', 'Status', 'Tech Score', 'Coding Score', 'Invite Source', 'CID', 'Job & Assessment', 'Action'].map((c) => (
+                                {['Candidate', 'Timeline', 'Status', 'Tech Score', 'Coding Score', 'Invite Source', 'CID', 'JD ID', 'Job Role', 'Job Version', 'Assessment Version', 'Actions'].map((c) => (
                                   <th key={c} className="tf-th-cell tf-th"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -8675,12 +8719,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="tf-td"><Skeleton className="h-6 w-12 mx-auto" /></td>
                                   <td className="tf-td"><Skeleton className="h-4 w-24" /></td>
                                   <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
-                                  <td className="tf-td">
-                                    <div className="space-y-1.5">
-                                      <Skeleton className="h-4 w-48" />
-                                      <Skeleton className="h-3 w-32" />
-                                    </div>
-                                  </td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="tf-td"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-10 rounded-md" /></td>
+                                  <td className="tf-td"><Skeleton className="h-5 w-10 rounded-md" /></td>
                                   <td className="tf-td"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
                                 </tr>
                               ))}
@@ -8766,11 +8808,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             { key: 'expired', label: 'Expired', icon: Clock, value: bucketCount('expired'),
                               text: 'text-status-expired', hover: 'hover:text-status-expired', tint: 'bg-status-expired/10', ring: 'ring-status-expired/20' },
                             { key: 'started', label: 'In Progress', icon: Play, value: bucketCount('started'),
-                              text: 'text-status-progress', hover: 'hover:text-status-progress', tint: 'bg-status-progress/10', ring: 'ring-status-progress/20' },
+                              text: 'text-warning-strong', hover: 'hover:text-warning-strong', tint: 'bg-warning-subtle', ring: 'ring-warning-line' },
                             { key: 'completed', label: 'Completed', icon: CheckCircle, value: completedInvites,
                               text: 'text-status-completed', hover: 'hover:text-status-completed', tint: 'bg-status-completed/10', ring: 'ring-status-completed/20' },
                             { key: 'failed', label: 'Failed', icon: AlertTriangle, value: bucketCount('failed'),
-                              text: 'text-orange-700', hover: 'hover:text-orange-700', tint: 'bg-orange-50', ring: 'ring-orange-200' },
+                              text: 'text-destructive', hover: 'hover:text-destructive', tint: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
                           ] as const).map((segment) => {
                             const SegmentIcon = segment.icon;
                             const isActive = inviteStatusFilters.status === segment.key;
@@ -8858,8 +8900,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
 
                       {/* The list card, same treatment as the Candidate Results
-                          tab's. */}
-                      <div className="tf-card overflow-hidden">
+                          tab's — table only: the card view's own cards sit on
+                          the page, as Results' do. */}
+                      <div className={listDisplayMode === 'grid' ? '' : 'tf-card overflow-hidden'}>
                         {/* Header — the Candidate Results card's title row, with
                             the popup's Refresh control, since invite statuses
                             move while the tab sits open.
@@ -8889,7 +8932,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               No invitations match the current filters.
                             </div>
                           ) : (
-                          <div className="tf-grid-4 p-4">
+                          <div className="tf-grid-4">
                             {pageItems.map((inv: any) => {
                               const isSelected = selectedInviteIds.has(inv.id);
                               const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
@@ -8926,8 +8969,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <div className="flex items-center gap-1.5 flex-wrap min-w-0">
                                     {inv._jd_short_id && <JobIdBadge>{inv._jd_short_id}</JobIdBadge>}
                                     <span className="tf-row-name truncate min-w-0" title={inv._jd_title}>{inv._jd_title || '—'}</span>
-                                    {inv._jd_version ? <VersionPill kind="job" version={inv._jd_version} /> : null}
-                                    {inv._assessment_version ? <VersionPill kind="assessment" version={inv._assessment_version} /> : null}
+                                    {inv._jd_version ? <VersionPill kind="job" label="Job" version={inv._jd_version} /> : null}
+                                    {inv._assessment_version ? <VersionPill kind="assessment" label="Assessment" version={inv._assessment_version} /> : null}
                                   </div>
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     {renderInviteBadgeForStatus(statusOf(inv), inv)}
@@ -9035,7 +9078,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     both stay reachable while the columns
                                     between them scroll. Same treatment as the
                                     Track Invites popup's own Actions column. */}
-                                <th className="tf-th-cell text-center tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Action</span></th>
+                                <th className="tf-th-cell text-center tf-th tf-sticky-col"><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
                               </tr>
                             </thead>
                             )}
@@ -9131,9 +9174,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" />
                                     </td>
                                     <td className="tf-td whitespace-nowrap">
-                                      <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
-                                        {inv.candidate_display_id || '-'}
-                                      </span>
+                                      {inv.candidate_display_id ? (
+                                        <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                          {inv.candidate_display_id}
+                                        </span>
+                                      ) : <span className="tf-body-secondary">—</span>}
                                     </td>
                                     {/* Job ID / Job Role / Job Version /
                                         Assessment Version — four columns, each
@@ -9302,7 +9347,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           file holds cannot disagree. */}
                       {showInviteExportModal && (
                         <ExportColumnsModal<'csv' | 'xls'>
-                          title="Export Completed Invitations"
+                          title="Export Invitations"
                           recordCount={selectedInviteRows.length}
                           formats={[
                             { key: 'csv', title: 'CSV Format', description: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
@@ -9493,13 +9538,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="tf-row-name">HR</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
-                                  topicSettings.hr_enabled
-                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                                    : 'bg-slate-200 text-gray-600'
-                                }`}>
-                                  {topicSettings.hr_enabled ? 'On' : 'Off'}
-                                </span>
                                 <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                                   {topicSettings.hr_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
                                 </span>
@@ -9545,13 +9583,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="tf-row-name">Technical</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
-                                  topicSettings.technical_enabled
-                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                                    : 'bg-slate-200 text-gray-600'
-                                }`}>
-                                  {topicSettings.technical_enabled ? 'On' : 'Off'}
-                                </span>
                                 <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                                   {topicSettings.technical_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
                                 </span>
@@ -9597,13 +9628,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
                                 <h4 className="tf-row-name">Coding</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-xs font-medium ${
-                                  topicSettings.coding_enabled
-                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                                    : 'bg-slate-200 text-gray-600'
-                                }`}>
-                                  {topicSettings.coding_enabled ? 'On' : 'Off'}
-                                </span>
                                 <span className="hidden sm:inline px-2 py-0.5 rounded text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
                                   {topicSettings.coding_scoring_type === 'informational' ? 'Informational Only' : 'Scored (0-10)'}
                                 </span>
@@ -9840,12 +9864,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 disabled={savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled}
                                 className={`relative w-9 sm:w-11 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
                                   isEnabled && proctoringSettings.proctoring_enabled
-                                    ? 'bg-success'
+                                    ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
                                 } ${savingProctoringKeys.has(feature.key) || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
-                                  isEnabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0.5'
+                                  isEnabled && proctoringSettings.proctoring_enabled ? 'translate-x-4 sm:translate-x-5' : 'translate-x-0.5'
                                 }`} />
                               </button>
                             </div>
@@ -9874,7 +9898,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
                             disabled={savingProctoringKeys.has('email_masking_enabled')}
                             className={`relative w-14 h-7 rounded-full transition-colors ${
-                              proctoringSettings.email_masking_enabled ? 'bg-success' : 'bg-gray-300'
+                              proctoringSettings.email_masking_enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
                             } ${savingProctoringKeys.has('email_masking_enabled') ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
@@ -9984,7 +10008,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   event.severity === 'high' ? 'bg-destructive-subtle text-destructive' :
                                   event.severity === 'medium' ? 'bg-warning-subtle text-warning' : 'bg-gray-100 text-gray-600'
                                 }`}>
-                                  {event.severity}
+                                  {capitalizedCase(event.severity)}
                                 </span>
                                 {event.reviewed ? (
                                   <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success" />
@@ -10063,7 +10087,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   icon={FileText}
                   isNarrowed={assessmentListNarrowed}
                   query={assessmentSearchQuery}
-                  entityLabel="assessment"
+                  entityLabel="job"
                   emptyTitle={copy.title}
                   emptyDescription={copy.description}
                   onReset={clearAssessmentFilters}
@@ -10077,9 +10101,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         if (!canCreateAssessment) return;
                         handleOpenCreation();
                       }}
-                      aria-disabled={!canCreateAssessment}
+                      disabled={asUnitsExhausted}
+                      aria-disabled={!canCreateAssessment || asUnitsExhausted}
                       className={`${(!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : '')} disabled:opacity-50`}
-                      title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
+                      title={!canCreateAssessment ? 'You do not have permission to create assessments' : (asUnitsExhausted ? 'No assessment units available' : '')}
                       icon={<Plus className="w-4 h-4" />}
                     >
                       Create AI Assessment
@@ -10091,7 +10116,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             : (
               /* List: one full-width card per job. Card: the same cards in a
                  grid — each reflows by its own width (@container/job-row). */
-              <div className={listDisplayMode === 'grid' ? 'tf-grid-3 items-start' : 'space-y-3'}>
+              <div className={listDisplayMode === 'grid' ? 'tf-grid-3' : 'space-y-3'}>
                 {/* Renders nothing — it counts each visible job's completed
                     candidates from their own records and hands the numbers
                     back, so the rows' Completed metric reads the whole JD
@@ -10383,16 +10408,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {nextVersion} before publishing.
                   </p>
                 </div>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={closeIfIdle}
-                  disabled={isCloning}
-                  className="-mr-1.5 -mt-1 flex-shrink-0"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                </Button>
               </div>
 
               {/* FROM — the job the lineage belongs to, which the new version
@@ -10457,6 +10472,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
             {/* Actions */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <Button variant="secondary" size="md" onClick={closeIfIdle} disabled={isCloning}>
+                Cancel
+              </Button>
               <Button
                 variant="primary"
                 size="md"

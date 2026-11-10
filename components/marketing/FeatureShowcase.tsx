@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { gsap, useGSAP, withMotion } from "@/lib/gsap";
-import { Check, ClipboardCheck, FileText, Library, MessagesSquare, Mic, Play, ShieldCheck } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ClipboardCheck, FileText, Library, MessagesSquare, Mic, Play, ShieldCheck } from "lucide-react";
 
 /* ------------------------------------------------------------------ *
  * Previews — each module shows the artefact it actually produces,
@@ -20,7 +20,7 @@ function PreviewFrame({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-full flex-col rounded-[20px] border border-slate-900/[0.08] bg-mkt-surface p-4 shadow-[0_30px_60px_-36px_rgba(15,60,153,0.35)] dark:border-white/10 sm:p-6">
+    <div className="flex flex-col rounded-[20px] lg:h-full border border-slate-900/[0.08] bg-mkt-surface p-4 shadow-[0_30px_60px_-36px_rgba(15,60,153,0.35)] dark:border-white/10 sm:p-6">
       <p className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3 text-xs font-semibold text-slate-500 dark:border-white/10 dark:text-slate-400">
         <span className="min-w-0 truncate">{label}</span>
         <span className="shrink-0 rounded-full bg-mkt-cyan/10 px-2 py-0.5 text-[11px] font-semibold text-mkt-cyan-ink">
@@ -246,6 +246,37 @@ export function FeatureShowcase() {
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({});
   const panelRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  // Mobile strip: which ends still have tabs hidden past them.
+  const syncEdges = () => {
+    const el = listRef.current;
+    if (!el) return;
+    setEdges({ left: el.scrollLeft > 2, right: el.scrollLeft + el.clientWidth < el.scrollWidth - 2 });
+  };
+  useEffect(() => {
+    syncEdges();
+    window.addEventListener("resize", syncEdges);
+    return () => window.removeEventListener("resize", syncEdges);
+  }, []);
+
+  const centredFor = useRef(activeId);
+  // Keep the chosen tab centred in the strip (horizontal only — no page jump).
+  useEffect(() => {
+    if (centredFor.current === activeId) return; // only on a real switch (also StrictMode-safe)
+    centredFor.current = activeId;
+    const el = listRef.current;
+    const tab = tabRefs.current[activeId];
+    if (!el || !tab || el.scrollWidth <= el.clientWidth) return;
+    el.scrollTo({ left: tab.offsetLeft - (el.clientWidth - tab.offsetWidth) / 2, behavior: "smooth" });
+  }, [activeId]);
+
+  // End buttons: smooth-scroll the strip by ~60% of its width.
+  const scrollTabs = (dir: 1 | -1) => {
+    const el = listRef.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.6, behavior: "smooth" });
+  };
 
   // The artefact assembles itself: panel rises and its rows arrive in order.
   // First time on scroll-in, then on every switch.
@@ -284,11 +315,32 @@ export function FeatureShowcase() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1fr)] lg:gap-10">
       {/* Module list — the section's spine. Below lg it becomes a scrolling
           strip that bleeds into the gutter, so a clipped card reads as more. */}
+      <div className="relative min-w-0">
+      {/* Minimal scroll buttons at both ends (below lg), shown only when tabs are hidden that way. */}
+      {(["left", "right"] as const).map((side) =>
+        edges[side] ? (
+          <button
+            key={side}
+            type="button"
+            aria-label={side === "left" ? "Scroll tabs left" : "Scroll tabs right"}
+            onClick={() => scrollTabs(side === "left" ? -1 : 1)}
+            className={`absolute top-1/2 z-10 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-full border border-slate-900/10 bg-mkt-surface/45 text-mkt-accent shadow-md backdrop-blur transition-[opacity,transform] duration-200 active:scale-90 dark:border-white/10 lg:hidden ${
+              side === "left" ? "left-0" : "right-0"
+            }`}
+          >
+            {side === "left" ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+        ) : null
+      )}
       <div
+        ref={listRef}
+        onScroll={syncEdges}
+        // Room for the end buttons so they never cover a tab (inline beats the global mobile tablist padding).
+        style={edges.left || edges.right ? { paddingInline: 34, scrollPaddingInline: 34 } : undefined}
         role="tablist"
         aria-label="Product modules"
         aria-orientation="vertical"
-        className="-mx-4 flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:flex-col lg:gap-0 lg:overflow-visible lg:px-0 lg:pb-0"
+        className="relative mx-auto flex w-fit max-w-full snap-x snap-mandatory gap-2 overflow-x-auto pb-1 lg:w-auto lg:flex-col lg:gap-0 lg:overflow-visible lg:pb-0"
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowRight") {
             event.preventDefault();
@@ -330,22 +382,22 @@ export function FeatureShowcase() {
                   selected ? "opacity-100" : "opacity-0"
                 }`}
               />
-              <span className="flex items-center gap-2.5 sm:gap-3 lg:pl-5">
+              <span className="flex items-center gap-1.5 sm:gap-3 lg:pl-5">
                 <span
-                  className={`grid h-8 w-8 shrink-0 sm:h-9 sm:w-9 place-items-center rounded-lg transition-[background-color,color,scale] duration-300 group-hover:scale-110 ${
+                  className={`grid h-6 w-6 shrink-0 sm:h-9 sm:w-9 place-items-center rounded-lg transition-[background-color,color,scale] duration-300 group-hover:scale-110 ${
                     selected
                       ? "bg-mkt-accent-solid text-white"
                       : "bg-mkt-accent-solid/8 text-mkt-accent dark:bg-white/10"
                   }`}
                 >
-                  <Icon className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
+                  <Icon className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <span className="hidden text-xs font-medium lg:block text-slate-500 dark:text-slate-400">
                     {feature.stage}
                   </span>
                   <span
-                    className={`block whitespace-nowrap text-sm font-bold sm:text-base tracking-[-0.02em] lg:text-lg ${
+                    className={`block whitespace-nowrap text-[13px] font-bold sm:text-base tracking-[-0.02em] lg:text-lg ${
                       selected ? "text-mkt-ink" : "text-slate-600 dark:text-slate-300"
                     }`}
                   >
@@ -365,6 +417,7 @@ export function FeatureShowcase() {
             </button>
           );
         })}
+      </div>
       </div>
 
       {/* Artefact panel */}
