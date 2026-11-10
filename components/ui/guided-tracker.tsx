@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { HelpCircle, Lightbulb, X } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
@@ -30,10 +30,16 @@ export const STATUS_HELP: Partial<Record<InviteStatusKind, string>> = {
 };
 
 export function StatusLegend({ kinds }: { kinds: InviteStatusKind[] }) {
+  /* Kept inside the Track popup: the popup's panel is the collision boundary,
+     so the legend flips / shifts to stay within it (and scrolls if it is
+     taller than the room there) instead of spilling over its edge. */
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [boundary, setBoundary] = useState<Element | null>(null);
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => { if (open) setBoundary(triggerRef.current?.closest('.tf-tracker-panel') ?? null); }}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           className="inline-flex items-center gap-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
         >
@@ -41,7 +47,11 @@ export function StatusLegend({ kinds }: { kinds: InviteStatusKind[] }) {
           What do the statuses mean?
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[min(24rem,calc(100vw-1.5rem))] p-3">
+      <PopoverContent
+        align="start"
+        collisionBoundary={boundary ?? undefined}
+        className="w-[min(24rem,calc(100vw-1.5rem))] p-3"
+      >
         <p className="tf-caption mb-2">Invite statuses</p>
         <ul className="space-y-2">
           {kinds.map((kind) => (

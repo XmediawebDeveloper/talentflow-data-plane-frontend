@@ -126,7 +126,9 @@ import JobStatusBadge, { jobLockBadgeFor, type JobStatusBadgeKind } from '@/comp
 import { Tooltip } from '@/components/ui/tooltip';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import type { JDLineageVersion } from '@/lib/services/jdService';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import { assessmentResendExpiry } from '@/lib/utils/resendExpiry';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
@@ -779,6 +781,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Revoke confirmation state
   const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
   const [revokeCount, setRevokeCount] = useState<number | null>(null);
+  /* The one pending candidate's email when only one link is pending — the
+     revoke popup then reads as that candidate's own (three-dot) revoke. */
+  const [revokeOneEmail, setRevokeOneEmail] = useState<string | null>(null);
   const [isRevoking, setIsRevoking] = useState(false);
   // Set of assessment IDs revoked in THIS browser tab. We use a ref (not
   // state) because setState is async — if we set the state and then
@@ -4276,15 +4281,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       await dialog.alert({ title: 'Cannot revoke invites', message: jobLock, variant: 'warning' });
       return;
     }
-    setRevokeTargetAssessment(assessment);
-    setRevokeCount(null);
+    /* Count (and, for one link, whose it is) BEFORE opening: opening first
+       drew the many-links popup and then swapped it for the one-candidate
+       popup when the email landed — a visible flash. */
+    let count: number | null = null;
+    let oneEmail: string | null = null;
     try {
-      const count = await assessmentService.getRevokableInvitationsCount(assessment.id);
-      setRevokeCount(count);
+      count = await assessmentService.getRevokableInvitationsCount(assessment.id);
+      if (count === 1) {
+        /* Which candidate: the one invite the revoke would take — same rule. */
+        const res = await assessmentService.listInvitations(assessment.id, { page: 1, page_size: 200 }).catch(() => null);
+        oneEmail = res?.items?.find(isBulkRevocable)?.candidate_email || null;
+      }
     } catch (err) {
       console.error('Failed to fetch revokable count:', err);
-      setRevokeCount(null);
+      count = null;
     }
+    setRevokeCount(count);
+    setRevokeOneEmail(oneEmail);
+    setRevokeTargetAssessment(assessment);
   };
 
   const handleConfirmRevoke = async () => {
@@ -4484,33 +4499,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
 
-  // Preview the new expiry the backend will produce. Mirrors backend logic:
-  // reuses the original invitation's configured duration, measured from the LAST
-  // send (expires_at - sent_at). Anchoring on created_at would promise a longer
-  // window than the server grants on a second resend, since created_at never moves.
-  const computeResendExpiryPreview = (invitation: any): { dateLabel: string; durationLabel: string } | null => {
-    if (!invitation) return null;
-    const sentAnchor = invitation.sent_at || invitation.created_at;
-    const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
-    const expiresMs = invitation.expires_at ? new Date(invitation.expires_at).getTime() : NaN;
-    let durationMs = 24 * 60 * 60 * 1000; // default 1 day
-    if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
-      durationMs = expiresMs - createdMs;
-    }
-    const newExpiry = new Date(Date.now() + durationMs);
-    const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
-    let durationLabel: string;
-    if (totalMinutes >= 60 * 24) {
-      const days = Math.round(totalMinutes / (60 * 24));
-      durationLabel = days === 1 ? '1 day' : `${days} days`;
-    } else if (totalMinutes >= 60) {
-      const hours = Math.round(totalMinutes / 60);
-      durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
-    } else {
-      durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
-    }
-    return { dateLabel: formatIST(newExpiry.toISOString()), durationLabel };
-  };
 
   // Revoke current link and resend with a freshly generated link.
   // The backend regenerates invitation_token and refreshes expires_at using
@@ -10279,37 +10267,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       })()}
 
       {/* Resend confirmation — regenerates token, invalidates old link */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={!!resendTargetInvitation}
-        onClose={() => { if (!isResending) setResendTargetInvitation(null); }}
+        kind="assessment"
+        email={resendTargetInvitation?.candidate_email}
+        expiry={resendTargetInvitation ? assessmentResendExpiry(resendTargetInvitation) : null}
+        onCancel={() => { if (!isResending) setResendTargetInvitation(null); }}
         onConfirm={() => resendTargetInvitation && handleResendInvitation(resendTargetInvitation)}
-        title="Invalidate old link & send new invitation?"
-        description={
-          resendTargetInvitation
-            ? `A fresh invitation will be emailed to ${resendTargetInvitation.candidate_email}. The previous link will stop working immediately.`
-            : ''
-        }
-        confirmText={isResending ? 'Sending…' : 'Yes, send new link'}
-        cancelText="Cancel"
-        variant="warning"
-      >
-        {resendTargetInvitation && (() => {
-          const preview = computeResendExpiryPreview(resendTargetInvitation);
-          if (!preview) return null;
-          return (
-            <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
-              <p className="text-warning-strong font-medium mb-1">New link expiry</p>
-              <p className="text-warning-strong">
-                Valid for <strong>{preview.durationLabel}</strong> from now — expires on{' '}
-                <strong>{preview.dateLabel}</strong>.
-              </p>
-              <p className="text-warning text-xs mt-2">
-                Same duration as the original invitation.
-              </p>
-            </div>
-          );
-        })()}
-      </ConfirmationDialog>
+        isLoading={isResending}
+      />
 
       {/* Revoke / Edit ("Save & Send") / full-history — shared by the Track
           Invites popup and the Invitation Status tab (see
@@ -10338,52 +10304,48 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {/* Bulk resend confirmation for the Invitation Status tab — the same
           ConfirmationDialog, wording and warning tone as the popup's below,
           counting its own selection. */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={showInviteBulkResendConfirm}
-        onClose={() => { if (!isBulkResending) setShowInviteBulkResendConfirm(false); }}
+        kind="assessment"
+        bulk={{ count: inviteBulkResendCount }}
+        targets={inviteStatusRows.filter((inv) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkResending) setShowInviteBulkResendConfirm(false); }}
         onConfirm={handleInviteBulkResend}
-        title="Resend invitations to selected candidates?"
-        description={`A fresh invitation link will be emailed to ${inviteBulkResendCount} selected candidate${inviteBulkResendCount === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-        confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${inviteBulkResendCount}`}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isBulkResending}
       />
 
       {/* Bulk resend confirmation — selected Invited/Expired candidates only. */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={showBulkResendConfirm}
-        onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+        kind="assessment"
+        bulk={{ count: trackingSelectedIds.size }}
+        targets={trackingInvitations.filter((inv) => trackingSelectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: selectedAssessmentForTracking?.jd_short_id, jobTitle: selectedAssessmentForTracking?.jd_title, version: inv._assessment_version ?? selectedAssessmentForTracking?.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
         onConfirm={handleBulkResend}
-        title="Resend invitations to selected candidates?"
-        description={`A fresh invitation link will be emailed to ${trackingSelectedIds.size} selected candidate${trackingSelectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-        confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${trackingSelectedIds.size}`}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isBulkResending}
       />
 
       {/* Bulk revoke confirmation for the Invitation Status tab. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={showInviteBulkRevokeConfirm}
-        onClose={() => { if (!isBulkRevoking) setShowInviteBulkRevokeConfirm(false); }}
+        kind="assessment"
+        bulk={{ scope: 'selected', count: inviteBulkRevokeCount }}
+        targets={inviteStatusRows.filter((inv) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)).map((inv) => ({ jobCode: inv._jd_short_id, jobTitle: inv._jd_title, version: inv._assessment_version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevoking) setShowInviteBulkRevokeConfirm(false); }}
         onConfirm={handleInviteBulkRevoke}
-        title="Revoke selected invitations?"
-        description={`This will immediately expire the invitation link${inviteBulkRevokeCount === 1 ? '' : 's'} for ${inviteBulkRevokeCount} selected candidate${inviteBulkRevokeCount === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${inviteBulkRevokeCount}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevoking}
       />
 
       {/* Bulk revoke confirmation for the Track Invites popup — selected
           Invited candidates only. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={showTrackingBulkRevokeConfirm}
-        onClose={() => { if (!isBulkRevoking) setShowTrackingBulkRevokeConfirm(false); }}
+        kind="assessment"
+        bulk={{ scope: 'selected', count: trackingSelectedIds.size }}
+        targets={trackingInvitations.filter((inv) => trackingSelectedIds.has(inv.id) && isBulkRevocable(inv)).map((inv) => ({ jobCode: selectedAssessmentForTracking?.jd_short_id, jobTitle: selectedAssessmentForTracking?.jd_title, version: inv._assessment_version ?? selectedAssessmentForTracking?.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevoking) setShowTrackingBulkRevokeConfirm(false); }}
         onConfirm={handleTrackingBulkRevoke}
-        title="Revoke selected invitations?"
-        description={`This will immediately expire the invitation link${trackingSelectedIds.size === 1 ? '' : 's'} for ${trackingSelectedIds.size} selected candidate${trackingSelectedIds.size === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${trackingSelectedIds.size}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevoking}
       />
 
       {/* Duplicate confirmation — creates a DRAFT copy as the lineage's next
@@ -10565,33 +10527,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       {/* Revoke confirmation — invalidates only PENDING / SENT links.
           Candidates who have opened, started, or completed the assessment
           are deliberately not touched. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={!!revokeTargetAssessment}
-        onClose={() => { if (!isRevoking) setRevokeTargetAssessment(null); }}
+        kind="assessment"
+        bulk={{ scope: 'pending', count: revokeCount, targetName: revokeTargetAssessment ? stripVersionFromTitle(revokeTargetAssessment.title || '') : undefined }}
+        targets={revokeTargetAssessment ? [{ jobCode: revokeTargetAssessment.jd_short_id, jobTitle: revokeTargetAssessment.jd_title, version: revokeTargetAssessment.version, email: revokeOneEmail }] : undefined}
+        onCancel={() => { if (!isRevoking) setRevokeTargetAssessment(null); }}
         onConfirm={handleConfirmRevoke}
-        title="Revoke pending invite links?"
-        description={
-          revokeTargetAssessment
-            ? `Pending invite links for "${stripVersionFromTitle(revokeTargetAssessment.title || '')}" will stop working immediately.`
-            : ''
-        }
-        confirmText={isRevoking ? 'Revoking…' : 'Revoke links'}
-        cancelText="Cancel"
-        variant="warning"
-      >
-        {revokeTargetAssessment && (
-          <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
-            <p className="text-warning-strong font-medium mb-1">
-              {revokeCount === null
-                ? 'Counting eligible invitations…'
-                : `${revokeCount} link${revokeCount === 1 ? '' : 's'} will be revoked.`}
-            </p>
-            <p className="text-warning-strong text-xs mt-1">
-              Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
-            </p>
-          </div>
-        )}
-      </ConfirmationDialog>
+        isLoading={isRevoking}
+      />
     </main>
   );
 }

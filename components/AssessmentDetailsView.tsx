@@ -11,6 +11,7 @@ import type { AssessmentResponse, JDResponse } from '@/lib/services';
 import type { CombinedAuditActivity } from '@/lib/services/assessmentService';
 import { isAssessmentArchived } from '@/lib/services/assessmentService';
 import { isJdDisabled, assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
+import { JobVersionsLockBanner, splitJobVersions } from '@/components/jobs/JobLockNotice';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -25,7 +26,8 @@ import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import { currentResultReturnTo, isResultRestoreArrival, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import api from '@/lib/services/api';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -1036,7 +1038,12 @@ export default function AssessmentDetailsView({
   const inviteInitialLoading = inviteLoading && inviteRows.length === 0;
   const inviteRefreshVeil = (inviteLoading || inviteRefreshing) && inviteRows.length > 0;
 
-  const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status))
+  /* This assessment's job version: Disabled OR Archived locks its invite
+     actions (was Disabled only), and names it in the banner. */
+  const thisJobVersion = jobVersions.find((v) => v.id === assessment?.jd_id);
+  const thisVersionLock = splitJobVersions(thisJobVersion ? [thisJobVersion] : []).locked[0] ?? null;
+  const thisVersionLocked = isJdDisabled(thisJobVersion?.status) || !!thisVersionLock;
+  const inviteSelectableIds = (isAssessmentArchived(assessment?.status) || thisVersionLocked)
     ? []
     : inviteRows.filter(isBulkActionable).map((inv: any) => inv.id);
   const allInvitesSelected =
@@ -1616,6 +1623,13 @@ export default function AssessmentDetailsView({
           `sections`/`formattedDuration` this file derives. No new request, no
           new field, nothing hardcoded. A value the API did not return drops
           its item and its bullet rather than printing a blank. */}
+      {/* This assessment's job version is Disabled / Archived: say so, and
+          which versions invitation actions still work on. */}
+      {thisVersionLock && (
+        <div className="mb-4">
+          <JobVersionsLockBanner locked={[thisVersionLock]} active={splitJobVersions(jobVersions).active} />
+        </div>
+      )}
       <div className="mb-5">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
@@ -2953,7 +2967,7 @@ export default function AssessmentDetailsView({
                 selectedIds={inviteSelectedIds}
                 onToggleSelect={toggleInviteSelectOne}
                 archived={isAssessmentArchived(assessment?.status)}
-                jdDisabled={isJdDisabled(jobVersions.find((v) => v.id === assessment?.jd_id)?.status)}
+                jdDisabled={thisVersionLocked}
                 canOpenResult={opensTrackedInviteDetails}
                 onOpenResult={openInviteResult}
                 onResend={setResendTarget}
@@ -3656,43 +3670,35 @@ export default function AssessmentDetailsView({
 
       {/* Resend confirmation — regenerates the token and invalidates the old
           link. Same wording, tone and variant as the Track Invites popup's. */}
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={!!resendTarget}
-        onClose={() => { if (!isResending) setResendTarget(null); }}
+        kind="assessment"
+        email={resendTarget?.candidate_email}
+        onCancel={() => { if (!isResending) setResendTarget(null); }}
         onConfirm={() => resendTarget && handleResendInvite(resendTarget)}
-        title="Invalidate old link & send new invitation?"
-        description={
-          resendTarget
-            ? `A fresh invitation will be emailed to ${resendTarget.candidate_email}. The previous link will stop working immediately.`
-            : ''
-        }
-        confirmText={isResending ? 'Sending…' : 'Yes, send new link'}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isResending}
       />
 
-      <ConfirmationDialog
+      <ResendLinkModal
         isOpen={showInviteBulkResend}
-        onClose={() => { if (!isBulkResendingInvites) setShowInviteBulkResend(false); }}
+        kind="assessment"
+        bulk={{ count: inviteSelectedIds.size }}
+        targets={inviteRows.filter((inv) => inviteSelectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: assessment.jd_short_id, jobTitle: assessment.jd_title || stripVersionFromTitle(assessment.title), version: assessment.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkResendingInvites) setShowInviteBulkResend(false); }}
         onConfirm={handleInviteBulkResend}
-        title="Resend invitations to selected candidates?"
-        description={`A fresh invitation link will be emailed to ${inviteSelectedIds.size} selected candidate${inviteSelectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-        confirmText={isBulkResendingInvites ? 'Sending…' : `Yes, resend to ${inviteSelectedIds.size}`}
-        cancelText="Cancel"
-        variant="warning"
+        isLoading={isBulkResendingInvites}
       />
 
       {/* Bulk revoke confirmation — selected Invited candidates only. Same
           wording as the Track Invites popup's bulk revoke. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={showInviteBulkRevoke}
-        onClose={() => { if (!isBulkRevokingInvites) setShowInviteBulkRevoke(false); }}
+        kind="assessment"
+        bulk={{ scope: 'selected', count: inviteSelectedIds.size }}
+        targets={inviteRows.filter((inv) => inviteSelectedIds.has(inv.id) && isBulkRevocable(inv)).map((inv) => ({ jobCode: assessment.jd_short_id, jobTitle: assessment.jd_title || stripVersionFromTitle(assessment.title), version: assessment.version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevokingInvites) setShowInviteBulkRevoke(false); }}
         onConfirm={handleInviteBulkRevoke}
-        title="Revoke selected invitations?"
-        description={`This will immediately expire the invitation link${inviteSelectedIds.size === 1 ? '' : 's'} for ${inviteSelectedIds.size} selected candidate${inviteSelectedIds.size === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
-        confirmText={isBulkRevokingInvites ? 'Revoking…' : `Yes, revoke ${inviteSelectedIds.size}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevokingInvites}
       />
 
       {/* Configure-settings preview for a New Versions card.
