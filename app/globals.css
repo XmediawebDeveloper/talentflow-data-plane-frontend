@@ -188,6 +188,13 @@ html.tf-app-shell body {
   overflow: hidden;
 }
 
+/* Edge draws its own show-password eye (and clear ×) inside password fields;
+   ours sits beside it, so Edge showed two eyes. Hide the browser's. */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+
 /* Hide scrollbar for horizontal scrollable tabs */
 .scrollbar-hide {
   -ms-overflow-style: none;
