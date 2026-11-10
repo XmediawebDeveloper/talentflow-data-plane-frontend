@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { jdService, JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -336,6 +337,9 @@ export default function JDVersionHistoryModal({
   goToJdTab,
   cancelInFooter = false,
 }: JDVersionHistoryModalProps) {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10): JD Export, same as the JD list.
+  const canDownloadJd = isTenantAdmin || hasPermissionCode('jd:export');
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [versions, setVersions] = useState<JDHistoryVersion[]>([]);
@@ -453,6 +457,7 @@ export default function JDVersionHistoryModal({
      it, so the library stays out of the bundle until someone actually
      downloads. */
   const handleDownload = async (version: JDHistoryVersion) => {
+    if (!canDownloadJd) return;
     const { Document, Packer, Paragraph, TextRun } = await import('docx');
 
     const lines = buildCompareText(version).split('\n');
@@ -654,9 +659,10 @@ export default function JDVersionHistoryModal({
                     variant="secondary"
                     size="sm"
                     onClick={() => handleDownload(selectedVersion)}
-                    className=""
+                    className={!canDownloadJd ? 'opacity-50 cursor-not-allowed' : ''}
+                    aria-disabled={!canDownloadJd}
                     aria-label="Download this version as a Word document"
-                    title="Download this version as a Word document"
+                    title={canDownloadJd ? 'Download this version as a Word document' : "You can view this job description, but your role doesn't allow downloading it"}
                   >
                     <Download className="w-3.5 h-3.5" />
                   </Button>

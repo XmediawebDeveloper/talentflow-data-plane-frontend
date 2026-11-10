@@ -9,7 +9,7 @@ import FilterSelect from '@/components/ui/filter-select';
 import rbacService from '@/lib/services/rbacService';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { withRequired, withoutOrphanEntryPoints, getAllCatalogCodes } from '@/lib/permissions/permissionRules';
-import { ALWAYS_ON, copyBlockedReason } from '@/lib/permissions/moduleLevels';
+import { ALWAYS_ON, copyBlockedReason, pruneAutoMap, type AutoMap } from '@/lib/permissions/moduleLevels';
 import type { Role, RoleListItem } from '@/lib/types/rbac';
 import RoleAccessEditor from './RoleAccessEditor';
 import RoleAccessSummary from './RoleAccessSummary';
@@ -78,6 +78,8 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [codes, setCodes] = useState<Set<string>>(startCodes);
+  // Areas switched on automatically ("Auto"), saved with the role.
+  const [autoAreas, setAutoAreas] = useState<AutoMap>({});
   const [startFrom, setStartFrom] = useState('');
   const [nameTouched, setNameTouched] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -94,6 +96,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
     setName(mode === 'dup' && role ? `${role.name} (COPY)` : mode === 'edit' && role ? role.name : '');
     setDescription(mode === 'edit' && role ? role.description ?? '' : mode === 'dup' && role ? role.description ?? '' : '');
     setCodes(startCodes);
+    setAutoAreas(role && mode !== 'new' ? pruneAutoMap(startCodes, role.auto_enabled_areas) : {});
     setStartFrom('');
     setNameTouched(false);
     setConfirmOpen(false);
@@ -132,7 +135,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
           }] : []),
         ]}
       >
-        <RoleAccessSummary codes={roleCodes(role)} roleName={role.name} description={role.description} eyebrow={role.is_system ? 'System role' : 'Role'} />
+        <RoleAccessSummary codes={roleCodes(role)} roleName={role.name} description={role.description} eyebrow={role.is_system ? 'System role' : 'Role'} auto={role.auto_enabled_areas} />
         <RoleMembers role={role} roleNames={roleNames} onChanged={onPeopleChanged} />
       </AppModal>
     );
@@ -145,7 +148,10 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
       const idOf = new Map(permissions.map((p) => [p.code, p.id]));
       const permission_ids = Array.from(codes).map((c) => idOf.get(c)).filter((id): id is number => typeof id === 'number');
       if (mode === 'edit' && role) {
-        const updated = await rbacService.updateRole(role.id, { name: trimmed, description: description.trim(), permission_ids });
+        const updated = await rbacService.updateRole(role.id, {
+          name: trimmed, description: description.trim(), permission_ids,
+          auto_enabled_areas: pruneAutoMap(codes, autoAreas),
+        });
         const n = updated.affected_user_count ?? holders;
         toast.success(n ? `Role saved. Access updated for ${plural(n, 'user')}.` : 'Role saved');
         onSaved();
@@ -155,6 +161,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
           code: slug(trimmed),
           description: description.trim() || undefined,
           permission_ids,
+          auto_enabled_areas: pruneAutoMap(codes, autoAreas),
         });
         // Give the new role to the people picked (one role per user, so this
         // replaces their current role). The role exists either way.
@@ -234,7 +241,9 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
                 onChange={(v: string) => {
                   setStartFrom(v);
                   const src = roles.find((r) => String(r.id) === v);
-                  setCodes(src ? roleCodes(src) : new Set(ALWAYS_ON));
+                  const nextCodes = src ? roleCodes(src) : new Set<string>(ALWAYS_ON);
+                  setCodes(nextCodes);
+                  setAutoAreas(src ? pruneAutoMap(nextCodes, src.auto_enabled_areas) : {});
                 }}
                 options={[{ value: '', label: "Don't copy (start with no access)" }, ...roles.filter((r) => !copyBlockedReason(r)).map((r) => ({ value: String(r.id), label: r.name }))]}
                 ariaLabel="Copy permissions from"
@@ -270,7 +279,7 @@ export default function RoleEditorModal({ open, mode, role, roles, onClose, onSa
             </div>
           )}
         </div>
-        <RoleAccessEditor codes={codes} onChange={setCodes} />
+        <RoleAccessEditor codes={codes} onChange={setCodes} auto={autoAreas} onAutoChange={setAutoAreas} />
       </AppModal>
       <AppModal
         open={confirmOpen}

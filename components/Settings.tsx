@@ -45,7 +45,6 @@ const ROLE_LABELS: Record<string, string> = {
   recruiter: 'Recruiter',
   viewer: 'Viewer',
   billing_manager: 'Billing Manager',
-  standard_user: 'Member',
 };
 const prettyRoleName = (role?: string) =>
   (role && ROLE_LABELS[role]) || (role ? role.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '');

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, FileText, Download, Calendar, History, Eye, Loader2, Briefcase, CheckCircle2, Lightbulb } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
 import { toast } from 'sonner';
+import { useAuth } from '@/components/providers/AuthProvider';
+import { canDownloadSomeResumes, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
@@ -68,6 +70,9 @@ export default function ResumeVersionsModal({
   onApplyToJobDisabledReason,
   selectedVersionId,
 }: ResumeVersionsModalProps) {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  // Viewing isn't downloading (2026-11-10).
+  const canDownload = canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode });
   /* Choosing is offered whenever a handler exists and the whole dialog isn't
      already a picker. Falls back to the newest version, so "in use" is marked
      from the moment the list opens rather than only after a click. */
@@ -101,6 +106,7 @@ export default function ResumeVersionsModal({
   };
 
   const handleDownload = async (version: ResumeVersion) => {
+    if (!canDownload) return;
     try {
       const blob = candidate.resumeId
         ? await resumeService.downloadVersion(candidate.resumeId, version.id)
@@ -420,8 +426,9 @@ export default function ResumeVersionsModal({
                               e.stopPropagation();
                               handleDownload(version);
                             }}
-                            className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                            aria-label="Download" title="Download"
+                            aria-disabled={!canDownload}
+                            className={`p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors ${!canDownload ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-label="Download" title={canDownload ? 'Download' : DOWNLOAD_BLOCKED_MESSAGE}
                           >
                             <Download className="w-4 h-4" />
                           </button>

@@ -33,6 +33,7 @@ import UploadModal from './UploadModal';
 import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { Skeleton } from '@/components/ui/skeleton';
+import { canDownloadResume } from '@/lib/permissions/resumeDownload';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -185,6 +186,8 @@ export default function SelectSourceModal({
   const canUpdateMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:update');
   const canDeleteMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:delete');
   const canArchiveMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:archive');
+  const canDownloadMine = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: true });
+  const canDownloadShared = canDownloadResume({ isTenantAdmin, hasPermissionCode, own: false });
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // State
@@ -1264,6 +1267,7 @@ export default function SelectSourceModal({
                      org-wide list to pick candidates from, not one this
                      modal manages), so only the read-only Preview/Download
                      actions carry over onto it. */
+                  canDownload={activeTab === 'my-resumes' ? canDownloadMine : canDownloadShared}
                   onArchive={activeTab === 'my-resumes' ? handleArchiveResume : undefined}
                   onArchiveDisabled={!canArchiveMyResumes}
                   onArchiveDisabledReason="You do not have permission to archive resumes"
@@ -1295,9 +1299,6 @@ export default function SelectSourceModal({
                      match those pages without a second implementation here.
                      Selection is held by resume id, so ticks survive a page
                      change. */
-                  /* Left at its default (true), as on My Resumes and Resume
-                     Database, so the Download Resume entry appears. */
-                  canDownload
                   /* Fill the modal body and scroll inside it. Without this
                      the shell keeps `.tf-table-shell`'s 400px floor / vh cap
                      — taller than the space left under the header and tabs —

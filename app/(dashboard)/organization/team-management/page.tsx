@@ -890,7 +890,7 @@ export default function TeamManagementPage() {
               <TeamUsageAnalytics focusTeamId={usageFocusTeamId} onFocusHandled={() => setUsageFocusTeamId(null)} />
             ) : shownTab === 'analytics' ? (
               <TeamAnalyticsDashboard
-                userRole={authUser?.role || 'standard_user'}
+                userRole={authUser?.role || 'viewer'}
                 onOpenTeam={canViewUsageTab ? (teamId) => { setUsageFocusTeamId(teamId); setActiveTab('usage'); } : undefined}
               />
             ) : shownTab === 'history' ? (

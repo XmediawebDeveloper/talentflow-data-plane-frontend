@@ -35,6 +35,7 @@ import { RoleListItem } from '@/lib/types/rbac';
 import { useUserLimits } from './UserLimits';
 import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
+const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 import FilterSelect from '@/components/ui/filter-select';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -86,7 +87,6 @@ const defaultRoleLabels: Record<string, string> = {
   recruiter: 'Recruiter',
   viewer: 'Viewer',
   billing_manager: 'Billing',
-  standard_user: 'User',
 };
 
 // Default badge colors for known roles - RBAC01-07
@@ -96,7 +96,6 @@ const defaultRoleBadgeColors: Record<string, string> = {
   recruiter: 'bg-brand-cyan/10 text-brand-cyan',
   viewer: 'bg-gray-100 text-gray-600',
   billing_manager: 'bg-success-subtle text-success',
-  standard_user: 'bg-gray-100 text-gray-600',
 };
 
 // Color palette for custom roles - each custom role gets a distinct color
@@ -209,7 +208,9 @@ function resetUserSyncThrottle(): void {
 
 export default function UserManagement() {
   const router = useRouter();
-  const { user: currentUser, refreshUser, isLoading: authLoading, canManageUsers: authCanManageUsers, hasPermissionCode } = useAuth();
+  const { user: currentUser, refreshUser, isLoading: authLoading, canManageUsers: authCanManageUsers, hasPermissionCode, isTenantAdmin: isOwnerForSeats, hasPermission: hasPermissionForSeats } = useAuth();
+  // Buying seats needs Subscription & Billing Access (Upgrade Plan), same as the add-on API (2026-11-10).
+  const canBuySeats = isOwnerForSeats || hasPermissionForSeats('canUpgradePlan');
   const dialog = useGlobalDialog();
 
   // Granular action gates. Tenant admins always pass; delegated admins pass when
@@ -319,6 +320,7 @@ export default function UserManagement() {
     }
     if (isAtLimit) {
       if (isTrial) toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+      else if (!canBuySeats) toast.error(`User limit reached. ${SEATS_BLOCKED_MESSAGE}`);
       else setShowAddSeatsModal(true);
       return;
     }
@@ -1627,7 +1629,7 @@ export default function UserManagement() {
         </div>
         <div className="min-w-0 rounded-2xl border border-gray-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/40 sm:p-5">
           {role ? (
-            <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} />
+            <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} auto={role.auto_enabled_areas} />
           ) : (
             <div className="flex min-h-[200px] flex-col items-center justify-center gap-2 text-center">
               <Shield className="h-6 w-6 text-gray-300 dark:text-slate-600" />
@@ -1666,6 +1668,8 @@ export default function UserManagement() {
                 if (isAtLimit) {
                   if (isTrial) {
                     toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                  } else if (!canBuySeats) {
+                    toast.error(`User limit reached. ${SEATS_BLOCKED_MESSAGE}`);
                   } else {
                     setShowAddSeatsModal(true);
                   }
@@ -2487,7 +2491,7 @@ export default function UserManagement() {
               </div>
             </div>
             {role ? (
-              <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} />
+              <RoleAccessSummary codes={codesOfRole(role)} roleName={role.name} description={role.description} auto={role.auto_enabled_areas} />
             ) : (
               <p className="text-sm text-gray-500 dark:text-slate-400">
                 {isOwner

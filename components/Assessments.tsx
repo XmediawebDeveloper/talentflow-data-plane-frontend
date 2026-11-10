@@ -4447,6 +4447,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         await resolveJobVersionsByJdId([jdId, ...rows.map((row) => row?.jd_id)]),
       );
     }
+    /* Each job version's own Disabled/Archived status, so a sibling version
+       never shown on this page's own assessment list still locks its rows'
+       Resend/Revoke correctly — `jobVersionStatusById` is otherwise only
+       filled for the jd_ids `apiAssessments` itself points at. */
+    const jdIdsInScope = Array.from(new Set(
+      [jdId, ...rows.map((row) => row?.jd_id)].filter(Boolean),
+    )) as string[];
+    const missingStatusIds = jdIdsInScope.filter((id) => !(id in jobVersionStatusById));
+    if (missingStatusIds.length > 0) {
+      try {
+        const lineages = await loadJobVersionLineages(missingStatusIds);
+        setJobVersionStatusById((prev) => ({ ...prev, ...jobVersionStatusesFrom(lineages) }));
+      } catch {
+        // best effort — the per-row lock falls back to whatever is cached
+      }
+    }
     setTrackingJob({
       jobId: assessment.jd_short_id,
       jobTitle: assessment.job?.title || stripVersionFromTitle(assessment.title),
@@ -10221,6 +10237,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           ...assessment,
           jd_version: (trackingJob ? jobVersionOfAssessment(assessment, trackingJob.jobVersionByJdId) : assessment._job_version)
             ?? assessment.jd_version ?? 1,
+          /* Own job version's live status, so a whole-job tracker locks each
+             row by what ITS job version actually is, not the single JD the
+             Track button happened to be clicked from — see
+             TrackInvitesModal's `_jd_status` stamping. */
+          _jd_status: assessment.jd_id ? jobVersionStatusById[assessment.jd_id] : undefined,
         }));
         return (
           <TrackInvitesModal

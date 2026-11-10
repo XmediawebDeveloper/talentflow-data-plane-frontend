@@ -282,19 +282,19 @@ export default function GlobalScoringProgressIndicator() {
      hover-preview of it (isMinimized && shrunk && isHoveringShrunk) — same
      run, same content, so it's built once instead of kept in sync twice. */
   const cardClassName = `fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
-    isAllFailed ? 'bg-destructive hover:bg-destructive border-destructive-line' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
+    isAllFailed ? 'bg-destructive hover:bg-destructive border-destructive-line' : 'bg-brand-blue hover:bg-brand-blue-2 border-white/10 shadow-brand-blue/25'
   }`;
   const cardBody = (
     <>
       <div className="relative flex-shrink-0">
         <ClipboardList className="w-5 h-5" />
         {hasActiveScoring && (
-          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-brand-cyan rounded-full animate-pulse" />
         )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold truncate">{isAllFailed ? 'Scoring Failed' : 'Scoring Progress'}</p>
-        <p className="text-xs text-gray-300">
+        <p className="text-xs text-white/70">
           {isAllFailed
             ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
             : isAllComplete
@@ -303,13 +303,13 @@ export default function GlobalScoringProgressIndicator() {
           }
         </p>
       </div>
-      <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
+      <div className="w-12 h-1.5 bg-white/20 rounded-full overflow-hidden flex-shrink-0">
         <div
-          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-destructive' : isAllComplete ? 'bg-success' : 'bg-blue-500'}`}
+          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-white' : isAllComplete ? 'bg-brand-cyan' : 'bg-white'}`}
           style={{ width: `${overallProgress}%` }}
         />
       </div>
-      <Maximize2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+      <Maximize2 className="w-4 h-4 text-white/70 flex-shrink-0" />
       {/* Same close as the expanded panel's header X — clears every active job
           rather than just hiding this card, so the two "close" gestures agree
           on what closing the whole run actually means. Stops the click from
@@ -328,7 +328,7 @@ export default function GlobalScoringProgressIndicator() {
           className="flex-shrink-0 p-0.5 -m-0.5 rounded hover:bg-white/10 transition-colors"
           aria-label="Close"
         >
-          <X className="w-4 h-4 text-gray-400 hover:text-white transition-colors" />
+          <X className="w-4 h-4 text-white/70 hover:text-white transition-colors" />
         </button>
       )}
     </>

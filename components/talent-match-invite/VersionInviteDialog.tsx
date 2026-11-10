@@ -777,7 +777,8 @@ export default function VersionInviteDialog({
      coming back reopens it here. Without access to Usage & Quotas, who to
      ask instead. */
   const router = useRouter();
-  const canAddUnits = can('canViewUsage');
+  // Buying units is a billing action (2026-11-10): Upgrade Plan, same as the add-on API.
+  const canAddUnits = can('canUpgradePlan');
   const addUnits = () => {
     saveInviteUnitsHandoff({
       request: {
@@ -813,7 +814,7 @@ export default function VersionInviteDialog({
       Add units
     </Button>
   ) : (
-    <span className="block text-xs font-medium">Contact your workspace admin to add units.</span>
+    <span className="block text-xs font-medium">Ask the account owner or a Billing Manager to add units.</span>
   );
 
   /* An email typed in that is already picked elsewhere — said at once. */

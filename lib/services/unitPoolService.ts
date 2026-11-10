@@ -57,6 +57,28 @@ export type ConsumptionStatus =
   | 'ABANDONED'      // User abandoned action mid-process
   | 'INTERRUPTED';   // Connection/session interrupted
 
+export interface UserUsageRow {
+  user_id: string;
+  user_name: string | null;
+  user_email: string | null;
+  is_existing_user: boolean;
+  by_type: Partial<Record<'RS' | 'AS' | 'AIU' | 'RU', number>>;
+  total: number;
+  success_count: number;
+  failed_count: number;
+  last_active: string | null;
+}
+
+export interface UsersUsageResponse {
+  period: { start: string | null; end: string };
+  billing_period: { start: string; end: string | null } | null;
+  users: UserUsageRow[];
+  /** Units no user can be credited with (e.g. system adjustments); null for own-only views. */
+  unattributed: Partial<Record<'RS' | 'AS' | 'AIU' | 'RU', number>> | null;
+  totals: Partial<Record<'RS' | 'AS' | 'AIU' | 'RU', number>>;
+  visibility: string;
+}
+
 export interface ConsumptionLogEntry {
   id: string;
   unit_type: LedgerUnitType;
@@ -303,6 +325,23 @@ export const unitPoolService = {
   }): Promise<PaginatedResponse<ConsumptionLogEntry>> {
     try {
       const response = await api.get('/unit-pool/consumption-history', { params });
+      return response.data;
+    } catch (error) {
+      throw handleApiError(error);
+    }
+  },
+
+  /**
+   * Units used per user (User-Wise view). Same attribution as the Team-Wise
+   * view, so both agree. period='billing' = the current billing period exactly.
+   */
+  async getUsersUsage(params?: {
+    start_date?: string;
+    end_date?: string;
+    period?: 'billing';
+  }): Promise<UsersUsageResponse> {
+    try {
+      const response = await api.get('/unit-pool/users/usage', { params });
       return response.data;
     } catch (error) {
       throw handleApiError(error);

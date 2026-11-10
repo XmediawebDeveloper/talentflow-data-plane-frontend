@@ -432,10 +432,10 @@ export const featurePermissionService = {
    * Check if a role can have features assigned
    */
   canAssignFeatures(role: string): boolean {
-    // Only standard_user and recruiter can have features assigned
+    // Only recruiter can have features assigned (Standard User was removed 2026-11)
     // viewer has permission expansion blocked
     // tenant_admin has all features
-    return role === 'standard_user' || role === 'recruiter';
+    return role === 'recruiter';
   },
 
   /**
