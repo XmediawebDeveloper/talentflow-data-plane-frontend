@@ -3773,13 +3773,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                       aria-disabled={blockedByOtherPick || !latestSelectableStatus}
                       className={`rounded-lg border-2 p-3 sm:p-4 transition-all ${
                         blockedByOtherPick || !latestSelectableStatus
-                          ? 'bg-gray-50 border-gray-200 opacity-60'
+                          ? `bg-gray-50 border-gray-200 ${blockedByOtherPick ? 'opacity-60' : ''}`
                           : lineageSelected
                             ? 'bg-brand-blue/5 border-brand-blue/40 shadow-sm shadow-brand-blue/10'
                             : 'bg-white border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                       }`}
                     >
-                      <div className="flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4">
+                      {/* An archived / unpublished job fades only its radio
+                          and details, so the eye and expanded Version History
+                          stay normal. */}
+                      <div className={`flex flex-wrap sm:flex-nowrap items-start gap-2 sm:gap-4`}>
                         {/* A radio, because exactly one JD version is built
                             against. Wrapped in its own label rather than the
                             whole card: the card carries a versions toggle and
@@ -3791,7 +3794,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             sibling version that does not — and off while
                             another job holds the pick. */}
                         <label
-                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'}`}
+                          className={`flex items-center h-5 sm:h-auto sm:pt-1 ${latestSelectable ? 'cursor-pointer' : 'cursor-not-allowed'} ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}
                           title={
                             blockedByOtherPick
                               ? otherPickReason
@@ -3815,7 +3818,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           <span className="sr-only">Select the latest version of {job.title}</span>
                         </label>
 
-                        <div className="flex-1 min-w-0">
+                        <div className={`flex-1 min-w-0 ${!latestSelectableStatus && !blockedByOtherPick ? 'opacity-60' : ''}`}>
                           {/* Clicking the headline ticks the job, so the whole
                               block is a target without a <label> wrapping the
                               controls beside it. */}
