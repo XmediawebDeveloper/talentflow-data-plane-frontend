@@ -202,12 +202,17 @@ const TAB_TONES: Record<string, TabTone> = {
   expired: { Icon: Clock, text: 'text-brand-orange-deep', line: 'border-brand-orange', badge: 'bg-brand-orange text-white', soft: 'bg-brand-orange/10', hover: 'hover:text-brand-orange-deep' },
   terminated: { Icon: Ban, text: 'text-destructive', line: 'border-destructive', badge: 'bg-destructive text-white', soft: 'bg-destructive-subtle', hover: 'hover:text-destructive' },
   revoked: { Icon: Undo2, text: 'text-destructive', line: 'border-destructive', badge: 'bg-destructive text-white', soft: 'bg-destructive-subtle', hover: 'hover:text-destructive' },
+  failed: { Icon: X, text: 'text-destructive', line: 'border-destructive', badge: 'bg-destructive text-white', soft: 'bg-destructive-subtle', hover: 'hover:text-destructive' },
 };
+/* A tab key's entry in STATUS_HELP, where the two differ. */
+const HELP_KEY: Record<string, keyof typeof STATUS_HELP> = { failed: 'invite_failed' };
+const tabHelp = (key: string): string | undefined => STATUS_HELP[HELP_KEY[key] ?? (key as keyof typeof STATUS_HELP)];
 
 export type TrackerTab = { key: string; label: string; value: number };
 
 /** The status tabs — the trackers' count cards as a tab row; picking one
- *  filters the list exactly as its card did. Counts over 99 read "99+". */
+ *  filters the list exactly as its card did. Counts over 99 read "99+".
+ *  Compact (2026-11-11): tight padding, a 24px icon box and a slim count. */
 export function TrackerStatusTabs({ tabs, active, onSelect }: { tabs: TrackerTab[]; active: string; onSelect: (key: string) => void }) {
   return (
     <div className="shrink-0 px-2.5 sm:px-6 pt-2 border-b border-gray-200 dark:border-slate-700">
@@ -217,14 +222,14 @@ export function TrackerStatusTabs({ tabs, active, onSelect }: { tabs: TrackerTab
           const on = active === t.key;
           return (
             <button key={t.key} type="button" role="tab" aria-selected={on}
-              title={t.key === 'all' ? 'Everyone you invited.' : STATUS_HELP[t.key as keyof typeof STATUS_HELP]}
+              title={t.key === 'all' ? 'Everyone you invited.' : tabHelp(t.key)}
               onClick={() => onSelect(t.key)}
-              className={`inline-flex items-center gap-2 px-3 sm:px-3.5 py-2.5 text-sm font-bold border-b-[3px] whitespace-nowrap rounded-t-lg transition-colors ${on ? `${tone.line} ${tone.text}` : `border-transparent text-gray-900 dark:text-slate-100 ${tone.hover} hover:bg-slate-50 dark:hover:bg-slate-800/50`}`}>
-              <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${tone.soft}`}>
-                <tone.Icon className={`w-4 h-4 ${tone.text}`} />
+              className={`inline-flex items-center gap-1.5 px-2 py-2.5 text-sm font-bold border-b-[3px] whitespace-nowrap rounded-t-lg transition-colors ${on ? `${tone.line} ${tone.text}` : `border-transparent text-gray-900 dark:text-slate-100 ${tone.hover} hover:bg-slate-50 dark:hover:bg-slate-800/50`}`}>
+              <span className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 ${tone.soft}`}>
+                <tone.Icon className={`w-3.5 h-3.5 ${tone.text}`} />
               </span>
               {t.label}
-              <span className={`min-w-[1.5rem] rounded-full px-1.5 py-0.5 text-center text-xs font-semibold tabular-nums ${on ? tone.badge : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
+              <span className={`min-w-[1.25rem] rounded-full px-1 py-0.5 text-center text-xs font-semibold tabular-nums ${on ? tone.badge : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300'}`}
                 title={t.value > 99 ? `${t.value}` : undefined}>
                 {t.value > 99 ? '99+' : t.value}
               </span>
@@ -240,13 +245,16 @@ export function TrackerStatusTabs({ tabs, active, onSelect }: { tabs: TrackerTab
 export function TrackerTabHint({ tabs, active }: { tabs: TrackerTab[]; active: string }) {
   const tab = tabs.find((t) => t.key === active);
   const tone = TAB_TONES[active] ?? TAB_TONES.all;
-  const help = STATUS_HELP[active as keyof typeof STATUS_HELP];
+  const help = tabHelp(active);
   return (
     <p className="flex items-center gap-1.5 tf-meta min-w-0">
       <Lightbulb className="w-3.5 h-3.5 text-brand-orange shrink-0" aria-hidden="true" />
-      {active === 'all' || !tab || !help
-        ? 'Tip: pick a tab to see only those candidates.'
-        : <span className="min-w-0"><b className={tone.text}>{tab.label}:</b> {help}</span>}
+      {active === 'all'
+        /* All reads like every other tab — its name, then what it holds. */
+        ? <span className="min-w-0"><b className={tone.text}>All:</b> Everyone you invited, in every status. Pick a tab to see just one.</span>
+        : !tab || !help
+          ? 'Pick a tab to see only those candidates.'
+          : <span className="min-w-0"><b className={tone.text}>{tab.label}:</b> {help}</span>}
     </p>
   );
 }

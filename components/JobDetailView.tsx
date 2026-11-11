@@ -3387,6 +3387,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             )}
           </div>
         </div>
+          {/* Disabled / Archived job: the foot of the job card says what still
+              works and what is off — the Resume Scoring page's notice, in brand
+              orange. */}
+          {jobInactive && (
+            <div role="status" className="mt-3 sm:mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/10 px-3 sm:px-4 py-2.5 ring-1 ring-brand-orange/20">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange-deep" aria-hidden="true" />
+              <p className="min-w-0 text-sm text-brand-orange-deep leading-relaxed">
+                {job.status === 'Archived' ? (
+                  <>This job is <strong>archived</strong>. It is kept for reference — its scored resumes, assessments, AI interviews and results can still be viewed and exported, but AI Talent Match, scoring new resumes, and creating or sending assessments and AI interviews are turned off.</>
+                ) : (
+                  <>This job is <strong>disabled</strong>. Its scored resumes, assessments, AI interviews and results can still be viewed and exported, but AI Talent Match, scoring new resumes, and creating or sending assessments and AI interviews are turned off.</>
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
