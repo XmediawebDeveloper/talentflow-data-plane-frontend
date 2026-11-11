@@ -948,9 +948,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   return (
                     <MobileRecordCard
                       key={invitation.id}
-                      className="tf-invite-card"
                       {...rowOpenProps(invitation)}
-                      className={canOpenResult(invitation) ? 'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : undefined}
+                      className={`tf-invite-card${canOpenResult(invitation) ? ' cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40' : ''}`}
                       idBadge={
                         <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                           {invitation.candidate_display_id || '-'}
