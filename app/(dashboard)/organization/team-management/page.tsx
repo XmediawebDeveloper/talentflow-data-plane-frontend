@@ -53,6 +53,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { ClearSortChip, SortableHeader, ariaSort, sortRows, useTableSort, type SortDir } from '@/components/ui/sortable-header';
 import type { TeamListSortKey } from '@/components/teams/TeamListTable';
+import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 // Multiples of 6, so every page size fills whole rows in the 2- and 3-column grid.
 const TEAM_PAGE_SIZES = [6, 12, 24, 48];
@@ -1072,13 +1073,12 @@ export default function TeamManagementPage() {
                 {listView === 'members' && (
                   <section className="overflow-hidden tf-card-soft">
                     {flattenedMembers.length === 0 ? (
-                      <div className="px-6 py-16 text-center">
-                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                          <UserCheck className="h-6 w-6 text-brand-blue" />
-                        </div>
-                        <h3 className="tf-section-title max-sm:text-sm">No members found</h3>
-                        <p className="mt-1 tf-body-muted">Try a different search query or assign users to a team.</p>
-                      </div>
+                      <IllustratedEmptyState
+                        bordered={false}
+                        illustration={<IconTileIllustration icon={UserCheck} />}
+                        title="No members found"
+                        description="Try a different search query or assign users to a team."
+                      />
                     ) : (
                       <>
                       {/* Phones: one compact row per member. */}

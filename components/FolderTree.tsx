@@ -8,6 +8,7 @@ import { useDrop } from 'react-dnd';
 import { Folder as FolderType, Resume } from '@/lib/types/types';
 import { toast } from 'sonner';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { SidebarNoFoldersState } from '@/components/resumes/ResumeEmptyStates';
 
 // Folder-actions (⋮) menu item styling — same neutral hover-changes-only-the-
 // background convention as every other ⋮ menu in the app (ResumeTable,
@@ -1062,7 +1063,7 @@ export default function FolderTree({
         {regularFolders.length > 0 ? (
           regularFolders.map(folder => renderFolder(folder))
         ) : (
-          <p className="px-3 py-2 tf-meta">No folders yet.</p>
+          <SidebarNoFoldersState />
         )}
       </div>
       </div>

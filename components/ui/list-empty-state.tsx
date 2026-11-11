@@ -40,6 +40,9 @@ export interface ListEmptyStateProps {
    *  TabEmptyState's imageSrc so the two empty states can share one asset. */
   imageSrc?: string;
   imageAlt?: string;
+  /** An inline illustration for the genuinely-empty case, in place of
+   *  `imageSrc` (see `components/ui/illustrated-empty-state`). */
+  illustration?: React.ReactNode;
 }
 
 export default function ListEmptyState({
@@ -53,12 +56,15 @@ export default function ListEmptyState({
   className,
   imageSrc,
   imageAlt,
+  illustration,
 }: ListEmptyStateProps) {
   const trimmedQuery = (query || '').trim();
 
   return (
     <div className={cn('py-14 px-6 text-center', className)}>
-      {!isNarrowed && imageSrc ? (
+      {!isNarrowed && illustration ? (
+        <div className="mb-4 flex justify-center">{illustration}</div>
+      ) : !isNarrowed && imageSrc ? (
         <Image
           src={imageSrc}
           alt={imageAlt || ''}
