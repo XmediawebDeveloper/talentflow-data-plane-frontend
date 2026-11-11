@@ -6,6 +6,7 @@ import { ArrowLeft, X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSqua
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import { NoTicketsFoundState } from '@/components/SupportEmptyStates';
 
 interface SupportTicket {
   id: string;
@@ -526,13 +527,7 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
                 ))}
 
                 {filteredTickets.length === 0 && (
-                  <div className="text-center py-10">
-                    <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-muted/50 border border-border flex items-center justify-center">
-                      <Ticket className="w-6 h-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground mb-1">No tickets found</p>
-                    <p className="text-xs text-muted-foreground">Try adjusting your search or filters</p>
-                  </div>
+                  <NoTicketsFoundState />
                 )}
               </div>
             </div>

@@ -1,6 +1,7 @@
 'use client';
 
-import { X, Database, FolderOpen, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, ChevronDown } from 'lucide-react';
+import { X, Database, FolderOpen, Search, Loader2, ClipboardList, Upload, ChevronDown } from 'lucide-react';
+import { SelectAllMenu } from '@/components/ui/select-all-menu';
 import { RESUME_TAB_LABEL } from '@/lib/constants/resumePools';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -564,26 +565,8 @@ export default function SelectSourceModal({
     );
   };
 
-  // Select/deselect all VISIBLE resumes — preserves picks in other folders.
-  const handleSelectAll = () => {
-    const selectedFolderData = folders.find(f => f.id === selectedFolder);
-    const isArchivedFolder = selectedFolderData?.name?.toLowerCase().includes('archived') || false;
-    if (isArchivedFolder) {
-      toast.error('Archived resumes cannot be scored. Please select an active resume.');
-      return;
-    }
-    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
-    if (visibleIds.length === 0) return;
-    const allVisibleSelected = visibleIds.every(id => selectedResumes.includes(id));
-    setSelectedResumes(prev => {
-      if (allVisibleSelected) {
-        return prev.filter(id => !visibleIds.includes(id));
-      }
-      const merged = new Set(prev);
-      visibleIds.forEach(id => merged.add(id));
-      return Array.from(merged);
-    });
-  };
+  // Ids on the table's current page — fed to "Select all on this page".
+  const [pageResumeIds, setPageResumeIds] = useState<string[]>([]);
 
   // Tab change
   const handleTabChange = (tab: 'my-resumes' | 'internal-db') => {
@@ -1166,43 +1149,41 @@ export default function SelectSourceModal({
                     </button>
                   )}
                   {(() => {
-                    // Track selection state of the *visible* folder only — the
-                    // master count can include resumes from other folders.
-                    const visibleIds = filteredResumes.filter(r => !r.is_archived).map(r => r.id);
-                    const visibleSelectedCount = visibleIds.filter(id => selectedResumes.includes(id)).length;
-                    const allVisibleSelected = visibleIds.length > 0 && visibleSelectedCount === visibleIds.length;
-                    const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+                    /* The Job Openings "Select All ▾" menu (JD module):
+                       this page / every resume in the folder / clear. Same
+                       archived guard and "keep picks from other folders"
+                       rule the old button had. */
+                    const selectable = new Set(filteredResumes.filter(r => !r.is_archived).map(r => r.id));
+                    const visibleIds = Array.from(selectable);
+                    const pageIds = pageResumeIds.filter(id => selectable.has(id));
+                    const allVisibleSelected = visibleIds.length > 0 && visibleIds.every(id => selectedResumes.includes(id));
+                    const pageSelected = pageIds.length > 0 && pageIds.every(id => selectedResumes.includes(id));
+                    const blockedArchived = () => {
+                      const folder = folders.find(f => f.id === selectedFolder);
+                      if (folder?.name?.toLowerCase().includes('archived')) {
+                        toast.error('Archived resumes cannot be scored. Please select an active resume.');
+                        return true;
+                      }
+                      return false;
+                    };
                     return (
-                      <button
-                        onClick={handleSelectAll}
-                        disabled={filteredResumes.length === 0}
-                        className="tf-btn tf-btn-secondary h-9 px-3 sm:px-4 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex gap-1.5 sm:gap-2 justify-start"
-                      >
-                        {allVisibleSelected ? (
-                          <>
-                            <CheckSquare className="w-4 h-4 text-brand-blue" />
-                            <span className="hidden sm:inline">Deselect All</span>
-                            <span className="sm:hidden">Deselect</span>
-                          </>
-                        ) : someVisibleSelected ? (
-                          <>
-                            <MinusSquare className="w-4 h-4 text-blue-600" />
-                            <span className="hidden sm:inline">Select All</span>
-                            <span className="sm:hidden">All</span>
-                          </>
-                        ) : (
-                          <>
-                            <Square className="w-4 h-4" />
-                            <span className="hidden sm:inline">Select All</span>
-                            <span className="sm:hidden">All</span>
-                          </>
-                        )}
-                      </button>
+                      <SelectAllMenu
+                        selectedCount={selectedResumes.length}
+                        pageCount={pageIds.length}
+                        totalCount={visibleIds.length}
+                        noun="resumes"
+                        allSelected={allVisibleSelected}
+                        pageSelected={pageSelected}
+                        onSelectPage={() => {
+                          if (blockedArchived() || pageIds.length === 0) return;
+                          setSelectedResumes(prev => Array.from(new Set([...prev, ...pageIds])));
+                        }}
+                        onDeselectPage={() => setSelectedResumes(prev => prev.filter(id => !pageIds.includes(id)))}
+                        onSelectAll={() => handleTableSelectAll(true)}
+                        onClear={() => setSelectedResumes([])}
+                      />
                     );
                   })()}
-                  <div className="tf-label bg-brand-blue/5 ring-1 ring-brand-blue/15 h-9 inline-flex items-center px-2.5 sm:px-4 rounded-lg border border-transparent whitespace-nowrap">
-                    <span className="text-brand-blue">{selectedResumes.length}</span> <span className="hidden sm:inline">selected</span>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1248,6 +1229,8 @@ export default function SelectSourceModal({
                   selectedResumes={selectedResumes}
                   onSelectResume={handleToggleResume}
                   onSelectAll={handleTableSelectAll}
+                  hideHeaderSelectAll
+                  onPageItemsChange={setPageResumeIds}
                   /* Clicking a row picks the applicant, as this list has
                      always done — the page uses this hook to navigate, but
                      navigating away from a half-made selection is not what

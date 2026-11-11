@@ -19,7 +19,7 @@ import type { DashboardData } from './types';
 import { buildRationaleLines, orderQuestionsAsAsked, isSkillNotAssessed, isSkillEvaluated } from './types';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { labelOfViolation, recruiterSeverity, summarizeViolations, type ViolationRecord } from '../violationTaxonomy';
-import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 
 import { formatScore1, formatSkillScore } from '@/lib/utils/matchStatus';
 import { pdfSafe } from '@/lib/utils/pdfText';
@@ -32,6 +32,8 @@ export interface ReportSessionDetails {
   startedAt?: string | null;
   completedAt?: string | null;
   identityVerified?: boolean;
+  /** The results list's "Proctoring Risk" level (High / Medium / Low / None). */
+  proctoringRisk?: string | null;
   /** data: URL of the identity photo, or null when there isn't one. */
   photoDataUrl?: string | null;
   violations?: ViolationRecord[];
@@ -54,6 +56,15 @@ interface Props {
 
 // Exported so the results-page header shows the same Pass/Fail as this report.
 export const MHS_THRESHOLD = 6.0;
+
+/** Tail of the Executive Summary's Nice-to-Have sentence — shared by the page
+ *  and the PDF. It used to say "adequate" for anything under 7.5, even 0.0/10. */
+function niceToHaveVerdict(score: number, anyAsked: boolean): string {
+  if (!anyAsked) return 'as no Nice-to-Have question was reached before the interview ended.';
+  if (score >= 7.5) return 'demonstrating strong proficiency in supplementary skills.';
+  if (score >= 5) return 'demonstrating adequate proficiency in supplementary skills.';
+  return 'showing limited proficiency in supplementary skills.';
+}
 
 function priorityLabel(p: 'High' | 'Medium' | 'Low'): { tag: 'P1' | 'P2' | 'P3'; weight: number } {
   if (p === 'High')   return { tag: 'P1', weight: 10 };
@@ -186,6 +197,15 @@ export async function exportEvalReportPDF(
   doc.text('AI Interview Evaluation Report', textX, y + 4);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(9); txt(sub);
   doc.text(pdfSafe(`${candidate.name}  ·  ${candidate.role}`), textX, y + 9.5);
+  // "Duration" exactly as the result page header and the results list show
+  // it: started → completed, as "5m 5s".
+  const attendedDuration = (() => {
+    if (!details.startedAt || !details.completedAt) return null;
+    const secs = Math.floor((parseIST(details.completedAt).getTime() - parseIST(details.startedAt).getTime()) / 1000);
+    if (!Number.isFinite(secs) || secs <= 0) return null;
+    const h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60), sec = secs % 60;
+    return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m${sec ? ` ${sec}s` : ''}` : `${sec}s`;
+  })();
   const interviewedAt = details.completedAt
     ? `${formatISTDate(details.completedAt)}, ${formatISTTime(details.completedAt)}`
     : interview.date;
@@ -195,6 +215,7 @@ export async function exportEvalReportPDF(
     interview.mode ? `${interview.mode} Mode` : null,
     interviewedAt ? `Interviewed: ${interviewedAt}` : null,
     interview.duration && interview.duration !== '0s' ? `Time taken: ${interview.duration}` : null,
+    attendedDuration ? `Duration: ${attendedDuration}` : null,
   ].filter(Boolean) as string[];
   doc.setFontSize(7.5); txt(sub);
   const factLines = splitSafe(factParts.join('   |   '), pageW - M - textX - 45);
@@ -469,10 +490,15 @@ export async function exportEvalReportPDF(
   });
   const sevRank: Record<string, number> = { serious: 0, moderate: 1, minor: 2 };
   const issueRows = [...issueMap.values()].sort((a, b) => (sevRank[a.sev] - sevRank[b.sev]) || (b.count - a.count));
+  // The level is the results list's "Proctoring Risk" value (the stored
+  // risk_level), so the PDF never says High where the list says Medium.
+  // Only when it isn't passed in do we fall back to the violation counts.
+  const riskLabel = details.proctoringRisk
+    || (vs.someoneElse || vs.terminated || vs.phoneSeen || vs.serious > 0 ? 'High'
+      : vs.counted > 0 ? 'Medium'
+        : 'None');
   const integrityLevel: 'high' | 'review' | 'clear' =
-    vs.someoneElse || vs.terminated || vs.phoneSeen || vs.serious > 0 ? 'high'
-      : vs.counted > 0 || !details.identityVerified ? 'review'
-        : 'clear';
+    riskLabel === 'High' ? 'high' : riskLabel === 'None' ? 'clear' : 'review';
   const hasIntegrityDetail = integrityFlags.length > 0 || issueRows.length > 0;
 
   // ── Integrity status (page 1, every report) ───────────────────────
@@ -480,10 +506,10 @@ export async function exportEvalReportPDF(
   // "No issues" is information too.
   {
     const tone = integrityLevel === 'high'
-      ? { label: 'High Risk', color: red, bg: [254, 242, 242] as RGB }
+      ? { label: riskLabel, color: red, bg: [254, 242, 242] as RGB }
       : integrityLevel === 'review'
-        ? { label: 'Review Needed', color: amber, bg: amberBg }
-        : { label: 'No Issues', color: green, bg: [236, 253, 245] as RGB };
+        ? { label: riskLabel, color: amber, bg: amberBg }
+        : { label: riskLabel, color: green, bg: [236, 253, 245] as RGB };
     const countLabel = vs.counted === 0
       ? 'no violations recorded'
       : `${vs.counted} violation${vs.counted !== 1 ? 's' : ''} (${vs.serious} serious, ${vs.moderate} moderate, ${vs.minor} minor)`;
@@ -498,7 +524,7 @@ export async function exportEvalReportPDF(
     fill(tone.color); doc.roundedRect(M, y, 1.6, boxH, 0.8, 0.8, 'F');
     let ix = M + 5;
     doc.setFont('helvetica', 'bold'); doc.setFontSize(9); txt(ink);
-    doc.text('Integrity:', ix, y + 5.6); ix += doc.getTextWidth('Integrity: ');
+    doc.text('Proctoring Risk:', ix, y + 5.6); ix += doc.getTextWidth('Proctoring Risk: ');
     txt(tone.color); doc.text(tone.label, ix, y + 5.6); ix += doc.getTextWidth(tone.label) + 6;
     doc.setFontSize(8); txt(sub); doc.setFont('helvetica', 'normal');
     doc.text('ID verification:', ix, y + 5.6); ix += doc.getTextWidth('ID verification: ');
@@ -524,7 +550,7 @@ export async function exportEvalReportPDF(
     : '';
   // The original summary sentences, one per point with a drawn tick —
   // matching the on-screen Executive Summary (helvetica has no ✓ glyph).
-  const nhStrength = scores.niceToHave >= 7.5 ? 'strong' : 'adequate';
+  const nhVerdict = niceToHaveVerdict(scores.niceToHave, niceToHaveClusters.some((c) => c.skills.some((sk) => sk.asked)));
   const execPoints: string[] = [
     `${candidate.name} completed an AI-powered technical interview for the ${candidate.role} position on ${interview.date || 'the scheduled date'}.`,
     `The evaluation consisted of ${pdfQuestions} question${pdfQuestions !== 1 ? 's' : ''}${questionBreakdown} covering ${pdfSkills} skill${pdfSkills !== 1 ? 's' : ''} across multiple priority levels.`,
@@ -536,7 +562,7 @@ export async function exportEvalReportPDF(
         ? `which exceeds the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((scores.mustHave - MHS_THRESHOLD))} points.`
         : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`));
     if (sectionsPresent.niceToHave) {
-      execPoints.push(`The Nice-to-Have Section Score was ${formatScore1(scores.niceToHave)}/10, demonstrating ${nhStrength} proficiency in supplementary skills.`);
+      execPoints.push(`The Nice-to-Have Section Score was ${formatScore1(scores.niceToHave)}/10, ${nhVerdict}`);
     }
   }
   execPoints.push(isPartialEvaluation
@@ -1021,7 +1047,7 @@ export function EvalReportCombined({
   const singleSkillTable = showMustHaveTable !== showNiceToHaveTable;
   const totalSkills = flatMustHave.length + flatNiceToHave.length;
   const totalQuestions = perQuestionDetails.length;
-  const niceToHaveStrong = scores.niceToHave >= 7.5 ? 'strong' : 'adequate';
+  const niceToHaveText = niceToHaveVerdict(scores.niceToHave, niceToHaveClusters.some(c => c.skills.some(s => s.asked)));
 
   // ── Coverage per section ──────────────────────────────────────────────
   // Use the SAME definition as the Cluster Coverage tab (CoverageV2) so the two
@@ -1155,7 +1181,7 @@ export function EvalReportCombined({
                     : `which falls below the required threshold of ${MHS_THRESHOLD.toFixed(1)} by ${formatScore1((MHS_THRESHOLD - scores.mustHave))} points.`}</>,
             ] : []),
             ...(sectionsPresent.mustHave && sectionsPresent.niceToHave ? [
-              <>The Nice-to-Have Section Score was <strong>{formatScore1(scores.niceToHave)}/10</strong>, demonstrating {niceToHaveStrong} proficiency in supplementary skills.</>,
+              <>The Nice-to-Have Section Score was <strong>{formatScore1(scores.niceToHave)}/10</strong>, {niceToHaveText}</>,
             ] : []),
             isPartialEvaluation
               ? <>Because the interview was terminated early, this report provides question-by-question and skill-by-skill analysis only; it does not generate a final hiring recommendation or match score.</>

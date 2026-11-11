@@ -2,6 +2,8 @@ import { X, AlertCircle, Trash2, RefreshCw, GitBranch, FileText, Calendar, User,
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { resumeService } from '@/lib/services';
 import { renderAsync } from 'docx-preview';
+import PdfDocumentViewer from '@/components/resumes/PdfDocumentViewer';
+import { openLinksInNewTab } from '@/lib/utils/externalUrl';
 
 interface DuplicateFile {
   fileName: string;
@@ -44,6 +46,13 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
   const [pdfIframeLoaded, setPdfIframeLoaded] = useState(false);
   const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
   const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
+  // pdf.js renderer (primary) — links open in a new tab; iframe is fallback.
+  const [pdfJsLoaded, setPdfJsLoaded] = useState(false);
+  const [pdfJsFailed, setPdfJsFailed] = useState(false);
+  useEffect(() => {
+    setPdfJsLoaded(false);
+    setPdfJsFailed(false);
+  }, [previewUrl]);
   useEffect(() => {
     setPdfIframeLoaded(false);
     setPdfMinHoldElapsed(false);
@@ -84,6 +93,8 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           renderFooters: true,
           renderFootnotes: true,
         });
+        // Word links must open in a new tab, not replace TalentFlow.
+        openLinksInNewTab(docxContainerRef.current);
       } catch (err) {
         console.error('DOCX render error:', err);
         docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--raw-666666);">Failed to render document</div>';
@@ -548,17 +559,32 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
           <div className="flex-1 overflow-hidden">
             {previewUrl ? (
               <div className="relative w-full h-full">
-                {!pdfFrameLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900">
+                {!(pdfJsFailed ? pdfFrameLoaded : pdfJsLoaded) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10">
                     <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
                   </div>
                 )}
-                <iframe
-                  src={previewUrl}
-                  className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
-                  title={previewTitle}
-                  onLoad={() => setPdfIframeLoaded(true)}
-                />
+                {pdfJsFailed ? (
+                  <iframe
+                    src={previewUrl}
+                    className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
+                    title={previewTitle}
+                    onLoad={() => setPdfIframeLoaded(true)}
+                  />
+                ) : (
+                  <div className="w-full h-full overflow-y-auto bg-white">
+                    <PdfDocumentViewer
+                      key={previewUrl}
+                      url={previewUrl}
+                      className="w-full"
+                      onLoaded={() => setPdfJsLoaded(true)}
+                      onError={(err) => {
+                        console.warn('[DuplicatePreview] pdf.js render failed, using native viewer', err);
+                        setPdfJsFailed(true);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               <div className="relative w-full h-full">
