@@ -1417,30 +1417,33 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     'video/webm',
   ];
 
-  /** Enter fullscreen right after the screen-share picker closes. Waits up to
-   *  ~1 s for the window to get focus back (a refused request — "TypeError:
-   *  not granted" — is what Edge/Chrome return while it hasn't), then tries,
-   *  and retries once. Never throws: the final consent gate re-asks with a
-   *  fresh click if this did not take. */
-  const enterFullscreenAfterPicker = async (): Promise<void> => {
-    const waitForFocus = (ms: number) => new Promise<void>((resolve) => {
-      if (document.hasFocus()) { resolve(); return; }
-      const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
-      const t = setTimeout(done, ms);
-      window.addEventListener('focus', done);
-    });
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (isFullscreen()) return;
-      await waitForFocus(attempt === 0 ? 1000 : 400);
-      try {
-        await requestFullscreen();
-        return;
-      } catch {
-        await new Promise((r) => setTimeout(r, 250));
-      }
-    }
-  };
-
+  /** Enter fullscreen after the screen-share picker's Share click. That click
+   *  counts as a fresh click for ~5 s, but Chrome's "sharing your screen" bar
+   *  holds focus for the first ~1.5-2 s, and a request made then is refused
+   *  ("TypeError: not granted") AND uses the click up. So ask exactly once,
+   *  the moment the page has focus back. Never throws; if it does not take,
+   *  the final consent Start click enters fullscreen. (Going fullscreen BEFORE
+   *  the picker does not work — Chrome drops fullscreen to show the picker.) */
+  const enterFullscreenAfterShare = (): Promise<void> => new Promise<void>((resolve) => {
+    if (isFullscreen()) { resolve(); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      window.removeEventListener('focus', onFocus);
+      clearTimeout(timer);
+      resolve();
+    };
+    // Called straight from the focus event (no await first) so the click
+    // still counts when the request is made.
+    const ask = () => { requestFullscreen().catch(() => { /* Start click enters it */ }).finally(finish); };
+    const onFocus = () => { if (!done) ask(); };
+    // Past ~5 s the Share click no longer counts; stop waiting.
+    const timer = setTimeout(finish, 5000);
+    if (document.hasFocus()) ask();
+    else window.addEventListener('focus', onFocus);
+  });
+
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
       video: {
@@ -1803,26 +1806,17 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
     }
 
-    // Fullscreen attempt started right after the picker closes (see below);
-    // awaited before leaving this handler instead of firing a second request.
-    let fullscreenAttempt: Promise<void> = Promise.resolve();
     // Step 1: Request screen recording BEFORE entering fullscreen.
     // Browsers (Chrome) exit fullscreen automatically to show the screen-share picker.
     // By requesting screen share first (while not in fullscreen) we avoid a second
     // "Fullscreen Required" popup when the interview step loads.
+    let fullscreenAttempt: Promise<void> = Promise.resolve();
     try {
       const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
-      // Ask for fullscreen THE MOMENT the picker closes — not after the
-      // recorder/mic setup below. The browser allows it only within a few
-      // seconds of the click; that setup took long enough on slower laptops
-      // that the later request was refused ("TypeError: not granted") and the
-      // candidate got the "Return to Fullscreen" overlay instead.
-      // Edge (and Chrome) also refuse it with "not granted" while the window
-      // has not got focus back from the closing picker, even though the click
-      // still counts — so wait for focus, and retry once.
-      fullscreenAttempt = enterFullscreenAfterPicker();
       // Build a combined stream: screen video + mixed audio (tab + mic)
+      // Start waiting for focus NOW, alongside the recorder setup below.
+      fullscreenAttempt = enterFullscreenAfterShare();
       const recordingStream = await buildRecordingStreamWithAudio(screenStream);
       const screenMime = SCREEN_MIME_TYPES
         .find(m => { try { return MediaRecorder.isTypeSupported(m); } catch { return false; } }) || '';
@@ -1970,7 +1964,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
 
     // Step 2: Now enter fullscreen — screen-share picker is already done so no exit/re-entry cycle.
-    await fullscreenAttempt; // never throws; final consent re-asks if it failed
+    await fullscreenAttempt; // never throws; the final consent Start click covers a miss
 
     // Screen is shared and we're in fullscreen. Show the final in-fullscreen
     // consent gate ("Not allowed during the interview" + "Yes, I accept")
@@ -2527,7 +2521,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       if (!isFullscreen()) {
         setFinalConsentFsExited(true);
         toast.error(
-          'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
+          'The interview must run in fullscreen. Please click "Yes, I understand — Start Interview" again.',
           { duration: 6000 },
         );
         return;
@@ -3502,6 +3496,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
+    // Not in fullscreen on arrival is normal: Chrome refuses the automatic
+    // request after the share picker (verified, Chrome 157). The Start click is
+    // a fresh page click, so handleFinalConsentAccept enters fullscreen on it
+    // and then continues — one click, no separate fullscreen button.
+    const finalConsentNotFs = finalConsentFsExited;
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl max-w-[1400px] w-full my-auto px-5 py-4 md:px-7 md:py-5">
@@ -3512,7 +3511,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Before we begin
           </h1>
           <p className="tf-body-secondary mb-3 text-center max-w-4xl mx-auto">
-            You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.
+            {finalConsentNotFs
+              ? 'Screen sharing is active. Please confirm that you understand the actions that are not allowed. The interview opens in fullscreen and starts as soon as you accept.'
+              : 'You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.'}
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
               sharing and sends the candidate back to re-share. */}
@@ -3568,8 +3569,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </p>
             <button
               onClick={() => { handleFinalConsentAccept(); }}
-              disabled={startSubmitting || finalConsentFsExited}
-              title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
+              disabled={startSubmitting}
               className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue-2 text-white font-semibold py-2.5 px-5 rounded-lg transition-all text-sm disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-brand-blue/20"
             >
               {startSubmitting ? (
@@ -3580,34 +3580,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </button>
           </div>
         </div>
-
-        {/* Fullscreen dropped on this gate (F11 / Esc) — block accepting and
-            force the candidate back into fullscreen. Re-entering needs a user
-            gesture, so it happens on this button's click. */}
-        {finalConsentFsExited && (
-          <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
-            <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
-              <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
-                <Maximize2 className="w-8 h-8 text-warning" />
-              </div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}</h2>
-              <p className="tf-body-secondary mb-6">
-                {finalConsentFsWasOn
-                  ? 'You exited fullscreen. The interview can only start in fullscreen — please return to fullscreen to continue.'
-                  : 'Screen sharing is on. The interview runs in fullscreen — click below to switch to fullscreen and continue.'}
-              </p>
-              <button
-                onClick={async () => {
-                  try { await requestFullscreen(); } catch { /* ignore */ }
-                  setFinalConsentFsExited(!isFullscreen());
-                }}
-                className="w-full flex items-center justify-center gap-2 bg-warning hover:bg-warning text-white font-semibold py-3 rounded-xl transition-all"
-              >
-                <Maximize2 className="w-4 h-4" />{finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen'}
-              </button>
-            </div>
-          </div>
-        )}
       </div>
     );
   }
