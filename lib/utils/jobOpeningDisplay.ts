@@ -470,27 +470,26 @@ export const assessmentListRepresentative = (
   bucket.find(version => isSelectableVersion(version) && !hasAssessment(version)) ?? null;
 
 /**
- * The newest ARCHIVED version of a lineage, for a caller that wants to keep an
- * otherwise-dropped job visible — same idea as `JobOpeningPickerList`'s
+ * The newest ARCHIVED or DISABLED version of a lineage, for a caller that wants
+ * to keep an otherwise-dropped job visible — same idea as `JobOpeningPickerList`'s
  * `excludeDraftsOnly` mode: a job is still shown on its newest non-draft
  * version even when that version cannot be built against, so it reads as
- * "archived" rather than vanishing from the list.
+ * "archived" / "disabled" rather than vanishing from the list.
  *
  * Deliberately narrower than "has no selectable representative": a lineage
- * whose newest non-draft version is Disabled, or whose every live version is
- * simply already taken, returns `null` here too — this is only the Archived
- * case, for callers that keep those other two hidden on purpose and want
- * Archived added back without touching them.
+ * whose every live version is simply already taken returns `null` here.
  */
-export const archivedAssessmentRepresentative = (bucket: Job[]): Job | null => {
+export const inactiveAssessmentRepresentative = (bucket: Job[]): Job | null => {
   const latestNonDraft = bucket.find(version => version.status !== 'Draft');
-  return latestNonDraft && String(latestNonDraft.status) === 'Archived' ? latestNonDraft : null;
+  const status = String(latestNonDraft?.status);
+  return latestNonDraft && (status === 'Archived' || status === 'Disabled') ? latestNonDraft : null;
 };
 
 /**
  * The Create Assessment job list: one row per job, each on its newest
- * published version that does not already have an assessment, with jobs that
- * have no such version dropped.
+ * published version — even when that version already has an assessment (the
+ * card then can't be picked, and View Versions offers the free one). Jobs
+ * with no published version free of an assessment are dropped.
  *
  * Pass the FULL, unfiltered version list. The status test runs per version
  * INSIDE each lineage, so filtering by status upstream would remove the very
@@ -509,8 +508,9 @@ export const buildAssessmentJobList = (
 ): Job[] => {
   const reps: Job[] = [];
   groupByLineage(allVersions).forEach(bucket => {
-    const rep = assessmentListRepresentative(bucket, hasAssessment);
-    if (rep) reps.push(rep);
+    if (!assessmentListRepresentative(bucket, hasAssessment)) return;
+    const latestPublished = bucket.find(isSelectableVersion);
+    if (latestPublished) reps.push(latestPublished);
   });
   return reps;
 };

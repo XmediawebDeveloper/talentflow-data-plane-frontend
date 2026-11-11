@@ -287,6 +287,13 @@ interface ResumeTableProps {
    *  a page panel (Resume Database) so the cards line up with the panel's
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
+  /** Drops the header's select-all checkbox (the column stays for the row
+   *  ticks) — for callers that put the Job Openings "Select All ▾" menu in
+   *  their own toolbar instead. */
+  hideHeaderSelectAll?: boolean;
+  /** Reports the ids of the rows on the current page, so a toolbar
+   *  "Select all on this page" can act on exactly what is shown. */
+  onPageItemsChange?: (ids: string[]) => void;
 }
 
 // Helper function to highlight matching text
@@ -356,6 +363,8 @@ export default function ResumeTable({
   containerClassName = 'flex-1',
   tableShellClassName = '',
   flushCards = false,
+  hideHeaderSelectAll = false,
+  onPageItemsChange,
 }: ResumeTableProps) {
   const router = useRouter();
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
@@ -590,6 +599,13 @@ export default function ResumeTable({
   // When pagination is disabled (server-side pagination), render all passed items
   const paginatedItems = disablePagination ? orderedResumes : paginatedItemsFromHook;
 
+  // Current page's ids, for a caller's toolbar "Select all on this page".
+  const pageIdsKey = paginatedItems.map(r => r.id).join('|');
+  useEffect(() => {
+    onPageItemsChange?.(pageIdsKey ? pageIdsKey.split('|') : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIdsKey]);
+
   // A resume whose candidate_email matches an existing team member's login
   // (stored before the upload-time restriction existed) is shown greyed out
   // and locked out of selection and every row action. Gated on
@@ -693,6 +709,9 @@ export default function ResumeTable({
                  digit. Pinned, so the ticks stay in view when the table is
                  scrolled sideways. */
               <th className={`sticky text-xs font-semibold text-gray-600 dark:text-slate-300 ${draggable ? 'left-10' : 'left-0'} z-20 w-px whitespace-nowrap px-4 py-3 align-middle border-r border-gray-200`}>
+                {hideHeaderSelectAll ? (
+                  <span className="sr-only">Select</span>
+                ) : (
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -712,6 +731,7 @@ export default function ResumeTable({
                     {selectedResumes.length > 0 ? `(${selectedResumes.length})` : ''}
                   </span>
                 </div>
+                )}
               </th>
             )}
             <th className="tf-th-cell text-left tf-th">

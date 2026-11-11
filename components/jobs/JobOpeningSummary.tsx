@@ -10,7 +10,7 @@ import {
   Calendar,
   User,
   Clock,
-  DollarSign,
+  Coins,
   Target,
   ClipboardCheck,
   Video,
@@ -252,7 +252,7 @@ export function JobOpeningPrimaryItems({ job, hideEmpty = false, breakBeforeType
       {/* Salary — same conditional treatment: shown only when there is a value. */}
       {(!hideEmpty || hasSalary) && (
         <span className={`flex items-center gap-1.5 ${hasSalary ? '' : 'max-sm:hidden'}`}>
-          <DollarSign className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <Coins className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           Salary {salaryText || '-'}
           {(job.salary_min || job.salary_max) && job.compensation_type
             ? ` / ${formatCompensationPeriod(job.compensation_type)}`
@@ -460,7 +460,7 @@ export default function JobOpeningSummary({
       <div className="flex items-center flex-wrap gap-2">
         {extras.salary && (
           <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-950/30 rounded-lg text-sm">
-            <DollarSign className="w-4 h-4 text-green-600" />
+            <Coins className="w-4 h-4 text-green-600" />
             <span className="text-green-700 dark:text-green-300">{extras.salary}</span>
           </div>
         )}
