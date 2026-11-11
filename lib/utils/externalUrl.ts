@@ -15,10 +15,32 @@ export function toExternalUrl(raw?: string | null): string | undefined {
 
   if (/^https?:\/\//i.test(value)) return value;
   if (value.startsWith('//')) return `https:${value}`;
-  if (/^mailto:/i.test(value)) return value;
+  if (/^(mailto|tel):/i.test(value)) return value;
   // Any other explicit scheme (javascript:, data:, vbscript:, …) is rejected.
   // "(?!\d)" keeps host:port values like "example.com:8080/x" allowed.
   if (/^[a-z][a-z0-9+.-]*:(?!\d)/i.test(value)) return undefined;
 
   return `https://${value.replace(/^\/+/, '')}`;
+}
+
+/**
+ * Make every link inside `root` open in a new tab with a safe absolute href.
+ * Used after docx-preview renders a Word resume: its <a> tags have no target,
+ * so clicking a candidate's LinkedIn/GitHub would replace TalentFlow itself.
+ */
+export function openLinksInNewTab(root: HTMLElement | null | undefined): void {
+  if (!root) return;
+  root.querySelectorAll('a[href]').forEach((el) => {
+    const a = el as HTMLAnchorElement;
+    const raw = a.getAttribute('href') || '';
+    if (raw.startsWith('#')) return; // in-document bookmark — leave as is
+    const href = toExternalUrl(raw);
+    if (!href) {
+      a.removeAttribute('href');
+      return;
+    }
+    a.setAttribute('href', href);
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+  });
 }
