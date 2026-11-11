@@ -605,16 +605,21 @@ export default function BulkScoringProgressModal({
                   <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
                 </Button>
               )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
-                className="w-8"
-                aria-label="Minimize to background"
-                title="Run in background"
-              >
-                <Minus className="w-4 h-4" />
-              </Button>
+              {/* Minimise only while scoring is still running — once every row
+                  has settled there is nothing left to run in the background,
+                  so Close is the only way out. */}
+              {!isAllComplete && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
+                  className="w-8"
+                  aria-label="Minimize to background"
+                  title="Run in background"
+                >
+                  <Minus className="w-4 h-4" />
+                </Button>
+              )}
               {/* Close appears only once every row has settled. While work is
                   still queued or running, Minimise is the way out — closing
                   mid-run reads as "cancel this", which it never did, and it

@@ -127,7 +127,8 @@ export default function AIInterviewJDSelection() {
     return () => { cancelled = true; };
   }, [reloadToken]);
 
-  const versionHasInterview = (versionId: string) => jdsWithInterview.has(versionId);
+  const versionHasInterview = (versionId: string) =>
+    jdsWithInterview.has(versionId) || jds.some(jd => jd.id === versionId && jd.has_published_config === true);
   /* Add stays off until we know which versions are taken — before that every
      version reads as free, and a press would carry a taken one into Configure. */
   const addReady = eligibilityLoaded && loadError !== 'eligibility';
@@ -141,17 +142,15 @@ export default function AIInterviewJDSelection() {
   const isJobDisabled = (job: Pick<Job, 'status'>) => isJdDisabled(String(job.status || ''));
   const isJobArchived = (job: Pick<Job, 'status'>) => isJdArchived(String(job.status || ''));
 
-  // Versions with a published AI interview config never reach the list — a JD
-  // can't be configured twice. Disabled and Archived JDs are listed
-  // separately, read-only.
-  const selectableJds = jds.filter(jd => jd.has_published_config !== true && !isJdDisabled(jd.status) && !isJdArchived(jd.status));
+  // Disabled and Archived JDs are listed separately, read-only.
+  const selectableJds = jds.filter(jd => !isJdDisabled(jd.status) && !isJdArchived(jd.status));
 
   /* ONE CARD PER JOB, on the Assessments picker's own rule and through its
      own helper, so the two lists cannot drift: each job is listed on its
-     newest version that is Published (or Republished) AND has no AI
-     interview yet — draft config or published. A job with no such version
-     gets no card; its versions, taken ones included, are still in Job
-     Openings and in View Versions. Newest job first. */
+     newest Published version, even when that version already has an AI
+     interview (the card is then unselectable and View Versions offers the
+     free one). A job with no published version free of an interview gets no
+     card. Newest job first. */
   const buildableJobs = buildAssessmentJobList(selectableJds.map(toJob), version => versionHasInterview(version.id));
   /* Disabled and Archived jobs stay visible exactly as before the status
      changed — one card per job, on its newest non-draft version, read-only
@@ -162,7 +161,9 @@ export default function AIInterviewJDSelection() {
      a job whose latest version has since been archived, or the reverse. */
   const buildableLineages = new Set(buildableJobs.map(lineageKey));
   const inactiveJobs = new Map<string, Job>();
-  groupByLineage(jds.map(toJob)).forEach((bucket, key) => {
+  /* The full JD list, when loaded, carries every version — the interview
+     endpoint may not return Disabled ones at all. */
+  groupByLineage(fullJobsById.size > 0 ? [...fullJobsById.values()] : jds.map(toJob)).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
     const latestNonDraft = bucket.find(job => job.status !== 'Draft');
     if (latestNonDraft && (isJobDisabled(latestNonDraft) || isJobArchived(latestNonDraft))) {

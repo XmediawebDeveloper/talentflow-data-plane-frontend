@@ -249,7 +249,16 @@ function byNewestVersion(a: any, b: any): number {
   return bTime - aTime;
 }
 
-export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
+export default function CandidateScoringDetailPage({ resume: resumeProp, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, jobPager, breadcrumbItems, assessmentConfigured, aiInterviewConfigured, allowCreateInviteTarget, onOpenInviteDialog, onSelectScore, versionReadOnly = false, inlineHeaderActions = false }: CandidateScoringDetailPageProps) {
+  /* The candidate the page is SHOWING, which lags `resumeProp` while Previous /
+     Next loads the next one. The header used to read the new prop at once while
+     the score, AI analysis and Score Table still showed the previous
+     candidate's fetched data, so for a moment the new name sat over the old
+     scores. Now the whole page stays on the current candidate until the next
+     one's data has arrived, then everything swaps in the same render. A prop
+     update for the SAME score (a parent refresh) still shows immediately. */
+  const [shownResume, setShownResume] = useState<ScoredResume>(resumeProp);
+  const resume = resumeProp.id === shownResume.id ? resumeProp : shownResume;
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   // Viewing isn't downloading (2026-11-10).
   const canDownloadResumes = canDownloadSomeResumes({ isTenantAdmin, hasPermissionCode });
@@ -565,29 +574,32 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
   // Always fetch complete scoring data AND full resume data from API
   useEffect(() => {
+    // A slower response for a candidate already stepped past must not
+    // overwrite the one now being loaded (fast Next, Next clicks).
+    let cancelled = false;
     const fetchCompleteData = async () => {
       console.log('[CandidateScoringDetailPage] Fetching complete data from API');
 
       // Always fetch from API when jobId is available to get latest data
-      if (jobId && resume?.id) {
-        console.log('[CandidateScoringDetailPage] Fetching from API for jobId:', jobId, 'scoreId:', resume.id);
+      if (jobId && resumeProp?.id) {
+        console.log('[CandidateScoringDetailPage] Fetching from API for jobId:', jobId, 'scoreId:', resumeProp.id);
         try {
           const { jdService } = await import('@/lib/services/jdService');
           const { resumeService } = await import('@/lib/services/resumeService');
 
           // Fetch JD details for Overview tab
           jdService.get(jobId).then((jd: any) => {
-            setJdDetails(jd);
+            if (!cancelled) setJdDetails(jd);
           }).catch((err: any) => {
             console.error('[CandidateScoringDetailPage] Failed to fetch JD details:', err);
           });
 
           // First fetch scored resumes to get the actual resume_id
           const scoredResumes = await jdService.getScoredResumes(jobId, { page_size: 100 });
-          const completeResumeData = scoredResumes.items.find((r: any) => r.id === resume.id);
+          const completeResumeData = scoredResumes.items.find((r: any) => r.id === resumeProp.id);
 
           // IMPORTANT: API returns 'id' as score ID and 'resume_id' as the actual resume ID
-          const actualResumeId = completeResumeData?.resume_id || resume.resumeId || resume.id;
+          const actualResumeId = completeResumeData?.resume_id || resumeProp.resumeId || resumeProp.id;
           // Version dropdown: this job's newest score per resume version.
           const byResume: Record<string, { scoreId: string; rating?: number | null; scoredAt?: string }> = {};
           for (const item of (scoredResumes.items || []) as any[]) {
@@ -597,9 +609,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               byResume[item.resume_id] = { scoreId: item.id, rating: item.overall_rating_10, scoredAt: item.created_at };
             }
           }
-          setScoreByResumeId(byResume);
-          setScoredResumeId(actualResumeId);
-          console.log('[CandidateScoringDetailPage] Score ID:', resume.id, 'Actual Resume ID:', actualResumeId);
+          console.log('[CandidateScoringDetailPage] Score ID:', resumeProp.id, 'Actual Resume ID:', actualResumeId);
 
           // Now fetch the full resume using the correct resume ID, plus its
           // upload history for the Version History section. Versions are
@@ -638,6 +648,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             }
           }
 
+          if (cancelled) return;
+          // Everything for the new candidate is committed in one batch below
+          // (no await between these setters), so no part of the page shows it early.
+          setScoreByResumeId(byResume);
+          setScoredResumeId(actualResumeId);
           setResumeVersions(
             versionsWithText.map((v: any) => ({
               id: v.id,
@@ -688,7 +703,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
             // IMPORTANT: Prioritize full resume data over scored resume data for Personal Info
             const fr = fullResume as any;
             setFullResumeData({
-              ...resume,
+              ...resumeProp,
               // Store the actual resume ID (different from score ID!)
               resumeId: actualResumeId,
               /* Scoring-specific data. `resume` (the row that was actually
@@ -702,41 +717,41 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                  than the one the user clicked (seen live: a 100% row opening
                  to show 85%). Only fall back to the refetched value when the
                  original genuinely has none. */
-              scorePercentage: resume.scorePercentage ?? Number((completeResumeData.overall_score || 0).toFixed(1)),
-              scoreFormula: resume.scoreFormula || completeResumeData.score_formula,
+              scorePercentage: resumeProp.scorePercentage ?? Number((completeResumeData.overall_score || 0).toFixed(1)),
+              scoreFormula: resumeProp.scoreFormula || completeResumeData.score_formula,
               // Mean Required rating - the Exact/Partial discriminator, shown on the
               // Score Table beside the classification. `??` not `||`: an average of 0
               // is a real value (every Required criterion rated 0), while null means
               // the JD has no Required criteria at all.
-              essentialAverage: resume.essentialAverage ?? completeResumeData.essential_average,
-              essentialRating10: resume.essentialRating10 ?? completeResumeData.essential_rating_10,
-              nonEssentialRating10: resume.nonEssentialRating10 ?? completeResumeData.non_essential_rating_10,
-              combinedAverage10: resume.combinedAverage10 ?? completeResumeData.combined_average_10,
-              overallRating10: resume.overallRating10 ?? completeResumeData.overall_rating_10,
-              ratingCapApplied: resume.ratingCapApplied ?? completeResumeData.rating_cap_applied,
-              ratingSummaryText: resume.ratingSummaryText ?? completeResumeData.rating_summary_text,
+              essentialAverage: resumeProp.essentialAverage ?? completeResumeData.essential_average,
+              essentialRating10: resumeProp.essentialRating10 ?? completeResumeData.essential_rating_10,
+              nonEssentialRating10: resumeProp.nonEssentialRating10 ?? completeResumeData.non_essential_rating_10,
+              combinedAverage10: resumeProp.combinedAverage10 ?? completeResumeData.combined_average_10,
+              overallRating10: resumeProp.overallRating10 ?? completeResumeData.overall_rating_10,
+              ratingCapApplied: resumeProp.ratingCapApplied ?? completeResumeData.rating_cap_applied,
+              ratingSummaryText: resumeProp.ratingSummaryText ?? completeResumeData.rating_summary_text,
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
-              aiSummary: resume.aiSummary || completeResumeData.ai_summary,
-              strengths: resume.strengths?.length ? resume.strengths : (completeResumeData.strengths || []),
-              gaps: resume.gaps?.length ? resume.gaps : (completeResumeData.gaps || []),
-              scoredDate: resume.scoredDate || completeResumeData.created_at,
-              matchStatus: resume.matchStatus || completeResumeData.match_status,
-              scoredBy: resume.scoredBy || completeResumeData.scored_by || completeResumeData.scored_by_name || 'System',
+              aiSummary: resumeProp.aiSummary || completeResumeData.ai_summary,
+              strengths: resumeProp.strengths?.length ? resumeProp.strengths : (completeResumeData.strengths || []),
+              gaps: resumeProp.gaps?.length ? resumeProp.gaps : (completeResumeData.gaps || []),
+              scoredDate: resumeProp.scoredDate || completeResumeData.created_at,
+              matchStatus: resumeProp.matchStatus || completeResumeData.match_status,
+              scoredBy: resumeProp.scoredBy || completeResumeData.scored_by || completeResumeData.scored_by_name || 'System',
               // Full resume data for Personal Info tab (prioritize full resume over scored resume)
               // Note: Backend returns snake_case, we map to camelCase for frontend
-              candidateName: fr?.candidate_name || resume.candidateName,
+              candidateName: fr?.candidate_name || resumeProp.candidateName,
               professionalSummary: fr?.professional_summary || '', // Don't fall back to AI summary
               experienceDetails: fr?.experience || [],
               educationDetails: fr?.education || [],
               skills: fr?.skills || [],
               technicalSkills: fr?.technical_skills || [],
               softSkills: fr?.soft_skills || [],
-              certifications: fr?.certifications || resume.certifications || [],
+              certifications: fr?.certifications || resumeProp.certifications || [],
               languages: fr?.languages || [],
               currentCompany: fr?.current_company || '',
-              title: fr?.current_title || resume.title || '',
-              location: fr?.location || resume.location || '',
+              title: fr?.current_title || resumeProp.title || '',
+              location: fr?.location || resumeProp.location || '',
               experience: fr?.experience_years ? `${fr.experience_years} years` : '',
               // Additional fields from full resume
               projects: fr?.projects || [],
@@ -760,26 +775,32 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               uploadedBy: fr?.uploaded_by_name || 'Unknown',
               versionCount: fr?.version_count || (versionsData?.length || 1),
             });
+            setShownResume(resumeProp);
             setIsDataReady(true);
           } else {
             console.log('[CandidateScoringDetailPage] Resume not found in API response, using existing data');
-            setFullResumeData(resume);
+            setFullResumeData(resumeProp);
+            setShownResume(resumeProp);
             setIsDataReady(true);
           }
         } catch (error) {
           console.error('[CandidateScoringDetailPage] Error fetching complete data:', error);
-          setFullResumeData(resume);
+          if (cancelled) return;
+          setFullResumeData(resumeProp);
+          setShownResume(resumeProp);
           setIsDataReady(true);
         }
       } else {
         console.log('[CandidateScoringDetailPage] No jobId provided, using existing data');
-        setFullResumeData(resume);
+        setFullResumeData(resumeProp);
+        setShownResume(resumeProp);
         setIsDataReady(true);
       }
     };
 
     fetchCompleteData();
-  }, [resume?.id, jobId]);
+    return () => { cancelled = true; };
+  }, [resumeProp?.id, jobId]);
 
   // Generate enriched data from resume with varied fallback scores
   const generateVariedScore = (base: number, variance: number) => {
