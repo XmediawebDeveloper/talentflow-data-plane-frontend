@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { toExternalUrl } from '@/lib/utils/externalUrl';
 
 interface ResumeDetailViewProps {
   resume: Resume;
@@ -241,7 +242,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     {detailedResume.links.linkedin && (
                       <div className="flex items-center gap-2 tf-body">
                         <Linkedin className="w-4 h-4 text-blue-600" />
-                        <a href={`https://${detailedResume.links.linkedin}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
+                        <a href={toExternalUrl(detailedResume.links.linkedin)} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           LinkedIn <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>
@@ -249,7 +250,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     {detailedResume.links.portfolio && (
                       <div className="flex items-center gap-2 tf-body">
                         <Globe className="w-4 h-4 text-blue-600" />
-                        <a href={`https://${detailedResume.links.portfolio}`} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
+                        <a href={toExternalUrl(detailedResume.links.portfolio)} target="_blank" rel="noopener noreferrer" className="hover:text-blue-600 flex items-center gap-1">
                           Portfolio <ExternalLink className="w-3 h-3" />
                         </a>
                       </div>

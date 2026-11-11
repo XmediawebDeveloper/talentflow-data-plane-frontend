@@ -17,6 +17,7 @@ import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { NoTeamTicketsState, NoTicketsFoundState } from '@/components/SupportEmptyStates';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
 
@@ -514,10 +515,7 @@ export default function InternalTicketAdmin() {
                   <Loader2 className="w-8 h-8 animate-spin text-gray-600" />
                 </div>
               ) : tickets.length === 0 ? (
-                <div className="text-center py-12">
-                  <Inbox className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="tf-body-secondary">No team tickets yet</p>
-                </div>
+                <NoTeamTicketsState />
               ) : (
                 <div className="space-y-3">
                   {tickets.slice(0, 5).map(ticket => (
@@ -709,19 +707,13 @@ export default function InternalTicketAdmin() {
                   </table>
 
                   {filteredTickets.length === 0 && (
-                    <div className="text-center py-12">
-                      <Inbox className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                      <p className="tf-body-secondary">No tickets found</p>
-                    </div>
+                    <div className="p-4"><NoTicketsFoundState /></div>
                   )}
                 </div>
                 <MobileRecordList
                   className="p-3"
                   empty={
-                    <div className="text-center py-12">
-                      <Inbox className="w-16 h-16 mx-auto mb-4 text-gray-400" />
-                      <p className="tf-body-secondary">No tickets found</p>
-                    </div>
+                    <div className="p-4"><NoTicketsFoundState /></div>
                   }
                 >
                   {filteredTickets.map(ticket => {
