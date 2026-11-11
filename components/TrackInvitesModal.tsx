@@ -830,7 +830,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             <button
               type="button"
               onClick={toggleSelectAll}
-              className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+              className="flex items-center gap-2 text-left text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
             >
               <span
                 role="checkbox"
@@ -933,6 +933,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   return (
                     <MobileRecordCard
                       key={invitation.id}
+                      className="tf-invite-card"
                       idBadge={
                         <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
                           {invitation.candidate_display_id || '-'}
@@ -940,7 +941,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                       }
                       title={
                         <span className="flex min-w-0 items-center gap-2">
-                          <span className="truncate">{capitalizedCase(invitation.candidate_name)}</span>
+                          <span className="truncate max-sm:whitespace-normal max-sm:break-words">{capitalizedCase(invitation.candidate_name)}</span>
                         </span>
                       }
                       badges={
@@ -1002,7 +1003,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
                       {timelineEvents(invitation, timelineLimit).length > 0 && (
-                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
+                        <div className="tf-invite-timeline mt-2 grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-400">
                           {timelineEvents(invitation, timelineLimit).map(({ label, at, Icon, tone }, i) => (
                             <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                               <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
