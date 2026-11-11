@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { formatJdExperience, formatExperienceLevelName } from '@/lib/utils/jobExperience';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
@@ -177,14 +178,12 @@ export default function JobDetailsPage({ user, tenant }: JobDetailsPageProps = {
     // Fetch all published JDs across pages (backend caps at 100 per page)
     const fetchAllPublished = async () => {
       const ids: string[] = [];
-      let page = 1;
-      while (true) {
-        const res = await jdService.list({ status: 'published', page_size: 100, page });
-        const items = res.items ?? [];
-        ids.push(...items.map((j: JDResponse) => j.id));
-        if (ids.length >= res.total || items.length < 100) break;
-        page++;
-      }
+      // Page 1, then the rest in parallel (a few at a time) — was one by one.
+      const first = await jdService.list({ status: 'published', page_size: 100, page: 1 });
+      const rest = await fetchRemainingPages(Math.max(1, Math.ceil((first.total ?? 0) / 100)), (page) =>
+        jdService.list({ status: 'published', page_size: 100, page }),
+      );
+      for (const r of [first, ...rest]) ids.push(...(r.items ?? []).map((j: JDResponse) => j.id));
       setAllJDIds(ids);
     };
     fetchAllPublished().catch(() => {});
