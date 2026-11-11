@@ -146,8 +146,8 @@ const STATUS_CARD_LABEL: Record<string, string> = {
   invited: 'Invited', in_progress: 'In Progress', completed: 'Completed', expired: 'Expired', terminated: 'Terminated', revoked: 'Revoked',
 };
 /* guided: every card in the Status dropdown, Revoked included. */
-const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }];
-const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked'];
+const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }, { value: 'failed', label: 'Invite Failed' }];
+const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked', 'invite_failed'];
 
 /**
  * Invite tracking for a job's AI interview, opened from the Job Details page.
@@ -309,6 +309,7 @@ export default function AIInterviewTrackInvitesModal({
     cancelled: 0,
     revoked: 0,
     expired: 0,
+    failed: 0,
   });
   // Resend flow — confirm first (the old link stops working), then send.
   const [resendTarget, setResendTarget] = useState<any | null>(null);
@@ -457,7 +458,7 @@ export default function AIInterviewTrackInvitesModal({
               invite_date_to: filters.dateTo || undefined,
               page: 1,
               page_size: 1000,
-            }).then((res) => (res.items || []).map((inv: any) => ({
+            }).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv: any) => ({
               ...inv,
               _config_id: entry.configId,
               _jd_version: entry.jobVersion,
@@ -488,6 +489,8 @@ export default function AIInterviewTrackInvitesModal({
           cancelled: sum((o) => o.cancelled),
           revoked: sum((o) => o.revoked),
           expired: sum((o) => o.expired),
+          // The overview endpoint has no failed-invite count.
+          failed: 0,
         });
         setLoadedAt(Date.now());
         return;
@@ -498,7 +501,11 @@ export default function AIInterviewTrackInvitesModal({
          `invited` or `revoked`, and deriving either as "total minus the rest"
          would leave that card disagreeing with the rows it filters to — the
          remainder also holds expired and system_check sessions. */
-      const [result, summary, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
+      /* Invite Failed: the backend has no failed status for AI invites yet.
+         Asked for anyway — once it reports one, the tab fills — and a refusal
+         reads as none (an empty list, a 0 tab), never as a load error. */
+      const noFailed = { items: [], total: 0, total_pages: 1 } as unknown as Awaited<ReturnType<typeof aiInterviewService.getConfigInvitations>>;
+      const [result, summary, invitedOnly, revokedOnly, expiredOnly, failedOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
           status: filters.status !== 'all' ? filters.status : undefined,
@@ -509,11 +516,12 @@ export default function AIInterviewTrackInvitesModal({
              matching list is fetched and paged here instead. */
           page: fetchAllForClientFilters ? 1 : page,
           page_size: fetchAllForClientFilters ? 1000 : pageSize,
-        }),
+        }).catch((err) => { if (filters.status === 'failed') return noFailed; throw err; }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'invited' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'expired' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'failed' }).catch(() => noFailed),
       ]);
       if (isStale()) return;
 
@@ -540,6 +548,7 @@ export default function AIInterviewTrackInvitesModal({
         cancelled: summary.cancelled || 0,
         revoked: revokedOnly.total || 0,
         expired: expiredOnly.total || 0,
+        failed: failedOnly.total || 0,
       });
       setLoadedAt(Date.now());
 
@@ -575,10 +584,10 @@ export default function AIInterviewTrackInvitesModal({
       const lists = jobScope
         ? await Promise.all(jobScope
           .filter((entry) => (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter) && (!versionFilter || String(entry.interviewVersion) === versionFilter))
-          .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).then((res) => (res.items || []).map((inv) => ({
+          .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv) => ({
             ...inv, _config_id: entry.configId, _jd_version: entry.jobVersion, _interview_version: entry.interviewVersion,
           })))))
-        : [((await aiInterviewService.getConfigInvitations(configId, params)).items || [])];
+        : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
       const rows: typeof invitations = lists.flat().filter((inv) =>
         (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
       const lockedRow = (inv: (typeof invitations)[number]) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv);
@@ -654,6 +663,7 @@ export default function AIInterviewTrackInvitesModal({
     { key: 'expired', label: 'Expired', value: overview.expired },
     { key: 'terminated', label: 'Terminated', value: overview.terminated },
     { key: 'revoked', label: 'Revoked', value: overview.revoked },
+    { key: 'failed', label: 'Invite Failed', value: overview.failed },
   ];
   const startIndex = filteredTotal === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = Math.min(page * pageSize, filteredTotal);
@@ -1106,9 +1116,9 @@ export default function AIInterviewTrackInvitesModal({
         {!(isUnstarted && embedded) && (
         <div className={`${paginationBelowTable || look ? 'tf-tracker-footer ' : ''}border-t bg-slate-50 shrink-0 ${look ? 'sm:flex sm:items-center border-gray-200 dark:border-slate-700 dark:bg-slate-800 shadow-[0_-4px_12px_-6px_rgba(15,23,42,0.12)]' : 'border-gray-100 dark:border-slate-700/60 dark:bg-slate-950'}`}>
         {/* look: one footer row from sm — the pager, then Cancel / Invite More
-            right after its page buttons (kept right, ml-auto, when a tab is
-            empty and there is no pager); stacked on phones. */}
-        {look && !initialLoading && filteredTotal > 0 && (
+            right after its page buttons; with no pager, a spacer holds them
+            right. Stacked on phones. */}
+        {look && (!initialLoading && filteredTotal > 0 ? (
           <div className="px-3 pt-2 sm:flex-1 sm:min-w-0 sm:pl-6 sm:pr-0 sm:py-3">
             <ListPagination
               currentPage={page}
@@ -1122,7 +1132,12 @@ export default function AIInterviewTrackInvitesModal({
               alwaysShow
             />
           </div>
-        )}
+        ) : (
+          /* No pager (loading, or an empty tab): an empty box in its place, so
+             Cancel / Invite More stay right without leaning on ml-auto alone —
+             they never jump from the left while the list loads. */
+          <div className="hidden sm:block flex-1" aria-hidden="true" />
+        ))}
         <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 ${look ? `px-3 py-2.5 sm:py-2 sm:pl-4 sm:pr-6 sm:ml-auto shrink-0 ${!initialLoading && filteredTotal > 0 ? 'sm:border-l sm:border-gray-200 dark:sm:border-slate-700' : 'sm:py-3'}` : 'px-3 sm:px-6 py-2.5 sm:py-4'}`}>
           <p className={`tf-body-muted text-center sm:text-left order-2 sm:order-1 ${look ? 'hidden' : ''}`}>
             {/* Under the table instead when the paging is there. */}

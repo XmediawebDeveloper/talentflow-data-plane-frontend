@@ -247,7 +247,11 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
   });
 };
 
-const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
+/* 10 minutes, not 2 (2026-11-11): the "Invited" audit row lands after the
+   email goes out, and a slow or retried send pushed it past 2 minutes — the
+   row's own created_at then read as a second send, the duplicate "Invited"
+   in Invitation History. */
+const FALLBACK_MATCH_WINDOW_MS = 10 * 60 * 1000;
 
 /** The exact-duplicate filter in buildFullTimeline only catches the same
  *  action at the same millisecond. The same event also arrives twice a few
@@ -389,13 +393,10 @@ const buildFullTimeline = (
  *  Older events drop off the cell, not the trail: "View full history" opens
  *  every one of them. */
 const COMPACT_TIMELINE_LIMIT = 4;
+/* The invite email reads "Invited" here too (it used to be renamed "Email
+   Shared"), as the AI Interview timeline and View History say (2026-11-11). */
 export const timelineEvents = (inv: any, limit: number = COMPACT_TIMELINE_LIMIT): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(0, limit).reverse().map(
-    // An "Invited" entry is the invitation EMAIL going out (a shared link has
-    // its own "Link Shared" entry), so the cell says how it was shared. Display
-    // only: the status logic above still keys on the "Invited" label.
-    (entry) => (entry.label === 'Invited' ? { ...entry, label: 'Email Shared' } : entry)
-  );
+  buildFullTimeline(inv, inv.timeline || []).slice(0, limit).reverse();
 
 /** Timeline entry label -> the status key it puts an invitation in (the keys
  *  the status badge and the Invitation Status tabs use). Only entries that ARE
@@ -879,18 +880,12 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Invitation History</DialogTitle>
-          {/* Name, then the email — two candidates can share a name, and the
-              email is what tells them apart. */}
-          {/* Name, then the invitation's email beside it — the one place the
-              popup names the address. */}
+          {/* Name, then the email once — two candidates can share a name, and
+              the email tells them apart. The AI Interview history's header. */}
           <DialogDescription className="break-words">
-            
-            {capitalizedCase(target?.candidate_name) || (!target?.candidate_email ? 'Candidate' : null)}
-            {target?.candidate_name && target?.candidate_email && ' — '}
-            {target?.candidate_email && <span className="break-all">{target.candidate_email}</span>}
-          
+            {capitalizedCase(target?.candidate_name) || target?.candidate_email || 'Candidate'}
             {target?.candidate_name && target?.candidate_email && (
-              <span className="text-gray-400 dark:text-slate-500"> · {target.candidate_email}</span>
+              <span className="text-gray-400 dark:text-slate-500 break-all"> · {target.candidate_email}</span>
             )}
           </DialogDescription>
         </DialogHeader>

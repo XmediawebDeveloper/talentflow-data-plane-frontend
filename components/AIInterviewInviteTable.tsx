@@ -7,7 +7,7 @@ import { Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
   MoreVertical, Monitor, History, XCircle, FileText, Timer, ChevronDown,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
@@ -346,8 +346,8 @@ const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
  *  narrow rather than a generic rank table. */
 const ORDER_TIE_WINDOW_MS = 10 * 1000;
 const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
-  const ta = new Date(a.at).getTime();
-  const tb = new Date(b.at).getTime();
+  const ta = parseIST(a.at).getTime();
+  const tb = parseIST(b.at).getTime();
   if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
     const aFailed = a.label === 'Invite Failed';
     const bFailed = b.label === 'Invite Failed';
@@ -400,7 +400,21 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
   });
 };
 
-const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
+/* 10 minutes, not 2 (2026-11-11) — as the assessment trail: a slow send
+   landed its "Invited" audit row past 2 minutes, and the row's created_at
+   then read as a second "Invited" in Invitation History. */
+const FALLBACK_MATCH_WINDOW_MS = 10 * 60 * 1000;
+/* The same event logged twice (a retried write) or read from two copies of
+   the trail prints as two identical lines: neighbours with the same label
+   inside a minute are one event, the earliest kept — the assessment trail's
+   collapseRepeatedEvents. A real repeat (Invited -> Revoked -> Invited)
+   keeps every line, since only neighbours in time order merge. */
+const DUPLICATE_EVENT_WINDOW_MS = 60 * 1000;
+const collapseRepeatedEvents = (sorted: TimelineEntry[]): TimelineEntry[] =>
+  sorted.filter((entry, i) => {
+    const prev = sorted[i - 1];
+    return !(prev && prev.label === entry.label && parseIST(entry.at).getTime() - parseIST(prev.at).getTime() <= DUPLICATE_EVENT_WINDOW_MS);
+  });
 const buildFullTimeline = (
   inv: any,
   auditLogs: Array<{ action: string; created_at: string | null }>
@@ -414,7 +428,7 @@ const buildFullTimeline = (
   const seen = new Set<string>();
   const dedupedLogs = auditLogs.filter((log) => {
     if (!log.created_at) return true;
-    const key = `${log.action}|${new Date(log.created_at).getTime()}`;
+    const key = `${log.action}|${parseIST(log.created_at).getTime()}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -453,7 +467,7 @@ const buildFullTimeline = (
   ];
   for (const [action, at] of fallback) {
     if (!at) continue;
-    const candidateMs = new Date(at).getTime();
+    const candidateMs = parseIST(at).getTime();
     // The audit row is written AFTER the column is set (the revoke row lands
     // ~1s after revoked_at, the invite row seconds after invitation_sent_at
     // because the email goes out first). A strict "at or before" test saw
@@ -464,7 +478,7 @@ const buildFullTimeline = (
       (log) =>
         log.action === action &&
         log.created_at &&
-        new Date(log.created_at).getTime() <= candidateMs + FALLBACK_MATCH_WINDOW_MS
+        parseIST(log.created_at).getTime() <= candidateMs + FALLBACK_MATCH_WINDOW_MS
     );
     if (!coveredByRealRow) {
       out.push({ ...describeTimelineAction(action), at });
@@ -475,7 +489,7 @@ const buildFullTimeline = (
     compareTimelineEntries
   );
   // Ascending — oldest event first, the order it happened in.
-  return collapseRepeatedExpiries(merged);
+  return collapseRepeatedExpiries(collapseRepeatedEvents(merged));
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
@@ -518,6 +532,11 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       return <InviteStatusChip kind="expired" />;
     case 'revoked':
       return <InviteStatusChip kind="revoked" title="Revoked by recruiter — the old link no longer works" />;
+    // The Invite Failed tab's rows, once the backend reports them.
+    case 'failed':
+      return <InviteStatusChip kind="invite_failed" />;
+    case 'bounced':
+      return <InviteStatusChip kind="bounced" />;
     default:
       return <InviteStatusChip kind="other" label={inv.status || 'Pending'} />;
   }
