@@ -299,6 +299,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // overlay wording: "you exited" only if they really did; otherwise the
   // browser refused the automatic request and it is a plain "enter" step.
   const [finalConsentFsWasOn, setFinalConsentFsWasOn] = useState(false);
+  // Set when the Start click itself could not enter fullscreen. Only then is
+  // the "Enter Fullscreen" overlay shown for a candidate who was never in it:
+  // the browser refuses fullscreen right after the share picker, so arriving
+  // here windowed is normal and the Start click enters it — no extra popup.
+  const [finalConsentFsAskFailed, setFinalConsentFsAskFailed] = useState(false);
   // "Hide the screen-share bar" gate (vision-LLM verified) shown before start.
   const [shareBarChecking, setShareBarChecking] = useState(false);
   const [shareBarError, setShareBarError] = useState<string | null>(null);
@@ -1417,30 +1422,54 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     'video/webm',
   ];
 
-  /** Enter fullscreen right after the screen-share picker closes. Waits up to
-   *  ~1 s for the window to get focus back (a refused request — "TypeError:
-   *  not granted" — is what Edge/Chrome return while it hasn't), then tries,
-   *  and retries once. Never throws: the final consent gate re-asks with a
-   *  fresh click if this did not take. */
-  const enterFullscreenAfterPicker = async (): Promise<void> => {
-    const waitForFocus = (ms: number) => new Promise<void>((resolve) => {
-      if (document.hasFocus()) { resolve(); return; }
-      const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
-      const t = setTimeout(done, ms);
-      window.addEventListener('focus', done);
-    });
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (isFullscreen()) return;
-      await waitForFocus(attempt === 0 ? 1000 : 400);
-      try {
-        await requestFullscreen();
-        return;
-      } catch {
-        await new Promise((r) => setTimeout(r, 250));
-      }
-    }
-  };
-
+  /** Enter fullscreen right after the screen-share picker closes. Waits up to
+
+   *  ~1 s for the window to get focus back (a refused request — "TypeError:
+
+   *  not granted" — is what Edge/Chrome return while it hasn't), then tries,
+
+   *  and retries once. Never throws: the final consent gate re-asks with a
+
+   *  fresh click if this did not take. */
+
+  const enterFullscreenAfterPicker = async (): Promise<void> => {
+
+    const waitForFocus = (ms: number) => new Promise<void>((resolve) => {
+
+      if (document.hasFocus()) { resolve(); return; }
+
+      const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
+
+      const t = setTimeout(done, ms);
+
+      window.addEventListener('focus', done);
+
+    });
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+
+      if (isFullscreen()) return;
+
+      await waitForFocus(attempt === 0 ? 1000 : 400);
+
+      try {
+
+        await requestFullscreen();
+
+        return;
+
+      } catch {
+
+        await new Promise((r) => setTimeout(r, 250));
+
+      }
+
+    }
+
+  };
+
+
+
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
       video: {
@@ -1810,6 +1839,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // Browsers (Chrome) exit fullscreen automatically to show the screen-share picker.
     // By requesting screen share first (while not in fullscreen) we avoid a second
     // "Fullscreen Required" popup when the interview step loads.
+    // Enter fullscreen on THIS click, before the picker opens. The picker's own
+    // Share button is browser UI, not a page click, so fullscreen can't be
+    // asked for after it ("TypeError: not granted"); asked for now, the
+    // candidate is already in fullscreen when they press Share. If the browser
+    // drops fullscreen for the picker, the after-picker attempt below and the
+    // final consent Start click still cover it.
+    if (!isFullscreen()) {
+      try { await requestFullscreen(); } catch { /* covered after the picker */ }
+    }
     try {
       const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
@@ -1963,6 +2001,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         if (invalidSelection) {
           toast.error(ENTIRE_SCREEN_REQUIRED_MESSAGE, { duration: 6000 });
         }
+        // Fullscreen was entered before the picker — leave it again, the
+        // candidate is back on the share prompt.
+        if (isFullscreen()) exitFullscreen().catch(() => {});
         setStartSubmitting(false);
         return; // do NOT enter fullscreen or start interview
       }
@@ -2526,8 +2567,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       }
       if (!isFullscreen()) {
         setFinalConsentFsExited(true);
+        setFinalConsentFsAskFailed(true);
         toast.error(
-          'You must be in fullscreen to start. Click "Return to Fullscreen", then accept again.',
+          'You must be in fullscreen to start. Use the fullscreen button, then accept again.',
           { duration: 6000 },
         );
         return;
@@ -2819,6 +2861,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       if (e.key === 'F11') { try { e.preventDefault(); } catch { /* ignore */ } }
     };
     setFinalConsentFsWasOn(false); // fresh arrival on the gate
+    setFinalConsentFsAskFailed(false);
     sync();
     document.addEventListener(ev, sync);
     window.addEventListener('keydown', onKey, true);
@@ -3502,6 +3545,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
+    // Block with the overlay only if the candidate LEFT fullscreen here, or the
+    // Start click failed to enter it. Never-entered (refused after the share
+    // picker) is handled by the Start click itself.
+    const finalConsentFsBlocked = finalConsentFsExited && (finalConsentFsWasOn || finalConsentFsAskFailed);
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl max-w-[1400px] w-full my-auto px-5 py-4 md:px-7 md:py-5">
@@ -3512,7 +3559,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Before we begin
           </h1>
           <p className="tf-body-secondary mb-3 text-center max-w-4xl mx-auto">
-            You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.
+            {finalConsentFsExited
+              ? 'Screen sharing is active. Please confirm that you understand the actions that are not allowed. The interview opens in fullscreen and starts as soon as you accept.'
+              : 'You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.'}
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
               sharing and sends the candidate back to re-share. */}
@@ -3568,8 +3617,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             </p>
             <button
               onClick={() => { handleFinalConsentAccept(); }}
-              disabled={startSubmitting || finalConsentFsExited}
-              title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
+              disabled={startSubmitting || finalConsentFsBlocked}
+              title={finalConsentFsBlocked ? 'Return to fullscreen to continue' : undefined}
               className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue-2 text-white font-semibold py-2.5 px-5 rounded-lg transition-all text-sm disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-brand-blue/20"
             >
               {startSubmitting ? (
@@ -3584,7 +3633,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {/* Fullscreen dropped on this gate (F11 / Esc) — block accepting and
             force the candidate back into fullscreen. Re-entering needs a user
             gesture, so it happens on this button's click. */}
-        {finalConsentFsExited && (
+        {finalConsentFsBlocked && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4 overflow-y-auto">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
               <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
