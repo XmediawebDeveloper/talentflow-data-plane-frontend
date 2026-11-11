@@ -1170,7 +1170,7 @@ export default function ServerCandidatePicker({
         disabled={pickingDisabled || total === 0 || filterModeHere || selectingAll || (listRoom !== null && total > listRoom)}
         title={pickingDisabled ? 'Pick a version first'
           : listRoom !== null && total > listRoom && !filterModeHere ? `${fmt(total)} matching — only ${fmt(listRoom)} ${listRoom === 1 ? 'unit' : 'units'} left` : undefined}
-        className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="inline-flex items-center px-2.5 py-1 max-sm:basis-full max-sm:justify-center max-sm:py-1.5 rounded-md text-xs font-semibold border border-brand-blue/30 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue/15 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {selectingAll && <Loader2 className="w-3 h-3 mr-1 animate-spin" aria-hidden="true" />}
         {filterModeHere ? `All ${fmt(selection.total)} matching selected` : `Select all ${fmt(total)} matching`}
@@ -1199,7 +1199,7 @@ export default function ServerCandidatePicker({
         onScroll={updateTabsMore}
         role="tablist"
         aria-label="Where candidates come from"
-        className="flex items-end gap-x-4 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2"
+        className="tf-source-tabs flex items-end gap-x-4 sm:flex-wrap sm:gap-y-1 max-sm:overflow-x-auto border-b border-gray-200 dark:border-slate-700 px-2 sm:px-3 pt-2"
       >
         {TAB_GROUPS.map((g, i) => (
           <Fragment key={g.label}>
@@ -1234,9 +1234,9 @@ export default function ServerCandidatePicker({
           page's own tabs — each with its count and its picks — and Upload
           resumes at the right. One side only (permissions): no toggle. */}
       {isDbTab(source) && (
-      <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2 max-sm:flex-col max-sm:items-stretch">
       {dbOpen.length > 1 ? (
-        <div role="radiogroup" aria-label="Resume Database" className="inline-flex rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-0.5">
+        <div role="radiogroup" aria-label="Resume Database" className="inline-flex max-sm:flex max-sm:w-full max-sm:[&>button]:flex-1 max-sm:[&>button]:justify-center max-sm:[&>button]:py-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-0.5">
           {DB_SOURCES.map((d) => {
             const here = source === d;
             const n = tabCount(d);
@@ -1262,8 +1262,9 @@ export default function ServerCandidatePicker({
             );
           })}
         </div>
-      ) : <span />}
-        <div className="flex flex-wrap items-center justify-end gap-2">
+      ) : <span className="max-sm:hidden" />}
+        {/* Phones: Upload resumes · Select loaded on one line (ends of the row), Select all matching full width under them. */}
+        <div className="flex flex-wrap items-center justify-end gap-2 max-sm:justify-between max-sm:[&>button]:py-1.5">
         {/* Uploads go to My Resumes (and open it), from either side. */}
         <button
           type="button"
@@ -1283,7 +1284,7 @@ export default function ServerCandidatePicker({
       {!isDbTab(source) && (
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className={SECTION}>{LIST_HEADING[source]}</h3>
-        <div className="flex flex-wrap items-center gap-2">{pickControls}</div>
+        <div className="flex flex-wrap items-center gap-2 max-sm:w-full max-sm:justify-between">{pickControls}</div>
       </div>
       )}
 

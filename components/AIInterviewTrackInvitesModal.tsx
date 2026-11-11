@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { X, Users, Mail, Play, Check, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send, Undo2 } from 'lucide-react';
 import type { InviteStatusKind } from '@/components/ui/invite-status-chip';
 import { StatCardsHint, StatusLegend, UpdatedAgo } from '@/components/ui/guided-tracker';
+import { TrackerSelectAll, TrackerStatusTabs, TrackerTabHint, trackerSelection, TRACKER_LOOK_PANEL_CLASS, TRACKER_LOOK_BODY_CLASS, TrackerBulkBar, type TrackerTab, type TrackerSelectGroup } from '@/components/ui/tracker-look';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -145,8 +146,8 @@ const STATUS_CARD_LABEL: Record<string, string> = {
   invited: 'Invited', in_progress: 'In Progress', completed: 'Completed', expired: 'Expired', terminated: 'Terminated', revoked: 'Revoked',
 };
 /* guided: every card in the Status dropdown, Revoked included. */
-const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }];
-const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked'];
+const AI_CARD_STATUS_OPTIONS = [...AI_INTERVIEW_INVITE_STATUS_OPTIONS, { value: 'revoked', label: 'Revoked' }, { value: 'failed', label: 'Invite Failed' }];
+const INTERVIEW_LEGEND: InviteStatusKind[] = ['invited', 'in_progress', 'completed', 'terminated', 'cancelled', 'expired', 'revoked', 'invite_failed'];
 
 /**
  * Invite tracking for a job's AI interview, opened from the Job Details page.
@@ -308,6 +309,7 @@ export default function AIInterviewTrackInvitesModal({
     cancelled: 0,
     revoked: 0,
     expired: 0,
+    failed: 0,
   });
   // Resend flow — confirm first (the old link stops working), then send.
   const [resendTarget, setResendTarget] = useState<any | null>(null);
@@ -338,14 +340,41 @@ export default function AIInterviewTrackInvitesModal({
   const tableInvitations = lockedStatusByVersion.size === 0
     ? invitations
     : invitations.map((inv: { _jd_version?: number }) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv));
+  /* The Track popups' look (components/ui/tracker-look) — the guided popup;
+     the embedded Track tab keeps its cards. */
+  const look = guided && !embedded;
+  /* look: "Select all pages" — this tracker loads one page at a time, so the
+     matching rows of every page are read once, on that pick, with the same
+     filters as the list (`allPagesKey`). Kept until the filters change. */
+  const allPagesKey = JSON.stringify([filters, sourceFilter, resultFilter, jobVersionFilter, versionFilter, scopeKey]);
+  const [allPages, setAllPages] = useState<{ key: string; rows: typeof invitations } | null>(null);
+  const [allPagesLoading, setAllPagesLoading] = useState(false);
+  const allPagesRows = allPages?.key === allPagesKey ? allPages.rows : null;
+  /* The rows a selection can hold: this page, plus every page once read. */
+  const selectionRows = look && allPagesRows
+    ? [...invitations, ...allPagesRows.filter((row) => !invitations.some((inv) => inv.id === row.id))]
+    : invitations;
   const selectableIds = (jdDisabled || configArchived) ? [] : invitations.filter((inv: any) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv: any) => inv.id);
-  const selectedRows = invitations.filter((inv: any) => selectedIds.has(inv.id));
+  const selectedRows = selectionRows.filter((inv) => selectedIds.has(inv.id));
+  /* look: each bulk button acts on its own kind of the selection. */
+  const revocableSelected = selectedRows.filter(isRevocableInvite);
+  const resendableSelected = selectedRows.filter(isBulkResendable);
+  const allPagesIds = (jdDisabled || configArchived) || !allPagesRows ? [] : allPagesRows.filter((inv) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv) => inv.id as string);
+  const allPagesChecked = allPagesIds.length > 0 && allPagesIds.every((id) => selectedIds.has(id));
   const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvite);
   const allResendable = selectedRows.length > 0 && selectedRows.every(isBulkResendable);
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
   const toggleSelectAll = () =>
     setSelectedIds(() => (allSelected ? new Set<string>() : new Set<string>(selectableIds)));
+  /* look: Select All picks one kind at a time — Invited (to revoke) or
+     Expired (to resend) on this page — so a selection always has an action.
+     The pill's checkbox and the header checkbox share the rule. */
+  const selectGroups: TrackerSelectGroup[] = [
+    { key: 'invited', label: 'Invited', action: 'revoke', ids: invitations.filter((inv) => selectableIds.includes(inv.id) && isRevocableInvite(inv)).map((inv) => inv.id) },
+    { key: 'expired', label: 'Expired', action: 'resend', ids: invitations.filter((inv) => selectableIds.includes(inv.id) && isBulkResendable(inv)).map((inv) => inv.id) },
+  ];
+  const pageSelection = trackerSelection(selectGroups, selectedIds, setSelectedIds);
   const toggleSelectOne = (id: string) =>
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -360,18 +389,18 @@ export default function AIInterviewTrackInvitesModal({
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(invitations.filter(isBulkActionable).map((inv: any) => inv.id));
+      const valid = new Set(selectionRows.filter(isBulkActionable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [invitations, jdDisabled, configArchived]);
+  }, [invitations, allPagesRows, jdDisabled, configArchived]);
 
   // Bulk resend — same endpoint as the single-row Resend, called per
   // invitation. Sequential on purpose: a burst of parallel resends is exactly
   // the kind of thing mail rate-limiters punish.
   const handleBulkResend = async () => {
-    const targets = invitations.filter(
+    const targets = selectionRows.filter(
       (inv: any) => selectedIds.has(inv.id) && isBulkResendable(inv)
     );
     if (targets.length === 0) {
@@ -429,7 +458,7 @@ export default function AIInterviewTrackInvitesModal({
               invite_date_to: filters.dateTo || undefined,
               page: 1,
               page_size: 1000,
-            }).then((res) => (res.items || []).map((inv: any) => ({
+            }).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv: any) => ({
               ...inv,
               _config_id: entry.configId,
               _jd_version: entry.jobVersion,
@@ -460,6 +489,8 @@ export default function AIInterviewTrackInvitesModal({
           cancelled: sum((o) => o.cancelled),
           revoked: sum((o) => o.revoked),
           expired: sum((o) => o.expired),
+          // The overview endpoint has no failed-invite count.
+          failed: 0,
         });
         setLoadedAt(Date.now());
         return;
@@ -470,7 +501,11 @@ export default function AIInterviewTrackInvitesModal({
          `invited` or `revoked`, and deriving either as "total minus the rest"
          would leave that card disagreeing with the rows it filters to — the
          remainder also holds expired and system_check sessions. */
-      const [result, summary, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
+      /* Invite Failed: the backend has no failed status for AI invites yet.
+         Asked for anyway — once it reports one, the tab fills — and a refusal
+         reads as none (an empty list, a 0 tab), never as a load error. */
+      const noFailed = { items: [], total: 0, total_pages: 1 } as unknown as Awaited<ReturnType<typeof aiInterviewService.getConfigInvitations>>;
+      const [result, summary, invitedOnly, revokedOnly, expiredOnly, failedOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
           status: filters.status !== 'all' ? filters.status : undefined,
@@ -481,11 +516,12 @@ export default function AIInterviewTrackInvitesModal({
              matching list is fetched and paged here instead. */
           page: fetchAllForClientFilters ? 1 : page,
           page_size: fetchAllForClientFilters ? 1000 : pageSize,
-        }),
+        }).catch((err) => { if (filters.status === 'failed') return noFailed; throw err; }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'invited' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'expired' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'failed' }).catch(() => noFailed),
       ]);
       if (isStale()) return;
 
@@ -512,6 +548,7 @@ export default function AIInterviewTrackInvitesModal({
         cancelled: summary.cancelled || 0,
         revoked: revokedOnly.total || 0,
         expired: expiredOnly.total || 0,
+        failed: failedOnly.total || 0,
       });
       setLoadedAt(Date.now());
 
@@ -529,6 +566,39 @@ export default function AIInterviewTrackInvitesModal({
       if (!isStale()) setIsLoading(false);
     }
   }, [configId, page, pageSize, filters, sourceFilter, resultFilter, fetchAllForClientFilters, jobScope, jobVersionFilter, versionFilter]);
+
+  /* look: every page's matching rows for "Select all pages" — the same
+     requests and filters as loadInvitations, unpaged (1000 a config, as its
+     own Source / Result path reads). */
+  const selectAllPages = async () => {
+    setAllPagesLoading(true);
+    try {
+      const params = {
+        search: filters.search.trim() || undefined,
+        status: filters.status !== 'all' ? filters.status : undefined,
+        invite_date_from: filters.dateFrom || undefined,
+        invite_date_to: filters.dateTo || undefined,
+        page: 1,
+        page_size: 1000,
+      };
+      const lists = jobScope
+        ? await Promise.all(jobScope
+          .filter((entry) => (!jobVersionFilter || String(entry.jobVersion) === jobVersionFilter) && (!versionFilter || String(entry.interviewVersion) === versionFilter))
+          .map((entry) => aiInterviewService.getConfigInvitations(entry.configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; }).then((res) => (res.items || []).map((inv) => ({
+            ...inv, _config_id: entry.configId, _jd_version: entry.jobVersion, _interview_version: entry.interviewVersion,
+          })))))
+        : [((await aiInterviewService.getConfigInvitations(configId, params).catch((err) => { if (filters.status === 'failed') return { items: [] }; throw err; })).items || [])];
+      const rows: typeof invitations = lists.flat().filter((inv) =>
+        (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
+      const lockedRow = (inv: (typeof invitations)[number]) => (rowJdLocked(inv) ? { ...inv, _jd_status: lockedStatusByVersion.get(inv._jd_version as number) } : inv);
+      setAllPages({ key: allPagesKey, rows: rows.map(lockedRow) });
+      setSelectedIds(new Set(rows.filter((inv) => isBulkActionable(inv) && !rowJdLocked(inv)).map((inv) => inv.id)));
+    } catch (err) {
+      toast.error(friendlyErrorMessage(err, "Couldn't select every page. Please try again."));
+    } finally {
+      setAllPagesLoading(false);
+    }
+  };
 
   /* Header Refresh — re-reads in place: the rows stay put under a veil and the
      dialog's height is pinned until the new data lands, so nothing jumps. */
@@ -584,6 +654,17 @@ export default function AIInterviewTrackInvitesModal({
 
   const filtersActive = hasActiveInviteFilters(filters);
   const completionRate = overview.total > 0 ? Math.round((overview.completed / overview.total) * 100) : 0;
+  /* look: the count cards as status tabs — same keys and counts. */
+  const statusTabs: TrackerTab[] = [
+    { key: 'all', label: 'All', value: overview.total },
+    { key: 'invited', label: 'Invited', value: overview.invited },
+    { key: 'in_progress', label: 'In Progress', value: overview.inProgress },
+    { key: 'completed', label: 'Completed', value: overview.completed },
+    { key: 'expired', label: 'Expired', value: overview.expired },
+    { key: 'terminated', label: 'Terminated', value: overview.terminated },
+    { key: 'revoked', label: 'Revoked', value: overview.revoked },
+    { key: 'failed', label: 'Invite Failed', value: overview.failed },
+  ];
   const startIndex = filteredTotal === 0 ? 0 : (page - 1) * pageSize + 1;
   const endIndex = Math.min(page * pageSize, filteredTotal);
   const resultsLabel = filtersActive
@@ -605,9 +686,9 @@ export default function AIInterviewTrackInvitesModal({
         {...(embedded ? {} : heightLock.dialogProps)}
         className={embedded
           ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
-          : `${TRACKER_DIALOG_PANEL_CLASS} ${paginationBelowTable ? NO_INNER_SCROLL_PANEL : ''}`}>
+          : `${TRACKER_DIALOG_PANEL_CLASS} ${look ? TRACKER_LOOK_PANEL_CLASS : paginationBelowTable ? NO_INNER_SCROLL_PANEL : ''}`}>
         {/* Header */}
-        <div className={`${paginationBelowTable ? 'tf-tracker-header ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0`}>
+        <div className={`${paginationBelowTable || look ? 'tf-tracker-header ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0`}>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 sm:gap-3">
               <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
@@ -695,6 +776,13 @@ export default function AIInterviewTrackInvitesModal({
         <>
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
+        {look ? (
+          <TrackerStatusTabs
+            tabs={statusTabs}
+            active={filters.status}
+            onSelect={(status) => { setFilters({ ...filters, status }); setPage(1); }}
+          />
+        ) : (
         <InviteStatCards
           gridClassName={guided ? `tf-tracker-stats ${GUIDED_STATS_PHONE}` : 'tf-tracker-stats'}
           activeStatus={filters.status}
@@ -714,7 +802,18 @@ export default function AIInterviewTrackInvitesModal({
               : { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
-        {guided && (
+        )}
+
+        {/* look: everything from here to the footer is the one part that
+            scrolls; the header, tabs and footer stay put. */}
+        <div className={look ? TRACKER_LOOK_BODY_CLASS : 'contents'}>
+        {look && (
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2.5 sm:px-6 pt-3 flex-shrink-0">
+            <TrackerTabHint tabs={statusTabs} active={filters.status} />
+            <StatusLegend kinds={INTERVIEW_LEGEND} />
+          </div>
+        )}
+        {guided && !look && (
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-2.5 sm:px-6 pt-2 flex-shrink-0">
             <StatCardsHint
               activeLabel={filters.status !== 'all' ? (STATUS_CARD_LABEL[filters.status] ?? filters.status) : null}
@@ -726,6 +825,32 @@ export default function AIInterviewTrackInvitesModal({
 
         <InviteFilterBar
           moreFilters={guided}
+          compact={look}
+          beforeSearch={look && !initialLoading && invitations.length > 0 && !(jdDisabled || configArchived) ? (
+            <>
+              <TrackerSelectAll
+                selected={selectedIds} groups={selectGroups} onChange={setSelectedIds}
+                allPages={{
+                  count: allPagesRows ? allPagesIds.length : undefined,
+                  checked: allPagesChecked,
+                  loading: allPagesLoading,
+                  onSelect: () => { if (allPagesRows) setSelectedIds(new Set(allPagesIds)); else void selectAllPages(); },
+                }}
+              />
+              <TrackerBulkBar
+                inline
+                count={selectedIds.size}
+                revokeCount={revocableSelected.length}
+                resendCount={resendableSelected.length}
+                onRevoke={() => setShowBulkRevokeConfirm(true)}
+                onResend={() => setShowBulkResendConfirm(true)}
+                revoking={isBulkRevoking}
+                resending={isBulkResending}
+                onClear={() => setSelectedIds(new Set())}
+                revokeTitle="Revoke the selected candidates' interview links"
+              />
+            </>
+          ) : undefined}
           filters={filters}
           onChange={(nextFilters) => {
             setFilters(nextFilters);
@@ -768,7 +893,8 @@ export default function AIInterviewTrackInvitesModal({
             regardless of the active stat card. The completion-rate badge
             (previously its own card in the stat row above) sits on this same
             row, straight across from Select All. */}
-        {!initialLoading && (
+
+        {!look && !initialLoading && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             {selectableIds.length > 0 ? (
               <button
@@ -866,8 +992,12 @@ export default function AIInterviewTrackInvitesModal({
             selectedIds={(jdDisabled || configArchived) ? undefined : selectedIds}
             onToggleSelect={(jdDisabled || configArchived) ? undefined : toggleSelectOne}
             isSelectable={isBulkActionable}
+            trackerLook={look}
+            allSelected={look ? pageSelection.full : undefined}
+            onToggleSelectAll={look && !(jdDisabled || configArchived) && !pageSelection.empty ? () => pageSelection.toggle?.() : undefined}
+            selectAllBlockedReason={look && !pageSelection.toggle ? 'Invited and Expired are mixed — pick one from Select All ▾' : undefined}
           />
-          {paginationBelowTable && !initialLoading && filteredTotal > 0 && (
+          {!look && paginationBelowTable && !initialLoading && filteredTotal > 0 && (
             <div className="mt-auto pt-3 shrink-0">
               <ListPagination
                 currentPage={page}
@@ -893,6 +1023,7 @@ export default function AIInterviewTrackInvitesModal({
               </span>
             </div>
           )}
+        </div>
         </div>
         </>
         )}
@@ -962,7 +1093,7 @@ export default function AIInterviewTrackInvitesModal({
         <RevokeLinkModal
           isOpen={showBulkRevokeConfirm}
           kind="interview"
-          bulk={{ scope: 'selected', count: selectedRows.length }}
+          bulk={{ scope: 'selected', count: look ? revocableSelected.length : selectedRows.length }}
           targets={selectedRows.filter(isRevocableInvite).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._interview_version ?? interviewVersionProp ?? lookedUpVersions?.interview, email: inv.candidate_email }))}
           onCancel={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
           onConfirm={handleBulkRevoke}
@@ -973,8 +1104,8 @@ export default function AIInterviewTrackInvitesModal({
         <ResendLinkModal
           isOpen={showBulkResendConfirm}
           kind="interview"
-          bulk={{ count: selectedIds.size }}
-          targets={invitations.filter((inv) => selectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._interview_version ?? interviewVersionProp ?? lookedUpVersions?.interview, email: inv.candidate_email }))}
+          bulk={{ count: look ? resendableSelected.length : selectedIds.size }}
+          targets={selectionRows.filter((inv) => selectedIds.has(inv.id) && isBulkResendable(inv)).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._interview_version ?? interviewVersionProp ?? lookedUpVersions?.interview, email: inv.candidate_email }))}
           onCancel={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
           onConfirm={handleBulkResend}
           isLoading={isBulkResending}
@@ -983,8 +1114,32 @@ export default function AIInterviewTrackInvitesModal({
         {/* Footer — stacks on phones; First/Last drop out below sm. Nothing to
             count or page when nobody is invited, so embedded it goes too. */}
         {!(isUnstarted && embedded) && (
-        <div className={`${paginationBelowTable ? 'tf-tracker-footer ' : ''}px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0`}>
-          <p className="tf-body-muted text-center sm:text-left order-2 sm:order-1">
+        <div className={`${paginationBelowTable || look ? 'tf-tracker-footer ' : ''}border-t bg-slate-50 shrink-0 ${look ? 'sm:flex sm:items-center border-gray-200 dark:border-slate-700 dark:bg-slate-800 shadow-[0_-4px_12px_-6px_rgba(15,23,42,0.12)]' : 'border-gray-100 dark:border-slate-700/60 dark:bg-slate-950'}`}>
+        {/* look: one footer row from sm — the pager, then Cancel / Invite More
+            right after its page buttons; with no pager, a spacer holds them
+            right. Stacked on phones. */}
+        {look && (!initialLoading && filteredTotal > 0 ? (
+          <div className="px-3 pt-2 sm:flex-1 sm:min-w-0 sm:pl-6 sm:pr-0 sm:py-3">
+            <ListPagination
+              currentPage={page}
+              itemsPerPage={pageSize}
+              totalItems={filteredTotal}
+              onPageChange={setPage}
+              onItemsPerPageChange={(n) => { setPageSize(n); setPage(1); }}
+              itemLabel="invites"
+              minimalOnMobile
+              compact
+              alwaysShow
+            />
+          </div>
+        ) : (
+          /* No pager (loading, or an empty tab): an empty box in its place, so
+             Cancel / Invite More stay right without leaning on ml-auto alone —
+             they never jump from the left while the list loads. */
+          <div className="hidden sm:block flex-1" aria-hidden="true" />
+        ))}
+        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 ${look ? `px-3 py-2.5 sm:py-2 sm:pl-4 sm:pr-6 sm:ml-auto shrink-0 ${!initialLoading && filteredTotal > 0 ? 'sm:border-l sm:border-gray-200 dark:sm:border-slate-700' : 'sm:py-3'}` : 'px-3 sm:px-6 py-2.5 sm:py-4'}`}>
+          <p className={`tf-body-muted text-center sm:text-left order-2 sm:order-1 ${look ? 'hidden' : ''}`}>
             {/* Under the table instead when the paging is there. */}
             {!paginationBelowTable && resultsLabel}
           </p>
@@ -1041,6 +1196,7 @@ export default function AIInterviewTrackInvitesModal({
               </Button>
             )}
           </div>
+        </div>
         </div>
         )}
       </div>

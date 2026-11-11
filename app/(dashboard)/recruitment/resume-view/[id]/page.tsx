@@ -8,6 +8,7 @@ import {
   clearInviteHandoff, readInviteHandoff, RESUME_INVITE_PARAM, type InviteHandoffKind,
 } from '@/lib/utils/resumeScoringInviteHandoff';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { toExternalUrl } from '@/lib/utils/externalUrl';
 import VersionCompareModal from '@/components/VersionCompareModal';
 import RecordPager from '@/components/RecordPager';
 import {
@@ -2058,7 +2059,7 @@ Best regards`);
                     )}
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                       {resume.linkedinUrl && (
-                        <a href={resume.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                        <a href={toExternalUrl(resume.linkedinUrl)} target="_blank" rel="noopener noreferrer"
                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors min-w-0 bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 hover:border-brand-blue/30">
                           <SkillLogo name="LinkedIn" className="w-4 h-4" />
                           <span className="text-brand-blue text-xs font-medium truncate">LinkedIn</span>
@@ -2066,7 +2067,7 @@ Best regards`);
                         </a>
                       )}
                       {resume.githubUrl && (
-                        <a href={resume.githubUrl} target="_blank" rel="noopener noreferrer"
+                        <a href={toExternalUrl(resume.githubUrl)} target="_blank" rel="noopener noreferrer"
                            className="flex items-center gap-1.5 px-3 py-2 tf-card-muted transition-colors min-w-0 hover:bg-slate-100">
                           <SkillLogo name="GitHub" className="w-4 h-4" />
                           <span className="tf-caption truncate">GitHub</span>
@@ -2074,7 +2075,7 @@ Best regards`);
                         </a>
                       )}
                       {resume.portfolioUrl && (
-                        <a href={resume.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                        <a href={toExternalUrl(resume.portfolioUrl)} target="_blank" rel="noopener noreferrer"
                            className="flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors min-w-0 bg-brand-cyan/5 border border-brand-cyan/20 hover:bg-brand-cyan/10 hover:border-brand-cyan/30">
                           <Globe className="w-4 h-4 text-brand-cyan flex-shrink-0" />
                           <span className="text-brand-cyan text-xs font-medium truncate">Portfolio</span>
@@ -2104,7 +2105,7 @@ Best regards`);
                     <div className="flex items-start justify-between mb-2">
                       <h4 className="tf-row-title sm:text-base">{project.name}</h4>
                       {project.url && (
-                        <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
+                        <a href={toExternalUrl(project.url)} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                           <ExternalLink className="w-4 h-4" />
                         </a>
                       )}
