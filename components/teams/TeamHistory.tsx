@@ -15,6 +15,7 @@ import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListPagination from '@/components/ListPagination';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useIsMobile } from '@/components/ui/use-mobile';
+import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 const PAGE_SIZES = [10, 25, 50];
 
@@ -461,26 +462,23 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
     );
   } else if (items.length === 0) {
     body = (
-      <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 py-16 text-center text-gray-400 dark:text-slate-500">
-        <Clock className="mx-auto mb-3 h-10 w-10 opacity-40" />
-        {advancedOn ? (
-          <>
-            <p className="text-sm">No activity matches these filters</p>
-            <button type="button" onClick={clearAdvanced} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
-              Clear filters
-            </button>
-          </>
-        ) : filter === 'ALL' ? (
-          <p className="text-sm">No activity recorded yet</p>
-        ) : (
-          <>
-            <p className="text-sm">No “{filterLabel}” activity</p>
-            <button type="button" onClick={() => handleFilterChange('ALL')} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
-              Show all activity
-            </button>
-          </>
-        )}
-      </div>
+      <IllustratedEmptyState
+        illustration={<IconTileIllustration icon={Clock} />}
+        title={
+          advancedOn
+            ? 'No activity matches these filters'
+            : filter === 'ALL'
+              ? 'No activity recorded yet'
+              : `No “${filterLabel}” activity`
+        }
+        action={
+          advancedOn
+            ? { label: 'Clear filters', onClick: clearAdvanced, variant: 'link' }
+            : filter === 'ALL'
+              ? undefined
+              : { label: 'Show all activity', onClick: () => handleFilterChange('ALL'), variant: 'link' }
+        }
+      />
     );
   } else {
     body = (

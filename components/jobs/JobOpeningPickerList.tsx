@@ -19,11 +19,33 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { onListCacheInvalidate } from '@/lib/utils/listCache';
+import { getTokens } from '@/lib/services/api';
 
-/** Same page size the Job Openings page reads the JD list in. */
-const JD_BATCH_SIZE = 100;
 /** Same rows-per-page the Job Openings list starts on. */
 const DEFAULT_ITEMS_PER_PAGE = 10;
+
+/* The last full job list this session read, so reopening the picker (Resume
+   Scoring, Apply, Talent Match) paints instantly from it while a fresh read
+   runs behind it — stale-while-revalidate. Dropped whenever the shared list
+   cache is invalidated (every JD create/edit/publish/status change does). */
+let lastFullJobList: { scope: string; jobs: Job[] } | null = null;
+if (typeof window !== 'undefined') {
+  onListCacheInvalidate(() => { lastFullJobList = null; });
+}
+/* Tied to the signed-in session (the same scope the shared list cache uses),
+   so a different login in the same tab never sees the previous one's jobs. */
+const sessionScope = (): string | null => {
+  try {
+    return typeof window === 'undefined' ? null : getTokens().accessToken || null;
+  } catch {
+    return null;
+  }
+};
+const cachedJobsForSession = (): Job[] | null => {
+  const scope = sessionScope();
+  return scope && lastFullJobList?.scope === scope ? lastFullJobList.jobs : null;
+};
 
 export type JobSelection = { job: Job; lineage: string } | null;
 
@@ -169,11 +191,18 @@ export default function JobOpeningPickerList({
      counts as published here while the Job Openings page — which sees the v3 —
      calls it a draft. That was the 226-vs-223 gap. The published test belongs
      AFTER the collapse, in `getPublishedJobs`, on the full list. */
-  const [fetchedJobs, setFetchedJobs] = useState<Job[] | null>(null);
+  const [fetchedJobs, setFetchedJobs] = useState<Job[] | null>(() => cachedJobsForSession());
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
+  /* Progressive: the first 10 jobs are put on screen the moment they land,
+     and the 100-row pages are read in parallel behind them, the list swapping
+     to the full set when they're all in. The old loop awaited every page one after another before
+     drawing anything — 4 pages of 100 sat behind a skeleton for 10s+. The
+     small "Loading jobs..." spinner beside the heading stays up until the
+     full set is in, since a lineage's older versions can still be on a later
+     page (the View Versions button may appear a moment later). */
   useEffect(() => {
     let cancelled = false;
 
@@ -181,23 +210,26 @@ export default function JobOpeningPickerList({
       setLoadingJobs(true);
       setJobsError(null);
       try {
-        const firstPage = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-        const items = [...firstPage.items];
-        const totalPages = Math.max(
-          firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
-          1,
-        );
-        for (let page = 2; page <= totalPages; page += 1) {
-          const nextPage = await jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-          items.push(...nextPage.items);
-        }
+        /* The first screen's worth of jobs (one picker page) is read on its
+           own and painted the moment it lands, then every 100-row page is
+           read in parallel behind it. Only painted when there's nothing
+           better on screen already — replacing a cached full list with ten
+           rows would make the rest vanish and come back. */
+        const items = await jdService.listAllMineProgressive((firstItems) => {
+          if (cancelled || cachedJobsForSession()) return;
+          setFetchedJobs(firstItems.map(mapJDToJob));
+        }, DEFAULT_ITEMS_PER_PAGE);
         if (cancelled) return;
-        setFetchedJobs(items.map(mapJDToJob));
+        const full = items.map(mapJDToJob);
+        const scope = sessionScope();
+        lastFullJobList = scope ? { scope, jobs: full } : null;
+        setFetchedJobs(full);
       } catch (error) {
         if (cancelled) return;
         console.error('[JobOpeningPickerList] Failed to load job openings:', error);
-        // Keep whatever the host handed in rather than emptying the list — the
-        // recruiter can still pick from it while the retry is offered.
+        // Keep whatever is already on screen (cached list, page 1, or the
+        // host's jobs) rather than emptying the list — the recruiter can still
+        // pick from it while the retry is offered.
         setJobsError('Could not load job openings.');
       } finally {
         if (!cancelled) setLoadingJobs(false);
@@ -399,7 +431,9 @@ export default function JobOpeningPickerList({
                 derivation, via getPublishedJobs. No total beside it and
                 nothing hardcoded. It follows the search, so it always
                 describes exactly what is listed. */}
-            {sortedJobs.length > 0 && (
+            {/* Held back while loading: the first screen is only a partial
+                list, and "— 10 jobs" beside the spinner would read as the total. */}
+            {sortedJobs.length > 0 && !loadingJobs && (
               <span className="ml-2 font-normal text-gray-500 dark:text-slate-400 whitespace-nowrap">
                 &mdash; {sortedJobs.length} {excludeDraftsOnly ? `job${sortedJobs.length === 1 ? '' : 's'}` : 'available'}
               </span>

@@ -56,6 +56,7 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
+import { ScoredResumesIllustration } from '@/components/jobs/JobResultsIllustrations';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -2734,11 +2735,10 @@ Best regards`);
               isNarrowed={search.isNarrowed}
               query={search.appliedQuery}
               entityLabel="scored resume"
-              emptyTitle="No Scored Resumes"
+              emptyTitle="No Scored Resumes Yet"
               emptyDescription="Score resumes against this job description to see the candidates here."
               onReset={search.reset}
-              imageSrc="/scored-resumes-empty-state.webp"
-              imageAlt="Scored resumes illustration"
+              illustration={<ScoredResumesIllustration />}
               action={onScoreResumesFromEmptyState ? (
                 <Button
                   variant="primary"
@@ -3550,11 +3550,10 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No Scored Resumes"
+            emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
-            imageSrc="/scored-resumes-empty-state.webp"
-            imageAlt="Scored resumes illustration"
+            illustration={<ScoredResumesIllustration />}
             action={onScoreResumesFromEmptyState ? (
               <Button
                 variant="primary"
@@ -3741,11 +3740,10 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No Scored Resumes"
+            emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
-            imageSrc="/scored-resumes-empty-state.webp"
-            imageAlt="Scored resumes illustration"
+            illustration={<ScoredResumesIllustration />}
             action={onScoreResumesFromEmptyState ? (
               <Button
                 variant="primary"

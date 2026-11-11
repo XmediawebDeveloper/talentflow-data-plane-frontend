@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,6 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
-import { EmptyState } from './ui/empty-state';
 import { ResumeArchivedBadge } from './ui/resume-archived-badge';
 import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
@@ -27,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { NoResumesFoundState } from '@/components/resumes/ResumeEmptyStates';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -269,7 +269,6 @@ interface ResumeTableProps {
    *  actually lives in — what an aggregated view (All Resumes) needs to stay
    *  readable, and noise in a view that is already one folder. */
   getFolderName?: (folderId?: string) => string | undefined;
-  showEmptyAction?: boolean;
   /** Replaces the built-in "No resumes found" block. Pages whose whole body is
    *  the empty state (My Resumes) pass their own illustrated version; every
    *  other caller keeps the default. */
@@ -358,7 +357,6 @@ export default function ResumeTable({
   enableRowReorder = false,
   reorderScopeKey,
   getFolderName,
-  showEmptyAction = true,
   emptyState,
   containerClassName = 'flex-1',
   tableShellClassName = '',
@@ -659,19 +657,7 @@ export default function ResumeTable({
   if (resumes.length === 0) {
     if (emptyState) return <>{emptyState}</>;
     return (
-      <EmptyState
-        icon={FileText}
-        title="No resumes found"
-        description="We couldn't find any resumes matching your search criteria. Try adjusting your filters or search terms."
-        action={showEmptyAction ? {
-          label: 'Clear all filters',
-          onClick: () => {
-            // This would be handled by parent component
-            window.location.reload();
-          },
-          variant: 'secondary'
-        } : undefined}
-      />
+      <NoResumesFoundState />
     );
   }
 
