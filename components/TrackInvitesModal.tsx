@@ -1315,7 +1315,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
         {/* Footer — stacks on phones; First/Last drop out below sm, matching the
             Assessments and AI Interviews trackers. */}
         {/* guided: one footer row from sm — the pager, then Cancel / Invite More
-            right after its page buttons; stacked on phones. */}
+            right after its page buttons (kept right, ml-auto, when a tab is
+            empty and there is no pager); stacked on phones. */}
         <div className={`tf-tracker-footer border-t bg-slate-50 shrink-0 ${guided ? 'sm:flex sm:items-center border-gray-200 dark:border-slate-700 dark:bg-slate-800 shadow-[0_-4px_12px_-6px_rgba(15,23,42,0.12)]' : 'border-gray-100 dark:border-slate-700/60 dark:bg-slate-950'}`}>
         {guided && !isLoading && filteredInvitations.length > 0 && (
           <div className="px-3 pt-2 sm:flex-1 sm:min-w-0 sm:pl-6 sm:pr-0 sm:py-3">
@@ -1332,7 +1333,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
             />
           </div>
         )}
-        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 ${guided ? 'px-3 py-2.5 sm:py-2 sm:pl-4 sm:pr-6 sm:ml-4 sm:border-l sm:border-gray-200 dark:sm:border-slate-700 shrink-0' : 'px-3 sm:px-6 py-2.5 sm:py-4'}`}>
+        <div className={`flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 ${guided ? `px-3 py-2.5 sm:py-2 sm:pl-4 sm:pr-6 sm:ml-auto shrink-0 ${!isLoading && filteredInvitations.length > 0 ? 'sm:border-l sm:border-gray-200 dark:sm:border-slate-700' : 'sm:py-3'}` : 'px-3 sm:px-6 py-2.5 sm:py-4'}`}>
           {/* Phones show this count above the cards already, so it isn't repeated here. */}
           <p className={`tf-body-muted text-center sm:text-left order-2 sm:order-1 max-sm:hidden ${guided ? '!hidden' : ''}`}>
             {/* The filtered count, not the raw total — the number has to agree
