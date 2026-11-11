@@ -1422,54 +1422,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     'video/webm',
   ];
 
-  /** Enter fullscreen right after the screen-share picker closes. Waits up to
-
-   *  ~1 s for the window to get focus back (a refused request — "TypeError:
-
-   *  not granted" — is what Edge/Chrome return while it hasn't), then tries,
-
-   *  and retries once. Never throws: the final consent gate re-asks with a
-
-   *  fresh click if this did not take. */
-
-  const enterFullscreenAfterPicker = async (): Promise<void> => {
-
-    const waitForFocus = (ms: number) => new Promise<void>((resolve) => {
-
-      if (document.hasFocus()) { resolve(); return; }
-
-      const done = () => { window.removeEventListener('focus', done); clearTimeout(t); resolve(); };
-
-      const t = setTimeout(done, ms);
-
-      window.addEventListener('focus', done);
-
-    });
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-
-      if (isFullscreen()) return;
-
-      await waitForFocus(attempt === 0 ? 1000 : 400);
-
-      try {
-
-        await requestFullscreen();
-
-        return;
-
-      } catch {
-
-        await new Promise((r) => setTimeout(r, 250));
-
-      }
-
-    }
-
-  };
-
-
-
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
       video: {
@@ -1832,34 +1784,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       console.warn('[Portal] Failed to pre-create AudioContext:', e);
     }
 
-    // Fullscreen attempt started right after the picker closes (see below);
-    // awaited before leaving this handler instead of firing a second request.
-    let fullscreenAttempt: Promise<void> = Promise.resolve();
     // Step 1: Request screen recording BEFORE entering fullscreen.
     // Browsers (Chrome) exit fullscreen automatically to show the screen-share picker.
     // By requesting screen share first (while not in fullscreen) we avoid a second
     // "Fullscreen Required" popup when the interview step loads.
-    // Enter fullscreen on THIS click, before the picker opens. The picker's own
-    // Share button is browser UI, not a page click, so fullscreen can't be
-    // asked for after it ("TypeError: not granted"); asked for now, the
-    // candidate is already in fullscreen when they press Share. If the browser
-    // drops fullscreen for the picker, the after-picker attempt below and the
-    // final consent Start click still cover it.
-    if (!isFullscreen()) {
-      try { await requestFullscreen(); } catch { /* covered after the picker */ }
-    }
     try {
       const screenStream = await requestEntireScreenShare();
       screenStreamRef.current = screenStream;
-      // Ask for fullscreen THE MOMENT the picker closes — not after the
-      // recorder/mic setup below. The browser allows it only within a few
-      // seconds of the click; that setup took long enough on slower laptops
-      // that the later request was refused ("TypeError: not granted") and the
-      // candidate got the "Return to Fullscreen" overlay instead.
-      // Edge (and Chrome) also refuse it with "not granted" while the window
-      // has not got focus back from the closing picker, even though the click
-      // still counts — so wait for focus, and retry once.
-      fullscreenAttempt = enterFullscreenAfterPicker();
       // Build a combined stream: screen video + mixed audio (tab + mic)
       const recordingStream = await buildRecordingStreamWithAudio(screenStream);
       const screenMime = SCREEN_MIME_TYPES
@@ -2001,9 +1932,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         if (invalidSelection) {
           toast.error(ENTIRE_SCREEN_REQUIRED_MESSAGE, { duration: 6000 });
         }
-        // Fullscreen was entered before the picker — leave it again, the
-        // candidate is back on the share prompt.
-        if (isFullscreen()) exitFullscreen().catch(() => {});
         setStartSubmitting(false);
         return; // do NOT enter fullscreen or start interview
       }
@@ -2011,7 +1939,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
 
     // Step 2: Now enter fullscreen — screen-share picker is already done so no exit/re-entry cycle.
-    await fullscreenAttempt; // never throws; final consent re-asks if it failed
+    // ONE request, after the recorder/mic setup — by then the window has its
+    // focus back from the closing picker. Asking at the instant the picker
+    // closes (Nov 10) was refused ("TypeError: not granted") and a refused
+    // request uses up the click, so every later try failed too. If this one
+    // is refused, the final consent Start click enters fullscreen.
+    try { await requestFullscreen(); } catch { /* final consent Start click enters it */ }
 
     // Screen is shared and we're in fullscreen. Show the final in-fullscreen
     // consent gate ("Not allowed during the interview" + "Yes, I accept")
