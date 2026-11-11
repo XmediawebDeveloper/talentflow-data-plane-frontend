@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tooltip } from '@/components/ui/tooltip';
-import { EmptyState } from '@/components/ui/empty-state';
+import { NoTicketsYetState, NoTicketsFoundState, NoTeamTicketsState, NothingAssignedState, NoUnassignedState } from '@/components/SupportEmptyStates';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -1419,12 +1419,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   ))}
                 </div>
               ) : tickets.length === 0 ? (
-                <EmptyState
-                  icon={Ticket}
-                  title="No tickets yet"
-                  description="You haven't created any support tickets yet. Create your first ticket to get help from our support team."
-                  action={{ label: 'Create your first ticket', onClick: openSubmitView }}
-                />
+                <NoTicketsYetState onCreate={openSubmitView} />
               ) : (
                 <>
                   {/* Mobile: compact cards */}
@@ -2247,11 +2242,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {ticketsError ? (
                     <ListLoadError message={ticketsError} onRetry={fetchTickets} />
                   ) : filteredTickets.length === 0 && (
-                    <EmptyState
-                      icon={Ticket}
-                      title="No tickets found"
-                      description="Try adjusting your search or filters to find what you're looking for."
-                    />
+                    <div className="p-4"><NoTicketsFoundState /></div>
                   )}
                 </>
               )}
@@ -3075,10 +3066,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : internalTickets.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="tf-body-secondary">No team tickets yet</p>
-                </div>
+                <NoTeamTicketsState />
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {
                   setSelectedInternalTicket(ticket);
@@ -3454,20 +3442,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {internalTicketsError ? (
                     <ListLoadError message={internalTicketsError} onRetry={fetchInternalTickets} />
                   ) : filteredInternalTickets.length === 0 && (
-                    <div className="py-10 text-center sm:py-12">
-                      <Inbox className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-600 sm:h-12 sm:w-12" />
-                      <p className="tf-label">
-                        {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
-                          ? 'No unassigned tickets 🎉'
-                          : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
-                            ? 'Nothing is assigned to you right now'
-                            : 'No tickets match these filters'}
-                      </p>
-                      <p className="mt-1 tf-meta">
-                        {internalFilterAssignment === 'unassigned' || internalFilterAssignment === 'mine'
-                          ? 'New requests from your team will show up here.'
-                          : 'Try changing or clearing the filters above.'}
-                      </p>
+                    <div className="p-4">
+                      {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
+                        ? <NoUnassignedState />
+                        : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
+                          ? <NothingAssignedState />
+                          : <NoTicketsFoundState title="No tickets match these filters" />}
                     </div>
                   )}
                 </>

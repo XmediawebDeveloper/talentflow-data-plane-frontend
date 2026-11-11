@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { QrVerificationEmptyState, RecordingExpiredEmptyState } from './IllustratedEmptyState';
 // Shared with the assessment results page — one duration probe for all four recordings.
 import { VideoWithDuration, type VideoMarker } from '@/components/recording/RecordingPlayer';
 import Link from 'next/link';
@@ -393,6 +394,12 @@ function RecordingTabContent({
     ? `Recordings can be viewed for ${interview.recording_view_days ?? 7} days after the interview.`
       + (interview.recording_view_until ? ` This one expired on ${formatISTDate(interview.recording_view_until)}.` : '')
     : null;
+
+  /* The viewing window has passed and both files are gone: one card in
+     place of the players, instead of an empty pane under each sub-tab. */
+  if (expiredText && !interview.recording_file_path && !interview.screen_recording_file_path) {
+    return <RecordingExpiredEmptyState message={expiredText} />;
+  }
 
   return (
     <div className="space-y-4">
@@ -3731,13 +3738,15 @@ export default function CandidateResultsView({ interview, onBack, tabInUrl = tru
                   ))}
                 </div>
               ) : !envVerifications || envVerifications.length === 0 ? (
-                renderPlaceholder(
-                  envVerificationsError
-                    ? 'Could not load QR verification data — please refresh and try again.'
-                    : liveSession.environment_verification_enabled
-                    ? 'No QR verification was triggered during this interview.'
-                    : 'QR Verification was not enabled for this interview.'
-                )
+                envVerificationsError
+                  ? renderPlaceholder('Could not load QR verification data — please refresh and try again.')
+                  : (
+                    <QrVerificationEmptyState
+                      message={liveSession.environment_verification_enabled
+                        ? 'No QR verification was triggered during this interview.'
+                        : 'QR Verification was not enabled for this interview.'}
+                    />
+                  )
               ) : (
                 <div className="space-y-4">
                   {envVerifications.map((v, attemptIdx) => {
