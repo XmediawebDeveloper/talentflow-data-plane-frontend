@@ -123,7 +123,6 @@ export default function AITalentMatchPageJobsList({
         <JobEligibilityNote className="mb-3" description={MATCH_ELIGIBILITY} />
         <JobOpeningPickerList
           excludeDraftsOnly
-          availableVersionsOnly
           showCandidateCounts
           /* Coloured like the Job Openings badges, applicants read "scored". */
           coloredCountBadges

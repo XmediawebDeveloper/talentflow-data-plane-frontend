@@ -10,7 +10,6 @@ import {
   isVersionVisibleForScoring,
   lineageKey,
   mapJDToJob,
-  needsVersionPicker,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -92,7 +91,8 @@ export interface JobOpeningPickerListProps {
   showAllStatuses?: boolean;
   /**
    * The Job Descriptions page's All Jobs listing, drafts left out: each
-   * lineage by its latest NON-DRAFT version, whatever that version's status.
+   * lineage by its latest Published version, or — when it has
+   * none — its latest NON-DRAFT version, whatever that version's status.
    * A Disabled / Archived job is listed — so it does not silently go missing —
    * but greyed out and unselectable, with the reason on hover; only a
    * Published one can be picked from its card. Its Version History still
@@ -102,14 +102,6 @@ export interface JobOpeningPickerListProps {
    * other host keeps its existing listing.
    */
   excludeDraftsOnly?: boolean;
-  /**
-   * Show View Versions only when the job has another version that can be
-   * PICKED (Published / Republished) — a job whose card version is its one
-   * available version is picked straight from the card, with no extra step.
-   * Archived / Disabled reference versions stay readable through the eye.
-   * Off by default, so every other host keeps the visible-version rule.
-   */
-  availableVersionsOnly?: boolean;
   /**
    * Anchor placed immediately above the first job card, for a host that wants
    * to scroll this list to the top of the screen when it opens (Resume
@@ -155,7 +147,6 @@ export default function JobOpeningPickerList({
   proceedDisabled = false,
   showAllStatuses = false,
   excludeDraftsOnly = false,
-  availableVersionsOnly = false,
   listAnchorRef,
   showCandidateCounts = false,
   coloredCountBadges = false,
@@ -317,9 +308,11 @@ export default function JobOpeningPickerList({
     if (excludeDraftsOnly) {
       const reps: Job[] = [];
       versionGroups.forEach(bucket => {
-        // Newest-version-first, so the first non-draft is the latest one.
-        const latestNonDraft = bucket.find(v => v.status !== 'Draft');
-        if (latestNonDraft) reps.push(latestNonDraft);
+        // Newest-version-first: the card shows the latest Published
+        // version, falling back to the latest non-draft one
+        // (Disabled / Archived, greyed out) when none is published.
+        const rep = bucket.find(v => v.status === 'Published') ?? bucket.find(v => v.status !== 'Draft');
+        if (rep) reps.push(rep);
       });
       return reps;
     }
@@ -521,9 +514,7 @@ export default function JobOpeningPickerList({
                   .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants, true))
                   .map(sibling => sibling.versionNumber ?? 1),
               ).size;
-              const hasVersionHistory = availableVersionsOnly
-                ? needsVersionPicker(job, lineageSiblings, () => false)
-                : visibleVersionCount > 1;
+              const hasVersionHistory = visibleVersionCount > 1;
 
               /* Rendered in two places: beside the eye on phones (one row,
                  instead of a lone button on a row of its own under it), and
