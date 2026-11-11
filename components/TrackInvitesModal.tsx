@@ -20,7 +20,13 @@ import InviteFilterBar, {
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import ResendLinkModal from '@/components/recruitment/ResendLinkModal';
+import { assessmentResendExpiry } from '@/lib/utils/resendExpiry';
+import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
+import { JobLockBadge, JobLockBanner, JobVersionsLockBanner, JobVersionStatusPill, jobLockKindOf, splitJobVersions } from '@/components/jobs/JobLockNotice';
+import { ASSESSMENT_JOB_ARCHIVED_MESSAGE, ASSESSMENT_JOB_DISABLED_MESSAGE } from '@/lib/utils/assessmentJobLock';
+import { jobStatusBadgeKind } from '@/components/jobs/JobStatusBadge';
+import RevokeLinkModal from '@/components/recruitment/RevokeLinkModal';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { assessmentService, isAssessmentArchived } from '@/lib/services/assessmentService';
 import { isJdDisabled } from '@/lib/utils/assessmentJobLock';
@@ -130,7 +136,7 @@ const ASSESSMENT_CARD_STATUS_OPTIONS = [
   { value: 'revoked', label: 'Revoked' },
   { value: 'failed', label: 'Invite Failed' },
 ];
-const ASSESSMENT_LEGEND: InviteStatusKind[] = ['invited', 'read', 'system_check', 'in_progress', 'completed', 'terminated', 'expired', 'revoked', 'invite_failed', 'bounced'];
+const ASSESSMENT_LEGEND: InviteStatusKind[] = ['invited', 'system_check', 'in_progress', 'completed', 'terminated', 'expired', 'revoked'];
 
 // Effective status + expiry + timeline milestones now live in
 // AssessmentInviteActions (resolveInviteStatus / isInviteExpired /
@@ -153,7 +159,7 @@ const cardBucketOf = (inv: any): CardBucket => {
   return 'invited';
 };
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled = false, onChanged, initialSearch, pageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true, assessments: scopedAssessments }: TrackInvitesModalProps) {
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult, onInviteMore, inviteMoreDeniedReason, jdDisabled: jdDisabledProp = false, onChanged, initialSearch, pageSize: initialPageSize = INVITES_PAGE_SIZE, paginationBelowTable = true, guided = true, assessments: scopedAssessments }: TrackInvitesModalProps) {
   // Resend / Edit / Revoke need Assessments "Invite" (2026-11-10).
   const { isTenantAdmin: isOwnerForInvites, hasPermissionCode: hasCodeForInvites } = useAuth();
   const canInviteRows = isOwnerForInvites || hasCodeForInvites('assessments:invite');
@@ -201,13 +207,63 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
     initialSearch ? { ...EMPTY_INVITE_FILTERS, search: initialSearch } : EMPTY_INVITE_FILTERS
   ));
   const [page, setPage] = useState(1);
+  // Rows a page: the host's size to start, then the pager's 5 / 10 / 20 / 40 / 100.
+  const [pageSize, setPageSize] = useState(initialPageSize);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  /* The row's Resend asks first — the shared resend popup — like the
+     Assessments page's own Track Invites popup. */
+  const [resendTarget, setResendTarget] = useState<{ id: string; assessment_id?: string; candidate_email?: string; sent_at?: string | null; created_at?: string | null; expires_at?: string | null } | null>(null);
   const [historyTarget, setHistoryTarget] = useState<any | null>(null);
   const [revokeTarget, setRevokeTarget] = useState<any | null>(null);
   const [editTarget, setEditTarget] = useState<any | null>(null);
   useEffect(() => {
     if (isOpen && jdId) loadInvitations();
   }, [isOpen, jdId]);
+
+  /* The job versions the host's assessments belong to. Several = a job-wide
+     tracker; one = that version (which can differ from `jdId`, e.g. a job
+     row whose only assessment is on an older version). */
+  const scopeJdIds = new Set((scopedAssessments ?? []).map((a: { jd_id?: string }) => a.jd_id).filter((id): id is string => !!id));
+  const jobWide = scopeJdIds.size > 1;
+  const statusJdId = scopeJdIds.size === 1 ? [...scopeJdIds][0] : jdId;
+
+  /* That version's own status, read once: a Disabled / Archived job gets its
+     badge beside the job name in the header, and a banner. */
+  const [jdStatus, setJdStatus] = useState<{ jdId: string; status: string | null } | null>(null);
+  useEffect(() => {
+    if (!isOpen || !statusJdId || jobWide) return;
+    let cancelled = false;
+    jdService.get(statusJdId)
+      .then((jd) => { if (!cancelled) setJdStatus({ jdId: statusJdId, status: jd.status ?? null }); })
+      .catch(() => { /* unknown — no badge */ });
+    return () => { cancelled = true; };
+  }, [isOpen, statusJdId, jobWide]);
+  const jobBadge = !jobWide && jdStatus?.jdId === statusJdId ? jobStatusBadgeKind(jdStatus.status) : null;
+  /* Disabled / Archived: badge + banner, and the row actions and Invite More
+     turned off here too — whatever the host passed — so the banner is true. */
+  const jobLock = jobBadge === 'disabled' || jobBadge === 'archived' ? jobBadge : null;
+  const jdDisabled = jdDisabledProp || !!jobLock;
+  const jobLockMessage = jobLock === 'archived' ? ASSESSMENT_JOB_ARCHIVED_MESSAGE : ASSESSMENT_JOB_DISABLED_MESSAGE;
+
+  /* Job-wide tracker: each job version's own status (the job's lineage). A
+     Disabled / Archived version is named in a banner, and its rows' actions
+     and checkboxes are turned off — the other versions keep theirs. */
+  const [lineage, setLineage] = useState<{ jdId: string; versions: JDLineageVersion[] } | null>(null);
+  useEffect(() => {
+    if (!isOpen || !jdId || !jobWide) return;
+    let cancelled = false;
+    jdService.getLineageVersions(jdId)
+      .then((versions) => { if (!cancelled) setLineage({ jdId, versions: versions || [] }); })
+      .catch(() => { /* unknown — no banner, host's lock only */ });
+    return () => { cancelled = true; };
+  }, [isOpen, jdId, jobWide]);
+  const scopeVersions = jobWide && lineage?.jdId === jdId ? lineage.versions.filter((v) => scopeJdIds.has(v.id)) : [];
+  const versionLocks = splitJobVersions(scopeVersions);
+  const lockedJdIds = new Set(scopeVersions.filter((v) => ['disabled', 'archived'].includes(String(v.status).toLowerCase())).map((v) => v.id));
+  const rowJdLocked = (inv: { _jd_id?: string }): boolean => !!inv._jd_id && lockedJdIds.has(inv._jd_id);
+  /* A Disabled / Archived version's status, for its rows' Job Version cell. */
+  const rowJdLockKind = (inv: { _jd_id?: string }) =>
+    jobLockKindOf(inv._jd_id ? scopeVersions.find((v) => v.id === inv._jd_id)?.status : null);
   // Auto-refresh so pixel-fired status updates are reflected automatically
   useTrackerPoll(isOpen && !!jdId, () => loadInvitations(true)); // silent = don't show spinner
 
@@ -258,6 +314,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               // identically here.
               _jd_version: assessment.jd_version ?? jobVersion ?? undefined,
               _assessment_version: assessment.version,
+              // Its job version's own id — a Disabled / Archived version's rows lock.
+              _jd_id: assessment.jd_id,
               ...assessmentInviteSource(inv),
               assessment_technical_enabled: assessment.technical_enabled,
               assessment_coding_enabled: assessment.coding_enabled,
@@ -328,6 +386,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       toast.error(friendlyErrorMessage(error, "Couldn't resend invitation. Please try again."));
     } finally {
       setResendingId(null);
+      setResendTarget(null);
     }
   };
 
@@ -344,7 +403,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   // buildInvitationRowActions), never on a separate permission check. A
   // disabled JD still greys them out via `jdDisabled` below.
   const rowActionOptions = {
-    onResend: handleResendInvitation,
+    onResend: (inv) => setResendTarget(inv),
     resendingId,
     onEdit: (inv: any) => setEditTarget(inv),
     onRevoke: (inv: any) => setRevokeTarget(inv),
@@ -449,7 +508,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
   const inviteJdDisabled = (inv: any): boolean => jdDisabled || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectableIds = visibleInvitations
-    .filter((inv: any) => isBulkActionable(inv) && !inviteArchived(inv) && !inviteJdDisabled(inv))
+    .filter((inv: any) => isBulkActionable(inv) && !inviteArchived(inv) && !inviteJdDisabled(inv) && !rowJdLocked(inv))
     .map((inv: any) => inv.id);
   const selectedRows = visibleInvitations.filter((inv: any) => selectedIds.has(inv.id));
   const allRevocable = selectedRows.length > 0 && selectedRows.every(isRevocableInvitation);
@@ -612,6 +671,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <p className="flex items-center gap-2 tf-body-muted mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
+                  {jobLock && <JobLockBadge kind={jobLock} title={jobLockMessage} />}
                   {jobVersion != null && jobVersion > 0 && (
                     <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
                   )}
@@ -640,6 +700,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 out) is the one close control. */}
           </div>
         </div>
+
+        {jobLock && <JobLockBanner kind={jobLock} />}
+        {versionLocks.locked.length > 0 && (
+          <div className="mx-2.5 sm:mx-6 mt-2.5 sm:mt-3 flex-shrink-0">
+            <JobVersionsLockBanner locked={versionLocks.locked} active={versionLocks.active} />
+          </div>
+        )}
 
         {/* Stat row doubles as the status filter — identical buckets, wording and
             behaviour to the Assessments page popup. Filtering here is client-side
@@ -800,7 +867,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 <Button variant="secondary" size="sm" className="mt-3" onClick={() => { setFilters(EMPTY_INVITE_FILTERS); setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); setPage(1); }}>
                   Clear filters
                 </Button>
-              ) : onInviteMore ? (
+              ) : onInviteMore && !jdDisabled ? (
                 <Button variant="primary" size="sm" className="mt-3" onClick={onInviteMore} icon={<Send className="w-3.5 h-3.5" />}>
                   Invite candidates
                 </Button>
@@ -876,7 +943,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               canInvite: canInviteRows,
                               ...rowActionOptions,
                               archived: isAssessmentArchived(invitation.assessment_status),
-                              jdDisabled,
+                              jdDisabled: jdDisabled || rowJdLocked(invitation),
                             })}
                           />
                         </>
@@ -912,7 +979,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                   an assessment that has that round enabled. Same rule as
                   the Results page: no all-empty columns. */}
               <div
-                className={`hidden lg:block tf-table-shell tf-table-shell--compact ${paginationBelowTable ? 'border border-gray-200 dark:border-slate-700 rounded-lg' : 'tf-table-shell--fill flex-1 min-h-0'}`}
+                className={`hidden lg:block tf-table-shell tf-table-shell--compact ${paginationBelowTable ? 'border border-gray-200 dark:border-slate-700 rounded-lg overscroll-y-auto' : 'tf-table-shell--fill flex-1 min-h-0'}`}
                 style={paginationBelowTable ? { maxHeight: 'none' } : undefined}
               >
                 {/* Auto layout, not table-fixed. The fixed column widths
@@ -956,8 +1023,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                          way the Assessments page's Invite Status Tracking
                          table shows it. This used to print only the newest
                          with a "+N" counter, which hid the progression
-                         behind a tooltip. align-top so the first line sits
-                         level with the other columns' single line. */
+                         behind a tooltip. Centred like the other columns,
+                         so a lone "Invited" line is not stuck at the top. */
                       /* Invite Source — how this candidate was actually
                          invited, from the invitation's own resume_id. */
                       const inviteSourceCell = (
@@ -966,7 +1033,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                         </td>
                       );
                       const timelineCell = (
-                      <td className={`tf-td ${tdY} align-top tf-meta whitespace-nowrap`}>
+                      <td className={`tf-td ${tdY} align-middle tf-meta whitespace-nowrap`}>
                         {(() => {
                           const events = timelineEvents(invitation, timelineLimit);
                           return (
@@ -999,7 +1066,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               handler today, but kept consistent with the
                               Assessments page popup's own checkbox cell. */}
                           <td className={`${cellY} pl-3 lg:pl-4 pr-0 align-middle tf-sticky-col-left`} onClick={(e) => e.stopPropagation()}>
-                            {isBulkActionable(invitation) && !inviteArchived(invitation) && !inviteJdDisabled(invitation) ? (
+                            {isBulkActionable(invitation) && !inviteArchived(invitation) && !inviteJdDisabled(invitation) && !rowJdLocked(invitation) ? (
                               <button
                                 type="button"
                                 role="checkbox"
@@ -1113,7 +1180,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                               Assessments page's job-scoped Track Invites
                               popup shows. */}
                           <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap`}>
-                            <VersionChip kind="job" version={invitation._jd_version} />
+                            <span className="inline-flex items-center gap-1.5">
+                              <VersionChip kind="job" version={invitation._jd_version} />
+                              {rowJdLockKind(invitation) && <JobVersionStatusPill status={rowJdLockKind(invitation)!} />}
+                            </span>
                           </td>
                           {reorderColumns && assessmentCell}
                           <td className={`${cellY} px-3 lg:px-4 align-middle whitespace-nowrap`}>
@@ -1127,7 +1197,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                                 ...rowActionOptions,
                                 onViewResult: openResult,
                                 archived: isAssessmentArchived(invitation.assessment_status),
-                                jdDisabled,
+                                jdDisabled: jdDisabled || rowJdLocked(invitation),
                               });
                               return (
                                 <InvitationActionsMenu actions={rowActs} />
@@ -1149,8 +1219,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
                 itemsPerPage={pageSize}
                 totalItems={filteredInvitations.length}
                 onPageChange={(p) => setPage(() => p)}
-                onItemsPerPageChange={() => setPage(() => 1)}
-                pageSizeOptions={[pageSize]}
+                onItemsPerPageChange={(n) => { setPageSize(n); setPage(() => 1); }}
                 itemLabel="invites"
                 minimalOnMobile
                 compact
@@ -1211,10 +1280,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
               <Button
                 variant="primary"
                 size="sm"
-                onClick={() => { if (onInviteMore) onInviteMore(); }}
-                aria-disabled={!onInviteMore || undefined}
-                title={!onInviteMore ? inviteMoreDeniedReason : undefined}
-                className={`${(!onInviteMore ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
+                onClick={() => { if (onInviteMore && !jdDisabled) onInviteMore(); }}
+                aria-disabled={!onInviteMore || jdDisabled || undefined}
+                title={jdDisabled ? (jobLock ? jobLockMessage : ASSESSMENT_JOB_DISABLED_MESSAGE) : !onInviteMore ? inviteMoreDeniedReason : undefined}
+                className={`${(!onInviteMore || jdDisabled ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
                 icon={<Send className="w-3.5 h-3.5" />}
               >
                 Invite More
@@ -1243,27 +1312,36 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdSh
       />
 
       {/* Bulk resend confirmation — selected Expired/Failed candidates only. */}
-      <ConfirmationDialog
+      {/* Row Resend — one candidate. */}
+      <ResendLinkModal
+        isOpen={!!resendTarget}
+        kind="assessment"
+        email={resendTarget?.candidate_email}
+        expiry={resendTarget ? assessmentResendExpiry(resendTarget) : null}
+        onCancel={() => { if (resendingId !== resendTarget?.id) setResendTarget(null); }}
+        onConfirm={() => resendTarget && handleResendInvitation(resendTarget)}
+        isLoading={!!resendTarget && resendingId === resendTarget.id}
+      />
+
+      <ResendLinkModal
         isOpen={showBulkResendConfirm}
-        onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
+        kind="assessment"
+        bulk={{ count: selectedIds.size }}
+        targets={visibleInvitations.filter((inv) => selectedIds.has(inv.id) && canResendInvite(inv)).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._assessment_version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}
         onConfirm={handleBulkResend}
-        title="Resend invitations to selected candidates?"
-        description={`A fresh assessment link will be emailed to ${selectedIds.size} selected candidate${selectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
-        confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${selectedIds.size}`}
-        cancelText="Cancel"
-        variant="info"
+        isLoading={isBulkResending}
       />
 
       {/* Bulk revoke — selected Invited candidates only. */}
-      <ConfirmationDialog
+      <RevokeLinkModal
         isOpen={showBulkRevokeConfirm}
-        onClose={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
+        kind="assessment"
+        bulk={{ scope: 'selected', count: selectedRows.length }}
+        targets={selectedRows.filter(isRevocableInvitation).map((inv) => ({ jobCode: jdShortId, jobTitle: jdTitle, version: inv._assessment_version, email: inv.candidate_email }))}
+        onCancel={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
         onConfirm={handleBulkRevoke}
-        title="Revoke invitations for selected candidates?"
-        description={`The assessment link for ${selectedRows.length} selected candidate${selectedRows.length === 1 ? '' : 's'} will stop working immediately.`}
-        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedRows.length}`}
-        cancelText="Cancel"
-        variant="danger"
+        isLoading={isBulkRevoking}
       />
     </div>
   );

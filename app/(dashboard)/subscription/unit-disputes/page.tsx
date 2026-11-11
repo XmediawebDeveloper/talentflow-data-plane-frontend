@@ -1078,8 +1078,8 @@ export default function UnitDisputesPage() {
                         </div>
 
                         {/* Pagination */}
-                        <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700/60 pt-3">
-                          <p className="tf-meta">
+                        <div className="flex items-center justify-between border-t border-gray-100 dark:border-slate-700/60 pt-3 max-sm:flex-col max-sm:justify-center max-sm:gap-2">
+                          <p className="tf-meta max-sm:text-center">
                             {logTotal} total record{logTotal !== 1 ? 's' : ''}
                           </p>
                           <div className="flex items-center gap-2 sm:gap-3">

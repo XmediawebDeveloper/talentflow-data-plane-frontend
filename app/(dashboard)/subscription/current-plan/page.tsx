@@ -697,6 +697,30 @@ function CurrentPlanContent() {
   // Other sections are appended below the tabs; current-plan content stays visible.
   const [activeSection, setActiveSection] = useState<'current-plan' | 'usage-quotas' | 'payment-methods' | 'billing-history' | 'refund-history' | 'dispute-history' | 'unit-disputes'>('current-plan');
 
+  /* Phone / tablet tab slider (one row that scrolls sideways): the tabs keep their
+     natural widths, so the white tile is sized and placed from the active tab's
+     measured box, and the active tab is scrolled into view. Re-measured when the
+     row resizes (rotation, font load). Layout only — the tab change itself is
+     still just setActiveSection. */
+  const subTabNavRef = useRef<HTMLElement>(null);
+  const [subTabTile, setSubTabTile] = useState<{ left: number; width: number } | null>(null);
+  useEffect(() => {
+    const nav = subTabNavRef.current;
+    if (!nav) return;
+    const place = (scroll: boolean) => {
+      const btn = nav.querySelector<HTMLElement>('[aria-current="page"]');
+      if (!btn) { setSubTabTile(null); return; }
+      setSubTabTile({ left: btn.offsetLeft, width: btn.offsetWidth });
+      if (scroll && nav.scrollWidth > nav.clientWidth) {
+        nav.scrollTo({ left: btn.offsetLeft - (nav.clientWidth - btn.offsetWidth) / 2, behavior: 'smooth' });
+      }
+    };
+    place(true);
+    const ro = new ResizeObserver(() => place(false));
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [activeSection]);
+
   /* Deep link from the header's plan arrow: ?section=usage-quotas opens that
      tab, and &focus=quota-overview scrolls to the Quota Overview card once it
      exists. The card mounts only after the embedded Usage & Quotas page loads
@@ -2488,24 +2512,25 @@ function CurrentPlanContent() {
             merge into the panel below from lg up. */}
         {billingLinks.length > 0 && (
           <section className="mb-3 lg:mb-5">
-            {/* Mobile + tablet (< lg): one segmented control. Equal cells on a
-                light brand-blue track; the white tile glides to the active tab.
-                Short labels so all seven fit on a phone (full name on hover). */}
+            {/* Mobile + tablet (< lg): one segmented control on a light brand-blue
+                track, in ONE row. Each tab keeps its natural width (full short label,
+                spaced apart — seven equal cells on a phone were ~45px and ran together
+                as "Disput…", "Paym…"); tabs grow to fill the row when there's room and
+                the row scrolls sideways when there isn't (slim 6px `scrollbar-light`
+                bar, shown on hover, for a mouse). The white tile glides to the active tab (measured above). */}
             {(() => {
-              const activeIndex = billingLinks.findIndex((l) => l.id === activeSection);
-              const cols = billingLinks.length;
-              const cell = 'relative z-10 inline-flex min-w-0 items-center justify-center rounded-md px-0.5 text-xs font-medium transition-colors duration-300 sm:px-1 sm:text-sm';
+              const cell = 'relative z-10 inline-flex h-7 flex-[1_0_auto] items-center justify-center whitespace-nowrap rounded-md px-3 text-xs font-medium transition-colors duration-300 sm:text-sm';
               return (
                 <nav
+                  ref={subTabNavRef}
                   aria-label="Subscription sections"
-                  style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-                  className="relative grid h-9 rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10 lg:hidden"
+                  className="relative flex gap-1 overflow-x-auto overscroll-x-contain scrollbar-auto-hide scrollbar-light rounded-lg bg-brand-blue/5 p-1 ring-1 ring-brand-blue/10 lg:hidden"
                 >
-                  {activeIndex >= 0 && (
+                  {subTabTile && (
                     <span
                       aria-hidden
-                      style={{ width: `calc((100% - 0.5rem) / ${cols})`, transform: `translateX(${activeIndex * 100}%)` }}
-                      className="absolute bottom-1 left-1 top-1 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
+                      style={{ width: subTabTile.width, transform: `translateX(${subTabTile.left}px)` }}
+                      className="absolute left-0 top-1 h-7 rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-[transform,width] duration-300 ease-out motion-reduce:transition-none dark:bg-slate-800"
                     />
                   )}
                   {billingLinks.map((link) => {
@@ -2527,7 +2552,7 @@ function CurrentPlanContent() {
                             : 'text-gray-600 hover:text-brand-blue dark:text-slate-400'
                         }`}
                       >
-                        <span className="truncate">{link.short}</span>
+                        {link.short}
                       </button>
                     );
                   })}

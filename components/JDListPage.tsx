@@ -1115,10 +1115,10 @@ export default function JDListPage() {
         {/* Pagination */}
         {totalPages > 1 && (
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
-            <p className="tf-body-secondary">
+            <p className="tf-body-secondary max-sm:text-center">
               Showing {(currentPage - 1) * 20 + 1} to {Math.min(currentPage * 20, total)} of {total}
             </p>
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center max-sm:justify-center gap-2 sm:gap-3">
               <div className="flex items-center gap-1.5">
                 <span className="tf-body-secondary whitespace-nowrap">Go to</span>
                 <input

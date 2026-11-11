@@ -873,8 +873,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
               })}
             </div>
             {total > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>
@@ -1241,8 +1241,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
             </MobileRecordList>
 
             {total > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="flex flex-wrap items-center gap-3 tf-body-muted">
+              <div className="flex flex-wrap items-center justify-between max-sm:justify-center gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center max-sm:justify-center max-sm:text-center gap-3 tf-body-muted">
                   {/* Show N per page — back to page 1 on change. */}
                   <label className="inline-flex items-center gap-2">
                     <span>Show</span>

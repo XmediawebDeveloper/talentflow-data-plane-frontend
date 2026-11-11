@@ -10,8 +10,9 @@ import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
-import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, isJdDisabled, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, isInterviewConfigArchived, INTERVIEW_ARCHIVED_ACTION_MESSAGE } from '@/lib/services/aiInterviewService';
 import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog';
+import { JobVersionStatusPill, jobLockKindOf } from '@/components/jobs/JobLockNotice';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import InviteStatusChip from '@/components/ui/invite-status-chip';
@@ -707,7 +708,10 @@ export default function AIInterviewInviteTable({
       else next.add(id);
       return next;
     });
-  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status);
+  /* A row's own job version Disabled or Archived locks it too (job-wide
+     trackers span versions, so this is per row). */
+  const rowJdArchived = (inv: { _jd_status?: string | null; jd_status?: string | null } | null | undefined): boolean => String(inv?._jd_status ?? inv?.jd_status ?? '').toLowerCase() === 'archived';
+  const rowLocked = (inv: any): boolean => jdDisabled || configArchived || isJdDisabled(inv?._jd_status ?? inv?.jd_status) || rowJdArchived(inv);
 
   /* Full action-log modal — fetched on demand per row, never eagerly for the
      whole page, so opening the tracker doesn't fire one audit-trail request
@@ -738,7 +742,7 @@ export default function AIInterviewInviteTable({
     const actions: RowAction[] = [];
     const locked = rowLocked(inv);
     const lockedProps = locked
-      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
+      ? { disabled: true, title: configArchived ? INTERVIEW_ARCHIVED_ACTION_MESSAGE : !jdDisabled && rowJdArchived(inv) ? JD_ARCHIVED_ACTION_MESSAGE : JD_DISABLED_ACTION_MESSAGE }
       : {};
     const noInviteProps = !canInviteRows ? { disabled: true, title: "You can view invitations, but your role can't resend, edit or revoke them" } : {};
 
@@ -930,7 +934,7 @@ export default function AIInterviewInviteTable({
               )}
               {(cardJobVersion != null || cardInterviewVersion != null) && (
                 <div className="flex items-center gap-1.5 tf-micro-hint">
-                  {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} /></>}
+                  {cardJobVersion != null && <><span>Job</span><VersionPill kind="job" version={cardJobVersion} />{jobLockKindOf(inv._jd_status) && <JobVersionStatusPill status={jobLockKindOf(inv._jd_status)!} />}</>}
                   {cardInterviewVersion != null && <><span className="ml-1">Interview</span><VersionPill kind="interview" version={cardInterviewVersion} /></>}
                 </div>
               )}
@@ -1137,7 +1141,7 @@ export default function AIInterviewInviteTable({
           vertical scroller, which is what keeps the sticky header and the pinned
           Actions column in place. */}
       <div
-        className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? '' : 'tf-table-shell--fill flex-1 min-h-0'}`}
+        className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? 'overscroll-y-auto' : 'tf-table-shell--fill flex-1 min-h-0'}`}
         style={autoHeight ? { maxHeight: 'none' } : undefined}
       >
         {/* Auto layout, not table-fixed: columns size to their own content and the
@@ -1224,9 +1228,10 @@ export default function AIInterviewInviteTable({
                   ),
                 },
                 {
-                  // Every milestone on its own line, oldest first. align-top so
-                  // the first line sits level with the other columns.
-                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
+                  // Every milestone on its own line, oldest first. Centred like
+                  // the other columns, so a lone "Invited" line is not stuck at
+                  // the top of a taller row.
+                  id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
                   content: (
                     <div className="tf-meta">
                       {events.length > 0 ? (
@@ -1299,7 +1304,13 @@ export default function AIInterviewInviteTable({
                 ...((showJobColumn || jobVersion != null || showRowVersions) ? [{
                   id: 'jobVersion' as const, label: 'Job Version', className: `${cellY} px-4 align-middle whitespace-nowrap`,
                   content: (jobVersion ?? inv._jd_version) != null
-                    ? <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                    ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        <VersionPill kind="job" version={jobVersion ?? inv._jd_version} />
+                        {/* Only a Disabled / Archived job version gets its status. */}
+                        {jobLockKindOf(inv._jd_status) && <JobVersionStatusPill status={jobLockKindOf(inv._jd_status)!} />}
+                      </span>
+                    )
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
                 }] : []),
                 ...((showJobColumn || interviewVersion != null || showRowVersions) ? [{

@@ -3487,7 +3487,7 @@ export default function CandidateResultDetails({
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-4 py-3 bg-slate-50 border-t border-gray-100">
-                              <span className="tf-meta">
+                              <span className="tf-meta max-sm:text-center">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
                               <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">

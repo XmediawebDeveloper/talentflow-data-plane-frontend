@@ -16,6 +16,7 @@ import { ArrowLeft,
   AlertCircle,
   Eye,
   Lock,
+  ShieldAlert,
   KeyRound,
   Users as UsersIcon,
   UserCheck,
@@ -639,6 +640,10 @@ export default function UserManagement() {
         value={roleFilter}
         onChange={(v) => setRoleFilter(v)}
         ariaLabel="Filter by role"
+        /* Phones: the list opens centred (JD module menus) but grew to the full screen width
+           with a long role name; capped at 16rem so it stays a centred menu and long names
+           wrap inside it. `!` beats the centring code's inline max-width. */
+        contentClassName="max-sm:!max-w-64"
         options={[
           { value: 'all', label: 'All roles' },
           ...roleFilterOptions.map(([code, label]) => ({ value: code, label })),
@@ -672,24 +677,34 @@ export default function UserManagement() {
         it the switch stays visible but greyed (hover tooltip, no-op click). */}
     {(user.role || '').toLowerCase() !== 'tenant_admin' && user.id !== currentUserId ? (
       <div className="flex items-center gap-2">
-        <button
-          onClick={() => { if (canDisableUser) handleToggleActive(user); }}
-          aria-disabled={!canDisableUser}
+        {/* A <span role="switch">, not a <button>: the phone card puts this inside its
+            action row, whose CSS restyles every button there as an outlined square / text
+            button — that is what squared the track off. Keyboard: Tab, then Space/Enter. */}
+        <span
+          role="switch"
+          tabIndex={togglingUserIds.has(user.id) ? -1 : 0}
+          aria-checked={user.is_active}
+          onClick={() => { if (canDisableUser && !togglingUserIds.has(user.id)) handleToggleActive(user); }}
+          onKeyDown={(e) => {
+            if (e.key !== ' ' && e.key !== 'Enter') return;
+            e.preventDefault();
+            if (canDisableUser && !togglingUserIds.has(user.id)) handleToggleActive(user);
+          }}
+          aria-disabled={!canDisableUser || togglingUserIds.has(user.id)}
           aria-busy={togglingUserIds.has(user.id)}
-          disabled={togglingUserIds.has(user.id)}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:ring-offset-2 ring-1 ring-inset ${
-            user.is_active
-              ? 'bg-brand-blue ring-brand-blue/30 shadow-sm shadow-brand-blue/25'
-              : 'bg-gray-300 ring-black/5'
-          } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : ''}`}
+          // Same switch as the app's other on/off toggles (e.g. AI Interview settings):
+          // 44×24 track with a 2px transparent border, 20px knob sliding 20px.
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2 ${
+            user.is_active ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-200 dark:bg-slate-600'
+          } ${!canDisableUser ? 'cursor-not-allowed opacity-60 grayscale' : togglingUserIds.has(user.id) ? 'cursor-wait opacity-70' : 'cursor-pointer'}`}
           title={!canDisableUser ? 'You do not have permission to activate or deactivate users' : user.is_active ? 'Active - Click to deactivate' : 'Inactive - Click to activate'}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-              user.is_active ? 'translate-x-6' : 'translate-x-1'
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+              user.is_active ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
-        </button>
+        </span>
         <span className={`${compact ? 'hidden lg:inline' : ''} text-xs font-semibold ${user.is_active ? 'text-brand-blue dark:text-blue-300' : 'text-gray-500 dark:text-slate-500'}`}>
           {user.is_active ? 'Active' : 'Inactive'}
         </span>
@@ -770,7 +785,7 @@ export default function UserManagement() {
                 : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
             }`}
           >
-            <Lock className="w-4 h-4" />
+            <ShieldAlert className="w-4 h-4" />
           </button>
         </Tooltip>
       )}
@@ -2066,7 +2081,8 @@ export default function UserManagement() {
                   title={
                     <span className={`flex min-w-0 items-center gap-2 ${fade}`}>
                       <NameAvatar name={user.name} fallback={user.email} src={user.avatar_url} userId={user.id} size="sm" />
-                      <span className="min-w-0 truncate">{user.name || user.email || 'Unknown'}</span>
+                      {/* Name in full — wraps beside the avatar (no "…"). */}
+                      <span className="min-w-0 break-words">{user.name || user.email || 'Unknown'}</span>
                     </span>
                   }
                   badges={
@@ -2085,17 +2101,19 @@ export default function UserManagement() {
                           className={`flex max-w-full items-center gap-1 text-left transition-colors hover:text-brand-blue ${fade}`}
                         >
                           <Mail className="w-3.5 h-3.5 flex-shrink-0 text-gray-400" />
-                          <span className="truncate">{user.email}</span>
+                          <span className="min-w-0 break-all">{user.email}</span>
                         </button>
                       ) : null,
                     },
                   ]}
                   actions={
-                    <>
-                      {/* Toggle only — its colour says Active/Inactive. */}
-                      <div className="shrink-0">{renderUserStatus(user, true)}</div>
+                    /* Bottom row under a divider (as the JD card's footer): the Active switch
+                       with its word on the left, the four icon buttons on the right — before,
+                       everything sat at the right end with an empty gap on the left. */
+                    <div className="flex w-full items-center justify-between gap-2 border-t border-gray-100 pt-3 dark:border-slate-700/60">
+                      <div className="shrink-0">{renderUserStatus(user)}</div>
                       <div className="shrink-0 [&_button]:p-1.5 sm:[&_button]:p-2.5">{renderUserActions(user)}</div>
-                    </>
+                    </div>
                   }
                 >
                   {/* Access, created and last login open on demand, same as the table row. */}
@@ -2104,7 +2122,7 @@ export default function UserManagement() {
                     onClick={() => toggleUserDetails(user.id)}
                     aria-expanded={expandedUserId === user.id}
                     aria-controls={`user-card-details-${user.id}`}
-                    className="mt-2 inline-flex min-h-[32px] items-center gap-1 text-[13px] font-medium text-brand-blue hover:underline dark:text-blue-300"
+                    className="mt-1.5 inline-flex min-h-7 items-center gap-1 text-[13px] font-medium text-brand-blue hover:underline dark:text-blue-300"
                   >
                     <ChevronRight className={`h-4 w-4 transition-transform ${expandedUserId === user.id ? 'rotate-90' : ''}`} />
                     {expandedUserId === user.id ? 'Hide details' : 'Show details'}

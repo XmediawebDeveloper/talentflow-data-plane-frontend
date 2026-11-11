@@ -269,6 +269,10 @@ export async function requestFullscreen(element: HTMLElement = document.document
  * Exit fullscreen with cross-browser support
  */
 export async function exitFullscreen(): Promise<void> {
+  // Nothing to exit (already left, or the page is being torn down at the
+  // interview end): calling it anyway throws "Document not active", and the
+  // callers fire-and-forget, so that surfaced as an uncaught exception.
+  if (!isFullscreen()) return;
   try {
     if (document.exitFullscreen) {
       await document.exitFullscreen();
@@ -283,8 +287,9 @@ export async function exitFullscreen(): Promise<void> {
       await (document as any).msExitFullscreen();
     }
   } catch (error) {
-    console.error('[FULLSCREEN] Exit failed:', error);
-    throw error;
+    // Leaving fullscreen is best-effort (the browser also exits on page
+    // teardown); never let it reject into a fire-and-forget caller.
+    console.warn('[FULLSCREEN] Exit failed:', error);
   }
 }
 

@@ -24,6 +24,7 @@ export default function GridCardSelect({
   onToggle,
   label,
   selectionActive = false,
+  inline = false,
 }: {
   selected: boolean;
   onToggle: () => void;
@@ -31,6 +32,9 @@ export default function GridCardSelect({
   label: string;
   /** Something on the page is selected — keep every seal visible. */
   selectionActive?: boolean;
+  /** Sit level with the card's first line (top/left = the card's p-4 padding)
+   *  instead of up in the corner. Pair with `pl-7` on that first row. */
+  inline?: boolean;
 }) {
   const toggle = (e: React.SyntheticEvent) => {
     e.preventDefault();
@@ -48,7 +52,7 @@ export default function GridCardSelect({
       tabIndex={0}
       onClick={toggle}
       onKeyDown={(e) => { if (e.key === ' ' || e.key === 'Enter') toggle(e); }}
-      className={`absolute top-1.5 left-1.5 z-10 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer
+      className={`absolute ${inline ? 'top-4 left-4' : 'top-1.5 left-1.5'} z-10 w-5 h-5 rounded-full flex items-center justify-center cursor-pointer
         ring-2 ring-white dark:ring-slate-900 shadow-sm transition-all duration-150
         focus:outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-blue
         ${selected
