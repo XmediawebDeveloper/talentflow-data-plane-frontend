@@ -4899,7 +4899,8 @@ export default function ResumeScoringPage({
                           {formatIST(item.scoredAt)}
                         </div>
                       </td>
-                      <td className="tf-td hidden md:table-cell">
+                      {/* Scored count centred, like the Exact / Partial / No Match counts beside it. */}
+                      <td className="tf-td hidden md:table-cell text-center">
                         <span className="tf-row-title tabular-nums">
                           {scoredCountValue(item.totalScored, verdictTally)}
                         </span>
