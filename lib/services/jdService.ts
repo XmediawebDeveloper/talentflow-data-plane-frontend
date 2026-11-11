@@ -788,6 +788,36 @@ export const jdService = {
   },
 
   /**
+   * Every `source: 'my-jds'` JD record (all versions), for a job picker that
+   * should show something at once: a small first read (`firstSize`, the rows
+   * one picker page shows) goes to `onFirst` as soon as it lands — ~7 KB
+   * gzipped instead of a 75 KB 100-row page — and also tells us the total;
+   * then every 100-row page is read in parallel (a few at a time) and the full
+   * list is returned. `onFirst` is skipped when that first read already is
+   * the full list. Not cached: callers that want reuse hold their own copy.
+   */
+  async listAllMineProgressive(
+    onFirst?: (items: JDResponse[]) => void,
+    firstSize = 10,
+  ): Promise<JDResponse[]> {
+    const PAGE_SIZE = 100;
+    const quick = await jdService.list({ page: 1, page_size: firstSize, source: 'my-jds' });
+    const total = quick.total ?? quick.items.length;
+    if (quick.items.length >= total) return [...quick.items];
+    onFirst?.(quick.items);
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const [first, rest] = await Promise.all([
+      jdService.list({ page: 1, page_size: PAGE_SIZE, source: 'my-jds' }),
+      fetchRemainingPages(totalPages, (page) =>
+        jdService.list({ page, page_size: PAGE_SIZE, source: 'my-jds' }),
+      ),
+    ]);
+    const items = [...first.items];
+    for (const next of rest) items.push(...next.items);
+    return items;
+  },
+
+  /**
    * Get single JD by ID
    */
   async get(id: string): Promise<JDResponse> {

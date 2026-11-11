@@ -83,23 +83,28 @@ export default function AIInterviewJDSelection() {
   useEffect(() => {
     let cancelled = false;
     const jdParams = { source: 'my-jds' as const };
-    Promise.allSettled([
-      aiInterviewService.getPublishedJDs(),
-      fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page })),
-    ]).then(([published, full]) => {
-      if (cancelled) return;
-      if (published.status === 'fulfilled') {
-        setJds(published.value.items);
+    /* Two independent reads. The picker draws as soon as the interview JD
+       list lands; the full Job Openings rows (salary, work mode, applicants…)
+       fill the cards in when they arrive. Waiting on both used to hold the
+       skeleton until every page of the full list was in. */
+    aiInterviewService.getPublishedJDs()
+      .then((published) => {
+        if (cancelled) return;
+        setJds(published.items);
         setLoadError(prev => (prev === 'jobs' ? null : prev));
-      } else {
-        console.error('Failed to load JDs:', published.reason);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error('Failed to load JDs:', error);
         setLoadError('jobs');
-      }
-      if (full.status === 'fulfilled' && full.value?.items) {
-        setFullJobsById(new Map(full.value.items.map((row: Parameters<typeof mapJDToJob>[0]) => [row.id, mapJDToJob(row)] as const)));
-      }
-      setLoadingJds(false);
-    });
+      })
+      .finally(() => { if (!cancelled) setLoadingJds(false); });
+    fetchAllRows((page_size, page) => jdService.list({ ...jdParams, page_size, page }))
+      .then((full) => {
+        if (cancelled || !full?.items) return;
+        setFullJobsById(new Map(full.items.map((row: Parameters<typeof mapJDToJob>[0]) => [row.id, mapJDToJob(row)] as const)));
+      })
+      .catch((error) => console.error('Failed to load full job rows:', error));
     return () => { cancelled = true; };
   }, [reloadToken]);
 
@@ -133,12 +138,22 @@ export default function AIInterviewJDSelection() {
      version reads as free, and a press would carry a taken one into Configure. */
   const addReady = eligibilityLoaded && loadError !== 'eligibility';
 
+  /* Until the full rows land the card is drawn from the slim interview row.
+     publishedJdToJob puts `current_version` (the republish counter) on
+     versionNumber; the full row carries the LINEAGE version (`version_number`),
+     which is what buildAssessmentJobList picks each job's newest version by and
+     what the v1/v2 badge shows — so the slim card uses the same number, and
+     the representative/badge don't change when the full rows arrive. */
+  const slimJob = (jd: PublishedJD): Job => ({
+    ...publishedJdToJob(jd),
+    versionNumber: jd.version_number ?? jd.current_version ?? 1,
+  });
   const toJob = (jd: PublishedJD): Job => fullJobsById.get(jd.id)
     ?? (isJdDisabled(jd.status)
-      ? { ...publishedJdToJob(jd), status: 'Disabled' }
+      ? { ...slimJob(jd), status: 'Disabled' }
       : isJdArchived(jd.status)
-        ? { ...publishedJdToJob(jd), status: 'Archived' }
-        : publishedJdToJob(jd));
+        ? { ...slimJob(jd), status: 'Archived' }
+        : slimJob(jd));
   const isJobDisabled = (job: Pick<Job, 'status'>) => isJdDisabled(String(job.status || ''));
   const isJobArchived = (job: Pick<Job, 'status'>) => isJdArchived(String(job.status || ''));
 

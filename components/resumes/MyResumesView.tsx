@@ -66,6 +66,7 @@ import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
+import { NoFoldersState, NoFoldersMatchState, NoMatchingResumesState } from '@/components/resumes/ResumeEmptyStates';
 
 const formatDateIST = formatISTDate;
 const formatDateTimeIST = formatIST;
@@ -4472,7 +4473,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                      one folder it actually lives in. Inside a folder the column
                      would repeat that folder on every row, so it is dropped. */
                   getFolderName={selectedFolder === 'all' ? getResumeFolderName : undefined}
-                  showEmptyAction={false}
                   emptyState={
                     listControlsActive
                       ? undefined
@@ -4784,13 +4784,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     <div className="mb-4 sm:mb-6">
                       {cardViewFolder === null ? (
                         showRootFolderNoMatches ? (
-                          <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
-                            <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                              <Folder className="w-8 h-8 text-brand-blue" />
-                            </div>
-                            <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No folders match</h3>
-                            <p className="text-gray-500">No folders match the current search or filter.</p>
-                          </div>
+                          <NoFoldersMatchState />
                         ) : (
                           <>
                           {(showAllResumesCard || visibleSystemFolders.length > 0) && (
@@ -4875,11 +4869,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               {visibleMyFolders.map(folder => renderFolderCard(folder))}
                             </div>
                           ) : myFolders.length > 0 && folderControlsActive ? (
-                            <p className="tf-body-muted">No folders match the current search or filter.</p>
+                            <NoFoldersMatchState />
                           ) : systemFolders.length > 0 ? (
                             // Skipped when there are no folders at all — the
                             // page-level empty state below covers that case.
-                            <p className="tf-body-muted">No folders yet. Create one to organize your resumes.</p>
+                            <NoFoldersState />
                           ) : null}
                           </>
                         )
@@ -5021,7 +5015,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                             /* All Resumes aggregates every folder, so each row
                                names the one it lives in. */
                             getFolderName={cardViewFolder === 'all' ? getResumeFolderName : undefined}
-                            showEmptyAction={false}
                           />
                           </div>
                         </div>
@@ -5048,13 +5041,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                       {/* Card view pagination */}
                       {!loading && visibleFolderResumes.length === 0 && (folderResumes.length > 0 || resumeControlsActive) && (
-                        <div className="text-center py-12 bg-white border-2 border-dashed border-brand-blue/20 rounded-xl">
-                          <div className="w-16 h-16 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                            <FileText className="w-8 h-8 text-brand-blue" />
-                          </div>
-                          <h3 className="text-lg font-medium text-gray-900 mb-2 tracking-tight">No resumes match</h3>
-                          <p className="text-gray-500">Clear search or filters to show more resumes.</p>
-                        </div>
+                        <NoMatchingResumesState title="No resumes match" description="Clear search or filters to show more resumes." />
                       )}
 
                       {totalPages > 0 && folderResumes.length > 0 && (
