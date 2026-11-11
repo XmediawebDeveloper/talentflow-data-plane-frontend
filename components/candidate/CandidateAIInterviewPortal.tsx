@@ -2521,7 +2521,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       if (!isFullscreen()) {
         setFinalConsentFsExited(true);
         toast.error(
-          'You must be in fullscreen to start. Use the fullscreen button, then accept again.',
+          'The interview must run in fullscreen. Please click "Yes, I understand — Start Interview" again.',
           { duration: 6000 },
         );
         return;
@@ -3496,13 +3496,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
   // ========== FINAL CONSENT (shown in fullscreen, right before the interview starts) ==========
   if (step === 'final_consent') {
-    // Not in fullscreen → show an "Enter Fullscreen" button next to Start and
-    // keep Start disabled until fullscreen is on. Chrome refuses the automatic
-    // request after the share picker (verified, Chrome 157); this button is a
-    // fresh page click, which is what fullscreen needs. "Return to
-    // Fullscreen" if they were in it and left (Esc / F11).
-    const finalConsentFsBlocked = finalConsentFsExited;
-    const fsButtonLabel = finalConsentFsWasOn ? 'Return to Fullscreen' : 'Enter Fullscreen';
+    // Not in fullscreen on arrival is normal: Chrome refuses the automatic
+    // request after the share picker (verified, Chrome 157). The Start click is
+    // a fresh page click, so handleFinalConsentAccept enters fullscreen on it
+    // and then continues — one click, no separate fullscreen button.
+    const finalConsentNotFs = finalConsentFsExited;
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl max-w-[1400px] w-full my-auto px-5 py-4 md:px-7 md:py-5">
@@ -3513,8 +3511,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Before we begin
           </h1>
           <p className="tf-body-secondary mb-3 text-center max-w-4xl mx-auto">
-            {finalConsentFsBlocked
-              ? `Screen sharing is active. Click "${fsButtonLabel}", then confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.`
+            {finalConsentNotFs
+              ? 'Screen sharing is active. Please confirm that you understand the actions that are not allowed. The interview opens in fullscreen and starts as soon as you accept.'
               : 'You are now in fullscreen with screen sharing active. Please confirm that you understand the actions that are not allowed. Your interview will start as soon as you accept.'}
           </p>
           {/* Do-not-refresh warning: reloading here drops fullscreen + screen
@@ -3569,22 +3567,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 <span className="block">Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.</span>
               </span>
             </p>
-            <div className="w-full sm:w-auto flex-shrink-0 flex flex-col sm:flex-row gap-2">
-            {finalConsentFsBlocked && (
-              <button
-                onClick={async () => {
-                  try { await requestFullscreen(); } catch { /* button stays; click again */ }
-                  setFinalConsentFsExited(!isFullscreen());
-                }}
-                className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-warning hover:bg-warning text-white font-semibold py-2.5 px-5 rounded-lg transition-all text-sm shadow-md"
-              >
-                <Maximize2 className="w-4 h-4" />{fsButtonLabel}
-              </button>
-            )}
             <button
               onClick={() => { handleFinalConsentAccept(); }}
-              disabled={startSubmitting || finalConsentFsBlocked}
-              title={finalConsentFsBlocked ? `Click "${fsButtonLabel}" first` : undefined}
+              disabled={startSubmitting}
               className="w-full sm:w-auto flex-shrink-0 flex items-center justify-center gap-2 bg-gradient-to-r from-brand-blue to-brand-blue-2 hover:from-brand-blue-2 hover:to-brand-blue-2 text-white font-semibold py-2.5 px-5 rounded-lg transition-all text-sm disabled:opacity-70 disabled:cursor-not-allowed shadow-md shadow-brand-blue/20"
             >
               {startSubmitting ? (
@@ -3593,7 +3578,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 <><CircleCheck className="w-4 h-4" />Yes, I understand — Start Interview<ArrowRight className="w-4 h-4" /></>
               )}
             </button>
-            </div>
           </div>
         </div>
       </div>
