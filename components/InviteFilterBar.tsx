@@ -1,10 +1,11 @@
 'use client';
 
-import { Search, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { CalendarDays, ChevronDown, Search, X } from 'lucide-react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 export interface InviteFilterState {
   search: string;
@@ -40,7 +41,21 @@ interface InviteFilterBarProps {
   /** One line: search, Status, every extra dropdown, the invite date range
    *  and Clear — wrapping only where the popup is too narrow for it. */
   moreFilters?: boolean;
+  /** Drawn first on the `moreFilters` line, before the search box — the
+   *  trackers' Select All pill. */
+  beforeSearch?: ReactNode;
+  /** With `moreFilters`: one compact line (36px controls, the invite dates
+   *  behind a single button) that stays on one line from lg and sticks to
+   *  the top of its scroller from sm — the Track popups. The dropdowns give
+   *  up width (to 5.25rem, their text truncating) before the line overflows. */
+  compact?: boolean;
 }
+
+/* compact: "1 Nov – 10 Nov" for the dates button. */
+const shortDate = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+};
 
 /**
  * Status dropdowns for the two invite trackers.
@@ -107,6 +122,8 @@ export default function InviteFilterBar({
   extraSelects = [],
   onClearExtras,
   moreFilters = false,
+  beforeSearch,
+  compact = false,
 }: InviteFilterBarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -161,18 +178,24 @@ export default function InviteFilterBar({
     );
     /* On the line: a fixed width from sm (the shared select class is full
        width), two to a row on phones. */
-    const onLineClass = `${selectClass} max-sm:basis-[calc(50%-0.25rem)] max-sm:grow sm:!w-32`;
+    const onLineClass = compact
+      ? `${selectClass.replace(/h-\[38px\]/g, 'h-9')} max-sm:basis-[calc(50%-0.25rem)] max-sm:grow sm:!w-[7.25rem] sm:min-w-[5.25rem]`
+      : `${selectClass} max-sm:basis-[calc(50%-0.25rem)] max-sm:grow sm:!w-32`;
+    const hasDates = !!(filters.dateFrom || filters.dateTo);
     return (
-      <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative flex-1 min-w-[9rem] max-sm:basis-full">
+      <div className={compact
+        ? 'px-2.5 sm:px-6 py-2.5 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 sm:sticky sm:top-0 z-20 shrink-0'
+        : 'px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40'}>
+        <div className={`flex flex-wrap items-center gap-2 ${compact ? 'lg:flex-nowrap' : ''}`}>
+          {beforeSearch}
+          <div className={`relative flex-1 max-sm:basis-full ${compact ? 'min-w-[8rem]' : 'min-w-[9rem]'}`}>
             <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={localSearch}
               onChange={(e) => setLocalSearch(e.target.value)}
               placeholder={searchPlaceholder}
-              className="tf-input pl-9 pr-9"
+              className={`tf-input pl-9 pr-9 ${compact ? 'h-9' : ''}`}
             />
             {localSearch && (
               <button
@@ -196,6 +219,30 @@ export default function InviteFilterBar({
             className={onLineClass}
           />
           {extraSelects.map((select) => selectFor(select, onLineClass))}
+          {compact ? (
+            /* The invite date range behind one button — the two fields took
+               a third of the line. */
+            <Popover>
+              <PopoverTrigger asChild>
+                <button type="button" aria-label="Invite date range"
+                  className={`inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-sm whitespace-nowrap shrink-0 max-sm:basis-full transition-colors ${hasDates ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-blue/40'}`}>
+                  <CalendarDays className="w-4 h-4 shrink-0" />
+                  {hasDates ? `${filters.dateFrom ? shortDate(filters.dateFrom) : '…'} – ${filters.dateTo ? shortDate(filters.dateTo) : '…'}` : 'Invited'}
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0 opacity-60" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-[min(18rem,calc(100vw-1.5rem))] p-3 space-y-2">
+                <p className="tf-caption">Invited between</p>
+                <DateField value={filters.dateFrom} onChange={(v) => onChange({ ...filters, dateFrom: v })} className="w-full h-9 px-3 text-sm" aria-label="Invite date from" />
+                <DateField value={filters.dateTo} min={filters.dateFrom || undefined} onChange={(v) => onChange({ ...filters, dateTo: v })} className="w-full h-9 px-3 text-sm" aria-label="Invite date to" />
+                {hasDates && (
+                  <button type="button" onClick={() => onChange({ ...filters, dateFrom: '', dateTo: '' })} className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-slate-400 hover:underline">
+                    <X className="w-3 h-3" />Clear dates
+                  </button>
+                )}
+              </PopoverContent>
+            </Popover>
+          ) : (
           <div className="flex items-center gap-2 shrink-0 max-sm:basis-full max-sm:grid max-sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]">
             <span className="tf-body-secondary whitespace-nowrap">Invited</span>
             <DateField
@@ -213,11 +260,12 @@ export default function InviteFilterBar({
               aria-label="Invite date to"
             />
           </div>
+          )}
           {hasActiveFilters && (
             <button
               type="button"
               onClick={handleClear}
-              className="tf-btn tf-btn-secondary h-[38px] px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors gap-1.5 whitespace-nowrap max-sm:flex-1"
+              className={`tf-btn tf-btn-secondary ${compact ? 'h-9 shrink-0' : 'h-[38px]'} px-3 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-gray-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors gap-1.5 whitespace-nowrap max-sm:flex-1`}
             >
               <X className="w-3.5 h-3.5" /> Clear
             </button>
