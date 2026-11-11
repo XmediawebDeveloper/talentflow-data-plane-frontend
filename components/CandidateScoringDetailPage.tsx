@@ -20,6 +20,7 @@ import { buildCreateUrl, clearInviteHandoff, readInviteHandoff, saveInviteHandof
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
+import { toExternalUrl } from '@/lib/utils/externalUrl';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -2484,7 +2485,7 @@ Best regards`);
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <h4 className="font-semibold text-gray-900 min-w-0 [overflow-wrap:anywhere]">{project.name}</h4>
                           {project.url && (
-                            <a href={project.url} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
+                            <a href={toExternalUrl(project.url)} target="_blank" rel="noopener noreferrer" className="text-brand-blue hover:text-brand-blue-2">
                               <FileText className="w-4 h-4" />
                             </a>
                           )}
@@ -2595,19 +2596,19 @@ Best regards`);
                   </div>
                   <div className="tf-grid-3">
                     {fullResumeData.linkedinUrl && (
-                      <a href={fullResumeData.linkedinUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={toExternalUrl(fullResumeData.linkedinUrl)} target="_blank" rel="noopener noreferrer"
                          className="flex items-center justify-center gap-2 p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors">
                         <span className="text-brand-blue text-sm font-medium">LinkedIn</span>
                       </a>
                     )}
                     {fullResumeData.githubUrl && (
-                      <a href={fullResumeData.githubUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={toExternalUrl(fullResumeData.githubUrl)} target="_blank" rel="noopener noreferrer"
                          className="flex items-center justify-center gap-2 p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors">
                         <span className="text-brand-blue text-sm font-medium">GitHub</span>
                       </a>
                     )}
                     {fullResumeData.portfolioUrl && (
-                      <a href={fullResumeData.portfolioUrl} target="_blank" rel="noopener noreferrer"
+                      <a href={toExternalUrl(fullResumeData.portfolioUrl)} target="_blank" rel="noopener noreferrer"
                          className="flex items-center justify-center gap-2 p-4 bg-slate-50 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg hover:bg-brand-blue/5 hover:ring-brand-blue/20 transition-colors">
                         <span className="text-brand-blue text-sm font-medium">Portfolio</span>
                       </a>
