@@ -520,13 +520,12 @@ export function buildInvitationRowActions(inv: any, opts: {
   if (isCopyLinkAvailable(inv)) {
     actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInvitationLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
   }
-  // Terminated opens the same page. It carries no scores, so it is labelled
-  // "View Details" — what is there is the recording and the Integrity Check
-  // evidence, which is the reason to open a terminated candidate (2026-09-30).
+  // Terminated opens the same page — the recording and the Integrity Check
+  // evidence. One label for both, as the AI Interview menu (2026-11-11).
   if (opts.onViewResult && (status === 'completed' || status === 'abandoned')) {
     actions.push({
       key: 'view',
-      label: status === 'completed' ? 'View Results' : 'View Details',
+      label: 'View Results',
       Icon: Eye,
       run: () => opts.onViewResult!(inv),
       disabled: !inv.attempt_id,
@@ -536,7 +535,7 @@ export function buildInvitationRowActions(inv: any, opts: {
   if (opts.onResend && canResendInvite(inv)) {
     actions.push({
       key: 'resend',
-      label: 'Resend',
+      label: 'Resend Email',
       Icon: Mail,
       run: () => opts.onResend!(inv),
       busy: opts.resendingId === inv.id,
@@ -559,7 +558,7 @@ export function buildInvitationRowActions(inv: any, opts: {
   if (opts.onEdit && canEditInvitation(inv)) {
     actions.push({
       key: 'edit',
-      label: 'Edit',
+      label: 'Edit Email',
       Icon: Pencil,
       run: () => opts.onEdit!(inv),
       title: locked ? lockedMessage : 'Edit candidate details and send',
@@ -571,7 +570,7 @@ export function buildInvitationRowActions(inv: any, opts: {
   if (opts.onRevoke && isRevocableInvitation(inv)) {
     actions.push({
       key: 'revoke',
-      label: 'Revoke',
+      label: 'Revoke invite',
       Icon: Ban,
       run: () => opts.onRevoke!(inv),
       disabled: opts.revokingId === inv.id || locked,

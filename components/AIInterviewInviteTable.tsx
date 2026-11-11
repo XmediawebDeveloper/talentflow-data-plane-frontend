@@ -15,6 +15,7 @@ import type { TimelineHistoryRow } from '@/components/ui/timeline-history-dialog
 import { JobVersionStatusPill, jobLockKindOf } from '@/components/jobs/JobLockNotice';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
+import { TrackerCheckbox, TrackerTimeline, TrackerScorePill } from '@/components/ui/tracker-look';
 import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
@@ -480,6 +481,11 @@ const buildFullTimeline = (
 /** Badge wording and colours kept in one place so a recruiter reads the same
  *  status regardless of where tracking was opened from. */
 export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
+  /* One badge — the status the Timeline ends on: a link that ran out before
+     the candidate started is Expired, whatever step (Invited / System Check)
+     it reached first. It used to keep that step's badge and add a second
+     Expired flag beside it. */
+  if (isInviteExpired(inv)) return <InviteStatusChip kind="expired" title="The link expired before the candidate started" />;
   switch (inv.status) {
     case 'completed': {
       // (Auto) surfaces when the timeout monitor finalized an abandoned session —
@@ -490,6 +496,10 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
     }
     case 'in_progress':
       return <InviteStatusChip kind="in_progress" />;
+    // Was missing, so the raw "system_check" value printed — same chip and
+    // tooltip as the Assessment tracker's System Check.
+    case 'system_check':
+      return <InviteStatusChip kind="system_check" title="Consent accepted — the candidate is on the system check step" />;
     case 'invited':
       return <InviteStatusChip kind="invited" />;
     case 'cancelled':
@@ -586,6 +596,12 @@ const AUTO_HEIGHT_COL_MIN_W: Record<string, string> = {
 /* With `expandableRows`, the six columns the desktop row shows; the rest open
    in the row's expanded panel (the Resume Scoring list's expand pattern). */
 const PRIMARY_INVITE_COLUMNS: InviteColumnId[] = ['candidate', 'jobId', 'jobTitle', 'status', 'score', 'inviteSource'];
+/* `trackerLook` (the Track popups): CID and Candidate first, then Status,
+   Timeline and Score, the versions, and Invite Source last before Actions. */
+const TRACKER_LOOK_ORDER: InviteColumnId[] = ['cid', 'candidate', 'jobId', 'jobTitle', 'status', 'timeline', 'score', 'jobVersion', 'interviewVersion', 'inviteSource'];
+/* …and only Candidate keeps a floor, so the columns size to their
+   content and the table fits a 1920px screen at 100% / 125%. */
+const TRACKER_LOOK_COL_MIN_W: Record<string, string> = { candidate: 'min-w-[11rem]' };
 
 export interface AIInterviewInviteTableProps {
   invitations: any[];
@@ -630,6 +646,9 @@ export interface AIInterviewInviteTableProps {
    *  header cell empty, as the Track dialogs do. */
   allSelected?: boolean;
   onToggleSelectAll?: () => void;
+  /** `trackerLook`: the header checkbox shown greyed, with this as its
+   *  tooltip (e.g. Invited and Expired mixed on the page). */
+  selectAllBlockedReason?: string;
 
   /** Row actions. Each omitted callback simply drops that action from the menu,
    *  which is how the Job Details tracker stays read-only. */
@@ -657,6 +676,10 @@ export interface AIInterviewInviteTableProps {
   /** 'grid' renders the rows as cards (the host's List/Card toggle). Every
    *  other caller omits it and keeps the table. */
   displayMode?: ListDisplayMode;
+  /** The Track popups' look (components/ui/tracker-look): the native
+   *  checkbox, the column order above, the Timeline and Score cells, and a
+   *  centred ⋮. Presentation only. */
+  trackerLook?: boolean;
 }
 
 export default function AIInterviewInviteTable({
@@ -675,6 +698,7 @@ export default function AIInterviewInviteTable({
   isSelectable,
   allSelected = false,
   onToggleSelectAll,
+  selectAllBlockedReason,
   onResend,
   onEdit,
   onRevoke,
@@ -685,6 +709,7 @@ export default function AIInterviewInviteTable({
   configArchived = false,
   expandableRows = false,
   displayMode = 'list',
+  trackerLook = false,
 }: AIInterviewInviteTableProps) {
   // Resend / Edit / Revoke need AI Interviews "Invite" (2026-11-10): a
   // view-only role (Viewer) could resend expired links.
@@ -698,7 +723,9 @@ export default function AIInterviewInviteTable({
   const timelineLimit = autoHeight ? 2 : undefined;
   /* autoHeight (the paged trackers): every column a set minimum, at least its
      widest content, so filtering to fewer rows never re-sizes the columns. */
-  const colMinW = (id: string) => (autoHeight ? AUTO_HEIGHT_COL_MIN_W[id] ?? '' : '');
+  const colMinW = (id: string) => (trackerLook ? TRACKER_LOOK_COL_MIN_W[id] ?? '' : autoHeight ? AUTO_HEIGHT_COL_MIN_W[id] ?? '' : '');
+  const inOrder = <T extends { id: InviteColumnId }>(list: T[]): T[] =>
+    trackerLook ? [...list].sort((a, b) => TRACKER_LOOK_ORDER.indexOf(a.id) - TRACKER_LOOK_ORDER.indexOf(b.id)) : list;
   const inRow = (id: InviteColumnId) => !expandableRows || PRIMARY_INVITE_COLUMNS.includes(id);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
   const toggleExpanded = (id: string) =>
@@ -746,16 +773,20 @@ export default function AIInterviewInviteTable({
       : {};
     const noInviteProps = !canInviteRows ? { disabled: true, title: "You can view invitations, but your role can't resend, edit or revoke them" } : {};
 
-    if (isInterviewLinkLive(inv)) {
+    /* Copy Link also on an In Progress row (2026-11-11), as the Assessment
+       menu offers it — while the interview is under way and its link is not
+       expired; isInterviewLinkLive alone ends at the start. */
+    const inProgressLink = !!inv.interview_token && resolveInviteStatus(inv) === 'in_progress' && !inv.completed_at;
+    if (isInterviewLinkLive(inv) || inProgressLink) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download', ...lockedProps });
     }
-    /* View Details on Completed and Terminated rows — a terminated interview
+    /* View Results on Completed and Terminated rows — a terminated interview
        still has its (partial) evaluation to open; the result page shows it as
        a Partial Evaluation. In Progress / Invited have nothing to show yet. */
     if (onViewDetails && hasResultToOpen(inv)) {
-      actions.push({ key: 'view', label: 'View Details', Icon: Eye, run: () => onViewDetails(inv), iconClassName: 'text-menu-icon-view' });
+      actions.push({ key: 'view', label: 'View Results', Icon: Eye, run: () => onViewDetails(inv), iconClassName: 'text-menu-icon-view' });
     }
-    if (onResend && canResendInvite(inv)) {
+    if (onResend && (canResendInvite(inv) || inv.status === 'failed')) {
       actions.push({
         key: 'resend',
         label: 'Resend Email',
@@ -772,7 +803,7 @@ export default function AIInterviewInviteTable({
     if (onEdit && canEdit(inv)) {
       actions.push({
         key: 'edit',
-        label: 'Edit',
+        label: 'Edit Email',
         Icon: Pencil,
         run: () => onEdit(inv),
         title: 'Edit candidate details and send',
@@ -784,7 +815,7 @@ export default function AIInterviewInviteTable({
     if (onRevoke && isRevocableInvite(inv)) {
       actions.push({
         key: 'revoke',
-        label: 'Revoke',
+        label: 'Revoke invite',
         Icon: Ban,
         run: () => onRevoke(inv),
         disabled: revokingId === inv.id,
@@ -820,6 +851,16 @@ export default function AIInterviewInviteTable({
     // below it stays on the same left edge.
     if (rowLocked(inv) || !(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-5 flex-shrink-0" />;
     const checked = !!selectedIds?.has(inv.id);
+    if (trackerLook) {
+      return (
+        <TrackerCheckbox
+          checked={checked}
+          onClick={(e) => e.stopPropagation()}
+          onChange={() => onToggleSelect?.(inv.id)}
+          aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
+        />
+      );
+    }
     // Same round pill checkbox the Assessments tracker uses, so the select
     // column looks the same wherever it appears.
     return (
@@ -941,11 +982,6 @@ export default function AIInterviewInviteTable({
 
               <div className="flex items-center gap-1.5 flex-wrap">
                 <AIInviteStatusBadge inv={inv} />
-                {isInviteExpired(inv) && (
-                  <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
-                    <Clock className="w-3 h-3" /> Expired
-                  </span>
-                )}
               </div>
 
               <div className="flex items-center justify-between gap-2 tf-meta">
@@ -1049,11 +1085,6 @@ export default function AIInterviewInviteTable({
                   {inv.candidate_cid && cardJobVersion != null && <VersionPill kind="job" version={cardJobVersion} />}
                   {inv.candidate_cid && cardInterviewVersion != null && <VersionPill kind="interview" version={cardInterviewVersion} />}
                   <AIInviteStatusBadge inv={inv} />
-                  {isInviteExpired(inv) && (
-                    <span className="tf-badge text-2xs ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 flex-shrink-0">
-                      <Clock className="w-2.5 h-2.5" /> Expired
-                    </span>
-                  )}
                 </>
               }
               meta={[
@@ -1142,7 +1173,12 @@ export default function AIInterviewInviteTable({
           Actions column in place. */}
       <div
         className={`hidden lg:block tf-table-shell tf-table-shell--compact border border-gray-200 dark:border-slate-700 rounded-lg ${autoHeight ? 'overscroll-y-auto' : 'tf-table-shell--fill flex-1 min-h-0'}`}
-        style={autoHeight ? { maxHeight: 'none' } : undefined}
+        /* overscrollBehaviorY inline, not the utility: globals.css gives every
+           .tf-table-shell in a popup an unlayered `overscroll-behavior: contain`,
+           which beats `overscroll-y-auto`. Once the table scrolls sideways
+           (125% / 150% scale) that kept the wheel over it from scrolling the
+           popup — only the scrollbar moved it. */
+        style={autoHeight ? { maxHeight: 'none', overscrollBehaviorY: 'auto' } : undefined}
       >
         {/* Auto layout, not table-fixed: columns size to their own content and the
             shell scrolls sideways, rather than every column being scaled down
@@ -1152,7 +1188,17 @@ export default function AIInterviewInviteTable({
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && (
                 <th className="tf-th-cell w-8 pl-4 pr-0 tf-sticky-col-left tf-th" aria-label="Select">
-                  {onToggleSelectAll && (
+                  {onToggleSelectAll && trackerLook && (
+                    <TrackerCheckbox
+                      checked={allSelected}
+                      some={(selectedIds?.size ?? 0) > 0}
+                      disabled={!!selectAllBlockedReason}
+                      title={selectAllBlockedReason}
+                      onChange={onToggleSelectAll}
+                      aria-label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                    />
+                  )}
+                  {onToggleSelectAll && !trackerLook && (
                     <button
                       type="button"
                       role="checkbox"
@@ -1171,33 +1217,28 @@ export default function AIInterviewInviteTable({
                   )}
                 </th>
               )}
-              <th className={`tf-th-cell text-left tf-th ${colMinW('candidate')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Candidate</span></th>
-              {/* One column order for both modes — the order every AI Interview and
+{/* One column order for both modes — the order every AI Interview and
                   Assessment tracking/results table shares: Timeline (which
                   carries the invite time), Status, Score, Invite Source, then the job group (Job ID and Job
                   Title on the Invitation Status tab only; the two versions wherever
-                  they're known) just before Actions. */}
-              {/* hidden md:table-cell mirrors this column's <td> — without it the
-                  header carries one more cell than the body between sm and md and
-                  every heading after Timeline shifts off its column. */}
-              {inRow('timeline') && <th className={`tf-th-cell text-left tf-th hidden md:table-cell ${colMinW('timeline')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Timeline</span></th>}
-              {inRow('status') && <th className={`tf-th-cell text-left tf-th ${colMinW('status')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Status</span></th>}
-              {inRow('score') && <th className={`tf-th-cell text-center tf-th ${colMinW('score')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Score</span></th>}
-              {inRow('inviteSource') && <th className={`tf-th-cell text-left tf-th ${colMinW('inviteSource')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Invite Source</span></th>}
-              {inRow('cid') && <th className={`tf-th-cell text-left tf-th ${colMinW('cid')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">CID</span></th>}
-              {showJobColumn && (
-                <>
-                  {inRow('jobId') && <th className={`tf-th-cell text-left tf-th ${colMinW('jobId')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">JD ID</span></th>}
-                  {inRow('jobTitle') && <th className={`tf-th-cell text-left tf-th ${colMinW('jobTitle')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Title</span></th>}
-                </>
-              )}
-              {(showJobColumn || jobVersion != null || showRowVersions) && inRow('jobVersion') && (
-                <th className={`tf-th-cell text-left tf-th ${colMinW('jobVersion')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Job Version</span></th>
-              )}
-              {(showJobColumn || interviewVersion != null || showRowVersions) && inRow('interviewVersion') && (
-                <th className={`tf-th-cell text-left tf-th ${colMinW('interviewVersion')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Interview Version</span></th>
-              )}
-              <th className={`tf-th-cell text-left tf-th tf-sticky-col ${colMinW('actions')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
+                  they're known) just before Actions. `trackerLook` reorders it
+                  (TRACKER_LOOK_ORDER). Timeline's `hidden md:table-cell` mirrors
+                  its <td> — without it the header carries one more cell than
+                  the body between sm and md. */}
+              {inOrder(([
+                { id: 'candidate', label: 'Candidate' },
+                { id: 'timeline', label: 'Timeline', className: 'hidden md:table-cell' },
+                { id: 'status', label: 'Status' },
+                { id: 'score', label: 'Score', center: true },
+                { id: 'inviteSource', label: 'Invite Source' },
+                { id: 'cid', label: 'CID' },
+                ...(showJobColumn ? [{ id: 'jobId', label: 'JD ID' }, { id: 'jobTitle', label: 'Job Title' }] : []),
+                ...((showJobColumn || jobVersion != null || showRowVersions) ? [{ id: 'jobVersion', label: 'Job Version' }] : []),
+                ...((showJobColumn || interviewVersion != null || showRowVersions) ? [{ id: 'interviewVersion', label: 'Interview Version' }] : []),
+              ] as { id: InviteColumnId; label: string; className?: string; center?: boolean }[]).filter((h) => inRow(h.id))).map((h) => (
+                <th key={h.id} className={`tf-th-cell ${h.center ? 'text-center' : 'text-left'} tf-th ${h.className ?? ''} ${colMinW(h.id)}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">{h.label}</span></th>
+              ))}
+              <th className={`tf-th-cell ${trackerLook ? 'text-center' : 'text-left'} tf-th tf-sticky-col ${colMinW('actions')}`}><span className="inline-block w-max max-w-[8rem] whitespace-normal leading-tight align-middle">Actions</span></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -1232,7 +1273,13 @@ export default function AIInterviewInviteTable({
                   // the other columns, so a lone "Invited" line is not stuck at
                   // the top of a taller row.
                   id: 'timeline', label: 'Timeline', className: `${cellY} px-4 align-middle text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell`,
-                  content: (
+                  content: trackerLook ? (
+                    <TrackerTimeline
+                      events={events}
+                      hiddenCount={timelineEvents(inv, Infinity).length - events.length}
+                      onHistory={hasMoreTimelineHistory(inv, timelineLimit) ? () => openTimeline(inv) : undefined}
+                    />
+                  ) : (
                     <div className="tf-meta">
                       {events.length > 0 ? (
                         <div className={autoHeight ? 'space-y-0.5' : 'space-y-1'}>
@@ -1263,17 +1310,14 @@ export default function AIInterviewInviteTable({
                   content: (
                     <div className="flex items-center gap-1.5 flex-nowrap">
                       <AIInviteStatusBadge inv={inv} />
-                      {isInviteExpired(inv) && (
-                        <span className="tf-badge bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 flex-shrink-0">
-                          <Clock className="w-3 h-3" /> Expired
-                        </span>
-                      )}
                     </div>
                   ),
                 },
                 {
                   id: 'score', label: 'Score', className: `${cellY} px-4 align-middle text-center text-sm whitespace-nowrap`,
-                  content: <ScoreCell value={score} result={inviteResult(inv, score)} />,
+                  content: trackerLook
+                    ? <TrackerScorePill value={score} pass={inviteResult(inv, score) == null ? null : inviteResult(inv, score) === 'Pass'} why={hasResultToOpen(inv) ? 'No score for this interview' : 'Not taken yet'} />
+                    : <ScoreCell value={score} result={inviteResult(inv, score)} />,
                 },
                 {
                   id: 'inviteSource', label: 'Invite Source', className: `${cellY} px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400`,
@@ -1320,7 +1364,7 @@ export default function AIInterviewInviteTable({
                     : <span className="text-gray-400 dark:text-slate-500">—</span>,
                 }] : []),
               ];
-              const rowColumns = columns.filter((c) => inRow(c.id));
+              const rowColumns = inOrder(columns.filter((c) => inRow(c.id)));
               const detailColumns = columns.filter((c) => !inRow(c.id));
               const isExpanded = expandableRows && expandedIds.has(inv.id);
               const onRowClick = expandableRows ? () => toggleExpanded(inv.id) : openable ? () => onViewDetails?.(inv) : undefined;
@@ -1357,7 +1401,7 @@ export default function AIInterviewInviteTable({
                     {/* Radix's DropdownMenu rather than a hand-rolled absolute menu:
                         this table sits inside tf-table-shell (overflow: auto), which
                         would clip an absolutely positioned menu. Radix portals it out. */}
-                    <div className="flex items-center gap-1.5">
+                    <div className={`flex items-center gap-1.5 ${trackerLook ? 'justify-center' : ''}`}>
                     {/* The Resume Scoring list's expand control. */}
                     {expandableRows && (
                       <Button
