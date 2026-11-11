@@ -3,8 +3,7 @@
 import { formatExperienceRange } from '@/lib/utils/jobExperience';
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info, FileText } from 'lucide-react';
-import { EmptyState } from '@/components/ui/empty-state';
+import { Plus, Clock, Loader2, Search, Download, FileArchive, Users, Info } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -44,6 +43,7 @@ import { RESUME_VIEW_SOURCE_PARAM } from '@/lib/constants/resumePools';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { NoMatchingResumesState, NoResumesYetState } from '@/components/resumes/ResumeEmptyStates';
 
 interface SearchFilters {
   skills?: string[];
@@ -1162,19 +1162,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           highlightQuery={appliedSearchQuery}
           emptyState={
             appliedSearchQuery || activeFilterCount > 0 ? (
-              <EmptyState
-                icon={FileText}
-                title="No matching resumes"
+              <NoMatchingResumesState
                 description={appliedSearchQuery
                   ? `No resumes match "${appliedSearchQuery}"${activeFilterCount > 0 ? ' with the selected filters' : ''}. Try a different name, skill or keyword.`
                   : 'No resumes match the selected filters. Try choosing different filters.'}
               />
             ) : (
-              <EmptyState
-                icon={FileText}
-                title="No resumes yet"
-                description="Resumes you upload are saved here, ready to search and score against your jobs."
-              />
+              <NoResumesYetState />
             )
           }
         />

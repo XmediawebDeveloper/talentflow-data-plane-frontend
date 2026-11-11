@@ -95,6 +95,7 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
+import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -2873,7 +2874,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ? `Invite candidates to this job's ${kind === 'assessment' ? 'assessment' : 'AI interview'}`
           : undefined)}
         className={`${size === 'toolbar' ? 'whitespace-nowrap !h-9 !text-sm' : ''} ${blocked ? 'opacity-60 cursor-not-allowed' : ''}`}
-        icon={<UserPlus className="w-4 h-4" />}
+        icon={size === 'empty' && !exists
+          ? (kind === 'assessment' ? <ClipboardList className="w-4 h-4" /> : <Video className="w-4 h-4" />)
+          : <UserPlus className="w-4 h-4" />}
       >
         {label}
       </Button>
@@ -4431,9 +4434,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Users}
-              imageSrc="/scored-resumes-empty-state.webp"
-              imageAlt="Scored resumes illustration"
-              title="No Scored Resumes"
+              illustration={<ScoredResumesIllustration />}
+              title="No Scored Resumes Yet"
               description="Score resumes against this job description to see the candidates here."
               action={canOfferScoreResumesFromTab ? (
                 <Button
@@ -4442,7 +4444,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   aria-disabled={!!scoreResumesBlockedReason || undefined}
                   title={scoreResumesBlockedReason ?? undefined}
                   className={`${(scoreResumesBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
-                  icon={<ClipboardList className="w-4 h-4" />}
+                  icon={<FileText className="w-4 h-4" />}
                 >
                   Score Resumes
                 </Button>
@@ -4527,6 +4529,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 <TabEmptyState
                   bordered
                   icon={ClipboardList}
+                  illustration={<AssessmentIllustration />}
                   title="No Assessment Results Yet"
                   description={resultsEmptyText('assessment')}
                   action={resultsInviteAction('assessment', 'empty')}
@@ -4671,6 +4674,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Brain}
+              illustration={<InterviewIllustration />}
               title="No AI Interview Results Yet"
               description={resultsEmptyText('interview')}
               action={resultsInviteAction('interview', 'empty')}
@@ -5681,8 +5685,7 @@ function AIMatchTabContent({
       <TabEmptyState
         bordered
         icon={Brain}
-        imageSrc="/ai-talent-match-empty-state.webp"
-        imageAlt="AI talent match illustration"
+        illustration={<TalentMatchIllustration />}
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={(

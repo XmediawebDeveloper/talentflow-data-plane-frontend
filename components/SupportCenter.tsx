@@ -341,6 +341,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   // Active tab: 'external' for TalentFlow support, 'team' for internal team tickets
   const [activeTab, setActiveTab] = useState<'external' | 'team'>('external');
   const [view, setView] = useState<'overview' | 'submit' | 'tickets' | 'detail' | 'knowledge-base'>('overview');
+  /* The overview's Help Resources + contact block, folded away by default. */
+  const [helpOpen, setHelpOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   // My Tickets filters. The Team tab has its own set below — they used to be
   // shared, so "Urgent" picked here emptied the Team list (team has no Urgent).
@@ -1508,6 +1510,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
 
+            {/* Help Resources + Contact Information — one dropdown, collapsed by default */}
+            <div className="tf-panel">
+              <button
+                type="button"
+                onClick={() => setHelpOpen(o => !o)}
+                aria-expanded={helpOpen}
+                aria-controls="support-help-resources"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5"
+              >
+                <span className="tf-section-title">Help &amp; Resources</span>
+                <ChevronDown className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${helpOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {helpOpen && (
+            <div id="support-help-resources" className="space-y-4 border-t border-gray-100 p-4 sm:p-5 dark:border-slate-700/60">
             {/* Help Resources */}
             <div className="tf-grid-3">
               {[
@@ -1548,7 +1564,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Contact Information */}
-            <div className="tf-panel p-4 sm:p-5">
+            <div className="border-t border-gray-100 pt-4 dark:border-slate-700/60">
               <h3 className="mb-3 tf-section-title">Need Immediate Help?</h3>
               <div className="tf-grid-3 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
                 {[
@@ -1574,6 +1590,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   );
                 })}
               </div>
+            </div>
+            </div>
+              )}
             </div>
           </div>
         )}
@@ -2177,8 +2196,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     })}
                   </MobileRecordList>
 
-                  {/* Desktop Table */}
-                  <div className="hidden lg:block overflow-x-auto tf-table-shell">
+                  {/* Desktop Table — left out when empty: its min-height would
+                      otherwise sit as a blank gap above the empty state. */}
+                  <div className={`hidden overflow-x-auto tf-table-shell ${filteredTickets.length > 0 ? 'lg:block' : ''}`}>
                     <table className="w-full">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
@@ -3351,8 +3371,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     })}
                   </MobileRecordList>
 
-                  {/* Desktop Table */}
-                  <div className="hidden overflow-x-auto lg:block tf-table-shell">
+                  {/* Desktop Table — left out when empty, as above. */}
+                  <div className={`hidden overflow-x-auto tf-table-shell ${filteredInternalTickets.length > 0 ? 'lg:block' : ''}`}>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-left tf-caption dark:bg-slate-900">

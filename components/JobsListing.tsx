@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, ClipboardCheck, Video, Loader2, Info, ArrowUp, ArrowDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import type { LucideIcon } from 'lucide-react';
 import { centerMenuOnPhoneRef } from '@/lib/hooks/useCenteredMenuOnPhone';
@@ -54,6 +54,8 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteKind } from '@/components/talent-match-invite/inviteVersions';
+import { IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import { NoJobsFoundIllustration, NoJobsIllustration } from '@/components/jobs/JobResultsIllustrations';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -2707,35 +2709,23 @@ export default function JobsListing({ onCreateNew, onCreateNewDisabled = false, 
             </div>
         ) : (
           // Empty State
-          <div className="tf-card-soft p-8 sm:p-10 text-center">
-            <div className="max-w-md mx-auto">
-              <div className="w-12 h-12 mx-auto mb-4 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
-                {searchQuery || activeFiltersCount > 0 ? (
-                  <Search className="w-5 h-5 text-brand-blue" />
-                ) : (
-                  <Briefcase className="w-5 h-5 text-brand-blue" />
-                )}
-              </div>
-              <h3 className="tf-section-title sm:text-lg mb-2 tracking-tight">
-                {searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
-              </h3>
-              <p className="tf-body-secondary mb-4 leading-relaxed">
-                {searchQuery || activeFiltersCount > 0
-                  ? 'Try changing your search or filters'
-                  : 'Create your first job opening to get started'
-                }
-              </p>
-              {searchQuery || activeFiltersCount > 0 ? (
-                <Button variant="secondary" size="md" onClick={clearAllFilters} icon={<XCircle className="w-4 h-4" />}>
-                  Clear Filters
-                </Button>
-              ) : (
-                <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
-                  Create New Job
-                </Button>
-              )}
-            </div>
-          </div>
+          <IllustratedEmptyState
+            illustration={searchQuery || activeFiltersCount > 0 ? <NoJobsFoundIllustration /> : <NoJobsIllustration />}
+            title={searchQuery || activeFiltersCount > 0 ? 'No jobs found' : 'No jobs yet'}
+            description={searchQuery || activeFiltersCount > 0
+              ? 'Try changing your search or filters'
+              : 'Create your first job opening to get started'}
+          >
+            {searchQuery || activeFiltersCount > 0 ? (
+              <Button variant="secondary" size="md" onClick={clearAllFilters} icon={<XCircle className="w-4 h-4" />}>
+                Clear Filters
+              </Button>
+            ) : (
+              <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
+                Create New Job
+              </Button>
+            )}
+          </IllustratedEmptyState>
         )}
 
         {/* Pagination Controls */}
