@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
 import { ResumeHeadline, ResumeLine } from '@/components/resumes/ResumeDocLine';
+import PdfDocumentViewer from '@/components/resumes/PdfDocumentViewer';
+import { openLinksInNewTab } from '@/lib/utils/externalUrl';
 import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
@@ -160,6 +162,13 @@ export default function ResumeTextPreviewModal({
   const [pdfMinHoldElapsed, setPdfMinHoldElapsed] = useState(false);
   const pdfFrameLoaded = pdfIframeLoaded && pdfMinHoldElapsed;
   const pdfIframeRef = useRef<HTMLIFrameElement>(null);
+  // pdf.js renderer state (primary path); the iframe above is the fallback.
+  const [pdfJsLoaded, setPdfJsLoaded] = useState(false);
+  const [pdfJsFailed, setPdfJsFailed] = useState(false);
+  useEffect(() => {
+    setPdfJsLoaded(false);
+    setPdfJsFailed(false);
+  }, [effectiveDocumentUrl]);
   useEffect(() => {
     setPdfIframeLoaded(false);
     setPdfMinHoldElapsed(false);
@@ -323,6 +332,8 @@ export default function ResumeTextPreviewModal({
         // matching the extracted-text preview it sits beside.
         breakPages: false,
       });
+      // Word links must open in a new tab, not replace TalentFlow.
+      openLinksInNewTab(docxContainerRef.current);
     } catch {
       if (!docxContainerRef.current) return;
       docxContainerRef.current.innerHTML =
@@ -450,18 +461,38 @@ export default function ResumeTextPreviewModal({
                  - the browser's own PDF chrome (grey bar, page thumbnails, zoom
                    controls), hidden with #toolbar=0&navpanes=0. */
               <div className="relative bg-white rounded-xl shadow-sm ring-1 ring-black/5 max-w-2xl mx-auto h-full overflow-hidden">
-                {!pdfFrameLoaded && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-white">
+                {!(pdfJsFailed ? pdfFrameLoaded : pdfJsLoaded) && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
                     <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
                   </div>
                 )}
-                <iframe
-                  ref={pdfIframeRef}
-                  src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
-                  className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
-                  title={title}
-                  onLoad={() => setPdfIframeLoaded(true)}
-                />
+                {pdfJsFailed ? (
+                  /* Fallback only: the browser's native viewer, whose links
+                     open in the same tab (out of our control). */
+                  <iframe
+                    ref={pdfIframeRef}
+                    src={`${effectiveDocumentUrl}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                    className={`w-full h-full border-0 ${pdfFrameLoaded ? '' : 'invisible'}`}
+                    title={title}
+                    onLoad={() => setPdfIframeLoaded(true)}
+                  />
+                ) : (
+                  /* pdf.js render — every link in the PDF opens in a new tab,
+                     so clicking a candidate's LinkedIn/GitHub never navigates
+                     away from TalentFlow. */
+                  <div className="w-full h-full overflow-y-auto">
+                    <PdfDocumentViewer
+                      key={effectiveDocumentUrl}
+                      url={effectiveDocumentUrl}
+                      className="w-full"
+                      onLoaded={() => setPdfJsLoaded(true)}
+                      onError={(err) => {
+                        console.warn('[ResumePreview] pdf.js render failed, using native viewer', err);
+                        setPdfJsFailed(true);
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ) : (
               /* A Word file renders as real DOM, so it gets the identical page

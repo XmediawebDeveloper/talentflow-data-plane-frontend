@@ -31,6 +31,7 @@ import { useTeamReportRange, RangePresets, RANGE_PRESETS, todayIST, UnitRulesHel
 import { useIsMobile } from '@/components/ui/use-mobile';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
 import UnitActivityLog from './UnitActivityLog';
+import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -1822,13 +1823,13 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
             </ul>
           ) : teams.length === 0 ? (
             <div className={TABLE_EMPTY_PANEL_CLASS}>
-              <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-              <p className="tf-body-muted">No team usage data for the selected period.</p>
-              {canWidenRange && (
-                <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
-                  Try the last 90 days
-                </button>
-              )}
+              <IllustratedEmptyState
+                bordered={false}
+                className="!py-0"
+                illustration={<IconTileIllustration icon={BarChart3} />}
+                description="No team usage data for the selected period."
+                action={canWidenRange ? { label: 'Try the last 90 days', onClick: () => applyPreset(last90), variant: 'link' } : undefined}
+              />
             </div>
           ) : sortedTeams.length === 0 ? (
             noMatchPanel
@@ -1910,13 +1911,13 @@ export default function TeamUsageAnalytics({ focusTeamId = null, onFocusHandled 
                   {/* The shared empty-state panel — centred on both axes with
                       the same height and padding every other table's uses. */}
                   <div className={TABLE_EMPTY_PANEL_CLASS}>
-                    <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-                    <p className="tf-body-muted">No team usage data for the selected period.</p>
-                    {canWidenRange && (
-                      <button type="button" onClick={() => applyPreset(last90)} className="mt-2 text-xs font-semibold text-brand-blue hover:underline">
-                        Try the last 90 days
-                      </button>
-                    )}
+                    <IllustratedEmptyState
+                      bordered={false}
+                      className="!py-0"
+                      illustration={<IconTileIllustration icon={BarChart3} />}
+                      description="No team usage data for the selected period."
+                      action={canWidenRange ? { label: 'Try the last 90 days', onClick: () => applyPreset(last90), variant: 'link' } : undefined}
+                    />
                   </div>
                 </td>
               </tr>

@@ -203,11 +203,7 @@ export default function SelectedCandidatesPanel({
                inside a label would fire the checkbox too. */
             <div
               key={resume.id}
-              className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
-                included
-                  ? 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
-                  : 'bg-transparent border-dashed border-gray-300 dark:border-slate-700 opacity-60'
-              }`}
+              className="flex items-center gap-3 p-2.5 rounded-lg border transition-colors bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700"
             >
               <input
                 type="checkbox"
@@ -221,7 +217,7 @@ export default function SelectedCandidatesPanel({
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className={`text-sm truncate ${included ? 'text-gray-900 dark:text-slate-50' : 'text-gray-500 line-through'}`}>
+                  <span className="text-sm truncate text-gray-900 dark:text-slate-50">
                     {formatName && resume.name ? formatName(resume.name) : resume.name}
                   </span>
                   {/* Read-only label of the version going forward — the eye is

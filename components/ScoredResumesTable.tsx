@@ -34,6 +34,7 @@ import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { useIsMobile } from '@/components/ui/use-mobile';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { PLAN_LOCKED_MESSAGE } from '@/lib/types/planFeatures';
 
@@ -55,6 +56,7 @@ import {
   DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
+import { ScoredResumesIllustration } from '@/components/jobs/JobResultsIllustrations';
 
 /* Action menu item styling — cloned from the Job Openings page's three-dot
    menu (JobsListing.tsx: gray-700 text, hover:bg-gray-50, px-4/py-2.5 rows,
@@ -744,6 +746,9 @@ export default function ScoredResumesTable({
      chrome of the AI Talent Match reference; the standalone Resume Scoring
      page (no portal) keeps its existing 38px look. */
   const embedded = !!toolbarPortal;
+  /* Phones: a row ⋮ menu has no room for Invite ▸ to open sideways (it opened
+     off the left edge), so there the two invite entries sit in the menu itself. */
+  const isPhone = useIsMobile();
   // Names and job titles are shown with a capital first letter even when
   // they were typed in lower case ("jack" → "Jack", "python devloper" →
   // "Python devloper"). Done once, here, so the table, grouped view, grid,
@@ -1937,6 +1942,19 @@ Best regards`);
     // inlineRowInviteItems: the same entries straight in the ⋮ menu, no Invite ▸.
     if (inlineRowInviteItems) return renderInviteMenuItems(resume);
     const { rowInviteDisabled, rowInviteDisabledTitle } = getRowInviteGate(resume);
+    if (isPhone) {
+      return (
+        <>
+          <div
+            className="flex items-center gap-2 px-3 pt-1.5 pb-1 text-2xs font-semibold uppercase tracking-wide text-gray-400 dark:text-slate-500"
+            title={rowInviteDisabled ? rowInviteDisabledTitle : undefined}
+          >
+            <UserPlus className="w-3.5 h-3.5" /> Invite
+          </div>
+          {renderInviteMenuItems(resume)}
+        </>
+      );
+    }
     return (
       <DropdownMenuSub>
         <DropdownMenuSubTrigger
@@ -2717,11 +2735,10 @@ Best regards`);
               isNarrowed={search.isNarrowed}
               query={search.appliedQuery}
               entityLabel="scored resume"
-              emptyTitle="No Scored Resumes"
+              emptyTitle="No Scored Resumes Yet"
               emptyDescription="Score resumes against this job description to see the candidates here."
               onReset={search.reset}
-              imageSrc="/scored-resumes-empty-state.webp"
-              imageAlt="Scored resumes illustration"
+              illustration={<ScoredResumesIllustration />}
               action={onScoreResumesFromEmptyState ? (
                 <Button
                   variant="primary"
@@ -3533,11 +3550,10 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No Scored Resumes"
+            emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
-            imageSrc="/scored-resumes-empty-state.webp"
-            imageAlt="Scored resumes illustration"
+            illustration={<ScoredResumesIllustration />}
             action={onScoreResumesFromEmptyState ? (
               <Button
                 variant="primary"
@@ -3724,11 +3740,10 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No Scored Resumes"
+            emptyTitle="No Scored Resumes Yet"
             emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
-            imageSrc="/scored-resumes-empty-state.webp"
-            imageAlt="Scored resumes illustration"
+            illustration={<ScoredResumesIllustration />}
             action={onScoreResumesFromEmptyState ? (
               <Button
                 variant="primary"

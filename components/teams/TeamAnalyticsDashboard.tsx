@@ -45,6 +45,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useIsMobile } from '@/components/ui/use-mobile';
 import { useTeamReportRange, RangePresets, todayIST, UnitStatCard, UNIT_STAT_GRID, ReportScopeBadge, type Measure } from './reportControls';
 import { UNIT_KEYS, UNIT_LABELS, UNIT_CHART_COLOR, UNIT_TEXT_CLASS, UNIT_ICON, TOTAL_UNITS_ICON, type UnitKey } from '@/lib/constants/unitColors';
+import { IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 interface TeamAnalyticsDashboardProps {
   userRole: string;
@@ -872,13 +873,11 @@ export default function TeamAnalyticsDashboard({ userRole, onOpenTeam }: TeamAna
 
         {/* Empty State */}
         {!hasTeams && (
-          <div className="rounded-xl border border-dashed border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-8 text-center">
-            <BarChart3 className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-4" />
-            <h3 className="tf-section-title max-sm:text-sm mb-2">No Usage Data</h3>
-            <p className="tf-body-secondary">
-              No team usage data available for the selected period.
-            </p>
-          </div>
+          <IllustratedEmptyState
+            illustration={<IconTileIllustration icon={BarChart3} />}
+            title="No Usage Data"
+            description="No team usage data available for the selected period."
+          />
         )}
       </>
     );

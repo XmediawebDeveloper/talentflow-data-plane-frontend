@@ -7,6 +7,7 @@ import api from '@/lib/services/api';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { buildDashboardData } from './adapter';
 import { exportEvalReportPDF } from './EvalReportCombined';
+import { getProctoringRisk } from '../proctoringRisk';
 
 const parseClusterConfig = (si?: string | null) => {
   if (!si) return { mth: [], nth: [] };
@@ -91,6 +92,8 @@ export async function downloadSessionReport(sessionId: string, save = true) {
       startedAt: session.started_at || null,
       completedAt: session.completed_at || null,
       identityVerified: !!session.identity_verified,
+      // The results list's "Proctoring Risk" column — the PDF must match it.
+      proctoringRisk: getProctoringRisk(session).level,
       photoDataUrl,
       violations: session.proctoring_violations ?? [],
       // Same route the results lists open for a candidate.

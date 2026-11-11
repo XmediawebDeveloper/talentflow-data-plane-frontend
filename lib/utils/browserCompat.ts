@@ -234,16 +234,9 @@ export async function getUserMedia(
  * Request fullscreen with cross-browser support
  */
 export async function requestFullscreen(element: HTMLElement = document.documentElement): Promise<void> {
-  // Browsers grant fullscreen only right after a click. A click that first
-  // opens the screen-share picker has used that up by the time the picker
-  // closes, so the request would just be refused ("TypeError: not granted").
-  // Fail the same way callers already handle, without the doomed request;
-  // the next click (final consent / share-bar Continue) enters fullscreen.
-  const activation = (navigator as any).userActivation as { isActive?: boolean } | undefined;
-  if (activation && activation.isActive === false) {
-    console.info('[FULLSCREEN] No recent click to allow fullscreen — it will be entered on the next click');
-    throw new Error('FULLSCREEN_NEEDS_CLICK');
-  }
+  // No "recent click" pre-check here: right after the screen-share picker the
+  // browser may report no click yet still grant fullscreen, so always ask and
+  // let callers handle a refusal (the next click enters fullscreen).
   try {
     if (element.requestFullscreen) {
       await element.requestFullscreen();
@@ -260,7 +253,15 @@ export async function requestFullscreen(element: HTMLElement = document.document
       throw new Error('FULLSCREEN_NOT_SUPPORTED');
     }
   } catch (error) {
-    console.error('[FULLSCREEN] Request failed:', error);
+    // "TypeError: not granted" / "Permissions check failed" = the browser wants
+    // a fresh click first (e.g. right after the screen-share picker). Callers
+    // already fall back to the next click, so this is expected, not an error.
+    const msg = String((error as any)?.message || '');
+    if ((error as any)?.name === 'TypeError' && /not granted|permission/i.test(msg)) {
+      console.info('[FULLSCREEN] Browser needs a click first — fullscreen will be entered on the next click');
+    } else {
+      console.error('[FULLSCREEN] Request failed:', error);
+    }
     throw error;
   }
 }

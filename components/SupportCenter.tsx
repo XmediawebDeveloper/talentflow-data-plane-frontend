@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Tooltip } from '@/components/ui/tooltip';
-import { EmptyState } from '@/components/ui/empty-state';
+import { NoTicketsYetState, NoTicketsFoundState, NoTeamTicketsState, NothingAssignedState, NoUnassignedState } from '@/components/SupportEmptyStates';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -341,6 +341,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   // Active tab: 'external' for TalentFlow support, 'team' for internal team tickets
   const [activeTab, setActiveTab] = useState<'external' | 'team'>('external');
   const [view, setView] = useState<'overview' | 'submit' | 'tickets' | 'detail' | 'knowledge-base'>('overview');
+  /* The overview's Help Resources + contact block, folded away by default. */
+  const [helpOpen, setHelpOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   // My Tickets filters. The Team tab has its own set below — they used to be
   // shared, so "Urgent" picked here emptied the Team list (team has no Urgent).
@@ -1419,12 +1421,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   ))}
                 </div>
               ) : tickets.length === 0 ? (
-                <EmptyState
-                  icon={Ticket}
-                  title="No tickets yet"
-                  description="You haven't created any support tickets yet. Create your first ticket to get help from our support team."
-                  action={{ label: 'Create your first ticket', onClick: openSubmitView }}
-                />
+                <NoTicketsYetState onCreate={openSubmitView} />
               ) : (
                 <>
                   {/* Mobile: compact cards */}
@@ -1513,6 +1510,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               )}
             </div>
 
+            {/* Help Resources + Contact Information — one dropdown, collapsed by default */}
+            <div className="tf-panel">
+              <button
+                type="button"
+                onClick={() => setHelpOpen(o => !o)}
+                aria-expanded={helpOpen}
+                aria-controls="support-help-resources"
+                className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left sm:px-5"
+              >
+                <span className="tf-section-title">Help &amp; Resources</span>
+                <ChevronDown className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${helpOpen ? 'rotate-180' : ''}`} />
+              </button>
+              {helpOpen && (
+            <div id="support-help-resources" className="space-y-4 border-t border-gray-100 p-4 sm:p-5 dark:border-slate-700/60">
             {/* Help Resources */}
             <div className="tf-grid-3">
               {[
@@ -1553,7 +1564,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
 
             {/* Contact Information */}
-            <div className="tf-panel p-4 sm:p-5">
+            <div className="border-t border-gray-100 pt-4 dark:border-slate-700/60">
               <h3 className="mb-3 tf-section-title">Need Immediate Help?</h3>
               <div className="tf-grid-3 sm:divide-x sm:divide-gray-200 dark:sm:divide-slate-700">
                 {[
@@ -1579,6 +1590,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   );
                 })}
               </div>
+            </div>
+            </div>
+              )}
             </div>
           </div>
         )}
@@ -2182,8 +2196,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     })}
                   </MobileRecordList>
 
-                  {/* Desktop Table */}
-                  <div className="hidden lg:block overflow-x-auto tf-table-shell">
+                  {/* Desktop Table — left out when empty: its min-height would
+                      otherwise sit as a blank gap above the empty state. */}
+                  <div className={`hidden overflow-x-auto tf-table-shell ${filteredTickets.length > 0 ? 'lg:block' : ''}`}>
                     <table className="w-full">
                       <thead className="bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60">
                         <tr>
@@ -2247,11 +2262,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {ticketsError ? (
                     <ListLoadError message={ticketsError} onRetry={fetchTickets} />
                   ) : filteredTickets.length === 0 && (
-                    <EmptyState
-                      icon={Ticket}
-                      title="No tickets found"
-                      description="Try adjusting your search or filters to find what you're looking for."
-                    />
+                    <div className="p-4"><NoTicketsFoundState /></div>
                   )}
                 </>
               )}
@@ -3075,10 +3086,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
                 </div>
               ) : internalTickets.length === 0 ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Inbox className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 text-gray-400 dark:text-slate-500" />
-                  <p className="tf-body-secondary">No team tickets yet</p>
-                </div>
+                <NoTeamTicketsState />
               ) : (() => {
                 const openInternal = (ticket: InternalTicket) => {
                   setSelectedInternalTicket(ticket);
@@ -3363,8 +3371,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     })}
                   </MobileRecordList>
 
-                  {/* Desktop Table */}
-                  <div className="hidden overflow-x-auto lg:block tf-table-shell">
+                  {/* Desktop Table — left out when empty, as above. */}
+                  <div className={`hidden overflow-x-auto tf-table-shell ${filteredInternalTickets.length > 0 ? 'lg:block' : ''}`}>
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-white text-left tf-caption dark:bg-slate-900">
@@ -3454,20 +3462,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   {internalTicketsError ? (
                     <ListLoadError message={internalTicketsError} onRetry={fetchInternalTickets} />
                   ) : filteredInternalTickets.length === 0 && (
-                    <div className="py-10 text-center sm:py-12">
-                      <Inbox className="mx-auto mb-3 h-10 w-10 text-gray-300 dark:text-slate-600 sm:h-12 sm:w-12" />
-                      <p className="tf-label">
-                        {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
-                          ? 'No unassigned tickets 🎉'
-                          : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
-                            ? 'Nothing is assigned to you right now'
-                            : 'No tickets match these filters'}
-                      </p>
-                      <p className="mt-1 tf-meta">
-                        {internalFilterAssignment === 'unassigned' || internalFilterAssignment === 'mine'
-                          ? 'New requests from your team will show up here.'
-                          : 'Try changing or clearing the filters above.'}
-                      </p>
+                    <div className="p-4">
+                      {internalFilterAssignment === 'unassigned' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
+                        ? <NoUnassignedState />
+                        : internalFilterAssignment === 'mine' && teamFilterStatus === 'all' && !teamSearchQuery && teamCategoryFilter === 'all'
+                          ? <NothingAssignedState />
+                          : <NoTicketsFoundState title="No tickets match these filters" />}
                     </div>
                   )}
                 </>

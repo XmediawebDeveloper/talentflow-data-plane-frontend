@@ -3,7 +3,7 @@
 // `Folder` is already taken by the type imported below, so the icon comes in
 // under an alias.
 import { RESUME_EMAIL_SHARE_ENABLED } from '@/lib/constants/featureFlags';
-import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, FileText, Loader2 } from 'lucide-react';
+import { Eye, Briefcase, Download, MoreVertical, Paperclip, Upload, Zap, FileSearch, Edit3, FolderOpen, Folder as FolderIcon, Trash2, Copy, Share2, Mail, Send, Star, Archive, ArchiveRestore, Clock, GripVertical, Loader2 } from 'lucide-react';
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
@@ -14,7 +14,6 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
-import { EmptyState } from './ui/empty-state';
 import { ResumeArchivedBadge } from './ui/resume-archived-badge';
 import { TeamMemberEmailBadge } from './ui/team-member-badge';
 import Pagination from './Pagination';
@@ -27,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
+import { NoResumesFoundState } from '@/components/resumes/ResumeEmptyStates';
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
    Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
@@ -269,7 +269,6 @@ interface ResumeTableProps {
    *  actually lives in — what an aggregated view (All Resumes) needs to stay
    *  readable, and noise in a view that is already one folder. */
   getFolderName?: (folderId?: string) => string | undefined;
-  showEmptyAction?: boolean;
   /** Replaces the built-in "No resumes found" block. Pages whose whole body is
    *  the empty state (My Resumes) pass their own illustrated version; every
    *  other caller keeps the default. */
@@ -287,6 +286,13 @@ interface ResumeTableProps {
    *  a page panel (Resume Database) so the cards line up with the panel's
    *  content inset. Default keeps the 8px gutter dialogs rely on. */
   flushCards?: boolean;
+  /** Drops the header's select-all checkbox (the column stays for the row
+   *  ticks) — for callers that put the Job Openings "Select All ▾" menu in
+   *  their own toolbar instead. */
+  hideHeaderSelectAll?: boolean;
+  /** Reports the ids of the rows on the current page, so a toolbar
+   *  "Select all on this page" can act on exactly what is shown. */
+  onPageItemsChange?: (ids: string[]) => void;
 }
 
 // Helper function to highlight matching text
@@ -351,11 +357,12 @@ export default function ResumeTable({
   enableRowReorder = false,
   reorderScopeKey,
   getFolderName,
-  showEmptyAction = true,
   emptyState,
   containerClassName = 'flex-1',
   tableShellClassName = '',
   flushCards = false,
+  hideHeaderSelectAll = false,
+  onPageItemsChange,
 }: ResumeTableProps) {
   const router = useRouter();
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
@@ -590,6 +597,13 @@ export default function ResumeTable({
   // When pagination is disabled (server-side pagination), render all passed items
   const paginatedItems = disablePagination ? orderedResumes : paginatedItemsFromHook;
 
+  // Current page's ids, for a caller's toolbar "Select all on this page".
+  const pageIdsKey = paginatedItems.map(r => r.id).join('|');
+  useEffect(() => {
+    onPageItemsChange?.(pageIdsKey ? pageIdsKey.split('|') : []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pageIdsKey]);
+
   // A resume whose candidate_email matches an existing team member's login
   // (stored before the upload-time restriction existed) is shown greyed out
   // and locked out of selection and every row action. Gated on
@@ -643,19 +657,7 @@ export default function ResumeTable({
   if (resumes.length === 0) {
     if (emptyState) return <>{emptyState}</>;
     return (
-      <EmptyState
-        icon={FileText}
-        title="No resumes found"
-        description="We couldn't find any resumes matching your search criteria. Try adjusting your filters or search terms."
-        action={showEmptyAction ? {
-          label: 'Clear all filters',
-          onClick: () => {
-            // This would be handled by parent component
-            window.location.reload();
-          },
-          variant: 'secondary'
-        } : undefined}
-      />
+      <NoResumesFoundState />
     );
   }
 
@@ -693,6 +695,9 @@ export default function ResumeTable({
                  digit. Pinned, so the ticks stay in view when the table is
                  scrolled sideways. */
               <th className={`sticky text-xs font-semibold text-gray-600 dark:text-slate-300 ${draggable ? 'left-10' : 'left-0'} z-20 w-px whitespace-nowrap px-4 py-3 align-middle border-r border-gray-200`}>
+                {hideHeaderSelectAll ? (
+                  <span className="sr-only">Select</span>
+                ) : (
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -712,6 +717,7 @@ export default function ResumeTable({
                     {selectedResumes.length > 0 ? `(${selectedResumes.length})` : ''}
                   </span>
                 </div>
+                )}
               </th>
             )}
             <th className="tf-th-cell text-left tf-th">

@@ -95,6 +95,7 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { formatCandidateFirstName } from '@/lib/utils/candidateNameDisplay';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import NameAvatar from '@/components/ui/name-avatar';
+import { AssessmentIllustration, InterviewIllustration, ScoredResumesIllustration, TalentMatchIllustration } from '@/components/jobs/JobResultsIllustrations';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -2873,7 +2874,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ? `Invite candidates to this job's ${kind === 'assessment' ? 'assessment' : 'AI interview'}`
           : undefined)}
         className={`${size === 'toolbar' ? 'whitespace-nowrap !h-9 !text-sm' : ''} ${blocked ? 'opacity-60 cursor-not-allowed' : ''}`}
-        icon={<UserPlus className="w-4 h-4" />}
+        icon={size === 'empty' && !exists
+          ? (kind === 'assessment' ? <ClipboardList className="w-4 h-4" /> : <Video className="w-4 h-4" />)
+          : <UserPlus className="w-4 h-4" />}
       >
         {label}
       </Button>
@@ -3387,6 +3390,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             )}
           </div>
         </div>
+          {/* Disabled / Archived job: the foot of the job card says what still
+              works and what is off — the Resume Scoring page's notice, in brand
+              orange. */}
+          {jobInactive && (
+            <div role="status" className="mt-3 sm:mt-4 flex items-start gap-2.5 rounded-xl bg-brand-orange/10 px-3 sm:px-4 py-2.5 ring-1 ring-brand-orange/20">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange-deep" aria-hidden="true" />
+              <p className="min-w-0 text-sm text-brand-orange-deep leading-relaxed">
+                {job.status === 'Archived' ? (
+                  <>This job is <strong>archived</strong>. It is kept for reference — its scored resumes, assessments, AI interviews and results can still be viewed and exported, but AI Talent Match, scoring new resumes, and creating or sending assessments and AI interviews are turned off.</>
+                ) : (
+                  <>This job is <strong>disabled</strong>. Its scored resumes, assessments, AI interviews and results can still be viewed and exported, but AI Talent Match, scoring new resumes, and creating or sending assessments and AI interviews are turned off.</>
+                )}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -4416,9 +4434,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Users}
-              imageSrc="/scored-resumes-empty-state.webp"
-              imageAlt="Scored resumes illustration"
-              title="No Scored Resumes"
+              illustration={<ScoredResumesIllustration />}
+              title="No Scored Resumes Yet"
               description="Score resumes against this job description to see the candidates here."
               action={canOfferScoreResumesFromTab ? (
                 <Button
@@ -4427,7 +4444,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   aria-disabled={!!scoreResumesBlockedReason || undefined}
                   title={scoreResumesBlockedReason ?? undefined}
                   className={`${(scoreResumesBlockedReason ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
-                  icon={<ClipboardList className="w-4 h-4" />}
+                  icon={<FileText className="w-4 h-4" />}
                 >
                   Score Resumes
                 </Button>
@@ -4512,6 +4529,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 <TabEmptyState
                   bordered
                   icon={ClipboardList}
+                  illustration={<AssessmentIllustration />}
                   title="No Assessment Results Yet"
                   description={resultsEmptyText('assessment')}
                   action={resultsInviteAction('assessment', 'empty')}
@@ -4656,6 +4674,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <TabEmptyState
               bordered
               icon={Brain}
+              illustration={<InterviewIllustration />}
               title="No AI Interview Results Yet"
               description={resultsEmptyText('interview')}
               action={resultsInviteAction('interview', 'empty')}
@@ -5666,8 +5685,7 @@ function AIMatchTabContent({
       <TabEmptyState
         bordered
         icon={Brain}
-        imageSrc="/ai-talent-match-empty-state.webp"
-        imageAlt="AI talent match illustration"
+        illustration={<TalentMatchIllustration />}
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={(
