@@ -39,7 +39,7 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import {
-  archivedAssessmentRepresentative,
+  inactiveAssessmentRepresentative,
   buildAssessmentJobList,
   formatEmploymentType,
   formatIndustryType,
@@ -3301,20 +3301,20 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   const buildableJobs = buildAssessmentJobList(allJdVersions, version =>
     versionHasAssessment(lineageKey(version), version.id),
   );
-  /* An Archived job keeps its row instead of vanishing the moment it has none
-     `buildAssessmentJobList` is willing to give it — same card, on its newest
-     version, greyed out and unselectable below, so it reads as "archived"
-     rather than as a job that disappeared. A lineage dropped for any other
-     reason (nothing but Draft, newest live version Disabled, or every live
-     version already assessed) still has no row; only Archived gets it back. */
+  /* An Archived or Disabled job keeps its row instead of vanishing the moment
+     it has none `buildAssessmentJobList` is willing to give it — same card, on
+     its newest version, greyed out and unselectable below, so it reads as
+     "archived" / "disabled" rather than as a job that disappeared. A lineage
+     dropped for any other reason (nothing but Draft, or every live version
+     already assessed) still has no row. */
   const buildableLineages = new Set(buildableJobs.map(lineageKey));
-  const archivedJobs: Job[] = [];
+  const inactiveJobs: Job[] = [];
   groupByLineage(allJdVersions).forEach((bucket, key) => {
     if (buildableLineages.has(key)) return;
-    const archivedRep = archivedAssessmentRepresentative(bucket);
-    if (archivedRep) archivedJobs.push(archivedRep);
+    const inactiveRep = inactiveAssessmentRepresentative(bucket);
+    if (inactiveRep) inactiveJobs.push(inactiveRep);
   });
-  const availableJobs = [...buildableJobs, ...archivedJobs];
+  const availableJobs = [...buildableJobs, ...inactiveJobs];
   /* Does this recruiter have ANY published version at all? Only the empty
      state reads it, to tell "you have not published a job yet" apart from "you
      have, and every published version is already assessed" — two empty lists
