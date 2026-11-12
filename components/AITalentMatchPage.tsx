@@ -89,6 +89,7 @@ import { usePagedList } from '@/lib/hooks/usePagedList';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -2961,6 +2962,8 @@ export default function AITalentMatchPage({
         jobId={scoreDetailView.jdId}
         /* Invite -> Create / Send for this score's job — Job Details' popup. */
         onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, scoreDetailView.jdId, candidates, scoreDetailView.jobTitle)}
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         onBack={close}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId) => {
@@ -8683,10 +8686,12 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('resumeVersion') && (
-                    <td className="tf-td text-center">
-                      <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
-                        v{candidate.resumeVersion || 1}
-                      </span>
+                    <td className="tf-td text-center" onClick={(e) => e.stopPropagation()}>
+                      {/* The resume version with View Resume joined as an eye. */}
+                      <VersionEyeBadge
+                        label={`v${candidate.resumeVersion || 1}`}
+                        onView={candidate.resumeId ? () => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' }) : undefined}
+                      />
                     </td>
                     )}
                     {isResultColumnVisible('attachments') && (
