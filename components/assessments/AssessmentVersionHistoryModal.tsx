@@ -14,6 +14,7 @@ import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
@@ -200,6 +201,36 @@ export default function AssessmentVersionHistoryModal({
   const shownRounds = (['technical', 'coding'] as const).filter((k) => versions.some((c) => roundsOf(c).some((r) => r.type === k)));
   const creators = [...new Set(versions.map((c) => c.created_by_name).filter(Boolean))] as string[];
 
+  /* Active filter tags — one per filter row control, the date range as one. */
+  const STATUS_CHIP_LABELS: Record<string, string> = { published: 'Active', draft: 'Draft', closed: 'Completed', archived: 'Archived' };
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const versionChipConfig = versionFilter ? versions.find((c) => String(c.id) === versionFilter) : undefined;
+  const activeFilterChips: FilterChip[] = [
+    !!versionFilter && {
+      key: 'version',
+      label: 'Version',
+      value: versionChipConfig
+        ? `${labelOf(versionChipConfig)}${multiJobVersions ? ` · Job V${jobVersionOf(versionChipConfig)}` : ''}`
+        : versionFilter,
+      onRemove: () => setVersionFilter(''),
+    },
+    !!statusFilter && { key: 'status', label: 'Status', value: STATUS_CHIP_LABELS[statusFilter] ?? statusFilter, onRemove: () => setStatusFilter('') },
+    !!creatorFilter && { key: 'creator', label: 'Created By', value: creatorFilter, onRemove: () => setCreatorFilter('') },
+    !!(dateFrom || dateTo) && {
+      key: 'date',
+      label: 'Date',
+      value: dateFrom && dateTo
+        ? `${formatChipDate(dateFrom)} – ${formatChipDate(dateTo)}`
+        : dateFrom ? `From ${formatChipDate(dateFrom)}` : `Until ${formatChipDate(dateTo)}`,
+      onRemove: () => { setDateFrom(''); setDateTo(''); },
+    },
+  ].filter(Boolean) as FilterChip[];
+
   const filtered = versions.filter((c) => {
     if (versionFilter && c.id !== versionFilter) return false;
     if (statusFilter && normalizeStatus(c.status) !== statusFilter) return false;
@@ -375,6 +406,9 @@ export default function AssessmentVersionHistoryModal({
                 </div>
               </div>
             </div>
+            {activeFilterChips.length > 0 && (
+              <FilterChips className="!mt-3" chips={activeFilterChips} />
+            )}
 
             {loading && versions.length === 0 ? (
               <div className="py-16 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-brand-blue" /></div>

@@ -35,6 +35,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard } from '@/components/ui/mobile-record-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 
 // Main API - Local backend handles everything including support tickets
 // Character limits for the Create Support Ticket form.
@@ -1279,8 +1280,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
       </div>
       {/* Tab Switcher - Only show for admins */}
       {isAdmin && (
-        <div className="mb-4 flex gap-1 border-b border-gray-200 dark:border-slate-700">
+        <div role="tablist" aria-label="Support ticket views" className="mb-4 flex gap-1 border-b border-gray-200 dark:border-slate-700">
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'external'}
             onClick={() => { setActiveTab('external'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
             className={`tf-tab-line -mb-px ${
               activeTab === 'external'
@@ -1295,6 +1299,9 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             </div>
           </button>
           <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === 'team'}
             onClick={() => { setActiveTab('team'); setView('overview'); setSelectedTicket(null); setSelectedInternalTicket(null); }}
             className={`tf-tab-line -mb-px ${
               activeTab === 'team'
@@ -2095,39 +2102,17 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     />
                   </div>
 
-                  {/* Active filters — each removable, plus clear all */}
-                  {(filterStatus !== 'all' || filterPriority !== 'all' || myCategoryFilter !== 'all' || searchQuery) && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="tf-meta">Filters:</span>
-                      {searchQuery && (
-                        <button type="button" onClick={() => setSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          &ldquo;{searchQuery}&rdquo; <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {filterStatus !== 'all' && (
-                        <button type="button" onClick={() => setFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Status: {filterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {filterPriority !== 'all' && (
-                        <button type="button" onClick={() => setFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Priority: {filterPriority} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {myCategoryFilter !== 'all' && (
-                        <button type="button" onClick={() => setMyCategoryFilter('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          {getCategoryLabel(myCategoryFilter)} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); setMyCategoryFilter('all'); }}
-                        className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
-                      >
-                        Clear all
-                      </button>
-                    </div>
-                  )}
+                  {/* Active filters — shared FilterChips, each removable, plus clear all
+                      (kept: this card's only reset). */}
+                  <FilterChips
+                    chips={[
+                      searchQuery && { key: 'search', label: 'Search', value: searchQuery, onRemove: () => setSearchQuery('') },
+                      filterStatus !== 'all' && { key: 'status', label: 'Status', value: filterStatus.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), onRemove: () => setFilterStatus('all') },
+                      filterPriority !== 'all' && { key: 'priority', label: 'Priority', value: filterPriority.charAt(0).toUpperCase() + filterPriority.slice(1), onRemove: () => setFilterPriority('all') },
+                      myCategoryFilter !== 'all' && { key: 'category', label: 'Category', value: getCategoryLabel(myCategoryFilter), onRemove: () => setMyCategoryFilter('all') },
+                    ].filter(Boolean) as FilterChip[]}
+                    onClearAll={() => { setSearchQuery(''); setFilterStatus('all'); setFilterPriority('all'); setMyCategoryFilter('all'); }}
+                  />
                 </div>
               </div>
 
@@ -3265,44 +3250,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     />
                   </div>
 
-                  {/* Active filters — each removable, plus clear all */}
-                  {(teamFilterStatus !== 'all' || teamFilterPriority !== 'all' || internalFilterAssignment !== 'all' || teamCategoryFilter !== 'all' || teamSearchQuery) && (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="tf-meta">Filters:</span>
-                      {teamSearchQuery && (
-                        <button type="button" onClick={() => setTeamSearchQuery('')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          &ldquo;{teamSearchQuery}&rdquo; <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {teamFilterStatus !== 'all' && (
-                        <button type="button" onClick={() => setTeamFilterStatus('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Status: {teamFilterStatus.replace(/[-_]/g, ' ')} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {internalFilterAssignment !== 'all' && (
-                        <button type="button" onClick={() => setInternalFilterAssignment('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          {internalFilterAssignment === 'mine' ? 'Assigned to me' : 'Unassigned'} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {teamFilterPriority !== 'all' && (
-                        <button type="button" onClick={() => setTeamFilterPriority('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium capitalize text-brand-blue hover:bg-brand-blue/15">
-                          Priority: {teamFilterPriority} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      {teamCategoryFilter !== 'all' && (
-                        <button type="button" onClick={() => setTeamCategoryFilter('all')} className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-1 text-xs font-medium text-brand-blue hover:bg-brand-blue/15">
-                          {getInternalCategoryLabel(teamCategoryFilter)} <X className="h-3 w-3" />
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => { setTeamSearchQuery(''); setTeamFilterStatus('all'); setTeamFilterPriority('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); }}
-                        className="text-xs font-medium text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline dark:text-slate-400"
-                      >
-                        Clear all
-                      </button>
-                    </div>
-                  )}
+                  {/* Active filters — shared FilterChips, each removable, plus clear all
+                      (kept: this card's only reset). */}
+                  <FilterChips
+                    chips={[
+                      teamSearchQuery && { key: 'search', label: 'Search', value: teamSearchQuery, onRemove: () => setTeamSearchQuery('') },
+                      teamFilterStatus !== 'all' && { key: 'status', label: 'Status', value: teamFilterStatus.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), onRemove: () => setTeamFilterStatus('all') },
+                      internalFilterAssignment !== 'all' && { key: 'assignment', label: 'Assignment', value: internalFilterAssignment === 'mine' ? 'Assigned to me' : 'Unassigned', onRemove: () => setInternalFilterAssignment('all') },
+                      teamFilterPriority !== 'all' && { key: 'priority', label: 'Priority', value: teamFilterPriority.charAt(0).toUpperCase() + teamFilterPriority.slice(1), onRemove: () => setTeamFilterPriority('all') },
+                      teamCategoryFilter !== 'all' && { key: 'category', label: 'Category', value: getInternalCategoryLabel(teamCategoryFilter), onRemove: () => setTeamCategoryFilter('all') },
+                    ].filter(Boolean) as FilterChip[]}
+                    onClearAll={() => { setTeamSearchQuery(''); setTeamFilterStatus('all'); setTeamFilterPriority('all'); setInternalFilterAssignment('all'); setTeamCategoryFilter('all'); }}
+                  />
                 </div>
               </div>
 

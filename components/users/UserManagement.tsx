@@ -38,6 +38,7 @@ import SeatQuotaCard from './SeatQuotaCard';
 import AddSeatsModal from './AddSeatsModal';
 const SEATS_BLOCKED_MESSAGE = "Your role can't buy seats or add-ons. Ask the account owner or a Billing Manager.";
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ListPagination from '@/components/ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { useQuota } from '@/contexts/QuotaContext';
@@ -632,6 +633,22 @@ export default function UserManagement() {
     setCurrentPage(1);
   };
   const hasRoleFilter = roleFilterOptions.length > 1;
+  // Active filter tags — the status pill and role dropdown that
+  // `isUserListNarrowed` counts (search shows in its own box).
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: statusFilter === 'active' ? 'Active' : 'Inactive',
+      onRemove: () => { setStatusFilter('all'); setCurrentPage(1); },
+    },
+    roleFilter !== 'all' && {
+      key: 'role',
+      label: 'Role',
+      value: roleFilterOptions.find(([code]) => code === roleFilter)?.[1] ?? roleFilter,
+      onRemove: () => setRoleFilter('all'),
+    },
+  ].filter(Boolean) as FilterChip[];
   // Role filter dropdown — rendered in two spots (beside search from sm up, on a
   // second line on phones) so the phone search box keeps its full width.
   const renderRoleFilter = (className: string) =>
@@ -1719,7 +1736,7 @@ export default function UserManagement() {
           {/* Phones (globals.css, `.tf-jobs-toolbar`): the Job Openings list's underlined
               status tabs; from sm the pills as before. */}
           <div className="tf-jobs-toolbar">
-          <div role="group" aria-label="Filter users by status" className="tf-jobs-status-tabs -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
+          <div role="tablist" aria-label="Filter users by status" className="tf-jobs-status-tabs -mx-1 flex flex-nowrap items-center gap-2 overflow-x-auto scrollbar-hide tf-hide-native-scrollbar px-1 py-0.5 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             {([
               { key: 'all', label: 'All users', Icon: UsersIcon, count: totalUsersCount, of: null },
               { key: 'active', label: 'Active', Icon: UserCheck, count: activeUsersCount, of: limits?.max_users === -1 ? '∞' : (limits?.max_users ?? null) },
@@ -1730,7 +1747,8 @@ export default function UserManagement() {
                 <button
                   key={key}
                   type="button"
-                  aria-pressed={active}
+                  role="tab"
+                  aria-selected={active}
                   onClick={() => {
                     setStatusFilter(key);
                     setPageView('list');
@@ -1858,6 +1876,10 @@ export default function UserManagement() {
           <div className="mt-2 lg:hidden">
             <AccessLegend />
           </div>
+        )}
+        {/* Active filter tags: always the card's last line, as on Job Openings. */}
+        {pageView === 'list' && activeFilterChips.length > 0 && (
+          <FilterChips className="mt-3" chips={activeFilterChips} />
         )}
       </div>
 

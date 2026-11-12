@@ -131,7 +131,7 @@ export default function ListPagination({
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
   const selectClass = compact
     ? 'data-[size=default]:h-7 sm:data-[size=default]:h-7 py-0 sm:py-0 pl-1.5 sm:pl-1.5 pr-1.5 sm:pr-1.5 gap-1 rounded-md sm:rounded-md text-xs'
-    : 'data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-2.5 sm:pl-3 pr-2 sm:pr-2.5 rounded-xl sm:rounded-xl text-sm';
+    : 'data-[size=default]:h-9 sm:data-[size=default]:h-9 py-0 sm:py-0 pl-2.5 sm:pl-3 pr-2 sm:pr-2.5 rounded-lg sm:rounded-lg text-sm';
   const stepButtonClass = compact ? 'w-7 h-7' : 'w-9 h-9';
   const goToInputClass = compact
     ? 'w-10 h-7 text-xs rounded-md'

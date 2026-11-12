@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
@@ -75,6 +76,20 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
     includePartialDeductions,
     includeNonDeductions,
   } = search.filters;
+
+  // Active filter tags — one per filter `activeFilterCount` counts (anything off
+  // its default), labelled as the More Filters controls label them. Each X puts
+  // only that filter back to its default.
+  const UNIT_TYPE_LABELS: Record<string, string> = { RS: 'Resume Scoring', AS: 'Assessment', AIU: 'AI Interview' };
+  const CATEGORY_LABELS: Record<string, string> = { FULL: 'Full Deduction (1.0)', PARTIAL: 'Partial Deduction (0.5)', NON_DEDUCTION: 'Non-Deduction (0)' };
+  const DAYS_LABELS: Record<number, string> = { 7: 'Last 7 Days', 30: 'Last 30 Days', 90: 'Last 90 Days', 180: 'Last 6 Months', 365: 'Last Year' };
+  const activeFilterChips: FilterChip[] = [
+    selectedUnitType !== '' && { key: 'unitType', label: 'Unit Type', value: UNIT_TYPE_LABELS[selectedUnitType] ?? String(selectedUnitType), onRemove: () => search.setFilter('unitType', '' as UnitType | '') },
+    selectedCategory !== '' && { key: 'category', label: 'Deduction Category', value: CATEGORY_LABELS[selectedCategory] ?? String(selectedCategory), onRemove: () => search.setFilter('category', '' as DeductionCategory | '') },
+    days !== 30 && { key: 'days', label: 'Time Period', value: DAYS_LABELS[days] ?? `Last ${days} Days`, onRemove: () => search.setFilter('days', 30) },
+    !includePartialDeductions && { key: 'includePartialDeductions', label: 'Partial Deductions', value: 'Excluded', onRemove: () => search.setFilter('includePartialDeductions', true) },
+    !includeNonDeductions && { key: 'includeNonDeductions', label: 'Non-Deductions', value: 'Excluded', onRemove: () => search.setFilter('includeNonDeductions', true) },
+  ].filter(Boolean) as FilterChip[];
   const [limit] = useState(50);
 
   const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / limit));
@@ -467,6 +482,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             searchDebounceMs={0}
             searchPlaceholder="Search usage records..."
             onToggleFilters={() => setShowFilters(!showFilters)}
+            // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+            filterChips={activeFilterChips}
             filtersOpen={showFilters}
             activeFilterCount={search.activeFilterCount}
             filtersApplied={search.filtersApplied}
@@ -561,18 +578,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
             </div>
 
-            {/* Panel footer: "Done" applies the selection and reveals the
-                toolbar Clear - same flow as job-openings. */}
-            <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-              {/* The controls above commit as they change, so Done just closes. */}
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setShowFilters(false)}
-              >
-                Done
-              </Button>
-            </div>
+            {/* Active filter tags as the panel's last line — phones / tablets only. */}
+            <FilterChipsPanelLine chips={activeFilterChips} />
             </div>
           )}
         </div>

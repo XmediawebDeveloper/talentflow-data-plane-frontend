@@ -16,6 +16,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
    Without a host slot it renders in place, as it did before. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
@@ -560,6 +561,24 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               every other tab. The controls, the hook behind them and the
               request they build are untouched. */}
           {(() => {
+          /* Active filter tags — one per filter the More Filters badge counts;
+             the date range counts once, so it is one tag. */
+          const formatChipDate = (v: string) => {
+            const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+            return Number.isNaN(d.getTime())
+              ? v
+              : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+          };
+          const activeFilterChips: FilterChip[] = [
+            (filterDateFrom || filterDateTo) && {
+              key: 'date',
+              label: 'Date',
+              value: filterDateFrom && filterDateTo
+                ? `${formatChipDate(filterDateFrom)} – ${formatChipDate(filterDateTo)}`
+                : filterDateFrom ? `From ${formatChipDate(filterDateFrom)}` : `Until ${formatChipDate(filterDateTo)}`,
+              onRemove: () => search.setFilters({ ...search.filters, dateFrom: '', dateTo: '' }),
+            },
+          ].filter(Boolean) as FilterChip[];
           const toolbarEl = (
           <ListToolbar
             searchValue={search.query}
@@ -572,6 +591,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
             activeFilterCount={search.activeFilterCount}
             filtersApplied={search.filtersApplied}
             onClearFilters={search.reset}
+            /* Active filter tags: hover popup on More Filters (lg+). */
+            filterChips={activeFilterChips}
             className="mb-0"
             /* The count badge every other tab's toolbar closes with. `filtered`
                is the total for the CURRENT query, which is what the request
@@ -594,9 +615,9 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   <DateField
                     id="audit-date-from"
                     aria-label="Date From"
-                    value={search.draftFilters.dateFrom}
-                    max={search.draftFilters.dateTo || undefined}
-                    onChange={(v) => search.setDraftFilter('dateFrom', v)}
+                    value={search.filters.dateFrom}
+                    max={search.filters.dateTo || undefined}
+                    onChange={(v) => search.setFilter('dateFrom', v)}
                     className="min-w-0 h-9"
                   />
                 </div>
@@ -605,25 +626,16 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                   <DateField
                     id="audit-date-to"
                     aria-label="Date To"
-                    value={search.draftFilters.dateTo}
-                    min={search.draftFilters.dateFrom || undefined}
-                    onChange={(v) => search.setDraftFilter('dateTo', v)}
+                    value={search.filters.dateTo}
+                    min={search.filters.dateFrom || undefined}
+                    onChange={(v) => search.setFilter('dateTo', v)}
                     className="min-w-0 h-9"
                   />
                 </div>
               </div>
 
-              {/* Panel footer: "Done" applies the selection and reveals the
-                  toolbar Clear - same flow as job-openings. */}
-              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex flex-wrap items-center justify-end gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                >
-                  Done
-                </Button>
-              </div>
+              {/* Active filter tags — the panel's last line (phones / tablets). */}
+              <FilterChipsPanelLine chips={activeFilterChips} />
             </div>
             }
             trailing={onDisplayModeChange ? <ListViewToggle value={displayMode} onChange={onDisplayModeChange} /> : undefined}
@@ -746,7 +758,7 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
                           label={activity.title}
                           selectionActive={selectedKeys.size > 0}
                         />
-                        <div className="flex items-start gap-2.5">
+                        <div className="flex items-start gap-2.5 pl-7">
                           <div className={`flex-shrink-0 w-9 h-9 rounded-full border-2 ${colors.border} ${colors.bg} flex items-center justify-center ${colors.icon}`}>
                             {icon}
                           </div>

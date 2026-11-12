@@ -16,6 +16,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 type ViewType = 'overview' | 'tickets' | 'detail';
@@ -33,6 +34,27 @@ const priorities = [
   { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
   { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
   { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'open', label: 'Open' },
+  { value: 'in-progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+];
+
+const ASSIGNMENT_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Tickets' },
+  { value: 'mine', label: 'Assigned to Me' },
+  { value: 'unassigned', label: 'Unassigned' },
+];
+
+const PRIORITY_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Priority' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ];
 
 export default function InternalTicketAdmin() {
@@ -302,6 +324,30 @@ export default function InternalTicketAdmin() {
       ticket.created_by?.name?.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+
+  // The overview stat cards can set 'in_progress', so match either separator.
+  const statusFilterLabel = (v: string) =>
+    STATUS_FILTER_OPTIONS.find(o => o.value === v.replace(/_/g, '-'))?.label ?? v;
+  const activeFilterChips: FilterChip[] = [
+    filterStatus !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: statusFilterLabel(filterStatus),
+      onRemove: () => setFilterStatus('all'),
+    },
+    filterAssignment !== 'all' && {
+      key: 'assignment',
+      label: 'Assignment',
+      value: ASSIGNMENT_FILTER_OPTIONS.find(o => o.value === filterAssignment)?.label ?? filterAssignment,
+      onRemove: () => setFilterAssignment('all'),
+    },
+    filterPriority !== 'all' && {
+      key: 'priority',
+      label: 'Priority',
+      value: PRIORITY_FILTER_OPTIONS.find(o => o.value === filterPriority)?.label ?? filterPriority,
+      onRemove: () => setFilterPriority('all'),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   /* Placeholder until stats arrive ('—' if they failed) rather than a
      provisional 0 that then jumps. */
@@ -592,39 +638,25 @@ export default function InternalTicketAdmin() {
                   <FilterSelect
                     value={filterStatus}
                     onChange={(v) => setFilterStatus(v)}
-                    options={[
-                      { value: 'all', label: 'All Status' },
-                      { value: 'open', label: 'Open' },
-                      { value: 'in-progress', label: 'In Progress' },
-                      { value: 'resolved', label: 'Resolved' },
-                      { value: 'closed', label: 'Closed' },
-                    ]}
+                    options={STATUS_FILTER_OPTIONS}
                     className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
                   />
 
                   <FilterSelect
                     value={filterAssignment}
                     onChange={(v) => setFilterAssignment(v)}
-                    options={[
-                      { value: 'all', label: 'All Tickets' },
-                      { value: 'mine', label: 'Assigned to Me' },
-                      { value: 'unassigned', label: 'Unassigned' },
-                    ]}
+                    options={ASSIGNMENT_FILTER_OPTIONS}
                     className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
                   />
 
                   <FilterSelect
                     value={filterPriority}
                     onChange={(v) => setFilterPriority(v)}
-                    options={[
-                      { value: 'all', label: 'All Priority' },
-                      { value: 'low', label: 'Low' },
-                      { value: 'medium', label: 'Medium' },
-                      { value: 'high', label: 'High' },
-                    ]}
+                    options={PRIORITY_FILTER_OPTIONS}
                     className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
                   />
                 </div>
+                {activeFilterChips.length > 0 && <FilterChips className="mt-3" chips={activeFilterChips} />}
               </div>
 
               {/* Tickets Table */}

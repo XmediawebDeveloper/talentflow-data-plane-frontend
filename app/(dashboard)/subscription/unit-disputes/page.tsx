@@ -17,6 +17,7 @@ import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -462,6 +463,30 @@ export default function UnitDisputesPage() {
   };
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
+  // Active filter tags: Status and the date range as one tag (the search
+  // shows in its own box). Each removes just its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label ?? statusFilter,
+      onRemove: () => setStatusFilter('all'),
+    },
+    (startDate || endDate) && {
+      key: 'date',
+      label: 'Date',
+      value: startDate && endDate
+        ? `${formatChipDate(startDate)} – ${formatChipDate(endDate)}`
+        : startDate ? `From ${formatChipDate(startDate)}` : `Until ${formatChipDate(endDate)}`,
+      onRemove: () => { setStartDate(''); setEndDate(''); },
+    },
+  ].filter(Boolean) as FilterChip[];
 
   // --- Render ---
 
@@ -604,7 +629,7 @@ export default function UnitDisputesPage() {
                 placeholder="Search by ID, reason, description"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="tf-input rounded-xl pl-9 pr-3"
+                className="tf-input pl-9 pr-3"
               />
             </div>
             <FilterSelect
@@ -612,7 +637,7 @@ export default function UnitDisputesPage() {
               onChange={(v) => setStatusFilter(v)}
               ariaLabel="Filter by status"
               options={STATUS_OPTIONS.map(opt => ({ value: opt.value, label: opt.label }))}
-              className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-xl sm:rounded-xl"
+              className="w-full sm:w-full pl-3 sm:pl-3 pr-3 sm:pr-3 py-2.5 sm:py-2.5 rounded-lg sm:rounded-lg"
             />
             <DateField
               aria-label="Start date"
@@ -625,6 +650,9 @@ export default function UnitDisputesPage() {
               onChange={setEndDate}
             />
           </div>
+          {activeFilterChips.length > 0 && (
+            <FilterChips className="mt-3" chips={activeFilterChips} />
+          )}
         </div>
 
         {/* Error */}
