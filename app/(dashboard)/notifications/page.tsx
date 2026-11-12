@@ -18,6 +18,7 @@ import notificationService, { Notification } from '@/lib/services/notificationSe
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -182,6 +183,17 @@ export default function NotificationsPage() {
     { value: 'billing', label: 'Billing' },
   ];
 
+  // One removable tag per active filter. The All/Unread switch is the page's
+  // main view toggle (always visible, always has a value), so it isn't one.
+  const activeFilterChips: FilterChip[] = [
+    !!categoryFilter && {
+      key: 'category',
+      label: 'Category',
+      value: categories.find(cat => cat.value === categoryFilter)?.label ?? categoryFilter,
+      onRemove: () => setCategoryFilter(undefined),
+    },
+  ].filter(Boolean) as FilterChip[];
+
   return (
     <main ref={rootRef} className="tf-page">
       <div className="mx-auto w-full max-w-[1400px]">
@@ -224,8 +236,10 @@ export default function NotificationsPage() {
 
       {/* Filters */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-5">
-        <div className="flex bg-gray-100 rounded-lg p-1">
+        <div role="tablist" aria-label="Notification filter" className="flex bg-gray-100 rounded-lg p-1">
           <button
+            role="tab"
+            aria-selected={filter === 'all'}
             onClick={() => setFilter('all')}
             className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'all'
@@ -236,6 +250,8 @@ export default function NotificationsPage() {
             All
           </button>
           <button
+            role="tab"
+            aria-selected={filter === 'unread'}
             onClick={() => setFilter('unread')}
             className={`flex-1 sm:flex-none px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
               filter === 'unread'
@@ -257,6 +273,11 @@ export default function NotificationsPage() {
           />
         </div>
       </div>
+      {/* Active filter tags — the filter row's mb-5 is pulled back so they sit
+          12px under it, keeping the same gap to the list. */}
+      {activeFilterChips.length > 0 && (
+        <FilterChips className="-mt-2 mb-5" chips={activeFilterChips} />
+      )}
 
       {/* Notifications List */}
       <div className="tf-card-soft overflow-hidden">

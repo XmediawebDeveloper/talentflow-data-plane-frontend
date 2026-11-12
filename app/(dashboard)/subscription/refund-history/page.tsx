@@ -17,6 +17,7 @@ import { DateField } from '@/components/ui/date-field';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 // Use backend proxy instead of direct Admin API calls
@@ -320,6 +321,30 @@ export default function RefundHistoryPage() {
   };
 
   const hasActiveFilters = searchQuery || statusFilter !== 'all' || startDate || endDate;
+  // Active filter tags: Status and the date range as one tag (the search
+  // shows in its own box). Each removes just its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_OPTIONS.find(opt => opt.value === statusFilter)?.label ?? statusFilter,
+      onRemove: () => setStatusFilter('all'),
+    },
+    (startDate || endDate) && {
+      key: 'date',
+      label: 'Date',
+      value: startDate && endDate
+        ? `${formatChipDate(startDate)} – ${formatChipDate(endDate)}`
+        : startDate ? `From ${formatChipDate(startDate)}` : `Until ${formatChipDate(endDate)}`,
+      onRemove: () => { setStartDate(''); setEndDate(''); },
+    },
+  ].filter(Boolean) as FilterChip[];
 
   return (
     <main ref={rootRef} className="tf-page">
@@ -477,6 +502,9 @@ export default function RefundHistoryPage() {
               onChange={setEndDate}
             />
           </div>
+          {activeFilterChips.length > 0 && (
+            <FilterChips className="mt-3" chips={activeFilterChips} />
+          )}
         </div>
 
         {/* Error State */}

@@ -10,6 +10,7 @@ import NameAvatar from '@/components/ui/name-avatar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListPagination from '@/components/ListPagination';
@@ -432,6 +433,43 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
 
   const filterLabel = filter === 'ALL' ? '' : eventLabel(filter);
 
+  // Active filter tags: event, team, person and the date range as one tag (the
+  // search shows in its own box). Each removes just its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    filter !== 'ALL' && {
+      key: 'event',
+      label: 'Event',
+      value: eventLabel(filter),
+      onRemove: () => handleFilterChange('ALL'),
+    },
+    teamFilter && {
+      key: 'team',
+      label: 'Team',
+      value: teamOptions.find((t) => t.id === teamFilter)?.name ?? teamFilter,
+      onRemove: () => { setTeamFilter(''); setPage(1); },
+    },
+    actorFilter && {
+      key: 'person',
+      label: 'Person',
+      value: actorOptions.find((a) => a.id === actorFilter)?.name ?? actorFilter,
+      onRemove: () => { setActorFilter(''); setPage(1); },
+    },
+    (dateFrom || dateTo) && {
+      key: 'date',
+      label: 'Date',
+      value: dateFrom && dateTo
+        ? `${formatChipDate(dateFrom)} – ${formatChipDate(dateTo)}`
+        : dateFrom ? `From ${formatChipDate(dateFrom)}` : `Until ${formatChipDate(dateTo)}`,
+      onRemove: () => { setDateFrom(''); setDateTo(''); setPage(1); },
+    },
+  ].filter(Boolean) as FilterChip[];
+
   let body: React.ReactNode;
   if (error) {
     body = (
@@ -820,6 +858,8 @@ export default function TeamHistory({ onOpenTeam, openableTeamIds, initialTeamId
             </button>
           </div>
         </div>
+        {/* Active filter tags: the card's last line (the card's gap-3 spaces them). */}
+        {activeFilterChips.length > 0 && <FilterChips chips={activeFilterChips} />}
       </div>
 
       {/* An honest note when the summary and filters see the latest batch only. */}

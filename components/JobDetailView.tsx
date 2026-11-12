@@ -20,6 +20,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip } from '@/components/ui/mobile-record-card';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import ExtractedDataSummary from '@/components/jobs/ExtractedDataSummary';
 import ToolbarFilterSelect from '@/components/ui/toolbar-filter-select';
@@ -5432,6 +5433,13 @@ function AIMatchTabContent({
     setFilterExperienceMin('');
     setFilterExperienceMax('');
   };
+  // One tag per filter the More Filters badge counts, so the two always agree.
+  const aiMatchFilterChips: FilterChip[] = [
+    filterPhone.trim() !== '' && { key: 'phone', label: 'Phone', value: filterPhone.trim(), onRemove: () => setFilterPhone('') },
+    filterLocation.trim() !== '' && { key: 'location', label: 'Location', value: filterLocation.trim(), onRemove: () => setFilterLocation('') },
+    filterExperienceMin !== '' && { key: 'expMin', label: 'Experience (min)', value: `${filterExperienceMin} yrs`, onRemove: () => setFilterExperienceMin('') },
+    filterExperienceMax !== '' && { key: 'expMax', label: 'Experience (max)', value: `${filterExperienceMax} yrs`, onRemove: () => setFilterExperienceMax('') },
+  ].filter(Boolean) as FilterChip[];
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -5747,6 +5755,8 @@ function AIMatchTabContent({
           /* The built-in More Filters (and Reset) at the 36px band via
              `compactButtons` — the same buttons the sibling result tabs use. */
           onToggleFilters={() => setShowMoreFilters((open) => !open)}
+          // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+          filterChips={aiMatchFilterChips}
           compactButtons
           filtersOpen={showMoreFilters}
           activeFilterCount={aiMatchActiveFilterCount}
@@ -5826,7 +5836,8 @@ function AIMatchTabContent({
           filterPanel={
             /* pb-4 keeps the inputs off the card's bottom border (they were 1px
                from it); gap-3 sm:gap-4 matches the master's field spacing. */
-            <div className="tf-grid-4 [&>div]:min-w-0 pb-4">
+            <div className="pb-4">
+            <div className="tf-grid-4 [&>div]:min-w-0">
               <div>
                 <label className="block tf-label mb-1.5">Phone</label>
                 <input
@@ -5867,6 +5878,9 @@ function AIMatchTabContent({
                   className="tf-input"
                 />
               </div>
+            </div>
+            {/* Active filter tags as the panel's last line — phones / tablets only. */}
+            <FilterChipsPanelLine chips={aiMatchFilterChips} />
             </div>
           }
           />
@@ -6080,9 +6094,9 @@ function AIMatchTabContent({
                         label={candidate.name || 'candidate'}
                         selectionActive={selectedIds.size > 0}
                       />
-                      {/* pl-6 keeps the corner select seal off the avatar — it shows on touch, on
+                      {/* pl-7 keeps the corner select seal off the avatar — it shows on touch, on
                           hover, and on every card once anything is selected. */}
-                      <div className="flex items-start gap-2.5 pl-6">
+                      <div className="flex items-start gap-2.5 pl-7">
                         <NameAvatar name={candidate.name} fallback={candidate.email} size="md" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">

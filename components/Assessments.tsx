@@ -45,6 +45,7 @@ import AssessmentInviteTable, {
   isValidInviteEmail,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { type FilterChip } from '@/components/ui/filter-chips';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { DateField } from '@/components/ui/date-field';
 /* The one position every tab's search row lands in. See the note on the
@@ -4913,6 +4914,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const assessmentListNarrowed = assessmentListSearch.isNarrowed;
   const clearAssessmentFilters = assessmentListSearch.reset;
 
+  /* Active filter tags — dates read like '01 Nov 2026'. */
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  /* A From / To pair that counts as ONE filter, as one tag. */
+  const formatChipDateRange = (from: string, to: string) =>
+    from && to
+      ? `${formatChipDate(from)} – ${formatChipDate(to)}`
+      : from ? `From ${formatChipDate(from)}` : `Until ${formatChipDate(to)}`;
+  /* One tag per filter `assessmentFilterCount` counts (each key off its
+     initial value), so the More Filters badge and the tags agree. */
+  const assessmentListChips: FilterChip[] = [
+    filterType !== 'all' && { key: 'type', label: 'Type', value: String(filterType), onRemove: () => assessmentListSearch.setFilter('type', 'all') },
+    filterCreatedBy !== 'all' && { key: 'createdBy', label: 'Created by', value: String(filterCreatedBy), onRemove: () => assessmentListSearch.setFilter('createdBy', 'all') },
+    filterCreatedFrom !== '' && { key: 'createdFrom', label: 'Created from', value: formatChipDate(filterCreatedFrom), onRemove: () => assessmentListSearch.setFilter('createdFrom', '') },
+    filterCreatedTo !== '' && { key: 'createdTo', label: 'Created to', value: formatChipDate(filterCreatedTo), onRemove: () => assessmentListSearch.setFilter('createdTo', '') },
+  ].filter(Boolean) as FilterChip[];
+
 
   const assessmentResultCount = serverTotalJobs ? totalJobsPaged.total : collapsedAssessments.length;
 
@@ -7141,6 +7163,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 activeFilterCount={assessmentFilterCount}
                 filtersApplied={assessmentFiltersActive}
                 onClearFilters={clearAssessmentFilters}
+                /* Active filter tags: hover popup on More Filters (lg+). */
+                filterChips={assessmentListChips}
                 className="mb-0"
                 /* The page-wide List / Card switch, pinned far right. */
                 trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -7153,16 +7177,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    the assessment tabs can open the same object rather than a
                    copy of it. */
                 <ListFilterPanel
-                  footer={
-                    <Button
-                      // The controls above commit as they change, so Done just closes.
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowAssessmentFilters(false)}
-                    >
-                      Done
-                    </Button>
-                  }
+                  chips={assessmentListChips}
                 >
                     <div>
                       <label htmlFor="assessment-type" className="block tf-caption mb-1.5">
@@ -7341,6 +7356,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    switch tab AND scroll the list section to the top. A bare
                    setActiveTab left the page parked on the stat cards. */
                 onClick={() => openAssessmentsList(tab.key)}
+                role="tab"
+                aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
                 className={`${TAB_PILL_CLASS} ${
                   isActive
@@ -7383,12 +7400,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           return (
             <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap">
               {/* `contents` from sm (the row as before); on phones one underlined strip. */}
-              <div className="tf-jobs-status-tabs contents">
+              <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Assessment views">
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key) && !CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
-              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+              <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
                 {visibleTabs.filter((tab) => CANDIDATE_GROUP.includes(tab.key)).map(renderTabPill)}
               </div>
-              <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+              <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
                 {visibleTabs.filter((tab) => AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
                 {/* Clear Sort — All / Active / Draft / Archived, right after
                     Settings, in Settings' own pill styling. Shown only while
@@ -7541,6 +7558,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 completedFrom: filterResultFrom,
                 completedTo: filterResultTo,
               } = completedCandidatesSearch.filters;
+              /* One tag per filter the More Filters badge counts. */
+              const completedCandidateChips: FilterChip[] = [
+                filterResultJob !== '' && { key: 'job', label: 'Job', value: String(filterResultJob), onRemove: () => completedCandidatesSearch.setFilter('job', '') },
+                filterResultOutcome !== 'all' && { key: 'outcome', label: 'Outcome', value: filterResultOutcome === 'pass' ? 'Passed' : 'Failed', onRemove: () => completedCandidatesSearch.setFilter('outcome', 'all') },
+                filterResultFrom !== '' && { key: 'completedFrom', label: 'Completed from', value: formatChipDate(filterResultFrom), onRemove: () => completedCandidatesSearch.setFilter('completedFrom', '') },
+                filterResultTo !== '' && { key: 'completedTo', label: 'Completed to', value: formatChipDate(filterResultTo), onRemove: () => completedCandidatesSearch.setFilter('completedTo', '') },
+              ].filter(Boolean) as FilterChip[];
               /* No results anywhere (not narrowed by this tab's own search or
                  filters) — the tab empty state rather than "no matches". */
               const noResultsAnywhere = completedResultsPaged.total === 0 && !completedCandidatesSearch.isNarrowed;
@@ -7583,6 +7607,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         activeFilterCount={completedCandidatesSearch.activeFilterCount}
                         filtersApplied={completedCandidatesSearch.filtersApplied}
                         onClearFilters={completedCandidatesSearch.reset}
+                        filterChips={completedCandidateChips}
                         className="mb-0"
                         /* The page-wide List / Card switch, pinned far right. */
                         trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -7667,18 +7692,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </ListToolbar>
 
                       {showCompletedCandidateFilters && (
-                        /* Controls commit as they change, so Done just closes —
-                           the same panel contract the Total Jobs tab uses. */
+                        /* Controls commit as they change; the panel has no
+                           footer — Reset beside More Filters clears it. */
                         <ListFilterPanel
-                          footer={
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowCompletedCandidateFilters(false)}
-                            >
-                              Done
-                            </Button>
-                          }
+                          chips={completedCandidateChips}
                         >
                           <SearchableSelect
                             label="Job"
@@ -7875,6 +7892,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               selection={{
                                 checked: selectedResultKeys.has(resultRowKey(result)),
                                 onChange: () => toggleResultSelected(result),
+                                active: selectedResultKeys.size > 0,
                               }}
                             />
                           ))}
@@ -8422,6 +8440,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 setInviteStatusFilters(EMPTY_INVITE_FILTERS);
                 setInviteStatusPage(1);
               };
+              /* One tag per filter `inviteStatusFilterCount` counts — the date
+                 range is one filter, so one tag. */
+              const inviteStatusChips: FilterChip[] = [
+                inviteStatusFilters.status !== 'all' && {
+                  key: 'status',
+                  label: 'Status',
+                  value: INVITATION_STATUS_TAB_OPTIONS.find((o) => o.value === inviteStatusFilters.status)?.label ?? String(inviteStatusFilters.status),
+                  onRemove: () => {
+                    setInviteStatusFilters({ ...inviteStatusFilters, status: 'all' });
+                    setInviteStatusPage(1);
+                  },
+                },
+                (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo) && {
+                  key: 'invited',
+                  label: 'Invited',
+                  value: formatChipDateRange(inviteStatusFilters.dateFrom, inviteStatusFilters.dateTo),
+                  onRemove: () => {
+                    setInviteStatusFilters({ ...inviteStatusFilters, dateFrom: '', dateTo: '' });
+                    setInviteStatusPage(1);
+                  },
+                },
+              ].filter(Boolean) as FilterChip[];
 
               /* The row's kebab — the table's Action cell and each card. */
               const renderInviteRowActions = (inv: any) => {
@@ -8521,6 +8561,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         activeFilterCount={inviteStatusFilterCount}
                         filtersApplied={inviteStatusFilterCount > 0}
                         onClearFilters={clearInviteStatusFilters}
+                        filterChips={inviteStatusChips}
                         className="mb-0"
                         /* Shown only while rows are ticked ("N selected"): the
                            tab pills already carry the totals. */
@@ -8609,19 +8650,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </ListToolbar>
 
                       {showInviteStatusFilters && (
-                        /* Commit-as-you-change, Done just closes — the Total
-                           Jobs panel's contract, and the behaviour the filter
-                           bar already had. */
+                        /* Commit-as-you-change, no footer — Reset beside
+                           More Filters clears it. */
                         <ListFilterPanel
-                          footer={
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => setShowInviteStatusFilters(false)}
-                            >
-                              Done
-                            </Button>
-                          }
+                          chips={inviteStatusChips}
                         >
                           <div>
                             <label htmlFor="invite-status-filter" className="block tf-caption mb-1.5">
@@ -8959,7 +8991,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       onToggle={() => toggleSelectInvite(inv.id)}
                                       label={inv.candidate_name || inv.candidate_email || 'candidate'}
                                       selectionActive={selectedInviteRows.length > 0}
-                                      inline
                                     />
                                   )}
                                   {/* Select seal and name on one line when the seal is shown; pl-7 clears it. */}
@@ -9402,11 +9433,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               /* Settings Tab with Sub-tabs */
               <div className="space-y-4 sm:space-y-6">
                 {/* Settings Sub-tabs */}
-                <div className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
+                <div role="tablist" aria-label="Settings sections" className="flex gap-2 sm:gap-4 border-b border-gray-200 dark:border-slate-700 overflow-x-auto scrollbar-hide">
                   {/* Proctoring & Security — staging-only testing menu; hidden in production. */}
                   {!IS_PRODUCTION_ENV && (
                   <button
                     onClick={() => setSettingsSubTab('proctoring')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'proctoring'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'proctoring'
                         ? 'tf-tab-line-active'
@@ -9420,6 +9453,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   )}
                   <button
                     onClick={() => setSettingsSubTab('topics')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'topics'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'topics'
                         ? 'tf-tab-line-active'
@@ -9434,6 +9469,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {isTenantAdmin && (
                   <button
                     onClick={() => setSettingsSubTab('consent')}
+                    role="tab"
+                    aria-selected={settingsSubTab === 'consent'}
                     className={`tf-tab-line shrink-0 ${
                       settingsSubTab === 'consent'
                         ? 'tf-tab-line-active'

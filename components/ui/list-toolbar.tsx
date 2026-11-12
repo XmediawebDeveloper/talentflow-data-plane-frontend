@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { Search, SlidersHorizontal, XCircle } from 'lucide-react';
 import { cn } from './utils';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from './hover-card';
+import { FilterChipsHoverContent, FILTER_CHIPS_HOVER_CLASS, type FilterChip } from './filter-chips';
 import { useMobileRecordCardVariant } from './mobile-record-card';
 import { useInListToolbarSlot } from './list-toolbar-slot';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -37,6 +39,13 @@ export interface ListToolbarProps {
 
   /** "More Filters" button. Omit `onToggleFilters` to hide it. */
   onToggleFilters?: () => void;
+  /** Shown in a small popup while the pointer rests on More Filters (e.g. the active
+   *  filter tags) — laptop / desktop only (lg+); never on phones or tablets, where a
+   *  tap would open it. Omit for no popup — the default on every page but Job Openings. */
+  filtersHoverContent?: React.ReactNode;
+  /** The active filter tags. Shown in the More Filters hover popup (laptop / desktop),
+   *  the Job Openings way — pair with ListFilterPanel's `chips` for phones / tablets. */
+  filterChips?: FilterChip[];
   /** True while the filter panel is open (drives the tinted "open" state). */
   filtersOpen?: boolean;
   /** Number shown in the badge; 0 hides the badge. */
@@ -211,6 +220,8 @@ export default function ListToolbar({
   searchDebounceMs = 300,
   searchPlaceholder = 'Search...',
   onToggleFilters,
+  filtersHoverContent,
+  filterChips,
   filtersOpen = false,
   activeFilterCount = 0,
   filtersApplied = false,
@@ -302,7 +313,9 @@ export default function ListToolbar({
   const buttonIcon = 'w-4 h-4';
 
   const hasSearch = draftSearch.trim() !== '';
-  const showClear = typeof onClearFilters === 'function' && (filtersApplied || hasSearch);
+  // Reset shows whenever anything narrows the list — a search, or any filter the
+  // More Filters badge counts (a restored / preset filter included) — as on Job Openings.
+  const showClear = typeof onClearFilters === 'function' && (filtersApplied || hasSearch || activeFilterCount > 0);
 
   // Without a panel the markup is exactly what it always was — the wrapper only
   // appears when there is something to put under the row.
@@ -361,7 +374,8 @@ export default function ListToolbar({
       >
         {leadingActions}
 
-        {onToggleFilters && (
+        {onToggleFilters && (() => {
+          const filtersButton = (
           <button
             type="button"
             onClick={onToggleFilters}
@@ -389,7 +403,18 @@ export default function ListToolbar({
               </span>
             )}
           </button>
-        )}
+          );
+          const hoverBody = filtersHoverContent
+            ?? (filterChips && filterChips.length > 0 ? <FilterChipsHoverContent chips={filterChips} /> : null);
+          return hoverBody ? (
+            <HoverCard openDelay={150} closeDelay={120}>
+              <HoverCardTrigger asChild>{filtersButton}</HoverCardTrigger>
+              <HoverCardContent align="start" className={FILTER_CHIPS_HOVER_CLASS}>
+                {hoverBody}
+              </HoverCardContent>
+            </HoverCard>
+          ) : filtersButton;
+        })()}
 
         {/* Sort by lands here — see `useListSortSlot`. */}
         <span data-list-sort-slot className="contents" />
@@ -397,21 +422,12 @@ export default function ListToolbar({
         {afterFiltersActions}
 
         {showClear && (
-          <button
-            type="button"
+          <ToolbarResetButton
             onClick={() => {
               clearSearchNow();
               onClearFilters!();
             }}
-            title="Clear the search and every filter"
-            className={cn(
-              'rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300',
-              buttonSize,
-            )}
-          >
-            <XCircle className={buttonIcon} />
-            Reset
-          </button>
+          />
         )}
 
         {children}
@@ -447,5 +463,28 @@ export default function ListToolbar({
         <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">{filterPanel}</div>
       )}
     </div>
+  );
+}
+
+
+/**
+ * The toolbar "Reset" button (Job Openings reference): red-outlined, 36px,
+ * beside More Filters, shown only while something narrows the list. Exported
+ * for filter bars that draw their own More Filters button.
+ */
+export function ToolbarResetButton({ onClick, className }: { onClick: () => void; className?: string }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Clear the search and every filter"
+      className={cn(
+        'h-9 px-3 shrink-0 whitespace-nowrap rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 hover:border-red-300',
+        className,
+      )}
+    >
+      <XCircle className="w-4 h-4" />
+      Reset
+    </button>
   );
 }

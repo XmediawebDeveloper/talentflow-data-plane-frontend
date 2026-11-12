@@ -3295,11 +3295,11 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   @media (width < theme(--breakpoint-sm)) {
     .tf-jdv-toolbar { gap: 0.5rem !important; }
     .tf-jdv-toolbar > .tf-tb-controls { display: contents !important; }
-    /* Line 1: rounded search · Filters pill · view switch. */
+    /* Line 1: search · Filters button (8px corners, like the other toolbar boxes) · view switch. */
     .tf-jdv-toolbar > .tf-tb-search { order: 1 !important; flex: 1 1 0% !important; min-width: 0 !important; width: auto !important; }
-    .tf-jdv-toolbar > .tf-tb-search input { border-radius: 9999px !important; }
+    .tf-jdv-toolbar > .tf-tb-search input { border-radius: 0.5rem !important; }
     .tf-jdv-toolbar > .tf-tb-controls > [data-tb-filters] {
-      order: 2 !important; flex: none !important; border-radius: 9999px !important; padding: 0 0.875rem !important;
+      order: 2 !important; flex: none !important; border-radius: 0.5rem !important; padding: 0 0.875rem !important;
       background: white !important; border: 1px solid var(--color-gray-200) !important; color: var(--color-brand-blue) !important; font-weight: 600;
     }
     .dark .tf-jdv-toolbar > .tf-tb-controls > [data-tb-filters] { background: var(--color-slate-900) !important; border-color: var(--color-slate-700) !important; }
@@ -3340,7 +3340,7 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     /* Ticked rows: "● N Selected ▾" as one small outlined pill inside the tinted bar, so
        the ▾ clearly belongs to it (it opens the same menu). */
     .tf-jdv-toolbar .tf-tb-selectall[aria-pressed="true"] {
-      height: 2rem !important; padding: 0 0.5rem !important; gap: 0.25rem !important; border-radius: 9999px !important;
+      height: 2rem !important; padding: 0 0.5rem !important; gap: 0.25rem !important; border-radius: 0.5rem !important;
       background: white !important; border-color: color-mix(in srgb, var(--color-brand-blue) 35%, white) !important;
       color: var(--color-brand-blue) !important; font-weight: 600;
     }
@@ -3440,7 +3440,7 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jobs-toolbar .tf-jobs-contents { display: contents !important; }
     /* Line 1: search · filter icon. */
     .tf-jobs-toolbar .tf-tb-search { order: 1; flex: 1 1 0% !important; min-width: 0; }
-    .tf-jobs-toolbar .tf-tb-search input { border-radius: 9999px !important; }
+    .tf-jobs-toolbar .tf-tb-search input { border-radius: 0.5rem !important; }
     .tf-jobs-toolbar [data-tb-filters] { order: 2; flex: none !important; width: 2.25rem !important; padding: 0 !important; position: relative; }
     .tf-jobs-toolbar [data-tb-filters] > span:not(:last-child),
     .tf-jobs-toolbar [data-tb-filters] > span.sm\:hidden { display: none !important; }
@@ -3466,15 +3466,21 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     .tf-jobs-toolbar:has(:is(.tf-jobs-viewtoggle, .tf-tb-trailing, .tf-tb-controls > [data-list-view-toggle])) .tf-tb-controls > button:not([data-tb-filters]) {
       width: 2.25rem; padding: 0 !important; gap: 0 !important; justify-content: center; font-size: 0 !important;
     }
-    /* Line 2: Location / Industry / Creator as rounded pills sharing the width. */
+    /* Line 2: Location / Industry / Creator as 8px-corner boxes sharing the width. */
     .tf-jobs-toolbar .tf-jobs-filter-pills { order: 3; display: flex !important; flex-wrap: wrap; gap: 0.5rem; flex: 1 1 100%; }
     .tf-jobs-toolbar .tf-jobs-filter-pills > * { flex: 1 1 40%; min-width: 0; width: auto !important; }
-    .tf-jobs-toolbar .tf-jobs-filter-pills button[aria-haspopup="listbox"] { border-radius: 9999px !important; }
+    .tf-jobs-toolbar .tf-jobs-filter-pills button[aria-haspopup="listbox"] { border-radius: 0.5rem !important; }
     /* More Filters panel, when open. */
     .tf-jobs-toolbar > div.mb-3.pt-3,
     .tf-jobs-toolbar .tf-jobs-filter-panel,
     /* ListToolbar's own `filterPanel` (drawn after its row). */
     .tf-jobs-toolbar div:has(.tf-tb-row) > :not(.tf-tb-row):not(:has(.tf-tb-row)) { order: 4; flex: 1 1 100%; margin: 0 !important; }
+    /* Active filter tags: a full line of their own at the foot of the card, as on desktop —
+       always the LAST line: after the tabs, All / AI / Manual, Select all · Sort · Refresh and a
+       selection's Actions (N) · Clear line (even an `order-last` one, 9999). !important beats the generic
+       "under the toolbar row" rule (order 4) when the tags sit inside a ListToolbar. */
+    .tf-jobs-toolbar .tf-jobs-filter-chips { order: 10000 !important; flex: 1 1 100% !important; min-width: 0; margin: 0 !important; }
+    .tf-jobs-toolbar .tf-jobs-filter-chips:empty { display: none !important; }
     /* A page's toolbar slot holding a hand-built toolbar (AI Interviews' All Interviews): a full line. */
     .tf-jobs-toolbar .tf-jobs-slot { order: 1; flex: 1 1 100%; }
     /* A selection's Actions inside the toolbar row (AI Talent Match results): a line of its own. */
@@ -3486,31 +3492,61 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     /* Sort menu + List / Grid sharing Select all's line, on the right (AI Assessment results). */
     .tf-jobs-toolbar .tf-jobs-trail { order: 8; flex: none; margin-left: auto !important; }
     .tf-jobs-toolbar .tf-jobs-actions-line > button { flex: 1 1 auto; }
-    /* Line 3: status tabs — underlined, scrolling sideways, the card's divider under them. */
+    /* Line 3: status tabs — built to the same measurements as the All / AI / Manual toggle
+       right under it on phones (JobsListing: SEGMENT_TOGGLE + segmentBtn + pillCountBadge):
+         track   p-1 (4px), rounded-lg (8px), bg brand-blue/5, ring-1 brand-blue/10, no gap
+         tab     py-1 (4px) · px 10px, rounded-md (6px), text-sm (14px scale), font-medium,
+                 gray-600; label→count gap 4px (gap-1, no extra margin)
+         picked  white chip, brand-blue-2 text, shadow-sm brand-blue/10
+         count   px-1.5 py-0.5, rounded (4px), text-xs semibold, white + ring brand-blue/15
+       Tabs share the row's width when they fit and scroll sideways when they don't.
+         [ All Jobs 1 |▕Published 1▏| Draft 0 | Disabled 0 | Archived 0 ] */
     .tf-jobs-toolbar .tf-jobs-status-tabs {
-      order: 5; display: flex !important; flex: 1 1 100%; flex-wrap: nowrap !important; gap: 1rem; overflow-x: auto; scrollbar-width: none;
-      border-bottom: 1px solid var(--color-gray-200); margin-top: 0.125rem;
+      order: 5; display: flex !important; flex: 1 1 100%; flex-wrap: nowrap !important; gap: 0 !important;
+      align-items: center; overflow-x: auto; scrollbar-width: none; margin-top: 0.125rem;
+      height: 2.25rem !important; box-sizing: border-box;
+      padding: 0.25rem !important; scroll-padding-inline: 0.25rem; border: 0 !important; border-radius: 0.5rem !important;
+      background: color-mix(in oklab, var(--color-brand-blue) 5%, transparent) !important;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-brand-blue) 10%, transparent) !important;
     }
     .tf-jobs-toolbar .tf-jobs-status-tabs::-webkit-scrollbar { display: none; }
     /* Grouped tabs (AI Assessments): the groups' boxes drop, their tabs join the strip. */
     .tf-jobs-toolbar .tf-jobs-status-tabs > div { display: contents !important; }
     .tf-jobs-toolbar .tf-jobs-status-tabs > button,
     .tf-jobs-toolbar .tf-jobs-status-tabs > div > button {
-      flex: none; height: 2.25rem !important; padding: 0 0.125rem !important; border-radius: 0 !important;
+      flex: 1 0 auto; justify-content: center; display: inline-flex; align-items: center; gap: 0.25rem !important;
+      height: 1.75rem !important; box-sizing: border-box; padding: 0 0.625rem !important; margin: 0 !important;
+      border: 0 !important; border-radius: 0.375rem !important;
+      font-size: 0.875rem !important; line-height: 1.25rem !important; font-weight: 500 !important; white-space: nowrap;
       background: transparent !important; box-shadow: none !important; color: var(--color-gray-600) !important;
-      border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap;
     }
     /* aria-pressed: Resume Scoring's verdict pills (All / Exact / Partial / No Match). */
     .tf-jobs-toolbar .tf-jobs-status-tabs > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]),
-    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) { color: var(--color-brand-blue) !important; font-weight: 600; border-bottom-color: var(--color-brand-blue); }
-    /* The count chip (tabular-nums) — never a tab's label spans. */
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) {
+      background: #fff !important; color: var(--color-brand-blue-2, var(--color-brand-blue)) !important;
+      box-shadow: 0 1px 3px 0 color-mix(in srgb, var(--color-brand-blue) 10%, transparent), 0 1px 2px -1px color-mix(in srgb, var(--color-brand-blue) 10%, transparent) !important;
+    }
+    /* The count chip (tabular-nums) — never a tab's label spans. Same chip on every tab, the
+       picked one included, exactly as All / AI / Manual shows its counts. */
     .tf-jobs-toolbar .tf-jobs-status-tabs > button > span.tabular-nums,
-    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button > span.tabular-nums { background: var(--color-gray-100) !important; color: var(--color-gray-600) !important; box-shadow: none !important; }
-    .tf-jobs-toolbar .tf-jobs-status-tabs > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) > span.tabular-nums,
-    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) > span.tabular-nums { background: color-mix(in srgb, var(--color-brand-blue) 10%, white) !important; color: var(--color-brand-blue) !important; }
-    .dark .tf-jobs-toolbar .tf-jobs-status-tabs { border-color: var(--color-slate-700); }
+    .tf-jobs-toolbar .tf-jobs-status-tabs > div > button > span.tabular-nums {
+      margin-left: 0 !important; padding: 0.125rem 0.375rem !important; border-radius: 0.25rem !important;
+      font-size: 0.75rem !important; line-height: 1rem !important; font-weight: 600 !important;
+      background: #fff !important; color: var(--color-brand-blue) !important;
+      box-shadow: 0 0 0 1px color-mix(in oklab, var(--color-brand-blue) 15%, transparent) !important;
+    }
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs { background: color-mix(in srgb, var(--color-brand-blue) 10%, transparent) !important; }
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > button,
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > div > button { color: var(--color-slate-300) !important; }
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]),
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > div > button:is([aria-selected="true"], [aria-pressed="true"], [aria-current="page"]) { background: var(--color-slate-700) !important; color: #fff !important; }
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > button > span.tabular-nums,
+    .dark .tf-jobs-toolbar .tf-jobs-status-tabs > div > button > span.tabular-nums { background: var(--color-slate-800) !important; }
     /* Line 4: All / AI / Manual. */
     .tf-jobs-toolbar .tf-jobs-method { order: 6; flex: 1 1 100%; }
+    /* Same fixed heights as the status tabs strip above: a 36px box, 28px options inside. */
+    .tf-jobs-toolbar .tf-jobs-method > div { height: 2.25rem !important; box-sizing: border-box; padding: 0.25rem !important; align-items: center; }
+    .tf-jobs-toolbar .tf-jobs-method > div > button { height: 1.75rem !important; box-sizing: border-box; padding-top: 0 !important; padding-bottom: 0 !important; }
     /* Line 5: Select all on the left; the Sort menu button and Refresh on the right.
          ☐ Select All                  [⇅ Sort ▾] [↻]
        Phones sort from that menu (JobsListing, .tf-jobs-sortmenu), so the inline Sort
@@ -3536,7 +3572,13 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     /* Select all: the same boxed button as Sort beside it — white, light border, 36px, with
        its checkbox, label and ▾ (it opens a menu). Ticked rows: a light-blue box,
        "● N Selected ▾" in blue. */
-    .tf-jobs-toolbar .tf-jobs-select { flex: 0 1 auto; margin-right: auto; }
+    /* Select all · Sort · Refresh fill their line: Select all and Sort share the width
+       equally, Refresh stays a 36px square.
+         [ ☐ Select All ▾ ] [ ⇅ Sort ▾ ] [↻] */
+    .tf-jobs-toolbar .tf-jobs-select { flex: 1 1 0% !important; min-width: 0; margin-right: 0 !important; }
+    .tf-jobs-toolbar .tf-jobs-select > .relative { flex: 1 1 auto; min-width: 0; }
+    .tf-jobs-toolbar .tf-jobs-select .tf-jobs-selectall { width: 100%; justify-content: center; }
+    .tf-jobs-toolbar:has(.tf-jobs-select) .tf-jobs-sortmenu { flex: 1 1 0% !important; min-width: 0; justify-content: center; }
     .tf-jobs-toolbar .tf-jobs-selectall {
       height: 2.25rem !important; padding: 0 0.75rem !important; gap: 0.375rem !important; border-radius: 0.5rem !important;
       background: white !important; border: 1px solid var(--color-gray-200) !important; box-shadow: none !important;
@@ -3785,19 +3827,29 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
     input, select, textarea { font-size: 16px; }
   }
 
+  /* Every tab strip on phones and small tablets: the Job Openings reference — the
+     All / AI / Manual segmented toggle (SEGMENT_TOGGLE + segmentBtn + pillCountBadge):
+       strip   36px tall, 4px inset, 8px corners, brand-blue/5 tint, 1px brand-blue/10 ring, no gap
+       tab     28px tall, 10px sides, 6px corners, text-sm medium, gray-600
+       picked  white chip, brand-blue-2 text, shadow-sm brand-blue/10
+       count   white chip, text-xs semibold brand-blue, 1px brand-blue/15 ring
+     Tabs share the width when they fit and the strip slides sideways when they don't. */
   [role="tablist"] {
-    display: flex; gap: 4px; padding: 4px; height: auto; max-width: 100%;
-    border: 0; border-radius: 9999px; box-shadow: none;
-    background: color-mix(in srgb, var(--brand-blue) 7%, transparent);
+    display: flex; align-items: center; gap: 0; padding: 0.25rem; height: auto; min-height: 2.25rem; max-width: 100%;
+    box-sizing: border-box; border: 0; border-radius: 0.5rem;
+    background: color-mix(in oklab, var(--brand-blue) 5%, transparent);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand-blue) 10%, transparent);
     overflow-x: auto; scrollbar-width: none; scroll-snap-type: x proximity;
     -webkit-overflow-scrolling: touch;
   }
   [role="tablist"]::-webkit-scrollbar { display: none; }
 
   [role="tab"] {
-    flex: 0 0 auto; height: auto; margin: 0; padding: 6px 12px;
-    border: 0; border-radius: 9999px; box-shadow: none;
-    background: transparent; font-size: 12px; line-height: 1.25; white-space: nowrap;
+    flex: 1 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 0.25rem;
+    height: 1.75rem; min-height: 0; box-sizing: border-box; margin: 0; padding: 0 0.625rem;
+    border: 0; border-radius: 0.375rem; box-shadow: none;
+    background: transparent; color: var(--color-gray-600);
+    font-size: 0.875rem; line-height: 1.25rem; font-weight: 500; white-space: nowrap;
     scroll-snap-align: start;
     transition: background-color .28s cubic-bezier(.4,0,.2,1), color .28s cubic-bezier(.4,0,.2,1),
                 box-shadow .28s cubic-bezier(.4,0,.2,1), transform .15s ease;
@@ -3807,11 +3859,25 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   [role="tab"]::after, [role="tab"] > [class*="absolute"][class*="bottom-0"] { display: none; }
 
   [role="tab"][aria-selected="true"], [role="tab"][data-state="active"] {
-    background: var(--brand-blue); color: #fff;
-    box-shadow: 0 2px 8px color-mix(in srgb, var(--brand-blue) 35%, transparent);
+    background: #fff; color: var(--brand-blue-2);
+    box-shadow: 0 1px 3px 0 color-mix(in oklab, var(--brand-blue) 10%, transparent),
+                0 1px 2px -1px color-mix(in oklab, var(--brand-blue) 10%, transparent);
   }
   [role="tab"][aria-selected="true"] :is(span, svg):not([class*="bg-"]),
   [role="tab"][data-state="active"] :is(span, svg):not([class*="bg-"]) { color: inherit; }
+  /* Count badges inside a tab — the same white chip on every tab, the picked one included
+     (a selected tab is white now, so "white on blue" counts would vanish). Small dots
+     (w-1.5 / w-2 status dots) are left alone. */
+  [role="tab"] > span:is(.tabular-nums, [class*="rounded"][class*="bg-"]):not([class*="w-1"]):not([class*="w-2"]) {
+    margin-left: 0; padding: 0.125rem 0.375rem; border-radius: 0.25rem;
+    font-size: 0.75rem; line-height: 1rem; font-weight: 600;
+    background: #fff; color: var(--brand-blue);
+    box-shadow: 0 0 0 1px color-mix(in oklab, var(--brand-blue) 15%, transparent);
+  }
+  .dark [role="tablist"] { background: color-mix(in oklab, var(--brand-blue) 10%, transparent); }
+  .dark [role="tab"] { color: var(--color-slate-300); }
+  .dark [role="tab"][aria-selected="true"], .dark [role="tab"][data-state="active"] { background: var(--color-slate-700); color: #fff; }
+  .dark [role="tab"] > span:is(.tabular-nums, [class*="rounded"][class*="bg-"]):not([class*="w-1"]):not([class*="w-2"]) { background: var(--color-slate-800); }
 }
 @media (max-width: 767px) and (prefers-reduced-motion: reduce) {
   [role="tab"] { transition: none; }

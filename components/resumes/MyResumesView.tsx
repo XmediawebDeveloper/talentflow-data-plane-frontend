@@ -14,7 +14,8 @@ import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import ListPagination from '@/components/ListPagination';
 import StatsCards from '@/components/StatsCards';
-import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
+import SearchFilterBarCompact, { getResumeFilterChips } from '@/components/SearchFilterBarCompact';
+import { type FilterChip } from '@/components/ui/filter-chips';
 import { Skeleton } from '@/components/ui/skeleton';
 import FilterSelect from '@/components/ui/filter-select';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
@@ -3971,10 +3972,15 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   }, [pendingUploadFolderLabel, pendingUploadFolderId, buildBreadcrumbPath]);
 
   const selectedCardFolderFilterLabel = CARD_FOLDER_FILTER_OPTIONS.find(option => option.value === cardFolderFilter)?.label;
-  const gridToolbarFilterChips =
-    cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
-      ? [{ key: 'folder-filter', label: `Folder: ${selectedCardFolderFilterLabel}`, onClear: () => setCardFolderFilter('all') }]
-      : [];
+  // Active filter tags for the toolbar: the grid's Folder Filters pick (grid
+  // view only — that's the only view with the control) plus one per filter the
+  // Filter button's badge counts (both views — those filters narrow both).
+  const gridToolbarFilterChips: FilterChip[] = [
+    ...(viewMode === 'card' && cardFolderFilter !== 'all' && selectedCardFolderFilterLabel
+      ? [{ key: 'folder-filter', label: 'Folder', value: selectedCardFolderFilterLabel, onRemove: () => setCardFolderFilter('all') }]
+      : []),
+    ...getResumeFilterChips(filters, (newFilters: any) => search.setFilters(newFilters)),
+  ];
 
   // Handle duplicate resolution
   const handleResolveDuplicates = async (resolutions: { fileIndex: number; action: 'discard' | 'overwrite' | 'version' }[]) => {
@@ -4284,6 +4290,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   hideSearch
                   inline
                   showClearAllFilters={false}
+                  // Folder pick + the bar's own filters: a popup on hovering
+                  // Filter (laptop / desktop), the panel's last line below lg.
+                  filterChips={gridToolbarFilterChips}
                 />
 
                 {/* No "View" label: the two icons carry their own tooltips and
@@ -4316,25 +4325,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </div>
               </div>
             </div>
-
-            {viewMode === 'card' && gridToolbarFilterChips.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="tf-meta">Grid filters:</span>
-                {gridToolbarFilterChips.map((chip) => (
-                  <span key={chip.key} className="tf-badge bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
-                    {chip.label}
-                    <button
-                      type="button"
-                      onClick={chip.onClear}
-                      className="rounded-full p-0.5 transition-colors hover:bg-brand-blue/10"
-                      aria-label={`Clear ${chip.label}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 

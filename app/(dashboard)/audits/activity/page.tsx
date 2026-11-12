@@ -46,6 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tooltip } from '@/components/ui/tooltip';
 import { EmptyState } from '@/components/ui/empty-state';
 import Pagination from '@/components/Pagination';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 
 // /audits/recent only takes a limit (no offset), so the latest entries are
 // fetched once and paged on the client.
@@ -219,6 +220,16 @@ export default function ActivityLogsPage() {
     setPage(1);
   };
 
+  // One removable tag per active filter (search text isn't one — it stays visible in its box).
+  const activeFilterChips: FilterChip[] = [
+    actionFilter !== 'all' && {
+      key: 'action',
+      label: 'Action',
+      value: ACTION_FILTERS.find((a) => a.id === actionFilter)?.label ?? actionFilter,
+      onRemove: () => { setActionFilter('all'); setPage(1); },
+    },
+  ].filter(Boolean) as FilterChip[];
+
   // Group logs by date
   const totalPages = Math.max(1, Math.ceil(filteredLogs.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -307,7 +318,7 @@ export default function ActivityLogsPage() {
           <div role="tablist" aria-label="Activity tabs" className="relative inline-flex w-full max-w-xs max-sm:max-w-none rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-100 dark:bg-slate-800/50 p-1">
             <span
               aria-hidden
-              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+              className={`max-md:hidden absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-lg bg-white dark:bg-slate-900 shadow-sm ring-1 ring-black/[0.03] dark:ring-white/[0.04] transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
                 activeTab === 'activity' ? 'translate-x-full' : 'translate-x-0'
               }`}
             />
@@ -379,14 +390,18 @@ export default function ActivityLogsPage() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
+              {/* `contents` from md; on phones / small tablets the global [role=tablist]
+                  rule turns these pills into the Job Openings segmented strip. */}
+              <div role="tablist" aria-label="Filter by action" className="contents">
               {ACTION_FILTERS.map((a) => {
                 const isActive = a.id === actionFilter;
                 return (
                   <button
                     key={a.id}
                     type="button"
+                    role="tab"
                     onClick={() => { setActionFilter(a.id); setPage(1); }}
-                    aria-pressed={isActive}
+                    aria-selected={isActive}
                     className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                       isActive
                         ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
@@ -397,6 +412,7 @@ export default function ActivityLogsPage() {
                   </button>
                 );
               })}
+              </div>
               {isFiltering && (
                 <button
                   type="button"
@@ -409,6 +425,11 @@ export default function ActivityLogsPage() {
               )}
             </div>
           </div>
+        )}
+        {/* Active filter tags — the toolbar's mb-5 is pulled back so they sit
+            12px under the filter row, keeping the same gap to the timeline. */}
+        {logs.length > 0 && activeFilterChips.length > 0 && (
+          <FilterChips className="-mt-2 mb-5" chips={activeFilterChips} />
         )}
 
         {loading && logs.length === 0 ? (

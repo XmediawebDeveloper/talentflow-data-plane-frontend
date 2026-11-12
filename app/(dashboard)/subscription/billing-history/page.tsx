@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 interface BillingStats {
@@ -217,6 +218,25 @@ export default function BillingHistoryPage() {
 
   const activeStatusFilter = STATUS_FILTERS.find(f => f.value === statusFilter) ?? STATUS_FILTERS[0];
   const hasInvoiceFilters = searchQuery.trim() !== '' || statusFilter !== 'all' || dateFrom !== '' || dateTo !== '';
+  // Active filter tags: Status and the date range as one tag (the search shows
+  // in its own box). Each removes just its own filter via the toolbar's setters.
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const invoiceFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && { key: 'status', label: 'Status', value: activeStatusFilter.label, onRemove: () => changeStatus('all') },
+    (dateFrom !== '' || dateTo !== '') && {
+      key: 'date',
+      label: 'Date',
+      value: dateFrom && dateTo
+        ? `${formatChipDate(dateFrom)} – ${formatChipDate(dateTo)}`
+        : dateFrom ? `From ${formatChipDate(dateFrom)}` : `Until ${formatChipDate(dateTo)}`,
+      onRemove: () => { changeDateFrom(''); changeDateTo(''); },
+    },
+  ].filter(Boolean) as FilterChip[];
 
   const filteredInvoices = invoices.filter(inv => {
     const q = searchQuery.trim().toLowerCase();
@@ -480,7 +500,7 @@ export default function BillingHistoryPage() {
             {billingTab === 'invoices' && (
               <>
             {/* Search + filters */}
-            <div className="mb-5 flex flex-col gap-3 tf-card-soft p-4 sm:p-5 xl:flex-row xl:items-center">
+            <div className="mb-5 flex flex-col gap-3 tf-card-soft p-4 sm:p-5 xl:flex-row xl:flex-wrap xl:items-center">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
                 <input
@@ -518,25 +538,12 @@ export default function BillingHistoryPage() {
                   Export CSV
                 </button>
               </div>
+              {/* Active filter tags — the card's last line (so a status picked from a stat
+                  card is never hidden); the card's gap-3 spaces them from the row. */}
+              {invoiceFilterChips.length > 0 && (
+                <FilterChips className="w-full xl:basis-full" chips={invoiceFilterChips} />
+              )}
             </div>
-
-            {/* Active filter chip — so a status picked from a stat card is never hidden */}
-            {statusFilter !== 'all' && (
-              <div className="-mt-2 mb-4 flex items-center gap-2 tf-meta">
-                Showing:
-                <span className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 py-1 pl-2.5 pr-1 font-medium text-brand-blue ring-1 ring-brand-blue/15">
-                  {activeStatusFilter.label}
-                  <button
-                    type="button"
-                    onClick={() => changeStatus('all')}
-                    aria-label={`Remove ${activeStatusFilter.label} filter`}
-                    className="inline-flex h-4 w-4 items-center justify-center rounded-full hover:bg-brand-blue/15"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              </div>
-            )}
 
         {/* Error State */}
         {error && (
