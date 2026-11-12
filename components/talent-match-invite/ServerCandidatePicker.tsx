@@ -23,8 +23,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import FilterSelect from '@/components/ui/filter-select';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
-import UploadModal from '@/components/UploadModal';
-import { uploadResumeFiles } from '@/lib/utils/uploadResumeFiles';
+import { useResumeUploadFlow } from '@/components/resumes/useResumeUploadFlow';
 import { convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import { FOLDER_NAME_MAX_LENGTH } from '@/components/FolderTree';
@@ -756,22 +755,11 @@ export default function ServerCandidatePicker({
   /* Archived rows ticked to unarchive together — only those still listed count. */
   const [archivedPicks, setArchivedPicks] = useState<Set<string>>(new Set());
   const archivedTicked = (archived?.key === archivedKey ? archived?.rows ?? [] : []).filter((r) => archivedPicks.has(r.id)).map((r) => r.id);
-  /* Upload into My Resumes — the Resume Database page's own upload popup and
-     rules. The new resumes are then listed (All Resumes, newest first) and
-     ticked, so they can be invited straight away; a duplicate's "Use Existing
-     Resume" ticks the resume already there. */
-  const [uploading, setUploading] = useState(false);
-  /* The folder the upload saves into: the ⋮ menu's folder, else the one open. */
-  const [uploadFolder, setUploadFolder] = useState<string | undefined>(undefined);
-  const closeUpload = () => { setUploading(false); setUploadFolder(undefined); onOverlayChange?.(null); };
-  const openUpload = (folderId?: string) => {
-    if (!canUploadMyResumes) return;
-    setUploadFolder(folderId);
-    setUploading(true);
-    onOverlayChange?.(closeUpload);
-  };
+  /* Upload into My Resumes — the same flow as the Resume Database page
+     (upload dialog, duplicate resolution, Upload History for bulk). The
+     resumes it stores are then listed (All Resumes, newest first) and ticked,
+     so they can be invited straight away. */
   const onUploaded = (list: { id: string; candidateName: string }[]) => {
-    closeUpload();
     if (list.length === 0) return;
     tickOnLoad.current = list.map((u) => u.id);
     if (source !== 'my-resumes') { setLastDb('my-resumes'); switchTab('my-resumes'); }
@@ -779,6 +767,38 @@ export default function ServerCandidatePicker({
     setFilters((f) => ({ ...f, folder_id: undefined, search: undefined, sort: 'best' }));
     setReloadTick((n) => n + 1);
     setFolders(null);
+  };
+  const {
+    openUploadToFolder,
+    isUploadModalOpen,
+    closeUploadModal,
+    uploadFlowElements,
+  } = useResumeUploadFlow({
+    folders: flatFolders.map(convertApiFolderToTree),
+    tenant,
+    // The folder open in the list, unless it is Archived Resumes.
+    defaultTargetFolder: filters.folder_id && filters.folder_id !== archivedFolderId ? filters.folder_id : undefined,
+    canUpload: canUploadMyResumes,
+    onViewResume: (id) => openPreview({ resume_id: id, name: 'Resume', email: '', phone: '', source: 'my-resumes', rating: null, match_score: null, score: null, already_invited: false }),
+    onRootFolderCreated: () => setFolders(null),
+    onRefresh: () => { setReloadTick((n) => n + 1); setFolders(null); },
+    // The list reload below announces it ("Resume uploaded and 1 selected").
+    successToast: false,
+    onResumeStored: (resume) => onUploaded([{ id: resume.id, candidateName: resume.candidate_name || 'Resume' }]),
+    onBatchFinished: onUploaded,
+  });
+  /* The upload dialog is this picker's overlay while it is open (Escape closes it first). */
+  const uploadOverlayShown = useRef(false);
+  useEffect(() => {
+    if (!isUploadModalOpen && !uploadOverlayShown.current) return;
+    uploadOverlayShown.current = isUploadModalOpen;
+    onOverlayChange?.(isUploadModalOpen ? closeUploadModal : null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUploadModalOpen]);
+  /* The ⋮ menu's folder scopes the upload to it; otherwise the one open. */
+  const openUpload = (folderId?: string) => {
+    if (!canUploadMyResumes) return;
+    openUploadToFolder(folderId, !!folderId);
   };
   const tickUploaded = useEffectEvent((items: ServerInviteCandidate[], ids: string[]) => {    const found = items.filter((r) => ids.includes(r.resume_id));
     const tickable = found.filter((r) => r.email && !r.already_invited && !addedDirectly(r));
@@ -1643,23 +1663,7 @@ export default function ServerCandidatePicker({
       </div>
       </div>
       {footer}
-      {uploading && typeof document !== 'undefined' && createPortal(
-        <UploadModal
-          folders={flatFolders.map(convertApiFolderToTree)}
-          tenant={tenant}
-          uploadSection="my-resumes"
-          targetFolder={uploadFolder ?? (filters.folder_id && filters.folder_id !== archivedFolderId ? filters.folder_id : undefined)}
-          /* From a folder's ⋮ Upload to Folder: only that folder and its subfolders. */
-          scopeFolderId={uploadFolder}
-          onClose={closeUpload}
-          onUpload={(files, folderId) => uploadResumeFiles(files, folderId)}
-          onScoreResume={(id, candidateName) => onUploaded([{ id, candidateName }])}
-          onScoreResumes={onUploaded}
-          onViewResume={(id) => { closeUpload(); openPreview({ resume_id: id, name: 'Resume', email: '', phone: '', source: 'my-resumes', rating: null, match_score: null, score: null, already_invited: false }); }}
-          duplicateProceedLabel="Use Existing Resume"
-        />,
-        document.body,
-      )}
+      {typeof document !== 'undefined' && createPortal(uploadFlowElements, document.body)}
       <AlertDialog open={!!archiveAsk} onOpenChange={(open) => { if (!open) doneAsking(setArchiveAsk); }}>
         <AlertDialogContent className="sm:max-w-md">
           <AlertDialogHeader>

@@ -30,6 +30,19 @@ export interface ScoringJob {
   startedAt: string;
   items: ScoringProgressItem[];
   returnUrl?: string;
+  /** The job's JD ID ("JD-352") and version, for the corner widget's rows. */
+  jobCode?: string;
+  jobVersion?: number;
+  /** Say when the run finishes (toast + View Results) — a run started in the
+   *  background from a page that keeps the recruiter where they are. */
+  announce?: boolean;
+}
+
+/** Optional details a run can be started with. */
+export interface ScoringJobMeta {
+  jobCode?: string;
+  jobVersion?: number;
+  announce?: boolean;
 }
 
 interface ScoringProgressContextType {
@@ -40,7 +53,7 @@ interface ScoringProgressContextType {
   isMainPanelOpen: boolean;  // True when center panel is visible (not minimized)
 
   // Actions
-  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => void;
+  startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => void;
   /**
    * Upsert a whole job from a progress snapshot.
    *
@@ -142,7 +155,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
 
   const hasActiveScoring = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
 
-  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => {
+  const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string, meta?: ScoringJobMeta) => {
     const newItems: ScoringProgressItem[] = items.map(item => ({ ...item, status: 'Queued' as const }));
 
     setActiveScoringJobs(prev => {
@@ -159,6 +172,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
           startedAt: new Date().toISOString(),
           items: newItems,
           returnUrl,
+          ...meta,
         };
         return [...prev, newJob];
       }
@@ -190,6 +204,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
         completed: mergedItems.filter(i => i.status === 'Scored successfully').length,
         failed: mergedItems.filter(i => i.status === 'Failed').length,
         returnUrl: returnUrl || existing.returnUrl,
+        ...meta,
       };
       const updated = [...prev];
       updated[existingIndex] = merged;

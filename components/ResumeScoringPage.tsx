@@ -9,7 +9,7 @@ import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, Tr
 import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId, Fragment } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useResumeActivityTrail } from '@/lib/utils/resumeActivityTrail';
+import { useResumeActivityTrail, readScoringOrigin, clearScoringOrigin, type TrailCrumb } from '@/lib/utils/resumeActivityTrail';
 import ScoredResumesTable, { candidateGroupKey } from './ScoredResumesTable';
 import ListPagination from './ListPagination';
 import SelectSourceModal from './SelectSourceModal';
@@ -526,6 +526,42 @@ export default function ResumeScoringPage({
   // View state
   const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'candidateView'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<ScoredResumeData | null>(null);
+  /* Scored from Resume Database (rememberScoringOrigin): that job keeps
+     Resume Database's trail — Dashboard › Resume Database ›
+     <job> — instead of Dashboard › Resume Scoring › <job>. Once the
+     recruiter goes back to the Resume Scoring overview it is dropped. */
+  const [originCrumbs, setOriginCrumbs] = useState<TrailCrumb[] | null>(null);
+  const originJobId = selectedHistoryItem?.jobId;
+  useEffect(() => {
+    // sessionStorage is browser-only, so it is read after render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOriginCrumbs(readScoringOrigin(originJobId));
+  }, [originJobId]);
+  // Dropped on a move BACK to the overview — not on the first render, which
+  // starts in 'history' before the batch's job is opened.
+  const originPrevViewModeRef = useRef(viewMode);
+  useEffect(() => {
+    const cameBack = viewMode === 'history' && originPrevViewModeRef.current !== 'history';
+    originPrevViewModeRef.current = viewMode;
+    if (cameBack) {
+      clearScoringOrigin();
+      setOriginCrumbs(null);
+    }
+  }, [viewMode]);
+  /* Opened from a run's View Results (`?run=<run id>`): the job's results show
+     that run's resumes only, until "Show all candidates". Kept in state, since
+     the page's own navigation (opening a candidate, Back) drops the parameter.
+     Applies only while the run's job is the one on screen. */
+  const runParam = useSearchParams().get('run');
+  const [runFilterId, setRunFilterId] = useState<string | null>(runParam);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (runParam) setRunFilterId(runParam);
+  }, [runParam]);
+  const runFilter = runFilterId ? getJobProgress(runFilterId) : undefined;
+  const runResumeIds = runFilter && selectedHistoryItem && runFilter.items.some(item => item.jobId === selectedHistoryItem.jobId)
+    ? new Set(runFilter.items.map(item => item.resumeId))
+    : null;
   const [isWaitingForInitialJd, setIsWaitingForInitialJd] = useState(false);
   // After scoring completes & history refreshes, auto-navigate to this JD's details
   const [pendingAutoSelectJdId, setPendingAutoSelectJdId] = useState<string | null>(null);
@@ -2456,6 +2492,8 @@ export default function ResumeScoringPage({
       {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         /* Invite ▾ → Create / Send for this job, this candidate. */
         onOpenInviteDialog={(kind, candidates) => setInviteRequest({ kind, job: inviteJobOf(selectedHistoryItem), candidates: asScoreCandidates(candidates) })}
         // Version dropdown: that version's score for this job, in place.
@@ -2484,12 +2522,12 @@ export default function ResumeScoringPage({
           { label: selectedHistoryItem.jobTitle || 'Score' },
         ] : [
           { label: 'Dashboard', href: '/dashboard' },
-          { label: 'Resume Scoring', onClick: () => {
+          ...(originCrumbs ?? [{ label: 'Resume Scoring', onClick: () => {
             setSelectedCandidateForView(null);
             setSelectedHistoryItem(null);
             setViewMode('history');
             router.push(`/recruitment/resume-scoring`, { scroll: false });
-          } },
+          } }]),
           { label: selectedHistoryItem.jobTitle, onClick: () => {
             setSelectedCandidateForView(null);
             setViewMode('details');
@@ -2574,6 +2612,8 @@ export default function ResumeScoringPage({
       {inviteDialogEl}
       <CandidateScoringDetailPage
         allowCreateInviteTarget
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         /* Invite ▾ → Create / Send for this score's own job. A row with no
            job ('global'): the detail page opens THE popup itself, on its
            picker of every published one. */
@@ -2723,7 +2763,7 @@ export default function ResumeScoringPage({
        at one version only, "Show All Versions" would re-render the same list. */
     const canShowAllVersions = detailsVersionRows.length > 1 || lineageScoredItems.length > 1;
     const lineageTotalScored = lineageScoredItems.reduce((sum, item) => sum + (item.totalScored || 0), 0);
-    const scoredResumesData = showingAllVersions
+    const allScoredResumesData = showingAllVersions
       /* Each row keeps its OWN version in the Job Version column here, the way
          the cross-job candidates list does — unlike the single-version list
          below, where every row shares the header's version. */
@@ -2732,6 +2772,11 @@ export default function ResumeScoringPage({
         )
       : convertToScoredResumesFormat(selectedHistoryItem)
           .map(r => ({ ...r, jobVersion: detailsVersionNumber }));
+    // Just the run it was opened from (View Results), until "Show all candidates".
+    const runOnly = !!runResumeIds && !showingAllVersions;
+    const scoredResumesData = runOnly
+      ? allScoredResumesData.filter(r => runResumeIds!.has(r.resumeId))
+      : allScoredResumesData;
     const goToVersion = (versionId: string, versionTitle: string) => {
       if (versionId === selectedHistoryItem.jobId) return;
       const stub: ScoredResumeData = {
@@ -2761,11 +2806,11 @@ export default function ResumeScoringPage({
           className="mb-4 md:mb-6"
           items={[
             { label: 'Dashboard', href: '/dashboard' },
-            { label: 'Resume Scoring', onClick: () => {
+            ...(originCrumbs ?? [{ label: 'Resume Scoring', onClick: () => {
               setViewMode('history');
               setSelectedHistoryItem(null);
               setSelectedStatusFilter('all');
-            } },
+            } }]),
             { label: selectedHistoryItem.jobTitle },
           ]}
           actions={(() => {
@@ -2828,6 +2873,11 @@ export default function ResumeScoringPage({
                         </span>
                       );
                     })()}
+                    {/* Version badge with View Job Detail as a small eye joined
+                        to it (the JD it opens is that version) — the same
+                        treatment as the resume version badge on the candidate
+                        page. With no version to name, the eye stands alone. */}
+                    <span className="inline-flex h-6 items-stretch rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 overflow-hidden flex-shrink-0 whitespace-nowrap">
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
                         <DropdownMenu>
@@ -2836,7 +2886,7 @@ export default function ResumeScoringPage({
                               type="button"
                               aria-label="Switch version"
                               title="Switch version"
-                              className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue transition-colors flex-shrink-0 whitespace-nowrap"
+                              className="inline-flex items-center gap-1 pl-2 pr-1.5 hover:bg-gray-100 dark:hover:bg-slate-700/60 hover:text-brand-blue transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40"
                             >
                               <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                               v{detailsVersionNumber}
@@ -2857,12 +2907,22 @@ export default function ResumeScoringPage({
                           </DropdownMenuContent>
                         </DropdownMenu>
                       ) : (
-                        <span className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full tf-meta bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 flex-shrink-0 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 pl-2 pr-1.5 tf-meta">
                           <span className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500" />
                           v{detailsVersionNumber}
                         </span>
                       )
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setShowJobDetailModal(true)}
+                      title="View Job Detail"
+                      aria-label="View Job Detail"
+                      className={`inline-flex items-center justify-center px-1.5 ${detailsVersionNumber && detailsVersionNumber >= 1 ? 'border-l border-gray-200 dark:border-slate-700' : ''} hover:bg-gray-100 dark:hover:bg-slate-700/60 hover:text-brand-blue transition-colors cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40`}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                    </span>
                     {/* "Show All Versions" — every version's scored resumes
                         for this job in one table, instead of only the version
                         the page is scoped to. Sits beside the version badge
@@ -2896,26 +2956,6 @@ export default function ResumeScoringPage({
                         Show All Versions
                       </button>
                     )}
-                    {/* "View Job Detail" — the JD this page is scoring against,
-                        read-only. Sits with the version badge and Show All
-                        Versions because all three answer "which job, and which
-                        version, am I looking at"; this one answers it by
-                        showing the JD rather than by naming it.
-
-                        Always available: unlike Show All Versions there is no
-                        precondition — the page cannot be here without a JD to
-                        show. Styled as the group's neutral pill so it reads as
-                        a sibling of the badge, not as a second primary action
-                        competing with Score New Resumes. */}
-                    <button
-                      type="button"
-                      onClick={() => setShowJobDetailModal(true)}
-                      title="View this job description"
-                      className="inline-flex h-6 items-center gap-1 px-2 py-0.5 rounded-full text-xs border transition-colors flex-shrink-0 whitespace-nowrap bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
-                    >
-                      <Eye className="w-3 h-3" />
-                      View Job Detail
-                    </button>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5 tf-meta">
                     <span className="flex items-center gap-1">
@@ -3016,6 +3056,23 @@ export default function ResumeScoringPage({
         />
 
         {inviteDialogEl}
+        {/* Opened from a run's View Results: say the list is that run only,
+            and offer the whole job's candidates. */}
+        {runOnly && (
+          <div role="status" className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-brand-blue/[0.06] px-3 py-2 text-sm text-brand-blue ring-1 ring-brand-blue/15">
+            <Info className="h-4 w-4 shrink-0" />
+            <span>
+              Showing the <b className="font-semibold">{scoredResumesData.length}</b> resume{scoredResumesData.length === 1 ? '' : 's'} from this scoring run
+            </span>
+            <button
+              type="button"
+              onClick={() => setRunFilterId(null)}
+              className="ml-auto font-medium underline-offset-2 hover:underline"
+            >
+              Show all candidates ({allScoredResumesData.length})
+            </button>
+          </div>
+        )}
         {/* Scored Resumes Table */}
         <ScoredResumesTable
           resumes={scoredResumesData}

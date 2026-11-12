@@ -30,10 +30,8 @@ import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggl
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import { JobActionLockProvider } from '@/components/jobs/JobActionLock';
-import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
-import ResumeScoring from './ResumeScoring';
 import JobApplicants from './JobApplicants';
 import ScoredResumesTable, {
   useScoringActionPermissions,
@@ -741,10 +739,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   });
   const toggleActionGroup = (group: keyof typeof openActionGroups) =>
     setOpenActionGroups(prev => ({ ...prev, [group]: !prev[group] }));
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showScoringView, setShowScoringView] = useState(false);
   const [showApplicantsView, setShowApplicantsView] = useState(false);
-  const [uploadedResumes, setUploadedResumes] = useState<any[]>([]);
   const menuRef = useRef<HTMLDivElement>(null);
   // True while the Create action resolves whether this JD already has an
   // assessment, so the button shows a spinner instead of feeling unresponsive.
@@ -2439,54 +2434,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     toast.error(`AI Matching failed: ${error}`);
   };
 
-  const handleAddApplications = () => {
-    setShowAddApplicantsMenu(false);
-    setShowUploadModal(true);
-  };
-
   const handleSelectApplicants = () => {
     setShowAddApplicantsMenu(false);
     setShowSelectSourceModal(true);
-  };
-
-  const handleResumeUpload = (files: File[]) => {
-    // Mock scoring data
-    const mockResumes = files.map((file, index) => ({
-      id: `resume-${Date.now()}-${index}`,
-      name: file.name.replace(/\.(pdf|doc|docx)$/, '').replace(/[-_]/g, ' '),
-      email: `candidate${index + 1}@example.com`,
-      phone: `+1 (555) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}`,
-      location: ['New York, NY', 'San Francisco, CA', 'Austin, TX', 'Remote'][Math.floor(Math.random() * 4)],
-      score: Math.floor(Math.random() * 30) + 70,
-      matchStatus: ['excellent', 'good', 'fair'][Math.floor(Math.random() * 3)] as 'excellent' | 'good' | 'fair',
-      experience: ['2-3 years', '3-5 years', '5+ years'][Math.floor(Math.random() * 3)],
-      education: ['Bachelor\'s Degree', 'Master\'s Degree', 'PhD'][Math.floor(Math.random() * 3)],
-      skills: ['React', 'TypeScript', 'Node.js', 'Python', 'AWS', 'Docker'].sort(() => Math.random() - 0.5).slice(0, 4),
-      strengths: [
-        'Strong technical background in required technologies',
-        'Relevant industry experience',
-        'Excellent communication skills',
-        'Leadership experience'
-      ].sort(() => Math.random() - 0.5).slice(0, 2),
-      gaps: [
-        'Limited experience with specific framework',
-        'Education level below preferred',
-        'Geographic location distance'
-      ].sort(() => Math.random() - 0.5).slice(0, 2)
-    }));
-
-    setUploadedResumes(mockResumes);
-    setShowUploadModal(false);
-    setShowScoringView(true);
-  };
-
-  const handleProceedToApplicants = () => {
-    setShowScoringView(false);
-    setShowApplicantsView(true);
-  };
-
-  const handleBackFromScoring = () => {
-    setShowScoringView(false);
   };
 
   const handleBackFromApplicants = () => {
@@ -2549,28 +2499,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     }
   ];
 
-  // Show scoring view
-  if (showScoringView) {
-    return (
-      <ResumeScoring
-        jobTitle={job.title}
-        resumes={uploadedResumes}
-        onBack={handleBackFromScoring}
-        onProceedToApplicants={handleProceedToApplicants}
-      />
-    );
-  }
-
   // Show applicants view
   if (showApplicantsView) {
     return (
       <JobApplicants
         jobTitle={job.title}
-        applicants={[...mockApplicants, ...uploadedResumes.map(r => ({
-          ...r,
-          status: 'New' as const,
-          appliedDate: 'Just now'
-        }))]}
+        applicants={mockApplicants}
         onBack={handleBackFromApplicants}
       />
     );
@@ -4742,15 +4676,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         />
       )}
       </JobActionLockProvider>
-
-      {/* Resume Upload Modal */}
-      {showUploadModal && (
-        <ResumeUploadModal
-          jobTitle={job.title}
-          onClose={() => setShowUploadModal(false)}
-          onSubmit={handleResumeUpload}
-        />
-      )}
 
       {/* Draft assessment prompt — Create found an unpublished draft for this JD.
           Publishing happens here rather than on the assessment details page,

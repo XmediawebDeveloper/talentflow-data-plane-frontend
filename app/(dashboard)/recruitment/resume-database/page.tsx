@@ -18,6 +18,8 @@
  */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import FirstTimeHint from '@/components/ui/first-time-hint';
+import { RESUME_DB_ACTIONS_HINT } from '@/components/resumes/useInPageScoringProgress';
 import { useSearchParams } from 'next/navigation';
 import { Database, FolderOpen, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -218,6 +220,13 @@ export default function ResumeDatabasePage() {
           </TabsList>
         </Tabs>
       )}
+      {/* First visit only: what selecting resumes is for, and that scoring
+          runs in the background. Gone once dismissed or a score is started. */}
+      <FirstTimeHint hintKey={RESUME_DB_ACTIONS_HINT} className="mb-4">
+        <b className="font-semibold">Tip:</b> Tick resumes to <b className="font-semibold">Score</b> them against a job, or
+        invite them to an <b className="font-semibold">Assessment</b> or <b className="font-semibold">AI Interview</b>.
+        Scoring runs in the background, so you can keep working here.
+      </FirstTimeHint>
     </>
   );
 
