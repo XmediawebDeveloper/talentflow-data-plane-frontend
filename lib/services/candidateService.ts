@@ -370,6 +370,7 @@ export interface AnswerSubmission {
   code_execution_error?: string;
   time_taken_seconds?: number;  // Time spent on question
   is_draft?: boolean;  // True = draft (auto-save, editable), False = submitted (locked)
+  final_save?: boolean;  // Last draft sent when the timer hits zero (accepted briefly past the deadline)
 }
 
 export interface SubmitAnswerResponse {
