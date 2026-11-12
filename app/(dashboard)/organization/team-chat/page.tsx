@@ -28,6 +28,8 @@ import {
   Copy,
   Check,
   PinOff,
+  MessageSquareText,
+  MessageCircleMore,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -48,6 +50,8 @@ import { Button } from '@/components/ui/button';
 import AppModal from '@/components/ui/app-modal';
 import NameAvatar from '@/components/ui/name-avatar';
 import ChatAttachmentViewer, { type ChatAttachment } from '@/components/organization/ChatAttachmentViewer';
+import { IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import TeamChatIllustration from '@/components/teams/TeamChatIllustration';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -1138,9 +1142,10 @@ export default function TeamChatPage() {
               <div className="mb-2">
                 {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
                 {filteredChannels.length === 0 ? (
-                  <p className="px-3 py-4 text-center tf-hint">
-                    {searchQuery ? 'No channels match your search' : 'No channels yet'}
-                  </p>
+                  <div className="px-3 py-4 text-center">
+                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
+                  </div>
                 ) : (
                   <div className="space-y-0.5">{filteredChannels.map(renderConversationRow)}</div>
                 )}
@@ -1151,9 +1156,10 @@ export default function TeamChatPage() {
               <div>
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
-                  <p className="px-3 py-4 text-center tf-hint">
-                    {searchQuery ? 'No conversations match your search' : 'No direct messages yet'}
-                  </p>
+                  <div className="px-3 py-4 text-center">
+                    {!searchQuery && <MessageCircleMore className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    <p className="tf-hint">{searchQuery ? 'No conversations match your search' : 'No direct messages yet'}</p>
+                  </div>
                 ) : (
                   <div className="space-y-0.5">{filteredDMs.map(renderConversationRow)}</div>
                 )}
@@ -1748,17 +1754,16 @@ export default function TeamChatPage() {
               >
                 <Menu className="h-5 w-5" />
               </button>
-              <div className="max-w-sm text-center">
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                  <MessageCircle className="h-6 w-6 text-brand-blue" />
-                </div>
-                <h2 className="tf-section-title max-sm:text-sm">Welcome to Team Chat</h2>
-                <p className="mt-1 tf-body-muted">
-                  {channels.length === 0
-                    ? 'No channels yet. Create one to bring your team into the conversation.'
-                    : 'Pick a channel or direct message to start the conversation.'}
-                </p>
-                <div className="mt-5 flex flex-wrap justify-center gap-2">
+              <IllustratedEmptyState
+                bordered={false}
+                className="max-w-md"
+                illustration={<TeamChatIllustration />}
+                title="Welcome to Team Chat"
+                description={channels.length === 0
+                  ? 'No channels yet. Create one to bring your team into the conversation.'
+                  : 'Pick a channel or direct message to start the conversation.'}
+              >
+                <div className="flex flex-wrap justify-center gap-2">
                   <Button
                     variant="primary"
                     onClick={openCreateModal}
@@ -1773,7 +1778,7 @@ export default function TeamChatPage() {
                     New message
                   </Button>
                 </div>
-              </div>
+              </IllustratedEmptyState>
             </div>
           )}
         </section>

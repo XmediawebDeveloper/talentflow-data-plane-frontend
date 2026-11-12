@@ -1289,7 +1289,6 @@ export default function SelectSourceModal({
                      buttons instead of staying in the table. */
                   containerClassName="flex flex-col md:flex-1 md:min-h-0"
                   tableShellClassName="tf-table-shell--fill flex-1 min-h-0"
-                  showEmptyAction={false}
                   emptyState={
                     activeTab === 'my-resumes'
                       /* Same call the My Resumes page makes: its illustrated
