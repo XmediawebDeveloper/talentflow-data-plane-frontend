@@ -8,6 +8,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows } from '@/lib/utils/exportUtils';
 import { toast } from 'sonner';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 
 const mockActivityLogs = [
   { id: '1', user: 'John Admin', action: 'Created job posting', details: 'Senior Frontend Developer', timestamp: '2 min ago', category: 'jobs' },
@@ -69,6 +70,17 @@ export default function ActivityLogsPage() {
     const matchesCategory = filterCategory === 'all' || log.category === filterCategory;
     return matchesSearch && matchesCategory;
   });
+
+  // One removable tag per active filter (search text isn't one — it stays visible in its box).
+  const categoryLabel = (cat: string) => cat.charAt(0).toUpperCase() + cat.slice(1);
+  const activeFilterChips: FilterChip[] = [
+    filterCategory !== 'all' && {
+      key: 'category',
+      label: 'Category',
+      value: categoryLabel(filterCategory),
+      onRemove: () => setFilterCategory('all'),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   // Export Logs — the currently filtered rows, in the format picked in the
   // shared CSV / Excel picker.
@@ -145,6 +157,11 @@ export default function ActivityLogsPage() {
             className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-3 sm:pl-4 pr-3 sm:pr-4 rounded-lg sm:rounded-lg dark:bg-slate-800 dark:text-slate-100"
           />
         </div>
+        {/* Active filter tags — the filter row's bottom margin is pulled back so
+            they sit 12px under it, keeping the same gap to the timeline. */}
+        {activeFilterChips.length > 0 && (
+          <FilterChips className="-mt-2 mb-5 sm:-mt-3 sm:mb-6" chips={activeFilterChips} />
+        )}
 
         {/* Activity Timeline */}
         <div className="tf-card">

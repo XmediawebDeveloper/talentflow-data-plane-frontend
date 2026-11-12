@@ -21,6 +21,7 @@ import {
 import type { ExtraMode } from './ExtraCandidatesInput';
 import { useAuth } from '@/lib/hooks/useAuth';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import ResumeVersionsModal from '@/components/ResumeVersionsModal';
 import UploadModal from '@/components/UploadModal';
@@ -1034,6 +1035,15 @@ export default function ServerCandidatePicker({
 
   const setFilter = <K extends keyof InviteCandidateFilters>(key: K, value: InviteCandidateFilters[K]) =>
     setFilters((f) => ({ ...f, [key]: value }));
+  /* Active filter tags for the dropdowns on this tab (the database tabs show
+     none of them). Search, Sort and "Hide already invited" show their own state. */
+  const MATCH_STATUS_LABELS: Record<string, string> = { exact_match: 'Exact Match', partial_match: 'Partial Match', no_match: 'No Match' };
+  const activeFilterChips: FilterChip[] = isDbTab(source) ? [] : [
+    !!filters.match_status && { key: 'match_status', label: 'Match Status', value: MATCH_STATUS_LABELS[filters.match_status] ?? String(filters.match_status), onRemove: () => setFilter('match_status', undefined) },
+    filters.scored !== undefined && { key: 'scored', label: 'Scored', value: filters.scored ? 'Scored' : 'Not scored', onRemove: () => setFilter('scored', undefined) },
+    source === 'talent-match' && filters.min_rating != null && { key: 'min_rating', label: 'Rating', value: `Rating ≥ ${filters.min_rating}`, onRemove: () => setFilter('min_rating', undefined) },
+    filters.min_score != null && { key: 'min_score', label: 'Score', value: `Score ≥ ${filters.min_score}%`, onRemove: () => setFilter('min_score', undefined) },
+  ].filter(Boolean) as FilterChip[];
   const switchTab = (s: InviteCandidateSourceTab) => {
     if (!tabAccess[s]) return;
     if (addTab) onAddTabChange(null);
@@ -1376,6 +1386,7 @@ export default function ServerCandidatePicker({
           Hide already invited
         </label>
       </div>
+      {activeFilterChips.length > 0 && <FilterChips chips={activeFilterChips} />}
 
       {/* My Resumes: the folder tree beside the list (click to open, tick to
           select everyone in it) from laptop width — the tree needs ~15rem for

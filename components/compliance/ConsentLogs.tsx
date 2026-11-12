@@ -19,13 +19,13 @@ import {
 } from 'lucide-react';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { type FilterChip } from '@/components/ui/filter-chips';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* Renders the toolbar into the host page's reserved position — on the
    Assessments page, the one row above the tab pills. The AI Interview page
    mounts this `compact`, with no filter row at all, so it is unaffected. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
-import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
@@ -196,6 +196,35 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
     startDate !== '' ||
     endDate !== '';
 
+  /* Active filter tags — one per filter the More Filters badge counts: Status,
+     and the consent date range as ONE tag (it counts once). Each X clears only
+     its own filter. */
+  const formatChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const STATUS_LABELS: Record<string, string> = { accepted: 'Accepted', declined: 'Declined' };
+  const activeFilterChips: FilterChip[] = [
+    !!statusFilter && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_LABELS[statusFilter] ?? statusFilter,
+      onRemove: () => { setStatusFilter(''); setPage(0); },
+    },
+    !!(startDate || endDate) && {
+      key: 'date',
+      label: 'Consented',
+      value: startDate && endDate
+        ? `${formatChipDate(startDate)} – ${formatChipDate(endDate)}`
+        : startDate
+          ? `From ${formatChipDate(startDate)}`
+          : `Until ${formatChipDate(endDate)}`,
+      onRemove: () => { setStartDate(''); setEndDate(''); setPage(0); },
+    },
+  ].filter(Boolean) as FilterChip[];
+
   if (isLoading && !hasLoadedOnce) {
     return (
       <div className="flex items-center justify-center py-12 tf-loader-center">
@@ -275,6 +304,8 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
             activeFilterCount={(statusFilter ? 1 : 0) + (startDate || endDate ? 1 : 0)}
             filtersApplied={!!statusFilter || !!startDate || !!endDate}
             onClearFilters={clearFilters}
+            /* Active filter tags: hover popup on More Filters (lg+). */
+            filterChips={activeFilterChips}
             className="mb-0"
             countBadge={
               <ListCountBadge
@@ -288,11 +319,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
 
           {showFilters && (
             <ListFilterPanel
-              footer={
-                <Button variant="secondary" size="sm" onClick={() => setShowFilters(false)}>
-                  Done
-                </Button>
-              }
+              chips={activeFilterChips}
             >
               <div>
                 <label htmlFor="consent-status" className="block tf-caption mb-1.5">

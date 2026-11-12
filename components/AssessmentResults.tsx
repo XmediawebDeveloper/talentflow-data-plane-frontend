@@ -45,6 +45,7 @@ import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '
 import InviteStatusChip, { type InviteStatusKind } from '@/components/ui/invite-status-chip';
 import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import SearchableSelect from '@/components/ui/searchable-select';
 import FilterSelect from '@/components/ui/filter-select';
 import { tabPill } from '@/components/ui/filter-pills';
@@ -2067,7 +2068,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             score bands, the From / To dates) now opens in the More Filters
             panel under it; the Columns picker is its own button beside it.
             The filters commit as they change, exactly as they did on the row,
-            so the panel's footer is Clear All + Done rather than an Apply.
+            so the panel has no footer — Reset beside More Filters clears it.
             When `toolbarPortal` is set (the Job Details tab-navigation card
             slot), the whole block portals there with its card chrome dropped so
             it reads as the tab card's second row; otherwise inline as before. */}
@@ -2249,6 +2250,99 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
           ),
         ].filter(Boolean).slice(0, portaled ? 5 : undefined);
+        /* Active filter tags — one per filter `activeFilterCount` counts, on
+           the same conditions, so the More Filters badge and the tags agree.
+           Values read as the panel's options do; the date range is one tag. */
+        const formatChipDate = (v: string) => {
+          const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+          return Number.isNaN(d.getTime())
+            ? v
+            : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+        const scoreBandLabel = (v: string) => scoreBands.find((b) => b.value === v)?.label ?? v;
+        const chipAssessment = assessmentOptions.find((option) => String(option.id) === String(effectiveAssessmentId));
+        const activeFilterChips: FilterChip[] = [
+          showsJobVersionSelect && effectiveJobVersion !== 'all' && {
+            key: 'jobVersion',
+            label: 'Job Version',
+            value: `Job Version V${effectiveJobVersion}`,
+            onRemove: () => {
+              setSelectedJobVersion('all');
+              setCurrentPage(1);
+              setSelectedRows([]);
+            },
+          },
+          showsAssessmentSelect && effectiveAssessmentId !== 'all' && {
+            key: 'assessment',
+            label: 'Assessment',
+            value: chipAssessment
+              ? (chipAssessment.version != null ? `${chipAssessment.title} (V${chipAssessment.version})` : chipAssessment.title)
+              : String(effectiveAssessmentId),
+            onRemove: () => {
+              setSelectedAssessmentId('all');
+              setCurrentPage(1);
+              setSelectedRows([]);
+            },
+          },
+          showsAssessmentVersionSelect && effectiveAssessmentVersion !== 'all' && {
+            key: 'assessmentVersion',
+            label: 'Assessment Version',
+            value: `Assessment V${effectiveAssessmentVersion}`,
+            onRemove: () => {
+              setSelectedAssessmentVersion('all');
+              setCurrentPage(1);
+              setSelectedRows([]);
+            },
+          },
+          portaled && statusFilter !== 'all' && {
+            key: 'status',
+            label: 'Status',
+            value: String(statusFilter),
+            onRemove: () => {
+              setStatusFilter('all');
+              setCurrentPage(1);
+            },
+          },
+          portaled && passFailFilter !== 'all' && {
+            key: 'result',
+            label: 'Result',
+            value: passFailFilter === 'pass' ? 'Pass' : 'Fail',
+            onRemove: () => {
+              setPassFailFilter('all');
+              setCurrentPage(1);
+            },
+          },
+          !!roundFilters.technical && {
+            key: 'techScore',
+            label: 'Tech Score',
+            value: roundFilters.technical === 'all' ? 'All Scores' : scoreBandLabel(roundFilters.technical),
+            onRemove: () => {
+              setRoundFilters(prev => ({ ...prev, technical: undefined }));
+              setCurrentPage(1);
+            },
+          },
+          !!roundFilters.coding && {
+            key: 'codingScore',
+            label: 'Coding Score',
+            value: roundFilters.coding === 'all' ? 'All Scores' : scoreBandLabel(roundFilters.coding),
+            onRemove: () => {
+              setRoundFilters(prev => ({ ...prev, coding: undefined }));
+              setCurrentPage(1);
+            },
+          },
+          (appliedDateFrom || appliedDateTo) && {
+            key: 'submitted',
+            label: 'Submitted',
+            value: appliedDateFrom && appliedDateTo
+              ? `${formatChipDate(appliedDateFrom)} – ${formatChipDate(appliedDateTo)}`
+              : appliedDateFrom ? `From ${formatChipDate(appliedDateFrom)}` : `Until ${formatChipDate(appliedDateTo)}`,
+            onRemove: () => {
+              setDateFrom('');
+              setDateTo('');
+              setCurrentPage(1);
+            },
+          },
+        ].filter(Boolean) as FilterChip[];
         /* Sort by — the tinted control driving the same sortField /
            sortDirection the column headers do. Embedded, Status too: the
            column headers there are plain labels. */
@@ -2350,10 +2444,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             activeFilterCount={activeFilterCount}
             filtersApplied={activeFilterCount > 0}
             /* Reset — search, status, result and every panel filter at once. */
-            onClearFilters={portaled ? undefined : clearAllFilters}
+            onClearFilters={clearAllFilters}
             /* Standalone the card padding gives the gap; embedded the row keeps
                ListToolbar's own `mb-3`, as on AI Talent Match. */
             className={portaled ? undefined : 'mb-0'}
+            /* Active filter tags: hover popup on More Filters (lg+). */
+            filterChips={activeFilterChips}
           >
             {/* AS-24: Customize Columns and Export — their own buttons on the
                 standalone page; embedded in Job Details they are items in the
@@ -2467,12 +2563,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className={JOB_TAB_FILTER_GRID_CLASS}>
                 {filterFields}
               </div>
+              {/* Active filter tags — the panel's last line (phones / tablets). */}
+              <FilterChipsPanelLine chips={activeFilterChips} />
             </div>
           ) : (
             <div className="tf-jobs-filter-panel mt-3 pt-3 border-t border-brand-blue/10">
               <div className="tf-grid-4 [&>div]:min-w-0">
                 {filterFields}
               </div>
+              <FilterChipsPanelLine chips={activeFilterChips} />
             </div>
           ))}
 
@@ -2552,7 +2651,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               )}
               {/* Status pills — as the Job Openings page's All Jobs /
                   Published / Draft … Same state the dropdown drove. */}
-              <div className="tf-jobs-status-tabs contents">
+              <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Candidate status">
               {([
                 ['all', 'All Candidates'],
                 ['In Progress', 'In Progress'],
@@ -2566,7 +2665,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     setStatusFilter(value);
                     setCurrentPage(1);
                   }}
-                  aria-pressed={statusFilter === value}
+                  role="tab"
+                  aria-selected={statusFilter === value}
                   className={tabPill(statusFilter === value)}
                 >
                   {label}
@@ -2702,6 +2802,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   selection={{
                     checked: selectedRows.includes(candidate.id),
                     onChange: (checked) => handleSelectRow(candidate.id, checked),
+                    active: selectedRows.length > 0,
                   }}
                   /* ⋮ — the table row's menu (View Result, Create / Send,
                      Download PDF); the card's own View Result button is

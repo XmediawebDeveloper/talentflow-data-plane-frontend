@@ -28,6 +28,7 @@ import {
 import { downloadSessionReports } from './evaluation-dashboard/downloadSessionReport';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { Skeleton, CardGridSkeleton } from '@/components/ui/skeleton';
@@ -514,6 +515,34 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
     );
   };
 
+  /* One tag per filter `countFilters` counts (Result is the toolbar's own
+     dropdown, not counted, so no tag; the Completed On range is one tag),
+     valued as the panel's dropdowns show them. */
+  const formatChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const optionLabel = (options: { value: string; label: string }[], value: string) =>
+    options.find((o) => o.value === value)?.label ?? value;
+  const activeFilterChips: FilterChip[] = ([
+    f.job && { key: 'job', label: 'Job', value: optionLabel(jobOptions, f.job), onRemove: () => search.setFilter('job', '') },
+    f.jobVersion && { key: 'jobVersion', label: 'Job Version', value: `V${f.jobVersion}`, onRemove: () => search.setFilter('jobVersion', '') },
+    f.interviewVersion && { key: 'interviewVersion', label: 'Interview Version', value: `V${f.interviewVersion}`, onRemove: () => search.setFilter('interviewVersion', '') },
+    f.inviteSource && { key: 'inviteSource', label: 'Invite Source', value: optionLabel(INVITE_SOURCE_FILTER_OPTIONS, f.inviteSource), onRemove: () => search.setFilter('inviteSource', '') },
+    // No control on this tab sets Status, but a restored view can — and it counts.
+    f.status && { key: 'status', label: 'Status', value: getStatusLabel(f.status), onRemove: () => search.setFilter('status', '') },
+    f.risk && { key: 'risk', label: 'Proctoring Risk', value: optionLabel(RISK_FILTER_OPTIONS, f.risk), onRemove: () => search.setFilter('risk', '') },
+    (f.completedFrom || f.completedTo) && {
+      key: 'completed', label: 'Completed On',
+      value: f.completedFrom && f.completedTo
+        ? `${formatChipDate(f.completedFrom)} – ${formatChipDate(f.completedTo)}`
+        : f.completedFrom ? `from ${formatChipDate(f.completedFrom)}` : `until ${formatChipDate(f.completedTo)}`,
+      onRemove: () => search.setFilters({ ...f, completedFrom: '', completedTo: '' }),
+    },
+  ] as (FilterChip | false | '')[]).filter(Boolean) as FilterChip[];
+
   const toolbar = (
     <>
 
@@ -532,6 +561,8 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         activeFilterCount={search.activeFilterCount}
         filtersApplied={search.filtersApplied}
         onClearFilters={search.reset}
+        /* Active filter tags: hover popup on More Filters (lg+). */
+        filterChips={activeFilterChips}
         leadingActions={
           /* Result (Pass / Fail) first, ahead of More Filters — the same
              toolbar order as the per-interview results view. */
@@ -550,14 +581,14 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,
-             email and CID are what the search box is for. Picks are drafts
-             until Done, as on the Activity Logs tab. */
+             email and CID are what the search box is for. Picks commit as
+             they change; Reset beside More Filters clears them. */
           <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
             <div className="tf-grid-4">
               <SearchableSelect
                 label="Job"
-                value={search.draftFilters.job}
-                onChange={(v) => search.setDraftFilter('job', v)}
+                value={search.filters.job}
+                onChange={(v) => search.setFilter('job', v)}
                 options={jobOptions}
                 placeholder="All jobs"
                 searchPlaceholder="Search job ID or title..."
@@ -565,27 +596,24 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                 emptyMessage="No jobs match"
               />
               <FilterSelect id="cr-job-version" label="Job Version" anyLabel="All versions"
-                value={search.draftFilters.jobVersion} onChange={(v) => search.setDraftFilter('jobVersion', v)}
+                value={search.filters.jobVersion} onChange={(v) => search.setFilter('jobVersion', v)}
                 options={jobVersionOptions} />
               <FilterSelect id="cr-interview-version" label="Interview Version" anyLabel="All versions"
-                value={search.draftFilters.interviewVersion} onChange={(v) => search.setDraftFilter('interviewVersion', v)}
+                value={search.filters.interviewVersion} onChange={(v) => search.setFilter('interviewVersion', v)}
                 options={interviewVersionOptions} />
               <FilterSelect id="cr-invite-source" label="Invite Source" anyLabel="All sources"
-                value={search.draftFilters.inviteSource} onChange={(v) => search.setDraftFilter('inviteSource', v)}
+                value={search.filters.inviteSource} onChange={(v) => search.setFilter('inviteSource', v)}
                 options={INVITE_SOURCE_FILTER_OPTIONS} />
               <FilterSelect id="cr-risk" label="Proctoring Risk" anyLabel="Any risk"
-                value={search.draftFilters.risk} onChange={(v) => search.setDraftFilter('risk', v)}
+                value={search.filters.risk} onChange={(v) => search.setFilter('risk', v)}
                 options={RISK_FILTER_OPTIONS} />
               <FilterDateRange idPrefix="cr-completed" label="Completed On"
-                from={search.draftFilters.completedFrom} to={search.draftFilters.completedTo}
-                onFromChange={(v) => search.setDraftFilter('completedFrom', v)}
-                onToChange={(v) => search.setDraftFilter('completedTo', v)} />
+                from={search.filters.completedFrom} to={search.filters.completedTo}
+                onFromChange={(v) => search.setFilter('completedFrom', v)}
+                onToChange={(v) => search.setFilter('completedTo', v)} />
             </div>
-            <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-              <Button variant="primary" size="sm" onClick={() => { search.applyFilters(); setShowFilters(false); }}>
-                Done
-              </Button>
-            </div>
+            {/* Active filter tags — the panel's last line (phones / tablets). */}
+            <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         }
       >
@@ -811,7 +839,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
                       label={row.candidate_name || 'candidate'}
                       selectionActive={selectedKeys.size > 0}
                     />
-                    <div className="flex items-start gap-2.5">
+                    <div className="flex items-start gap-2.5 pl-7">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
                           {capitalizedCase(row.candidate_name) || 'Unknown'}

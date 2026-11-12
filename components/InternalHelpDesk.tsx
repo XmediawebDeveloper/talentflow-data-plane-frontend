@@ -16,6 +16,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatValuePlaceholder } from '@/components/ui/stats-card';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 type ViewType = 'overview' | 'submit' | 'tickets' | 'detail';
@@ -33,6 +34,21 @@ const priorities = [
   { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
   { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
   { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
+];
+
+const STATUS_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Status' },
+  { value: 'open', label: 'Open' },
+  { value: 'in-progress', label: 'In Progress' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'closed', label: 'Closed' },
+];
+
+const PRIORITY_FILTER_OPTIONS = [
+  { value: 'all', label: 'All Priority' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
 ];
 
 export default function InternalHelpDesk() {
@@ -249,6 +265,21 @@ export default function InternalHelpDesk() {
       ticket.description.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesSearch;
   });
+
+  const activeFilterChips: FilterChip[] = [
+    filterStatus !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: STATUS_FILTER_OPTIONS.find(o => o.value === filterStatus)?.label ?? filterStatus,
+      onRemove: () => setFilterStatus('all'),
+    },
+    filterPriority !== 'all' && {
+      key: 'priority',
+      label: 'Priority',
+      value: PRIORITY_FILTER_OPTIONS.find(o => o.value === filterPriority)?.label ?? filterPriority,
+      onRemove: () => setFilterPriority('all'),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   /* Placeholder until stats arrive ('—' if they failed) rather than a
      provisional 0 that then jumps. */
@@ -563,28 +594,18 @@ export default function InternalHelpDesk() {
                   <FilterSelect
                     value={filterStatus}
                     onChange={(v) => setFilterStatus(v)}
-                    options={[
-                      { value: 'all', label: 'All Status' },
-                      { value: 'open', label: 'Open' },
-                      { value: 'in-progress', label: 'In Progress' },
-                      { value: 'resolved', label: 'Resolved' },
-                      { value: 'closed', label: 'Closed' },
-                    ]}
+                    options={STATUS_FILTER_OPTIONS}
                     className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
                   />
 
                   <FilterSelect
                     value={filterPriority}
                     onChange={(v) => setFilterPriority(v)}
-                    options={[
-                      { value: 'all', label: 'All Priority' },
-                      { value: 'low', label: 'Low' },
-                      { value: 'medium', label: 'Medium' },
-                      { value: 'high', label: 'High' },
-                    ]}
+                    options={PRIORITY_FILTER_OPTIONS}
                     className="px-4 sm:px-4 py-3 sm:py-3 rounded-lg sm:rounded-lg border-gray-300 text-gray-900 bg-white"
                   />
                 </div>
+                {activeFilterChips.length > 0 && <FilterChips className="mt-3" chips={activeFilterChips} />}
               </div>
 
               {/* Tickets Table */}

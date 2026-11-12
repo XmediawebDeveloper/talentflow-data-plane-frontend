@@ -26,7 +26,7 @@ import ListPagination from '@/components/ListPagination';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
-import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { type FilterChip } from '@/components/ui/filter-chips';
 /* The app's one list search/filter layout — the same row and the same panel
    the Assessments page's Total Jobs tab opens. This screen used to draw its
    own: a white card around a hand-built search input and a hand-built Filters
@@ -432,14 +432,11 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   );
 
   /* Search is applied as you type (debounced), because a search box that needs
-     a second click to take effect reads as broken. The FILTERS are the
-     opposite: six controls confirmed together by Apply, so picking a job then a
-     version then a date range refetches nothing and re-sorts nothing until the
-     user is done. `draft` is what the controls write to; `applied` is what the
-     table reads. */
+     a second click to take effect reads as broken. The FILTERS commit the same
+     way — each panel control writes straight to `filters`, which the table
+     reads; there is no draft / Apply step. */
   const [search, setSearch] = useState('');
   const appliedSearch = useDebounce(search, 300);
-  const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -690,26 +687,17 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     setPage(1);
   };
 
-  const applyFilters = () => {
-    setFilters(draftFilters);
-    setFiltersOpen(false);
-    setPage(1);
-  };
-
   const clearAll = () => {
-    setDraftFilters(EMPTY_FILTERS);
     setFilters(EMPTY_FILTERS);
     setSearch('');
     setPage(1);
   };
 
-  /* Removing ONE chip clears that dimension in both the applied and the draft
-     copy. Only `applied` would leave the panel still showing the value the
-     chip just removed, and re-opening it and pressing Apply would bring the
-     filter back. */
-  const clearOne = (patch: Partial<Filters>) => {
+  /* Panel controls commit as they change (no draft / Apply step), and
+     removing ONE chip clears that dimension — both narrow the result set, so
+     both return to page 1. */
+  const updateFilters = (patch: Partial<Filters>) => {
     setFilters((f) => ({ ...f, ...patch }));
-    setDraftFilters((f) => ({ ...f, ...patch }));
     setPage(1);
   };
 
@@ -726,26 +714,26 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         key: 'job',
         label: 'Job',
         value: job ? `${job.label} (${job.value})` : filters.job,
-        onRemove: () => clearOne({ job: '' }),
+        onRemove: () => updateFilters({ job: '' }),
       });
     }
     if (filters.jobVersion) {
       out.push({
         key: 'jobVersion', label: 'Job Version', value: `V${filters.jobVersion}`,
-        onRemove: () => clearOne({ jobVersion: '' }),
+        onRemove: () => updateFilters({ jobVersion: '' }),
       });
     }
     if (filters.assessmentVersion) {
       out.push({
         key: 'assessmentVersion', label: 'Assessment Version', value: `V${filters.assessmentVersion}`,
-        onRemove: () => clearOne({ assessmentVersion: '' }),
+        onRemove: () => updateFilters({ assessmentVersion: '' }),
       });
     }
     if (!fixedStatus && filters.status) {
       out.push({
         key: 'status', label: 'Status',
         value: STATUS_OPTIONS.find((s) => s.value === filters.status)?.label || filters.status,
-        onRemove: () => clearOne({ status: '' }),
+        onRemove: () => updateFilters({ status: '' }),
       });
     }
     if (filters.createdFrom || filters.createdTo) {
@@ -756,7 +744,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
       out.push({
         key: 'created', label: 'Created',
         value: from && to ? `${from} – ${to}` : from ? `from ${from}` : `until ${to}`,
-        onRemove: () => clearOne({ createdFrom: '', createdTo: '' }),
+        onRemove: () => updateFilters({ createdFrom: '', createdTo: '' }),
       });
     }
     return out;
@@ -1437,11 +1425,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               same Reset and the same count badge beside it.
 
               What stayed with this screen is what is about ITS data: which
-              controls the panel holds, and the draft-then-Apply rule they
-              commit under. The toolbar's own Reset is wired to `clearAll`, the
-              same handler the chips row and the panel's Clear All already
-              call, so there is one way to empty this list however it is
-              reached. */}
+              controls the panel holds. They commit as they change, and the
+              toolbar's own Reset is wired to `clearAll`, the same handler the
+              chips row calls, so there is one way to empty this list however
+              it is reached. */}
           <ListToolbarPortal>
             <ListToolbar
               searchValue={search}
@@ -1455,11 +1442,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               onToggleFilters={() => setFiltersOpen((o) => !o)}
               filtersOpen={filtersOpen}
               activeFilterCount={activeFilterCount}
-              /* APPLIED, not merely selected: the panel batches, so a picked
-                 filter that has not been applied yet is not narrowing anything
-                 and must not light the button up as though it were. */
               filtersApplied={hasAnyFilter(filters)}
               onClearFilters={clearAll}
+              /* Active filter tags: hover popup on More Filters (lg+). */
+              filterChips={chips}
               className="mb-0"
               afterFiltersActions={bulkActionsMenu}
               trailing={onDisplayModeChange ? <ListViewToggle value={displayMode} onChange={onDisplayModeChange} /> : undefined}
@@ -1470,24 +1456,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 the thing this screen is for — below the fold on a laptop. */}
             {filtersOpen && (
               <ListFilterPanel
-                footer={
-                  <>
-                    <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                      Clear All
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={applyFilters}>
-                      Apply Filters
-                    </Button>
-                  </>
-                }
+                chips={chips}
               >
                 {/* `[&>button]` lifts SearchableSelect's h-9 trigger to the
                     38px filter-field standard without touching components/ui. */}
                 <SearchableSelect
                   className="min-w-0 [&>button]:h-[38px]"
                   label="Job"
-                  value={draftFilters.job}
-                  onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
+                  value={filters.job}
+                  onChange={(v) => updateFilters({ job: v })}
                   options={jobOptions}
                   placeholder="All jobs"
                   searchPlaceholder="Search job or ID..."
@@ -1497,8 +1474,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <SearchableSelect
                   className="min-w-0 [&>button]:h-[38px]"
                   label="Job Version"
-                  value={draftFilters.jobVersion}
-                  onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
+                  value={filters.jobVersion}
+                  onChange={(v) => updateFilters({ jobVersion: v })}
                   options={jobVersionOptions}
                   placeholder="All versions"
                   searchPlaceholder="Search version..."
@@ -1508,8 +1485,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 <SearchableSelect
                   className="min-w-0 [&>button]:h-[38px]"
                   label="Assessment Version"
-                  value={draftFilters.assessmentVersion}
-                  onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
+                  value={filters.assessmentVersion}
+                  onChange={(v) => updateFilters({ assessmentVersion: v })}
                   options={assessmentVersionOptions}
                   placeholder="All versions"
                   searchPlaceholder="Search version..."
@@ -1520,8 +1497,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   <SearchableSelect
                     className="min-w-0 [&>button]:h-[38px]"
                     label="Status"
-                    value={draftFilters.status}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
+                    value={filters.status}
+                    onChange={(v) => updateFilters({ status: v })}
                     options={STATUS_OPTIONS}
                     placeholder="All statuses"
                     searchPlaceholder="Search status..."
@@ -1547,30 +1524,23 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     <DateField
                       id="all-assessments-created-from"
                       aria-label="Created from"
-                      value={draftFilters.createdFrom}
-                      max={draftFilters.createdTo || undefined}
-                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
+                      value={filters.createdFrom}
+                      max={filters.createdTo || undefined}
+                      onChange={(v) => updateFilters({ createdFrom: v })}
                       className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
                     <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                     <DateField
                       aria-label="Created to"
-                      value={draftFilters.createdTo}
-                      min={draftFilters.createdFrom || undefined}
-                      onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
+                      value={filters.createdTo}
+                      min={filters.createdFrom || undefined}
+                      onChange={(v) => updateFilters({ createdTo: v })}
                       className="sm:flex-1 sm:min-w-0 h-9 px-2 sm:px-3 text-sm"
                     />
                   </div>
                 </div>
               </ListFilterPanel>
             )}
-
-            {/* ── 3. Active filter chips ─────────────────────────────────────
-                Inside the portal, with the row they summarise: the toolbar now
-                sits in the host page's slot, and chips left behind in the card
-                would be a list of applied filters nowhere near the control that
-                applied them. */}
-            <FilterChips chips={chips} onClearAll={clearAll} className="mt-3 mb-0" />
           </ListToolbarPortal>
 
           {/* ── 4. The table ───────────────────────────────────────────────
@@ -1622,7 +1592,6 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         onToggle={() => toggleSelected(row.id)}
                         label={row.jobName}
                         selectionActive={selectedIds.size > 0}
-                        inline
                       />
                       {/* Select seal and name on one line: the seal sits level with this row, pl-7 clears it. */}
                       <div className="flex items-start justify-between gap-2 pl-7">
