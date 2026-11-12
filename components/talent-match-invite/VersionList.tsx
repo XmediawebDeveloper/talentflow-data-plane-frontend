@@ -146,6 +146,7 @@ export default function VersionList({
   onAction,
   hideDuplicate = false,
   spansJobVersions = false,
+  hideCreate = false,
 }: {
   kind: InviteKind;
   /** The cards to list. */
@@ -173,6 +174,8 @@ export default function VersionList({
    *  read its own job version's versions, and Latest is the newest overall.
    *  `allVersions` stays the picked job version's — usage, cap, New version. */
   spansJobVersions?: boolean;
+  /** Leave out New version / the cap note (a JD version other than the job's own). */
+  hideCreate?: boolean;
 }) {
   const label = KIND_LABEL[kind];
   const every = allVersions ?? versions;
@@ -375,7 +378,7 @@ export default function VersionList({
         </button>
       )}
 
-      {atCap ? (
+      {hideCreate ? null : atCap ? (
         <p role="status" className="rounded-lg border border-brand-orange/30 bg-brand-orange/10 px-3 py-2 text-xs font-medium text-brand-orange-deep">
           {versionCapMessage(kind)}
         </p>

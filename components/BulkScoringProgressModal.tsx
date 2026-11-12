@@ -628,17 +628,20 @@ export default function BulkScoringProgressModal({
               )}
               {/* Minimise only while scoring is still running — once every row
                   has settled there is nothing left to run in the background,
-                  so Close is the only way out. */}
+                  so Close is the only way out. Named for what it does
+                  ("Continue in background"), not as a bare minus: the run
+                  keeps going and the recruiter stays where they are. */}
               {!isAllComplete && (
                 <Button
                   variant="secondary"
                   size="sm"
                   onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
-                  className="w-8"
-                  aria-label="Minimize to background"
-                  title="Run in background"
+                  className="px-2 sm:px-3"
+                  aria-label="Continue in background"
+                  title="Continue in background — scoring keeps running"
                 >
                   <Minus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Continue in background</span>
                 </Button>
               )}
               {/* Close appears only once every row has settled. While work is

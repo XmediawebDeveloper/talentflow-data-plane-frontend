@@ -14,6 +14,7 @@ import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { clearScoringOrigin, FROM_RESUME_DATABASE } from '@/lib/utils/resumeActivityTrail';
 
 interface ScoredResumeData {
   id: string;
@@ -67,6 +68,15 @@ interface Job {
 export default function ResumeScoringRoute() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  /* Entered any way but Resume Database's Score Resume (`from=resume-database`):
+     Resume Database's trail does not apply. Cleared while this first renders,
+     before the scoring view reads it. */
+  const enteredFromResumeDatabase = searchParams.get('from') === FROM_RESUME_DATABASE;
+  useState(() => {
+    if (typeof window !== 'undefined' && !enteredFromResumeDatabase) clearScoringOrigin();
+    return null;
+  });
+  const fromQuery = enteredFromResumeDatabase ? `&from=${FROM_RESUME_DATABASE}` : '';
   const [jobs, setJobs] = useState<Job[]>([]);
   const [resumes, setResumes] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
@@ -415,7 +425,7 @@ export default function ResumeScoringRoute() {
               console.error('[ResumeScoringRoute] Error clearing pendingScoringBatch:', e);
             }
             // Update URL without full page reload to preserve state
-            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}`);
+            router.push(`/recruitment/resume-scoring?jd_id=${status.jd_id}${fromQuery}`);
           }, 2000);
         }
       } catch (e) {
@@ -666,7 +676,7 @@ export default function ResumeScoringRoute() {
     toast.success('Scoring completed! Refreshing data...');
 
     // Update URL to persist the view across refreshes
-    router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}`);
+    router.push(`/recruitment/resume-scoring?jd_id=${data.jobId}${fromQuery}`);
 
     // Refresh data from API to get the latest scores
     await loadScoredHistory();

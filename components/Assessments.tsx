@@ -117,6 +117,7 @@ import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/se
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown, Timer } from 'lucide-react';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import TrackInvitesModal from '@/components/TrackInvitesModal';
+import InviteProgressDialog from '@/components/bulk-invite/InviteProgressDialog';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -638,6 +639,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] =
     useState<Record<string, number[]>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* ⋯ View Progress: the version whose invite sends are shown. */
+  const [progressFor, setProgressFor] = useState<any | null>(null);
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
   const openMenuRef = useRef<HTMLDivElement | null>(null);
@@ -6325,6 +6328,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
+            {/* View Progress — this version's invite sends (Resume Scoring's View Progress). */}
+            <button
+              onClick={() => {
+                setOpenMenuId(null);
+                setProgressFor(assessment);
+              }}
+              className="group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-800"
+            >
+              <TrendingUp className="w-4 h-4 flex-shrink-0 text-brand-blue" />
+              <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
+            </button>
             <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             {/* Draft assessments hide Activate/Archive — drafts
                 go through the configure-page Publish button,
@@ -10306,6 +10320,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           />
         );
       })()}
+
+      {progressFor?.jd_id && (
+        <InviteProgressDialog
+          kind="assessment"
+          jdId={progressFor.jd_id}
+          versionId={progressFor.id}
+          jdCode={progressFor.jd_short_id}
+          jdTitle={progressFor.jd_title || progressFor.job?.title || stripVersionFromTitle(progressFor.title || '')}
+          versionLabel={`${progressFor.jd_version ? `Job V${progressFor.jd_version} · ` : ''}Assessment V${progressFor.version ?? 1}`}
+          onClose={() => setProgressFor(null)}
+        />
+      )}
 
       {/* Resend confirmation — regenerates token, invalidates old link */}
       <ResendLinkModal
