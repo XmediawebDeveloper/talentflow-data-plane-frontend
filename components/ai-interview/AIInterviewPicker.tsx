@@ -21,6 +21,7 @@ import JobStatusBadge, { jobStatusBadgeKind } from '@/components/jobs/JobStatusB
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import ConfigurePreviewDialog from './ConfigurePreviewDialog';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /**
  * The "pick one active AI interview" list shared by the AI Interview page's
@@ -424,11 +425,12 @@ export default function AIInterviewPicker({
 
       {viewMode === 'ungrouped' ? (
         pickerRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-            <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-            <p>{q ? 'No active interviews match your search' : 'No active interviews'}</p>
-            <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Publish an AI interview to invite candidates to it.'}</p>
-          </div>
+          <IllustratedEmptyState
+            bordered={false}
+            illustration={q ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Briefcase} />}
+            title={q ? 'No active interviews match your search' : 'No active interviews'}
+            description={q ? 'Try a different job title or Job ID.' : 'Publish an AI interview to invite candidates to it.'}
+          />
         ) : (
           /* The assessment picker's Ungrouped table, class for class: the AI
              Talent Match results card, its `tf-table-shell` in the
@@ -622,11 +624,12 @@ export default function AIInterviewPicker({
           </>
         )
       ) : jobRows.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-          <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-          <p>{q ? 'No jobs match your search' : 'No jobs found'}</p>
-          <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Create an AI interview against a job first.'}</p>
-        </div>
+        <IllustratedEmptyState
+          bordered={false}
+          illustration={q ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Briefcase} badge="x" />}
+          title={q ? 'No jobs match your search' : 'No jobs found'}
+          description={q ? 'Try a different job title or Job ID.' : 'Create an AI interview against a job first.'}
+        />
       ) : (
         /* Grouped — the assessment picker's job cards, class for class
            (gap 2, p-3, so a page of five fits the popup). */

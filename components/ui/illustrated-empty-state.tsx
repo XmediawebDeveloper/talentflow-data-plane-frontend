@@ -1,5 +1,5 @@
 import { useId, type ComponentType, type ReactNode } from 'react';
-import { Plus } from 'lucide-react';
+import { Check, Plus, Search, Send, X } from 'lucide-react';
 
 /* Illustrated empty states: a soft blue drawing on a pale cloud, over a title,
    a line of text and an optional button, in a bordered card. Colours are the
@@ -23,7 +23,7 @@ export function Illustration({ children }: { children: (ids: IllustrationIds) =>
   const id = useId().replace(/:/g, '');
   const ids = { blue: `${id}-blue`, light: `${id}-light` };
   return (
-    <svg viewBox="0 0 240 140" className="w-full max-w-[14rem] h-auto" aria-hidden>
+    <svg viewBox="0 0 240 140" className="w-full max-w-[12rem] h-auto" aria-hidden>
       <defs>
         <linearGradient id={ids.blue} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#6AA5FF" />
@@ -85,7 +85,7 @@ export function IconTileIllustration({
   badge?: boolean;
 }) {
   return (
-    <div className="relative w-full max-w-[14rem] aspect-[240/140]" aria-hidden>
+    <div className="relative w-full max-w-[12rem] aspect-[240/140]" aria-hidden>
       <Illustration>
         {() => (
           <>
@@ -109,6 +109,52 @@ export function IconTileIllustration({
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+const FOLDER_BADGE_ICON = { check: Check, send: Send, x: X, plus: Plus, search: Search } as const;
+
+/**
+ * A blue folder with a dashed draft page behind it and one white line icon on
+ * its front — the AI Interview / Assessment mockups' style. `badge` adds a
+ * white-ringed blue disc on the folder's corner (tick, send, ✕ or +).
+ */
+export function FolderIconIllustration({
+  icon: Icon,
+  badge,
+}: {
+  icon: ComponentType<{ className?: string; strokeWidth?: number }>;
+  badge?: keyof typeof FOLDER_BADGE_ICON;
+}) {
+  const BadgeIcon = badge ? FOLDER_BADGE_ICON[badge] : null;
+  return (
+    <div className="relative w-full max-w-[12rem] aspect-[240/140]" aria-hidden>
+      <Illustration>
+        {ids => (
+          <>
+            <circle cx="36" cy="70" r="4" fill="none" stroke={ILLUSTRATION_ACCENT} strokeWidth="2.5" />
+            <path d="M182 18v12M176 24h12M198 62v10M193 67h10" stroke={ILLUSTRATION_ACCENT} strokeWidth="3" strokeLinecap="round" />
+            {/* Dashed draft page */}
+            <path d="M92 6h36l14 14v50H92z" fill="#fff" stroke="#A9CBFF" strokeWidth="2" strokeDasharray="5 4" strokeLinejoin="round" />
+            <path d="M128 6v14h14" fill="#DCE9FF" stroke="#A9CBFF" strokeWidth="2" strokeLinejoin="round" />
+            {/* Folder */}
+            <path d="M66 46a6 6 0 016-6h28l6 6h60a6 6 0 016 6v62a6 6 0 01-6 6H72a6 6 0 01-6-6z" fill={`url(#${ids.blue})`} />
+          </>
+        )}
+      </Illustration>
+      <Icon className="absolute left-[49.5%] top-[57%] w-[15%] h-[15%] -translate-x-1/2 -translate-y-1/2 text-white" strokeWidth={2} />
+      {badge === 'search' ? (
+        /* A large magnifier overlapping the folder's right edge, not a disc. */
+        <span className="absolute left-[74%] top-[60%] -translate-x-1/2 -translate-y-1/2 w-[27%] aspect-square">
+          <span className="absolute left-[8%] top-[8%] w-[62%] aspect-square rounded-full bg-white/70" />
+          <Search className="relative w-full h-full text-[#2F6FEB]" strokeWidth={2.75} />
+        </span>
+      ) : BadgeIcon && (
+        <span className="absolute left-[68%] top-[76%] -translate-x-1/2 -translate-y-1/2 flex items-center justify-center w-[15%] aspect-square rounded-full bg-[#2F6FEB] ring-[3px] ring-white shadow-sm">
+          <BadgeIcon className="w-[55%] h-[55%] text-white" strokeWidth={3} />
+        </span>
+      )}
     </div>
   );
 }

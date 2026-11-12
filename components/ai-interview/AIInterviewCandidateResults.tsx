@@ -46,6 +46,7 @@ import {
 } from './AIInterviewResults';
 import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, InviteTimelineLines } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 import {
   FilterSelect,
   FilterDateRange,
@@ -759,6 +760,7 @@ export default function AIInterviewCandidateResults({ sortOrder = 'newest', tool
         entityLabel="candidate result"
         emptyTitle="No candidate results yet"
         emptyDescription="Results appear here once a candidate completes an AI interview."
+        illustration={<FolderIconIllustration icon={Users} badge="check" />}
       />
     );
   }

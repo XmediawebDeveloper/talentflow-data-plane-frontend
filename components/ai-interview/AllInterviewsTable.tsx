@@ -41,6 +41,7 @@ import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftR
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -1044,22 +1045,21 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   );
   const emptyPanel = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
-      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-        <Video className="w-7 h-7 text-brand-blue" />
-      </div>
-      <h3 className="tf-section-title mb-1">
-        {isNarrowed ? 'No interviews found' : 'No interviews yet'}
-      </h3>
-      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
-        {isNarrowed
+      <IllustratedEmptyState
+        bordered={false}
+        className="!py-0"
+        illustration={isNarrowed ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Video} />}
+        title={isNarrowed ? 'No interviews found' : 'No interviews yet'}
+        description={isNarrowed
           ? 'No interviews match your current search or filter criteria.'
           : 'AI interviews you create will be listed here.'}
-      </p>
-      {isNarrowed && (
-        <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-          Clear Filters
-        </Button>
-      )}
+      >
+        {isNarrowed && (
+          <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+            Clear Filters
+          </Button>
+        )}
+      </IllustratedEmptyState>
     </div>
   );
 

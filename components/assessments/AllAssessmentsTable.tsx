@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   X, ClipboardList, MoreVertical, Eye, Pencil, AlertTriangle, RefreshCw,
   Archive, ArchiveRestore, BarChart, Trash2,
-  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet, Send, CheckCircle2
+  CheckSquare, Square, ChevronDown, Loader2, FileDown, FileText, FileSpreadsheet, Send, CheckCircle2, FileSearch
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
@@ -57,6 +57,7 @@ import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card
 import { useArchiveAssessmentConfirm } from '@/components/assessments/ArchiveAssessmentModal';
 import { useDeleteRecordConfirm } from '@/components/recruitment/DeleteRecordModal';
 import { PAGER_LIST_PARAM, rememberAssessmentPagerOrder, type AssessmentPagerList } from '@/lib/utils/assessmentPagerList';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 /* The whole set is read (pages of 100, `listAssessmentsBatched`), the same
    batch size and the same reason as the Assessments dashboard's own list: the
@@ -1308,8 +1309,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   );
   const emptyPanel = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
-      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-        <ClipboardList className="w-7 h-7 text-brand-blue" />
+      <div className="mb-4 flex w-full justify-center">
+        <FolderIconIllustration
+          icon={isNarrowed ? FileSearch : fixedStatus === 'archived' ? Archive : ClipboardList}
+        />
       </div>
       {/* The "nothing here yet" wording is the one place the
           pinned status shows through. Archived is the reason:
@@ -1321,14 +1324,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           carried over verbatim from the empty state the
           Archived tab used before it moved into this table,
           so the tab reads exactly as it did. */}
-      <h3 className="tf-section-title mb-1">
+      <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">
         {isNarrowed
           ? 'No assessments found'
           : fixedStatus === 'archived'
             ? 'No archived assessments found.'
             : 'No assessments yet'}
       </h3>
-      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
+      <p className="mb-4 max-w-md mx-auto text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">
         {isNarrowed
           ? 'No assessments match your current search or filter criteria.'
           : fixedStatus === 'archived'

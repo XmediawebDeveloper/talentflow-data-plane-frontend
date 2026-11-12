@@ -21,6 +21,7 @@ import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { onListCacheInvalidate } from '@/lib/utils/listCache';
 import { getTokens } from '@/lib/services/api';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /** Same rows-per-page the Job Openings list starts on. */
 const DEFAULT_ITEMS_PER_PAGE = 10;
@@ -838,14 +839,13 @@ export default function JobOpeningPickerList({
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
-            <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-            <p className="text-sm">
-              {showAllStatuses || excludeDraftsOnly
-                ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
-                : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}
-            </p>
-          </div>
+          <IllustratedEmptyState
+            bordered={false}
+            illustration={<FolderIconIllustration icon={searchQuery ? Search : Briefcase} />}
+            description={showAllStatuses || excludeDraftsOnly
+              ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
+              : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}
+          />
         )}
       </div>
 
