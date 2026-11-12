@@ -1,7 +1,7 @@
 'use client'
 
 import { phoneCentredLeft } from '@/lib/hooks/useCenteredMenuOnPhone';
-import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, CheckCircle2, CheckSquare, Square, MoreVertical, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video, FileDown } from 'lucide-react';
 import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,7 +13,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDLocation, JDStatusEvent, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate } from '@/lib/utils/jobOpeningDisplay';
+import { formatLocationGroups, formatJobVersionLabel, formatLastUpdated, getPublishedDate, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -614,13 +614,17 @@ const JOB_ICON_ACTION_BASE =
    Hover now only deepens the same hue, which is what a hover should do:
    confirm the target, not introduce it.
 
-   The three hues are the ones this app already uses for these actions — blue
-   for edit, the red `Ban` of the job list's Disable row, and the shared
+   The three hues are the job list ⋮ menu's own for these actions — blue for
+   edit, its Disable row's orange-700 `Ban`, and the shared
    `--menu-icon-archive` token — rather than a palette invented here. */
 const JOB_ICON_ACTION_EDIT =
   'text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue/40';
 const JOB_ICON_ACTION_DISABLE =
-  'text-destructive hover:bg-destructive-subtle hover:border-destructive-line';
+  'text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10 hover:border-orange-200 dark:hover:border-orange-500/30';
+/* Re-enable / Unarchive: green, as the job list ⋮ menu's Re-enable JD and
+   Unarchive Job rows (text-success). */
+const JOB_RESTORE_ACTION =
+  '!text-success !border-success-line hover:!bg-success-subtle';
 const JOB_ICON_ACTION_ARCHIVE =
   'text-menu-icon-archive hover:bg-brand-orange/10 hover:border-brand-orange/40';
 
@@ -2268,8 +2272,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
       case 'Disabled':  // JD15: Disabled status styling
         return 'bg-destructive-subtle text-destructive border-destructive-line';
-      case 'Archived':
-        return 'bg-purple-100 text-purple-700 border-purple-200';
+      case 'Archived': {
+        // The Job Openings list's own Archived badge (getStatusConfig), so the
+        // two pages always read the same.
+        const archived = getStatusConfig('Archived');
+        return `${archived.bg} ${archived.text} ${archived.border}`;
+      }
       default:
         return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -3304,9 +3312,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   )
                 )}
 
-                {/* Orange on hover, matching the job list's Disable menu item —
-                    it takes the JD out of service, so it should not look like
-                    the neutral pair either side of it. */}
+                {/* Orange, matching the job list's Disable menu item — it takes
+                    the JD out of service, so it should not look like the
+                    neutral pair either side of it. */}
                 {onDisable && (
                   <button
                     onClick={() => { if (!disableLocked) handleDisable(); }}
@@ -3346,11 +3354,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="flex items-center gap-2">
                 {onEnable && (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     onClick={() => { if (!disableLocked) onEnable(job); }}
                     aria-disabled={disableLocked || undefined}
-                    className={`${(disableLocked ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
-                    icon={<CheckCircle className="w-4 h-4" />}
+                    className={`${JOB_RESTORE_ACTION} ${(disableLocked ? 'opacity-60 cursor-not-allowed' : undefined) ?? ''} disabled:opacity-50`}
+                    icon={<CheckCircle2 className="w-4 h-4" />}
                     aria-label="Re-enable this JD"
                     title={disableLocked ? 'You do not have permission to re-enable job descriptions' : 'Re-enable this JD'}
                   >
@@ -3365,13 +3373,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               <div className="flex items-center gap-2">
                 {onUnarchive && (
                   <Button
-                    variant="primary"
+                    variant="secondary"
                     // Same lock as Archive (2026-11-10): it had none, so Viewer saw it enabled.
                     onClick={() => { if (!archiveLocked) onUnarchive(job); }}
                     aria-disabled={archiveLocked || undefined}
-                    className={archiveLocked ? 'opacity-60 cursor-not-allowed' : undefined}
+                    className={`${JOB_RESTORE_ACTION} ${archiveLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
                     title={archiveLocked ? 'You do not have permission to unarchive job descriptions' : 'Unarchive this JD'}
-                    icon={<ArchiveRestore className="w-4 h-4" />}
+                    icon={<RefreshCw className="w-4 h-4" />}
                   >
                     Unarchive
                   </Button>
