@@ -2,7 +2,7 @@
 
 import JobIdBadge, { JOB_ID_BADGE_FIT } from '@/components/jobs/JobIdBadge';
 import { InviteSourceValue, assessmentInviteSource, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, ArchiveRestore, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square, FileSearch } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
@@ -165,6 +165,7 @@ import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 import InviteStatusChip from '@/components/ui/invite-status-chip';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 import { jobLineageKey, collapseByLineage as collapseJobLineages, orderTotalJobs } from '@/lib/utils/assessmentJobOrder';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -7810,6 +7811,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                        search. */
                     <TabEmptyState
                       icon={Users}
+                      illustration={<FolderIconIllustration icon={Users} />}
                       title="No Candidate Results Yet"
                       description="Results appear here once candidates complete an assessment."
                     />
@@ -7824,6 +7826,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       entityLabel="result"
                       emptyTitle="No Candidate Results Yet"
                       onReset={completedCandidatesSearch.reset}
+                      narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
                     />
                   ) : (
                     <>
@@ -8754,6 +8757,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                        inside the table. */
                     <TabEmptyState
                       icon={Mail}
+                      illustration={<FolderIconIllustration icon={Mail} />}
                       title="No Invitations Sent Yet"
                       description="Invite candidates to an assessment and their status appears here."
                     />
@@ -10105,6 +10109,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   emptyTitle={copy.title}
                   emptyDescription={copy.description}
                   onReset={clearAssessmentFilters}
+                  illustration={<FolderIconIllustration icon={ClipboardList} />}
+                  narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
                   action={copy.canCreate ? (
                     /* The page's own Create action, permission handling and
                        all, in the shared empty-state button class. */

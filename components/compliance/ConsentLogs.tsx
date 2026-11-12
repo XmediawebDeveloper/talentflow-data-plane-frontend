@@ -15,7 +15,7 @@ import {
   XCircle,
   ExternalLink,
   Download,
-  X,
+  X, FileSearch, ShieldCheck
 } from 'lucide-react';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -36,6 +36,7 @@ import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import NameAvatar from '@/components/ui/name-avatar';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 interface ConsentLogsProps {
   compact?: boolean;
@@ -371,6 +372,8 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           emptyTitle="No consent logs found"
           emptyDescription="Consent records appear here once candidates accept the terms for an assessment or interview."
           onReset={clearFilters}
+          illustration={<FolderIconIllustration icon={ShieldCheck} />}
+          narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
         />
       ) : (
         <>

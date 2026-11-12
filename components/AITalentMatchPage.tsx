@@ -77,7 +77,6 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { PageHeader } from '@/components/ui/page-header';
-import { EmptyState } from '@/components/ui/empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -88,6 +87,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { usePagedList } from '@/lib/hooks/usePagedList';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -4266,24 +4266,21 @@ export default function AITalentMatchPage({
                  Latest Matched, Actions. */
               <MatchTableSkeleton cols={['w-6', 'w-32', 'w-24', 'w-28', 'w-24', 'w-16']} />
             ) : filteredCandidateRows.length === 0 ? (
-              <div className="tf-panel p-8 sm:p-10 text-center">
-                <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
-                  <User className="w-5 h-5" />
-                </div>
-                <h3 className="tf-section-title sm:text-lg mb-2">
-                  {candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
-                </h3>
-                <p className="tf-body-secondary max-w-md mx-auto">
-                  {candidateFiltersApplied
-                    ? 'Try a different name, job, location, or lower the minimum match.'
-                    : 'Run AI Match on a job to see matched candidates here.'}
-                </p>
+              <IllustratedEmptyState
+                illustration={candidateFiltersApplied
+                  ? <FolderIconIllustration icon={Search} />
+                  : <FolderIconIllustration icon={Users} badge="search" />}
+                title={candidateFiltersApplied ? 'No candidates match your filters' : 'No matched candidates yet'}
+                description={candidateFiltersApplied
+                  ? 'Try a different name, job, location, or lower the minimum match.'
+                  : 'Run AI Match on a job to see matched candidates here.'}
+              >
                 {candidateFiltersApplied && (
-                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters} className="mt-4">
+                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters}>
                     Clear filters
                   </Button>
                 )}
-              </div>
+              </IllustratedEmptyState>
             ) : (
               /* Grouped table, matching Resume Scoring's grouped "View by
                  Candidates": one row per candidate (already email-deduped by
@@ -7074,33 +7071,36 @@ export default function AITalentMatchPage({
         })() : jobsList.loading ? (
           <MatchTableSkeleton cols={['w-24', 'w-48', 'w-24', 'w-32', 'w-24']} rows={5} />
         ) : (matchStats?.matched_jobs ?? 0) === 0 && !historySearch.isNarrowed && !candidateRatingBand ? (
-          <div className="tf-card">
-            <EmptyState
-              icon={Sparkles}
-              title="No Matching History Yet"
-              description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
-              action={{
-                label: 'Run AI Match Now',
-                onClick: () => {
-                  if (!canRunAiMatch) {
-                    return;
-                  }
-                  setViewMode('new');
-                  setSelectedJob('');
-                  router.push('/recruitment/ai-talent-match', { scroll: false });
-                },
+          <IllustratedEmptyState
+            illustration={<FolderIconIllustration icon={Sparkles} badge="search" />}
+            title="No Matching History Yet"
+            description="Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit."
+          >
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                if (!canRunAiMatch) {
+                  return;
+                }
+                setViewMode('new');
+                setSelectedJob('');
+                router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
-            />
-          </div>
+            >
+              Run AI Match Now
+            </Button>
+          </IllustratedEmptyState>
         ) : (
-          <div className="tf-card">
-            <EmptyState
-              icon={Search}
-              title="No Results Found"
-              description="No matched jobs match your current filters. Try adjusting your search criteria."
-              action={{ label: 'Clear All Filters', onClick: clearHistoryFilters }}
-            />
-          </div>
+          <IllustratedEmptyState
+            illustration={<FolderIconIllustration icon={Search} />}
+            title="No Results Found"
+            description="No matched jobs match your current filters. Try adjusting your search criteria."
+          >
+            <Button variant="primary" size="md" onClick={clearHistoryFilters}>
+              Clear All Filters
+            </Button>
+          </IllustratedEmptyState>
         )}
         </div>
         )}

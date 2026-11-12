@@ -102,6 +102,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import type { AIConfigListQuery, AIConfigListFilters } from '@/lib/services/aiInterviewService';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx, and to the
@@ -3715,25 +3716,15 @@ export default function AIInterview() {
                   {configRowsSkeleton}
                 </div>
               ) : (serverTotalJobs ? (totalJobsWaiting ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="relative inline-flex items-center justify-center mb-5">
-                    <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
-                    <div className="relative w-20 h-20 rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
-                      {searchQuery ? (
-                        <Search className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      ) : (
-                        <Video className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      )}
-                    </div>
-                  </div>
-                  <h3 className="tf-section-title mb-1.5 tracking-tight">
-                    {searchQuery ? 'No matches found' : 'No AI interviews yet'}
-                  </h3>
-                  <p className="tf-body-muted mb-6 max-w-sm mx-auto">
-                    {searchQuery
-                      ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
-                      : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
-                  </p>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={searchQuery ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Video} />}
+                  title={searchQuery ? 'No matches found' : 'No AI interviews yet'}
+                  description={searchQuery
+                    ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
+                    : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
+                >
                   {!searchQuery && (
                     <Button
                       variant="primary"
@@ -3755,7 +3746,7 @@ export default function AIInterview() {
                       Clear search
                     </Button>
                   )}
-                </div>
+                </IllustratedEmptyState>
               ) : (
                 <>
                 {/* List: one full-width card per job. Card: the same cards in a
@@ -4310,15 +4301,13 @@ export default function AIInterview() {
                   </Button>
                 </div>
               ) : inviteStatusRows.length === 0 ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Mail className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <h3 className="tf-section-title mb-1">No invitations sent yet</h3>
-                  <p className="tf-body-muted max-w-md mx-auto">
-                    Invite candidates to an AI interview and their status appears here.
-                  </p>
-                </div>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={<FolderIconIllustration icon={Mail} badge="send" />}
+                  title="No invitations sent yet"
+                  description="Invite candidates to an AI interview and their status appears here."
+                />
               ) : null;
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;

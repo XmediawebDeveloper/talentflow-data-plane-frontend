@@ -4,7 +4,7 @@ import {
   Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2,
-  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save, Copy, X, Square, CheckSquare
+  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save, Copy, X, Square, CheckSquare, FileSearch
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -25,6 +25,7 @@ import { exportRows } from '@/lib/utils/exportUtils';
 import { Button } from '@/components/ui/button';
 import { DateField } from '@/components/ui/date-field';
 import { formatScore } from '@/lib/utils/score';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -697,6 +698,8 @@ export default function AssessmentAuditTrail({ toolbarSlot, refreshSignal, displ
               emptyTitle="No activity yet"
               emptyDescription="Assessment and candidate events appear here as they happen."
               onReset={search.reset}
+              illustration={<FolderIconIllustration icon={Activity} />}
+              narrowedIllustration={<FolderIconIllustration icon={FileSearch} />}
             />
           ) : (
             <div className="space-y-3 sm:space-y-4">
