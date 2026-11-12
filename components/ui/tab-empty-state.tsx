@@ -31,6 +31,12 @@ export interface TabEmptyStateProps {
   /** Optional illustration shown in place of the default icon. */
   imageSrc?: string;
   imageAlt?: string;
+  /**
+   * An inline illustration (see `components/ui/illustrated-empty-state`),
+   * shown in place of the icon / image. With it the heading takes the
+   * illustrated empty states' bolder style.
+   */
+  illustration?: React.ReactNode;
   /** Heading, e.g. "No Assessment Results". */
   title: string;
   /** One line on what would fill this tab. */
@@ -55,6 +61,7 @@ export default function TabEmptyState({
   icon: Icon,
   imageSrc,
   imageAlt = '',
+  illustration,
   title,
   description,
   action,
@@ -70,7 +77,9 @@ export default function TabEmptyState({
         className,
       )}
     >
-      {imageSrc ? (
+      {illustration ? (
+        <div className="mb-4 flex w-full justify-center">{illustration}</div>
+      ) : imageSrc ? (
         <Image
           src={imageSrc}
           alt={imageAlt}
@@ -81,8 +90,17 @@ export default function TabEmptyState({
       ) : (
         <Icon className="w-12 h-12 text-gray-300 dark:text-slate-500 mb-3" />
       )}
-      <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">{title}</h3>
-      <p className="tf-body-muted max-w-sm">{description}</p>
+      {illustration ? (
+        <>
+          <h3 className="mb-1.5 text-base sm:text-lg font-bold tracking-tight text-[#0F1E3D] dark:text-slate-50">{title}</h3>
+          <p className="max-w-md text-sm sm:text-base leading-relaxed text-[#0F1E3D]/80 dark:text-slate-300">{description}</p>
+        </>
+      ) : (
+        <>
+          <h3 className="text-base font-medium text-gray-700 dark:text-slate-300 mb-2">{title}</h3>
+          <p className="tf-body-muted max-w-sm">{description}</p>
+        </>
+      )}
       {action && (
         <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{action}</div>
       )}

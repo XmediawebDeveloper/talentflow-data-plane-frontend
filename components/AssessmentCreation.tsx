@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
@@ -14,6 +15,7 @@ import { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { assessmentService, jdService } from '@/lib/services';
+import type { JDResponse } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
@@ -421,17 +423,21 @@ const JD_BATCH_SIZE = 100;
  * Any status test therefore belongs AFTER the lineage collapse, on the full
  * list (see `availableJobs`), never in this request.
  */
-const fetchAllJdVersions = async () => {
+const fetchAllJdVersions = async (onFirstPage?: (items: JDResponse[]) => void) => {
+  // Progressive read: the first screen of jobs to `onFirstPage` at once, the
+  // full list (100-row pages, in parallel) returned when it's all in.
+  if (onFirstPage) return jdService.listAllMineProgressive(onFirstPage, 10);
   const firstPage = await jdService.list({ page: 1, page_size: JD_BATCH_SIZE, source: 'my-jds' });
   const items = [...firstPage.items];
   const totalPages = Math.max(
     firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
     1,
   );
-  for (let page = 2; page <= totalPages; page += 1) {
-    const nextPage = await jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' });
-    items.push(...nextPage.items);
-  }
+  // Pages 2+ in parallel (a few at a time), kept in page order — was one by one.
+  const rest = await fetchRemainingPages(totalPages, (page) =>
+    jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' }),
+  );
+  for (const nextPage of rest) items.push(...nextPage.items);
   return items;
 };
 
@@ -1254,6 +1260,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
+  /* True while the first screen of jobs is showing and the rest are still
+     loading — the empty state and the count wait for the full list. */
+  const [isLoadingMoreJobs, setIsLoadingMoreJobs] = useState(false);
 
   // 1:1 JD-Assessment: Track which JDs already have assessments
   const [jdsWithAssessments, setJdsWithAssessments] = useState<Set<string>>(new Set());
@@ -1902,8 +1911,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         /* Both in parallel, but SETTLED: the assessments index failing used to
            reject the pair, which dropped the job list too and showed "No
            published jobs available" for what was a network error. */
+        /* Show the first 100 jobs the moment they land instead of waiting
+           for every page — the rest swap in when they arrive. Add stays gated
+           on the eligibility read either way (hasLoadedAssessmentEligibility).
+           Skipped when a JD is pre-selected by link: that flow should go
+           straight to Configure, not flash the picker while it resolves. */
+        const showFirstPageEarly = !(preSelectedJobId || urlJdId || editAssessmentId);
         const [jdResult, eligibilityResult] = await Promise.allSettled([
-          fetchAllJdVersions(),
+          fetchAllJdVersions(showFirstPageEarly ? (firstItems) => {
+            setLocalJobs(firstItems.map((jd: JDResponse & { coding_required?: boolean; supported_languages?: string[] }) => ({
+              ...mapJDToJob(jd),
+              coding_required: jd.coding_required || false,
+              supported_languages: jd.supported_languages || [],
+            })));
+            setIsLoadingMoreJobs(true);
+            setIsLoadingJobs(false);
+          } : undefined),
           assessmentService.getJDsWithAssessments(),
         ]);
         if (jdResult.status === 'rejected') throw jdResult.reason;
@@ -2002,12 +2025,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         }
       } catch (error) {
         console.error('Failed to fetch JDs:', error);
-        // Fall back to props if API fails
-        setLocalJobs(jobs);
+        // Fall back to props if API fails — unless the first screen of jobs
+        // already landed, which is kept (the banner offers a retry).
+        setLocalJobs(prev => (prev.length > 0 ? prev : jobs));
         setJobsLoadError('jobs');
       } finally {
         setHasLoadedAssessmentEligibility(true);
         setIsLoadingJobs(false);
+        setIsLoadingMoreJobs(false);
       }
     };
 
@@ -3633,9 +3658,15 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <span className="tf-label">
                     Select a Job Opening
-                    {filteredAvailableJobs.length > 0 && (
+                    {filteredAvailableJobs.length > 0 && !isLoadingMoreJobs && (
                       <span className="ml-2 font-normal text-gray-500 whitespace-nowrap">
                         &mdash; {filteredAvailableJobs.length} available
+                      </span>
+                    )}
+                    {isLoadingMoreJobs && (
+                      <span className="ml-2 inline-flex items-center gap-1 font-normal text-gray-500 dark:text-slate-400">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Loading jobs...
                       </span>
                     )}
                   </span>
@@ -4239,7 +4270,17 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     Not after a failed read with nothing loaded: the banner
                     above says what happened, and "publish a Job first" would
                     be wrong advice for a network error. */}
-                {filteredAvailableJobs.length === 0 && !(jobsLoadError === 'jobs' && availableJobs.length === 0) && (
+                {/* The first screen of jobs can hold nothing pickable (all
+                    drafts, or all already assessed) while the rest are still
+                    loading — show that it's loading, not "no jobs". */}
+                {filteredAvailableJobs.length === 0 && isLoadingMoreJobs && (
+                  <div className="space-y-3">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <Skeleton key={i} className="h-20 w-full rounded-lg" />
+                    ))}
+                  </div>
+                )}
+                {filteredAvailableJobs.length === 0 && !isLoadingMoreJobs && !(jobsLoadError === 'jobs' && availableJobs.length === 0) && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">

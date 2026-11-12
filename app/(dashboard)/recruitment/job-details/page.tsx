@@ -1,5 +1,6 @@
 'use client';
 
+import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { useState, useEffect, useRef } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -332,14 +333,12 @@ function JobDetailsContent() {
   useEffect(() => {
     const fetchAllPublished = async () => {
       const items: JDResponse[] = [];
-      let page = 1;
-      while (true) {
-        const res = await jdService.list({ status: 'published', page_size: 100, page });
-        const pageItems = res.items ?? [];
-        items.push(...pageItems);
-        if (items.length >= res.total || pageItems.length < 100) break;
-        page++;
-      }
+      // Page 1, then the rest in parallel (a few at a time) — was one by one.
+      const first = await jdService.list({ status: 'published', page_size: 100, page: 1 });
+      const rest = await fetchRemainingPages(Math.max(1, Math.ceil((first.total ?? 0) / 100)), (page) =>
+        jdService.list({ status: 'published', page_size: 100, page }),
+      );
+      for (const r of [first, ...rest]) items.push(...r.items ?? []);
 
       // Collapse every version down to one entry per Job lineage — keyed on
       // the human-readable job_id, same key JobsListing groups on, falling
