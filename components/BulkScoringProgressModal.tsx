@@ -5,6 +5,8 @@ import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import { ToolbarResetButton } from '@/components/ui/list-toolbar';
+import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
@@ -369,6 +371,25 @@ export default function BulkScoringProgressModal({
   const extraFiltersApplied = activeExtraFilterCount > 0;
   const anyFiltersApplied =
     searchQuery !== '' || statusFilter !== 'all' || sourceFilter !== 'all' || extraFiltersApplied;
+  /* Active filter tags: Status and Source, then one per filter the Filters
+     button's badge counts (Scored From / Scored To are counted apart there, so
+     they are two tags here). Search shows in its own box. */
+  const STATUS_CHIP_LABELS: Record<string, string> = { queued: 'Queued', 'in-progress': 'In Progress', completed: 'Completed', skipped: 'Skipped', failed: 'Failed' };
+  const SOURCE_CHIP_LABELS: Record<string, string> = { 'internal-db': 'Shared Database', 'my-resumes': 'My Resumes' };
+  const formatChipDate = (v: string) => {
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && { key: 'status', label: 'Status', value: STATUS_CHIP_LABELS[statusFilter] ?? statusFilter, onRemove: () => setStatusFilter('all') },
+    sourceFilter !== 'all' && { key: 'source', label: 'Source', value: SOURCE_CHIP_LABELS[sourceFilter] ?? sourceFilter, onRemove: () => setSourceFilter('all') },
+    scoredByFilter !== 'all' && { key: 'scoredBy', label: 'Scored By', value: scoredByFilter, onRemove: () => setScoredByFilter('all') },
+    jobVersionFilter !== 'all' && { key: 'jobVersion', label: 'Job Version', value: `v${jobVersionFilter}`, onRemove: () => setJobVersionFilter('all') },
+    scoredFrom !== '' && { key: 'scoredFrom', label: 'Scored From', value: formatChipDate(scoredFrom), onRemove: () => setScoredFrom('') },
+    scoredTo !== '' && { key: 'scoredTo', label: 'Scored To', value: formatChipDate(scoredTo), onRemove: () => setScoredTo('') },
+  ].filter(Boolean) as FilterChip[];
   const clearAllFilters = () => {
     setSearchQuery('');
     setStatusFilter('all');
@@ -816,6 +837,8 @@ export default function BulkScoringProgressModal({
             {/* Filters - the less-used controls live behind this toggle rather
                 than stretching the toolbar: the three above answer most
                 questions, and these narrow an already-filtered list. */}
+            {/* Active filter tags: a popup on hovering Filters (laptop / desktop). */}
+            <FilterChipsHover chips={activeFilterChips}>
             <button
               type="button"
               onClick={() => setShowMoreFilters(v => !v)}
@@ -836,6 +859,9 @@ export default function BulkScoringProgressModal({
               )}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showMoreFilters ? 'rotate-180' : ''}`} />
             </button>
+            </FilterChipsHover>
+            {/* Reset — beside Filters, as on Job Openings. */}
+            {anyFiltersApplied && <ToolbarResetButton onClick={clearAllFilters} />}
           </div>
 
           {showMoreFilters && (
@@ -903,23 +929,13 @@ export default function BulkScoringProgressModal({
                     />
                   </div>
                 </div>
+
+                {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                <FilterChipsPanelLine chips={activeFilterChips} />
               </div>
           )}
 
-          {/* "Showing N of M records" lived here too — the pagination footer
-              already says it, so only Clear Filters remains, when it applies. */}
-          {anyFiltersApplied && (
-          <div className="mt-1.5 flex items-center justify-end text-sm">
-            {anyFiltersApplied && (
-              <button
-                onClick={clearAllFilters}
-                className="text-gray-800 dark:text-slate-100 hover:text-gray-900 font-medium"
-              >
-                Clear Filters
-              </button>
-            )}
-          </div>
-          )}
+          {/* Clear Filters moved up beside the Filters button as Reset (Job Openings). */}
         </div>
 
         {/* Table / Cards */}

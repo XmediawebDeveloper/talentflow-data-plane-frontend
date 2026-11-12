@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Calendar, Clock, Eye } from 'lucide-react';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import { capitalizedCase } from '@/lib/utils/candidateNameDisplay';
 
@@ -40,7 +41,12 @@ export interface CandidateResultCardProps {
   date: ReactNode;
   onOpen: () => void;
   /** A row checkbox, for pages whose cards can be ticked for a bulk action. */
-  selection?: { checked: boolean; onChange: (checked: boolean) => void };
+  selection?: {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    /** Anything on the page is selected — keeps every card's seal visible. */
+    active?: boolean;
+  };
   /** Further action buttons, beside View Result. */
   actions?: ReactNode;
   /** Drop the View Result button (the card itself still opens the result on
@@ -83,23 +89,23 @@ export default function CandidateResultCard({
         }
       }}
       title={`View ${name || 'candidate'}'s result`}
-      className={`text-left bg-white dark:bg-slate-900 rounded-xl border ring-1 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 sm:p-5 flex flex-col gap-4 h-full cursor-pointer min-w-0 ${
+      className={`relative group text-left bg-white dark:bg-slate-900 rounded-xl border ring-1 shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 sm:p-5 flex flex-col gap-4 h-full cursor-pointer min-w-0 ${
         selection?.checked
           ? 'border-brand-blue/30 ring-brand-blue/20'
           : 'border-gray-100 dark:border-slate-700/60 ring-black/[0.02]'
-      }`}
+      } ${gridCardSelectedClass(!!selection?.checked)}`}
     >
-      <div className="flex items-center gap-3">
-        {selection && (
-          <input
-            type="checkbox"
-            checked={selection.checked}
-            onChange={(e) => selection.onChange(e.target.checked)}
-            onClick={(e) => e.stopPropagation()}
-            aria-label={`Select ${name || 'candidate'}`}
-            className="tf-checkbox focus:ring-brand-blue/40"
-          />
-        )}
+      {/* Grid card: the shared round select seal, level with the name row. */}
+      {selection && (
+        <GridCardSelect
+          selected={selection.checked}
+          onToggle={() => selection.onChange(!selection.checked)}
+          label={name || 'candidate'}
+          selectionActive={selection.active}
+          className="top-4 left-4 sm:top-5 sm:left-5"
+        />
+      )}
+      <div className={`flex items-center gap-3 ${selection ? 'pl-7' : ''}`}>
         <div className="min-w-0 flex-1">
           <p className="tf-row-name truncate" title={capitalizedCase(name) || 'Unknown'}>
             {capitalizedCase(name) || 'Unknown'}

@@ -764,7 +764,7 @@ export default function UiReferencePage() {
                         )}
                       >
                         <GridCardSelect selected={selected.has(r.id)} onToggle={() => toggleRow(r.id)} label={`Select ${r.name}`} selectionActive={selected.size > 0} />
-                        <div className="truncate pr-8 font-medium text-gray-900 dark:text-slate-100">{r.name}</div>
+                        <div className="truncate pl-7 pr-8 font-medium text-gray-900 dark:text-slate-100">{r.name}</div>
                         <div className="mt-1 truncate font-mono tf-meta" title={r.path}>{r.path}</div>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge variant={STATUS_BADGE[r.status]}>{r.status}</Badge>

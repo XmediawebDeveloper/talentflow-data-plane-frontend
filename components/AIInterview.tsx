@@ -78,6 +78,7 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import { isPhoneWidth, useCanDownloadAIReports, AI_REPORT_DOWNLOAD_DENIED, isForbiddenError } from '@/components/ai-interview/ResultRowActions';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -102,6 +103,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import type { AIConfigListQuery, AIConfigListFilters } from '@/lib/services/aiInterviewService';
 import { useJobStatusRefresh } from '@/lib/hooks/useJobStatusRefresh';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from '@/components/ai-interview/UnpublishedChangesChip';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /* The version panel's 3-dot menu trigger — the 32px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx, and to the
@@ -190,6 +192,18 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
 ];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const CONFIG_FETCH_PAGE_SIZE = 100;
+
+/** A 'YYYY-MM-DD' filter date as a filter tag shows it: 01 Nov 2026. */
+const formatChipDate = (v: string) => {
+  const d = new Date(`${v}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
+/** One date range (counted as one filter) as one tag value. */
+const formatChipDateRange = (from: string, to: string) =>
+  from && to ? `${formatChipDate(from)} – ${formatChipDate(to)}`
+    : from ? `from ${formatChipDate(from)}` : `until ${formatChipDate(to)}`;
 
 /** One string for the list filters the page-reset effect watches. */
 const listFilterKey = (v: Record<string, unknown>) =>
@@ -2926,6 +2940,29 @@ export default function AIInterview() {
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
 
+  /* Config-list toolbar's filter tags — one per filter `aiFilterCount`
+     counts, so the More Filters badge and the tags always agree. Values read
+     as the More Filters dropdowns show them. */
+  const AI_DATE_FILTER_LABELS: Record<DateFilterKey, string> = {
+    all: 'Any date', today: 'Today', yesterday: 'Yesterday', last_week: 'Last week', last_month: 'Last month', custom: 'Custom range…',
+  };
+  const aiFilterChips: FilterChip[] = ([
+    modeFilter !== 'all' && { key: 'mode', label: 'Mode', value: modeFilter === 'timed' ? 'Timed' : 'Conversational', onRemove: () => setModeFilter('all') },
+    creatorFilter !== 'all' && { key: 'creator', label: 'Created by', value: creatorFilter, onRemove: () => setCreatorFilter('all') },
+    dateFilter !== 'all' && {
+      key: 'created', label: 'Created',
+      value: dateFilter === 'custom' && (customDateFrom || customDateTo)
+        ? formatChipDateRange(customDateFrom, customDateTo)
+        : AI_DATE_FILTER_LABELS[dateFilter],
+      onRemove: () => setDateFilter('all'),
+    },
+    statusFilter !== 'all' && {
+      key: 'status', label: 'Status',
+      value: statusFilter === 'published' ? 'Active' : statusFilter === 'draft' ? 'Draft' : 'Archived',
+      onRemove: () => setStatusFilter('all'),
+    },
+  ] as (FilterChip | false)[]).filter(Boolean) as FilterChip[];
+
   /* Ticked rows a fresh link can be sent to — the Track Invites popup's bulk
      resend rule: Expired, and never once the candidate started or finished.
      Under ANY status bucket (it used to be offered only under the Expired
@@ -3382,6 +3419,8 @@ export default function AIInterview() {
               activeFilterCount={aiFilterCount}
               filtersApplied={aiFiltersActive}
               onClearFilters={clearAIInterviewFilters}
+              /* Active filter tags: hover popup on More Filters (lg+). */
+              filterChips={aiFilterChips}
               trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
             />
             {showAIFilters && (
@@ -3389,7 +3428,7 @@ export default function AIInterview() {
                    panel needs no Done. Four controls = the panel's one
                    4-column row from lg; the custom date range, when picked,
                    takes the row below. */
-                <ListFilterPanel>
+                <ListFilterPanel chips={aiFilterChips}>
                     <div>
                       <label htmlFor="ai-interview-mode" className="block tf-caption mb-1.5">
                         Mode
@@ -3494,7 +3533,7 @@ export default function AIInterview() {
         <div className="tf-jobs-contents flex items-start justify-between gap-2 flex-wrap">
         <div className="tf-jobs-contents flex items-center gap-1.5 flex-wrap w-full">
           {/* `contents` from sm (the row as before); on phones one underlined strip. */}
-          <div className="tf-jobs-status-tabs contents">
+          <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="AI interview views">
           {(() => {
             // Server counts (/configs/stats, the same shared WHERE the lists
             // page with), as on Assessments. `configs` now holds only the
@@ -3512,6 +3551,8 @@ export default function AIInterview() {
               <button
                 key={tab.key}
                 onClick={() => openListView(tab.key as TabKey)}
+                role="tab"
+                aria-selected={isActive}
                 aria-current={isActive ? 'page' : undefined}
                 className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                   isActive
@@ -3530,7 +3571,7 @@ export default function AIInterview() {
           })}
           {/* Candidates and invitations — their own group, divided off from
               the interview lists the way Activity Logs / Settings are. */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+          <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
             {([
               // Candidate sessions across every interview — the Assessments
               // page's tab of the same name, for AI interviews.
@@ -3544,6 +3585,8 @@ export default function AIInterview() {
                 <button
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
+                  role="tab"
+                  aria-selected={isActive}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
@@ -3563,7 +3606,7 @@ export default function AIInterview() {
               );
             })}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap sm:ml-1 sm:border-l-2 sm:border-gray-400 dark:sm:border-slate-500 sm:pl-2">
+          <div className="max-md:contents flex items-center gap-1.5 flex-wrap md:ml-1 md:border-l-2 md:border-gray-400 dark:md:border-slate-500 md:pl-2">
             {([
               { key: 'audit', label: 'Activity Logs' },
               { key: 'settings', label: 'Settings' },
@@ -3573,6 +3616,8 @@ export default function AIInterview() {
                 <button
                   key={tab.key}
                   onClick={() => openListView(tab.key as TabKey)}
+                  role="tab"
+                  aria-selected={isActive}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-2.5 h-9 inline-flex items-center rounded-lg text-sm font-medium transition-all whitespace-nowrap ${
                     isActive
@@ -3715,25 +3760,15 @@ export default function AIInterview() {
                   {configRowsSkeleton}
                 </div>
               ) : (serverTotalJobs ? (totalJobsWaiting ? false : groupedListTotal === 0) : collapsedConfigs.length === 0) ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="relative inline-flex items-center justify-center mb-5">
-                    <div className="absolute inset-0 rounded-full bg-brand-blue/10 blur-xl scale-150" aria-hidden />
-                    <div className="relative w-20 h-20 rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 flex items-center justify-center">
-                      {searchQuery ? (
-                        <Search className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      ) : (
-                        <Video className="w-9 h-9 text-brand-blue" strokeWidth={1.5} />
-                      )}
-                    </div>
-                  </div>
-                  <h3 className="tf-section-title mb-1.5 tracking-tight">
-                    {searchQuery ? 'No matches found' : 'No AI interviews yet'}
-                  </h3>
-                  <p className="tf-body-muted mb-6 max-w-sm mx-auto">
-                    {searchQuery
-                      ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
-                      : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
-                  </p>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={searchQuery ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Video} />}
+                  title={searchQuery ? 'No matches found' : 'No AI interviews yet'}
+                  description={searchQuery
+                    ? `We couldn't find anything matching "${searchQuery}". Try a different search.`
+                    : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
+                >
                   {!searchQuery && (
                     <Button
                       variant="primary"
@@ -3755,7 +3790,7 @@ export default function AIInterview() {
                       Clear search
                     </Button>
                   )}
-                </div>
+                </IllustratedEmptyState>
               ) : (
                 <>
                 {/* List: one full-width card per job. Card: the same cards in a
@@ -4310,15 +4345,13 @@ export default function AIInterview() {
                   </Button>
                 </div>
               ) : inviteStatusRows.length === 0 ? (
-                <div className="text-center py-16 sm:py-20">
-                  <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                    <Mail className="w-7 h-7 text-brand-blue" />
-                  </div>
-                  <h3 className="tf-section-title mb-1">No invitations sent yet</h3>
-                  <p className="tf-body-muted max-w-md mx-auto">
-                    Invite candidates to an AI interview and their status appears here.
-                  </p>
-                </div>
+                <IllustratedEmptyState
+                  bordered={false}
+                  className="sm:py-14"
+                  illustration={<FolderIconIllustration icon={Mail} badge="send" />}
+                  title="No invitations sent yet"
+                  description="Invite candidates to an AI interview and their status appears here."
+                />
               ) : null;
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
@@ -4607,6 +4640,30 @@ export default function AIInterview() {
                   setInviteStatusPage(1);
                 };
 
+                /* One tag per filter `inviteStatusFilterCount` counts (the
+                   Invited date range is one tag), valued as the panel's
+                   dropdowns show them. */
+                const optionLabel = (options: { value: string; label: string }[], value: string) =>
+                  options.find((o) => o.value === value)?.label ?? value;
+                const colFilters = inviteStatusColumnFilters;
+                const inviteStatusFilterChips: FilterChip[] = ([
+                  colFilters.job && { key: 'job', label: 'Job', value: optionLabel(jobOptions, colFilters.job), onRemove: () => updateColumnFilter('job', '') },
+                  colFilters.jobVersion && { key: 'jobVersion', label: 'Job Version', value: optionLabel(jobVersionOptions, colFilters.jobVersion), onRemove: () => updateColumnFilter('jobVersion', '') },
+                  colFilters.interviewVersion && { key: 'interviewVersion', label: 'Interview Version', value: optionLabel(interviewVersionOptions, colFilters.interviewVersion), onRemove: () => updateColumnFilter('interviewVersion', '') },
+                  colFilters.inviteSource && { key: 'inviteSource', label: 'Invite Source', value: optionLabel(INVITE_SOURCE_FILTER_OPTIONS, colFilters.inviteSource), onRemove: () => updateColumnFilter('inviteSource', '') },
+                  colFilters.result && { key: 'result', label: 'Result', value: optionLabel(RESULT_FILTER_OPTIONS, colFilters.result), onRemove: () => updateColumnFilter('result', '') },
+                  inviteStatusFilters.status !== 'all' && {
+                    key: 'status', label: 'Status',
+                    value: optionLabel(INVITATION_STATUS_TAB_OPTIONS, inviteStatusFilters.status),
+                    onRemove: () => updateInviteStatusFilters({ status: 'all' }),
+                  },
+                  (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo) && {
+                    key: 'invited', label: 'Invited',
+                    value: formatChipDateRange(inviteStatusFilters.dateFrom, inviteStatusFilters.dateTo),
+                    onRemove: () => updateInviteStatusFilters({ dateFrom: '', dateTo: '' }),
+                  },
+                ] as (FilterChip | false | '')[]).filter(Boolean) as FilterChip[];
+
                 /* This tab's search/filter row, in the shared slot ABOVE the
                    tab pills where every other tab's sits — the Assessments
                    page's Invitation Status layout. It used to be an
@@ -4627,6 +4684,8 @@ export default function AIInterview() {
                         setInviteStatusColumnFilters(EMPTY_INVITE_COLUMN_FILTERS);
                         setInviteStatusPage(1);
                       }}
+                      /* Active filter tags: hover popup on More Filters (lg+). */
+                      filterChips={inviteStatusFilterChips}
                       className="mb-0"
                       afterFiltersActions={statusBulkActions}
                       trailing={<ListViewToggle value={listDisplayMode} onChange={setListDisplayMode} />}
@@ -4703,11 +4762,8 @@ export default function AIInterview() {
                               />
                             </div>
                           </div>
-                          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                            <Button variant="secondary" size="sm" onClick={() => setShowInviteStatusFilters(false)}>
-                              Done
-                            </Button>
-                          </div>
+                          {/* Active filter tags — the panel's last line (phones / tablets). */}
+                          <FilterChipsPanelLine chips={inviteStatusFilterChips} />
                         </div>
                       }
                     />
@@ -4915,7 +4971,7 @@ export default function AIInterview() {
           {activeTab === 'settings' && (
             <div className="p-3 sm:p-6">
               {/* Settings Sub-tabs */}
-              <div className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
+              <div role="tablist" aria-label="Settings sections" className="flex gap-3 sm:gap-4 mb-4 sm:mb-6 border-b border-gray-100 dark:border-slate-700/60">
                 {[
                   { key: 'general', label: 'General' },
                   // Proctoring settings are a staging-only testing menu — hidden in
@@ -4925,6 +4981,8 @@ export default function AIInterview() {
                   <button
                     key={sub.key}
                     onClick={() => setSettingsSubTab(sub.key as 'general' | 'proctoring')}
+                    role="tab"
+                    aria-selected={settingsSubTab === sub.key}
                     className={`tf-tab-line ${
                       settingsSubTab === sub.key
                         ? 'tf-tab-line-active'

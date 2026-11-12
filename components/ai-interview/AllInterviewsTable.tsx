@@ -23,7 +23,8 @@ import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import NameAvatar from '@/components/ui/name-avatar';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
-import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+import { ToolbarResetButton } from '@/components/ui/list-toolbar';
+import { FilterChipsHover, FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import { DateField } from '@/components/ui/date-field';
 import { aiInterviewService, isJdDisabled, jdActionLockReason, JD_DISABLED_ACTION_MESSAGE, JD_ARCHIVED_ACTION_MESSAGE, cleanAIConfigParams, type AIInterviewResponse, type AIConfigListQuery, type AIConfigFilterOptions } from '@/lib/services/aiInterviewService';
 import { usePagedList } from '@/lib/hooks/usePagedList';
@@ -41,6 +42,7 @@ import { resolveAIInterviewDraftResumeHref } from '@/lib/utils/aiInterviewDraftR
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import UnpublishedChangesChip, { hasUnpublishedChanges } from './UnpublishedChangesChip';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -407,7 +409,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
 
   const [search, setSearch] = useState('');
   const appliedSearch = useDebounce(search, 300);
-  const [draftFilters, setDraftFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
@@ -747,22 +748,16 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
     setPage(1);
   };
 
-  const applyFilters = () => {
-    setFilters(draftFilters);
-    setFiltersOpen(false);
-    setPage(1);
-  };
-
   const clearAll = () => {
-    setDraftFilters(EMPTY_FILTERS);
     setFilters(EMPTY_FILTERS);
     setSearch('');
     setPage(1);
   };
 
-  const clearOne = (patch: Partial<Filters>) => {
+  /* Panel controls commit as they change (no draft / Apply step); chip
+     removal uses the same path. Both narrow the set, so back to page 1. */
+  const updateFilters = (patch: Partial<Filters>) => {
     setFilters((f) => ({ ...f, ...patch }));
-    setDraftFilters((f) => ({ ...f, ...patch }));
     setPage(1);
   };
 
@@ -774,26 +769,26 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
         key: 'job',
         label: 'Job',
         value: job ? `${job.label} (${job.value})` : filters.job,
-        onRemove: () => clearOne({ job: '' }),
+        onRemove: () => updateFilters({ job: '' }),
       });
     }
     if (filters.jobVersion) {
       out.push({
         key: 'jobVersion', label: 'Job Version', value: `V${filters.jobVersion}`,
-        onRemove: () => clearOne({ jobVersion: '' }),
+        onRemove: () => updateFilters({ jobVersion: '' }),
       });
     }
     if (filters.interviewVersion) {
       out.push({
         key: 'interviewVersion', label: 'Interview Version', value: `V${filters.interviewVersion}`,
-        onRemove: () => clearOne({ interviewVersion: '' }),
+        onRemove: () => updateFilters({ interviewVersion: '' }),
       });
     }
     if (filters.status) {
       out.push({
         key: 'status', label: 'Status',
         value: STATUS_OPTIONS.find((s) => s.value === filters.status)?.label || filters.status,
-        onRemove: () => clearOne({ status: '' }),
+        onRemove: () => updateFilters({ status: '' }),
       });
     }
     if (filters.createdFrom || filters.createdTo) {
@@ -803,7 +798,7 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
       out.push({
         key: 'created', label: 'Created',
         value: from && to ? `${from} – ${to}` : from ? `from ${from}` : `until ${to}`,
-        onRemove: () => clearOne({ createdFrom: '', createdTo: '' }),
+        onRemove: () => updateFilters({ createdFrom: '', createdTo: '' }),
       });
     }
     return out;
@@ -1044,22 +1039,21 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
   );
   const emptyPanel = (
     <div className={TABLE_EMPTY_PANEL_CLASS}>
-      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-        <Video className="w-7 h-7 text-brand-blue" />
-      </div>
-      <h3 className="tf-section-title mb-1">
-        {isNarrowed ? 'No interviews found' : 'No interviews yet'}
-      </h3>
-      <p className="tf-body-secondary mb-4 max-w-md mx-auto">
-        {isNarrowed
+      <IllustratedEmptyState
+        bordered={false}
+        className="!py-0"
+        illustration={isNarrowed ? <IconTileIllustration icon={Search} /> : <FolderIconIllustration icon={Video} />}
+        title={isNarrowed ? 'No interviews found' : 'No interviews yet'}
+        description={isNarrowed
           ? 'No interviews match your current search or filter criteria.'
           : 'AI interviews you create will be listed here.'}
-      </p>
-      {isNarrowed && (
-        <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-          Clear Filters
-        </Button>
-      )}
+      >
+        {isNarrowed && (
+          <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+            Clear Filters
+          </Button>
+        )}
+      </IllustratedEmptyState>
     </div>
   );
 
@@ -1094,6 +1088,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             )}
           </div>
 
+          {/* Active filter tags: hover popup on More Filters (lg+). */}
+          <FilterChipsHover chips={chips}>
           <button
             type="button"
             onClick={() => setFiltersOpen((o) => !o)}
@@ -1117,8 +1113,11 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               </span>
             )}
           </button>
+          </FilterChipsHover>
           {/* Sort by lands here — see `useListSortSlot`. */}
           <span data-list-sort-slot className="contents" />
+          {/* Reset — after More Filters and Sort by, as on Job Openings. */}
+          {isNarrowed && <ToolbarResetButton onClick={clearAll} />}
           {/* Actions (N) + Clear — only while rows are ticked. */}
           {selectedRows.length > 0 && (
             <ListBulkActions>
@@ -1206,8 +1205,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
             <div className="tf-grid-4">
               <SearchableSelect
                 label="Job"
-                value={draftFilters.job}
-                onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
+                value={filters.job}
+                onChange={(v) => updateFilters({ job: v })}
                 options={jobOptions}
                 placeholder="All jobs"
                 searchPlaceholder="Search job or ID..."
@@ -1216,8 +1215,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               />
               <SearchableSelect
                 label="Job Version"
-                value={draftFilters.jobVersion}
-                onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
+                value={filters.jobVersion}
+                onChange={(v) => updateFilters({ jobVersion: v })}
                 options={jobVersionOptions}
                 placeholder="All versions"
                 searchPlaceholder="Search version..."
@@ -1226,8 +1225,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               />
               <SearchableSelect
                 label="Interview Version"
-                value={draftFilters.interviewVersion}
-                onChange={(v) => setDraftFilters((f) => ({ ...f, interviewVersion: v }))}
+                value={filters.interviewVersion}
+                onChange={(v) => updateFilters({ interviewVersion: v })}
                 options={interviewVersionOptions}
                 placeholder="All versions"
                 searchPlaceholder="Search version..."
@@ -1238,8 +1237,8 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
               {!fixedStatus && (
                 <SearchableSelect
                   label="Status"
-                  value={draftFilters.status}
-                  onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
+                  value={filters.status}
+                  onChange={(v) => updateFilters({ status: v })}
                   options={STATUS_OPTIONS}
                   placeholder="All statuses"
                   searchPlaceholder="Search status..."
@@ -1259,36 +1258,27 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                   <DateField
                     id="all-interviews-created-from"
                     aria-label="Created from"
-                    value={draftFilters.createdFrom}
-                    max={draftFilters.createdTo || undefined}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, createdFrom: v }))}
+                    value={filters.createdFrom}
+                    max={filters.createdTo || undefined}
+                    onChange={(v) => updateFilters({ createdFrom: v })}
                     className="sm:flex-1 sm:min-w-0"
                   />
                   <span className="tf-hint text-center sm:text-left sm:flex-shrink-0">to</span>
                   <DateField
                     aria-label="Created to"
-                    value={draftFilters.createdTo}
-                    min={draftFilters.createdFrom || undefined}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, createdTo: v }))}
+                    value={filters.createdTo}
+                    min={filters.createdFrom || undefined}
+                    onChange={(v) => updateFilters({ createdTo: v })}
                     className="sm:flex-1 sm:min-w-0"
                   />
                 </div>
               </div>
             </div>
-
-            <div className="flex items-center justify-end gap-2 mt-3">
-              <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                Clear All
-              </Button>
-              <Button variant="primary" size="sm" onClick={applyFilters}>
-                Apply Filters
-              </Button>
-            </div>
+            {/* Active filter tags — the panel's last line (phones / tablets). */}
+            <FilterChipsPanelLine chips={chips} />
           </div>
         )}
       </div>
-
-      <FilterChips chips={chips} onClearAll={clearAll} className="mb-3" />
     </>
   );
 
@@ -1339,7 +1329,6 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, defaul
                     onToggle={() => toggleSelected(row.id)}
                     label={row.jobName}
                     selectionActive={selectedIds.size > 0}
-                    inline
                   />
                   {/* Select seal and name on one line: the seal sits level with this row, pl-7 clears it. */}
                   <div className="flex items-start justify-between gap-2 pl-7">

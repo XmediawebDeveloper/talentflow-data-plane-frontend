@@ -3,6 +3,8 @@
 import * as React from 'react';
 import { X } from 'lucide-react';
 import { cn } from './utils';
+import { Button } from './button';
+import { HoverCard, HoverCardTrigger, HoverCardContent } from './hover-card';
 
 /**
  * The row of "what is currently narrowing this list" chips, each removable on
@@ -83,14 +85,69 @@ export default function FilterChips({
       {/* Only worth offering once there is more than one chip to clear — with a
           single filter on, its own X already is Clear All. */}
       {onClearAll && chips.length > 1 && (
-        <button
+        /* The app's standard small secondary button (tf-btn-sm, 32px), so it
+           reads as an action like every other toolbar button, not a text link. */
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={onClearAll}
-          className="text-xs font-medium text-gray-500 dark:text-slate-400 hover:text-brand-blue underline underline-offset-2 transition-colors"
+          className="gap-1.5"
+          title="Remove every filter tag"
         >
+          <X className="w-3.5 h-3.5" />
           {clearAllLabel}
-        </button>
+        </Button>
       )}
+    </div>
+  );
+}
+
+/* ── Where the tags live (Job Openings reference) ───────────────────────────
+   Tags are NOT shown in the toolbar card. Instead:
+     • laptop / desktop (lg, 1024px+): a popup while hovering the More Filters
+       button — `FilterChipsHover` (or ListToolbar's `filterChips` prop);
+     • phone / tablet (< lg): the last line inside the More Filters panel —
+       `FilterChipsPanelLine` (or ListFilterPanel's `chips` prop).
+   Each tag's ✕ removes that filter wherever it is shown. */
+
+/** The hover popup's body: "Active filters (N)" over the tags. */
+export function FilterChipsHoverContent({ chips }: { chips: FilterChip[] }) {
+  return (
+    <div>
+      <p className="tf-label mb-2">Active filters ({chips.length})</p>
+      <FilterChips chips={chips} />
+    </div>
+  );
+}
+
+/** Popup class: laptop / desktop only — a tap on a phone or tablet never opens it. */
+export const FILTER_CHIPS_HOVER_CLASS =
+  'max-lg:hidden w-80 max-w-[calc(100vw-2rem)] p-3 bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 rounded-lg';
+
+/**
+ * Wraps a page's own More Filters button (one not drawn by ListToolbar) so
+ * hovering it shows the active tags. `children` must be a single element that
+ * accepts a ref (a <button> or Button). With no chips it renders the button as is.
+ */
+export function FilterChipsHover({ chips, children }: { chips: FilterChip[]; children: React.ReactElement }) {
+  if (chips.length === 0) return children;
+  return (
+    <HoverCard openDelay={150} closeDelay={120}>
+      <HoverCardTrigger asChild>{children}</HoverCardTrigger>
+      <HoverCardContent align="start" className={FILTER_CHIPS_HOVER_CLASS}>
+        <FilterChipsHoverContent chips={chips} />
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+/** The tags as the last line inside the More Filters panel — phones and tablets only. */
+export function FilterChipsPanelLine({ chips, className }: { chips: FilterChip[]; className?: string }) {
+  if (chips.length === 0) return null;
+  return (
+    <div className={cn('lg:hidden mt-3 pt-3 border-t border-brand-blue/10 dark:border-slate-700/60', className)}>
+      <FilterChips chips={chips} />
     </div>
   );
 }
