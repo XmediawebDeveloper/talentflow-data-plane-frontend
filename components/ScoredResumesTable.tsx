@@ -12,6 +12,7 @@ import { friendlyErrorMessage } from '@/lib/utils/friendlyError';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
@@ -996,6 +997,32 @@ Best regards`);
     jobTitle: filterJobTitle,
     jobVersion: filterJobVersion,
   } = search.filters;
+
+  // Active filter tags — one per filter `countFilters` counts (Score range is
+  // one tag, as it counts once), so the More Filters badge and the tags always
+  // agree. Each X clears only its own filter.
+  const formatChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const activeFilterChips: FilterChip[] = [
+    !hideMatchStatusFilter && filterMatchStatus !== 'all' && { key: 'matchStatus', label: 'Match Status', value: String(filterMatchStatus), onRemove: () => search.setFilter('matchStatus', 'all' as typeof filterMatchStatus) },
+    (filterScoreMin > 0 || filterScoreMax < 10) && {
+      key: 'score',
+      label: 'Score',
+      value: `${filterScoreMin.toFixed(1)} – ${filterScoreMax.toFixed(1)}`,
+      onRemove: () => { search.setFilter('scoreMin', 0); search.setFilter('scoreMax', 10); },
+    },
+    Boolean(filterDateFrom) && { key: 'dateFrom', label: 'Scored From', value: formatChipDate(String(filterDateFrom)), onRemove: () => search.setFilter('dateFrom', '' as typeof filterDateFrom) },
+    Boolean(filterDateTo) && { key: 'dateTo', label: 'Scored To', value: formatChipDate(String(filterDateTo)), onRemove: () => search.setFilter('dateTo', '' as typeof filterDateTo) },
+    filterRecruiter !== 'all' && { key: 'recruiter', label: embedded ? 'Scored By' : 'Recruiter', value: String(filterRecruiter), onRemove: () => search.setFilter('recruiter', 'all') },
+    filterJdId !== 'all' && { key: 'jdId', label: 'Job ID', value: String(filterJdId), onRemove: () => search.setFilter('jdId', 'all') },
+    // No control sets this one, but it counts, so it gets a tag.
+    filterJobTitle !== 'all' && { key: 'jobTitle', label: 'Job Title', value: String(filterJobTitle), onRemove: () => search.setFilter('jobTitle', 'all') },
+    filterJobVersion !== 'all' && { key: 'jobVersion', label: 'Job Version', value: `v${filterJobVersion}`, onRemove: () => search.setFilter('jobVersion', 'all') },
+  ].filter(Boolean) as FilterChip[];
 
   // The parent can preselect a match status (e.g. "Strong" from a stat card).
   useEffect(() => {
@@ -2393,6 +2420,8 @@ Best regards`);
               : undefined
           }
           onToggleFilters={() => setShowFilters(!showFilters)}
+          // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+          filterChips={activeFilterChips}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
@@ -2634,6 +2663,9 @@ Best regards`);
               )}
 
             </div>
+
+            {/* Active filter tags as the panel's last line — phones / tablets only. */}
+            <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
 
@@ -2787,9 +2819,9 @@ Best regards`);
                     const titles = Array.from(new Set(groupRows.map((r) => r.jobTitle).filter(Boolean))) as string[];
                     return (
                       <>
-                        {/* pr-7 leaves room for the corner checkbox; pl-6 keeps the
+                        {/* pr-7 leaves room for the corner checkbox; pl-7 keeps the
                             top-left select seal (touch, hover, any selection) off the name. */}
-                        <div className="min-w-0 pr-7 pl-6">
+                        <div className="min-w-0 pr-7 pl-7">
                           <div className="flex items-center gap-2 min-w-0">
                             {onViewCandidate ? (
                               <button
@@ -2831,9 +2863,9 @@ Best regards`);
                   })() : (
                   <>
                   {/* No initials avatar — there is no profile photo behind it.
-                      pl-6 keeps the top-left select seal (touch, hover, any
+                      pl-7 keeps the top-left select seal (touch, hover, any
                       selection) off the name. */}
-                  <div className="flex items-start gap-2.5 pl-6">
+                  <div className="flex items-start gap-2.5 pl-7">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="font-medium text-gray-900 truncate">{showName(resume.candidateName) || 'Candidate'}</p>

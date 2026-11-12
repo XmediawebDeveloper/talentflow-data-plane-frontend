@@ -229,6 +229,67 @@ export function AssessmentInterface({
     }
   };
 
+  // ── Final save on timeout ──────────────────────────────────────────────
+  // The auto-save waits 3 s after the last keystroke, so when the global timer
+  // hits zero the candidate's last edits can exist only here. Completing straight
+  // away scored the older saved code (a missing ';' fixed in the final seconds
+  // was lost). On expiry we send one `final_save` draft - the backend accepts it
+  // for FINAL_SAVE_GRACE_SECONDS past the deadline - and then complete.
+  const latestAnswerRef = useRef(answer);
+  latestAnswerRef.current = answer;
+  const latestQuestionIdRef = useRef(currentQuestion.question_id);
+  latestQuestionIdRef.current = currentQuestion.question_id;
+  const latestLockedRef = useRef(isCurrentAnswerLocked);
+  latestLockedRef.current = isCurrentAnswerLocked;
+  const lastSavedSnapshotRef = useRef<string | null>(null);
+  const inFlightSaveRef = useRef<Promise<unknown> | null>(null);
+  const timeoutCompleteStartedRef = useRef(false);
+
+  const answerSnapshot = (questionId: string, a: AnswerState) => JSON.stringify([
+    questionId, a.text_response ?? null, a.selected_options ?? null, a.code_submission ?? null, a.language ?? null,
+  ]);
+
+  const flushFinalDraft = async () => {
+    cancelPendingAutoSave();
+    const a = latestAnswerRef.current;
+    const questionId = latestQuestionIdRef.current;
+    const hasAnswer = a.text_response || a.selected_options?.length || a.code_submission;
+    if (!hasAnswer || latestLockedRef.current) return;
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    // Let a save already on its way land first, so it cannot overwrite this one.
+    if (inFlightSaveRef.current) {
+      await Promise.race([inFlightSaveRef.current.catch(() => undefined), wait(3000)]);
+    }
+    if (answerSnapshot(questionId, a) === lastSavedSnapshotRef.current) return;
+    try {
+      await Promise.race([
+        candidateService.saveDraft(token, questionId, {
+          text_response: a.text_response,
+          selected_options: a.selected_options,
+          code_submission: a.code_submission,
+          code_input: a.code_input,
+          language: a.language,
+          code_execution_status: a.code_execution_status,
+          code_execution_output: a.code_execution_output,
+          code_execution_error: a.code_execution_error,
+          time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
+          final_save: true,
+        }),
+        wait(5000),
+      ]);
+      console.log('[TIMER] Final draft saved before auto-complete');
+    } catch (error) {
+      console.warn('[TIMER] Final draft save failed; completing with the last saved answer', error);
+    }
+  };
+
+  const completeOnTimeout = async () => {
+    if (timeoutCompleteStartedRef.current) return;
+    timeoutCompleteStartedRef.current = true;
+    await flushFinalDraft();
+    onComplete();
+  };
+
   // Network status and retry queue
   const { isOnline, offlineReason, isSlowConnection, connectionType } = useNetworkStatus();
   const { queueSize, isProcessing, addToQueue, processQueue } = useRetryQueue();
@@ -374,7 +435,8 @@ export function AssessmentInterface({
 
       try {
         // Use the saveDraft method which sets is_draft: true automatically
-        const response = await candidateService.saveDraft(token, currentQuestion.question_id, {
+        const savedSnapshot = answerSnapshot(currentQuestion.question_id, answer);
+        const savePromise = candidateService.saveDraft(token, currentQuestion.question_id, {
           text_response: answer.text_response,
           selected_options: answer.selected_options,
           code_submission: answer.code_submission,
@@ -385,6 +447,11 @@ export function AssessmentInterface({
           code_execution_error: answer.code_execution_error,
           time_taken_seconds: Math.floor((Date.now() - questionStartTime) / 1000),
         });
+        inFlightSaveRef.current = savePromise;
+        const response = await savePromise.finally(() => {
+          if (inFlightSaveRef.current === savePromise) inFlightSaveRef.current = null;
+        });
+        lastSavedSnapshotRef.current = savedSnapshot;
 
         // Update answer status to track that we have a draft
         setAnswerStatuses(prev => {
@@ -1159,7 +1226,7 @@ export function AssessmentInterface({
         setIsGlobalTimeExpired(true);
         try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
         exitAssessmentFullscreen();
-        onComplete();
+        void completeOnTimeout();
       }
       return;
     }
@@ -1191,7 +1258,7 @@ export function AssessmentInterface({
         setIsGlobalTimeExpired(true);
         try { sessionStorage.removeItem(`assessment_timer_${token}`); } catch {}
         exitAssessmentFullscreen();
-        onComplete();
+        void completeOnTimeout();
       }
     }, 1000);
 
@@ -1222,7 +1289,7 @@ export function AssessmentInterface({
         if (remaining <= 0) {
           setIsGlobalTimeExpired(true);
           exitAssessmentFullscreen();
-          onComplete();
+          void completeOnTimeout();
         }
       }
 

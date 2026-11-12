@@ -1233,7 +1233,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     label={result.candidateName || 'candidate'}
                     selectionActive={selectedResults.length > 0}
                   />
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-start gap-2.5 pl-7">
                     <NameAvatar name={result.candidateName} fallback={result.email} size="md" />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-gray-900 truncate">{result.candidateName}</p>

@@ -44,7 +44,9 @@ import { PageHeader } from '@/components/ui/page-header';
 import { EmptyState } from '@/components/ui/empty-state';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
+import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
 import ScoredResumesExportModal from './ScoredResumesExportModal';
 import { SelectAllMenu, SortByControl, PhoneSortMenu } from '@/components/ui/select-all-menu';
 import SearchableSelect from '@/components/ui/searchable-select';
@@ -1005,6 +1007,24 @@ export default function ResumeScoringPage({
     industry: historyIndustry,
   } = historySearch.filters;
   const clearHistoryFilters = historySearch.reset;
+  // Active filter tags for the job list — one per filter `activeFilterCount`
+  // counts (every key that differs from its initial ''), so the More Filters
+  // badge and the tags always agree. Each X clears only its own filter.
+  const formatHistoryChipDate = (v: string) => {
+    const d = new Date(`${v}T00:00:00`);
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+  const historyFilterChips: FilterChip[] = [
+    historyLocation !== '' && { key: 'location', label: 'Location', value: String(historyLocation), onRemove: () => historySearch.setFilter('location', '') },
+    historyIndustry !== '' && { key: 'industry', label: 'Industry', value: formatIndustryType(historyIndustry), onRemove: () => historySearch.setFilter('industry', '') },
+    historyCreatedBy !== '' && { key: 'createdBy', label: 'Created By', value: String(historyCreatedBy), onRemove: () => historySearch.setFilter('createdBy', '') },
+    historyScoredFrom !== '' && { key: 'scoredFrom', label: 'Scored From', value: formatHistoryChipDate(historyScoredFrom), onRemove: () => historySearch.setFilter('scoredFrom', '') },
+    historyScoredTo !== '' && { key: 'scoredTo', label: 'Scored To', value: formatHistoryChipDate(historyScoredTo), onRemove: () => historySearch.setFilter('scoredTo', '') },
+    historyWorkMode !== '' && { key: 'workMode', label: 'Work Mode', value: formatWorkMode(historyWorkMode), onRemove: () => historySearch.setFilter('workMode', '') },
+    historyJobType !== '' && { key: 'jobType', label: 'Job Type', value: formatEmploymentType(historyJobType), onRemove: () => historySearch.setFilter('jobType', '') },
+  ].filter(Boolean) as FilterChip[];
 
   // Returning to the history list from a drill-in (role details / candidate view)
   // resets the filters to their default state, so Resume Scoring always opens on
@@ -3840,6 +3860,8 @@ export default function ResumeScoringPage({
               fitToContainer
               containerBreakpoint="4xl"
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
+              // Active filter tags: a popup on hovering More Filters (laptop / desktop).
+              filterChips={historyFilterChips}
               filtersOpen={showHistoryFilters}
               activeFilterCount={historySearch.activeFilterCount}
               filtersApplied={historySearch.filtersApplied}
@@ -3958,21 +3980,10 @@ export default function ResumeScoringPage({
                         ]}
                       />
                     </div>
-                    {/* Done rides the last row of fields, bottom-right, instead
-                        of a footer row of its own — same as View by Candidates.
-                        Clearing lives on the toolbar's Reset. The controls
-                        commit as they change, so Done just closes the panel. */}
-                    <div className="flex items-end justify-end">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setShowHistoryFilters(false)}
-                        className="!h-[38px] !px-4 !text-sm"
-                      >
-                        Done
-                      </Button>
-                    </div>
                   </div>
+
+                  {/* Active filter tags as the panel's last line — phones / tablets only. */}
+                  <FilterChipsPanelLine chips={historyFilterChips} />
                 </div>
               );
             })()}
@@ -4210,6 +4221,7 @@ export default function ResumeScoringPage({
             )}
           </StickyBulkBar>
         )}
+
         </div>
 
         {/* History List or Empty State */}
@@ -4479,23 +4491,34 @@ export default function ResumeScoringPage({
                        a translating card under the pointer reads as jumpy. */
                     className={`bg-white dark:bg-slate-900 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all duration-150 cursor-pointer ${
                       isJobExpanded || isSelected || isPartlySelected ? 'border-brand-blue/40 dark:border-brand-blue/40' : 'border-gray-300 dark:border-slate-700/60'
-                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? 'flex flex-col min-w-0' : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'col-span-full' : ''}`}
+                    } ${isSelected ? '!bg-brand-blue/[0.06] dark:!bg-brand-blue/15' : ''} ${jobListDisplayMode === 'grid' ? `relative group flex flex-col min-w-0 ${gridCardSelectedClass(isSelected)}` : ''} ${jobListDisplayMode === 'grid' && isJobExpanded ? 'col-span-full' : ''}`}
                     // The row opens its candidates in place; the job title (and
                     // the View Details button) still go to the job's own page.
                     onClick={() => toggleJobExpanded(jobKey)}
                     aria-expanded={isJobExpanded}
                   >
+                    {/* Grid cards take the shared round select seal (list rows
+                        keep the square toggle below). */}
+                    {jobListDisplayMode === 'grid' && !item.isProcessing && (
+                      <GridCardSelect
+                        selected={isSelected}
+                        onToggle={() => handleSelectHistoryItem(jobKey)}
+                        label={item.jobTitle || 'job'}
+                        selectionActive={selectedHistoryItems.size > 0}
+                        partial={isPartlySelected}
+                      />
+                    )}
                     <div className={`flex flex-col items-start gap-3 ${jobListDisplayMode === 'grid' ? 'flex-1' : 'sm:flex-row'}`}>
                       {/* No leading icon — the row starts at its JD ID badge. */}
                       <div className="flex-1 min-w-0 w-full">
                         {/* Title row — matches JD list card */}
-                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                        <div className={`flex flex-wrap items-center gap-2 mb-2 ${jobListDisplayMode === 'grid' ? 'pl-7' : ''}`}>
                           {/* Checkbox + Job ID + Job Name: one nowrap line at
                               every width — see JOB_HEADLINE_ROW. */}
                           <div className={JOB_HEADLINE_ROW}>
                           {/* Tick the job for Export. Stops the click so it
                               doesn't also open / close the row. */}
-                          {!item.isProcessing && (
+                          {jobListDisplayMode !== 'grid' && !item.isProcessing && (
                             <button
                               type="button"
                               onClick={(e) => { e.stopPropagation(); handleSelectHistoryItem(jobKey); }}

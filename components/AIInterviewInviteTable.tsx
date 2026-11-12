@@ -968,7 +968,7 @@ export default function AIInterviewInviteTable({
                   selectionActive={(selectedIds?.size ?? 0) > 0}
                 />
               )}
-              <div className="flex items-start gap-2.5">
+              <div className={`flex items-start gap-2.5 ${canSelect ? 'pl-7' : ''}`}>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900 dark:text-slate-50 truncate" title={capitalizedCase(inv.candidate_name) || 'Unknown'}>
                     {capitalizedCase(inv.candidate_name) || 'Unknown'}

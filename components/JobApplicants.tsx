@@ -4,6 +4,7 @@ import ResumeAnalysis from './ResumeAnalysis';
 import SkillsList from '@/components/ui/SkillsList';
 import { Button } from '@/components/ui/button';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips, { FilterChipsHover, type FilterChip } from '@/components/ui/filter-chips';
 
 interface Applicant {
   id: string;
@@ -122,6 +123,15 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
     partialMatch: applicantsWithMatch.filter(a => a.matchStatus === 'partial').length,
     lowMatch: applicantsWithMatch.filter(a => a.matchStatus === 'low').length,
   };
+
+  // Active filter tags — one per dropdown away from "All", labelled like its option.
+  const SCORE_LABELS: Record<string, string> = { high: 'High (85+)', medium: 'Medium (70-84)', low: 'Below 70' };
+  const MATCH_LABELS: Record<string, string> = { exact: 'Exact Match', partial: 'Partial Match', low: 'Low Match' };
+  const activeFilterChips: FilterChip[] = [
+    statusFilter !== 'all' && { key: 'status', label: 'Status', value: statusFilter, onRemove: () => setStatusFilter('all') },
+    scoreFilter !== 'all' && { key: 'score', label: 'Score', value: SCORE_LABELS[scoreFilter] ?? scoreFilter, onRemove: () => setScoreFilter('all') },
+    matchFilter !== 'all' && { key: 'match', label: 'Match', value: MATCH_LABELS[matchFilter] ?? matchFilter, onRemove: () => setMatchFilter('all') },
+  ].filter(Boolean) as FilterChip[];
 
   return (
     <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto bg-gray-50">
@@ -271,11 +281,17 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               ]}
             />
 
-            {/* Advanced Filters */}
-            <Button variant="secondary" icon={<Filter className="w-4 h-4" />}>
-              More Filters
-            </Button>
+            {/* Advanced Filters — hovering shows the active filter tags (laptop / desktop). */}
+            <FilterChipsHover chips={activeFilterChips}>
+              <Button variant="secondary" icon={<Filter className="w-4 h-4" />}>
+                More Filters
+              </Button>
+            </FilterChipsHover>
           </div>
+          {/* Phones / tablets: no hover and no panel here, so the tags stay under the row. */}
+          {activeFilterChips.length > 0 && (
+            <FilterChips className="mt-3 lg:hidden" chips={activeFilterChips} />
+          )}
         </div>
       </div>
 

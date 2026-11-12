@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, type RefObject } from 'react';
-import { Briefcase, CheckCircle, ChevronDown, ClipboardCheck, Eye, Info, Layers, Search, Send } from 'lucide-react';
+import { Briefcase, CheckCircle, ChevronDown, ClipboardCheck, Eye, Info, Layers, Search, Send, FileSearch } from 'lucide-react';
 import ListPagination from '@/components/ListPagination';
 import ToolbarSelectAll from '@/components/ui/toolbar-select-all';
 import { SEGMENT_TOGGLE, segmentBtn } from '@/components/ui/filter-pills';
@@ -18,6 +18,7 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MobileRecordList, MobileRecordCard, MobileStatChip, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 /**
  * The "pick one assessment to invite to" list, drawn exactly as
@@ -409,11 +410,12 @@ export default function AssessmentPicker({
 
       {viewMode === 'ungrouped' ? (
         pickerRows.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-            <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-            <p>{q ? 'No assessments match your search' : 'No active assessments found'}</p>
-            <p className="text-sm">{q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations'}</p>
-          </div>
+          <IllustratedEmptyState
+            bordered={false}
+            illustration={<FolderIconIllustration icon={q ? FileSearch : Briefcase} />}
+            title={q ? 'No assessments match your search' : 'No active assessments found'}
+            description={q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations.'}
+          />
         ) : (
           /* The AI Talent Match results table's card, header, row and checkbox
              styling — its bordered card, gray-50 header with the rule on the
@@ -636,11 +638,12 @@ export default function AssessmentPicker({
           </>
         )
       ) : jobRows.length === 0 ? (
-        <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-          <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-          <p>{q ? 'No jobs match your search' : 'No jobs found'}</p>
-          <p className="text-sm">{q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations'}</p>
-        </div>
+        <IllustratedEmptyState
+          bordered={false}
+          illustration={<FolderIconIllustration icon={q ? FileSearch : Briefcase} badge={q ? undefined : 'x'} />}
+          title={q ? 'No jobs match your search' : 'No jobs found'}
+          description={q ? 'Try different search terms' : 'Create and publish an assessment first to send invitations.'}
+        />
       ) : (
         /* Tighter than the AI picker's cards (gap 2, p-3) so a page of five
            fits the dialog without a scrollbar from sm up. */

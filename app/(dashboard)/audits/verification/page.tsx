@@ -27,6 +27,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import FilterSelect from '@/components/ui/filter-select';
+import FilterChips from '@/components/ui/filter-chips';
 import { MobileRecordList, MobileRecordCard, DESKTOP_TABLE_ONLY } from '@/components/ui/mobile-record-card';
 
 const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; icon: LucideIcon }> = {
@@ -121,6 +122,14 @@ export default function LogVerificationPage() {
 
     return entries;
   }, [pending, statusFilter, searchQuery]);
+
+  // Active filter tag for the Status dropdown (search shows in its own box).
+  const VERIFICATION_STATUS_LABELS: Record<string, string> = {
+    PENDING: 'Pending', MATCH: 'Match', MISMATCH: 'Mismatch', NOT_FOUND: 'Not Found', ERROR: 'Error',
+  };
+  const activeFilterChips = statusFilter
+    ? [{ key: 'status', label: 'Status', value: VERIFICATION_STATUS_LABELS[statusFilter] ?? statusFilter, onRemove: () => setStatusFilter('') }]
+    : [];
 
   const handleVerifyAll = useCallback(async () => {
     const unverifiedCount = pending.filter(e => !e.verified).length;
@@ -472,7 +481,7 @@ export default function LogVerificationPage() {
                     placeholder="Search by action, entity, user email..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="tf-input h-10 pl-10 sm:pl-11 pr-3 sm:pr-4 sm:rounded-xl"
+                    className="tf-input h-10 pl-10 sm:pl-11 pr-3 sm:pr-4"
                   />
                 </div>
               </div>
@@ -491,6 +500,9 @@ export default function LogVerificationPage() {
                 className="h-10 data-[size=default]:h-10 sm:data-[size=default]:h-10 py-0 sm:py-0 pl-3 sm:pl-4"
               />
             </div>
+            {activeFilterChips.length > 0 && (
+              <FilterChips className="mt-3" chips={activeFilterChips} />
+            )}
           </div>
 
           {/* Results Table */}

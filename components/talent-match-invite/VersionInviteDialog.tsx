@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useEffectEvent, useId, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Lightbulb, Loader2, Mail, Minus, Plus, Trash2, Video, X } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ClipboardList, Info, Briefcase, Calendar, ChevronDown, Lightbulb, Loader2, Mail, Minus, Plus, User, Trash2, Video, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePathname, useRouter } from 'next/navigation';
 import { saveInviteUnitsHandoff, USAGE_QUOTAS_FROM_INVITE_URL, type InviteUnitsRestore } from '@/lib/utils/inviteUnitsHandoff';
@@ -28,7 +28,10 @@ import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import AIInterviewWizardDialog from '@/components/ai-interview/AIInterviewWizardDialog';
-import { AssessmentJobStatusBadge } from '@/components/assessments/AllAssessmentsTable';
+import { AssessmentJobStatusBadge, VersionPill } from '@/components/assessments/AllAssessmentsTable';
+import { formatJobVersionExperience } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import { formatIST } from '@/lib/utils/dateUtils';
 import { useJobLockBadges } from '@/lib/hooks/useJobLockBadges';
 import { assessmentJobLockMessage } from '@/lib/utils/assessmentJobLock';
 import {
@@ -90,6 +93,18 @@ const BLOCK = 'tf-panel p-4';
 /** A candidate's identity in the review — the backend's `review_key`. */
 const reviewKey = (c: { resume_id?: string | null; email?: string | null }) =>
   c.resume_id ? String(c.resume_id) : `email:${(c.email || '').trim().toLowerCase()}`;
+
+/** The clock, outside the component so the React compiler lint does not read it as a render-time call. */
+const nowMs = () => Date.now();
+
+/* A JD version's status pill, as the Job Versions table words it. */
+const JD_STATUS: Record<string, { label: string; pill: string }> = {
+  published: { label: 'Published', pill: 'bg-success-subtle text-success-strong ring-success-line' },
+  active: { label: 'Published', pill: 'bg-success-subtle text-success-strong ring-success-line' },
+  draft: { label: 'Draft', pill: 'bg-warning-subtle text-warning-strong ring-warning-line' },
+  disabled: { label: 'Disabled', pill: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' },
+  archived: { label: 'Archived', pill: 'bg-slate-100 text-gray-600 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700' },
+};
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n.toLocaleString()} ${n === 1 ? one : many}`;
 
@@ -224,7 +239,9 @@ export default function VersionInviteDialog({
      version of the picked JOB, not just the one job version picked — Change
      version can switch to any of them. `versions` stays that job version's own
      (usage, cap, New version); null when the cards are not job-wide. */
-  const spansJob = kind === 'assessment' && !jdId;
+  /* Assessments always load every job version's cards: a job with more than
+     one JD version gets a JD version picker over them (see `jobVerOptions`). */
+  const spansJob = kind === 'assessment';
   const [jobWideVersions, setJobWideVersions] = useState<InviteVersion[] | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(!off && !!job);
@@ -337,7 +354,7 @@ export default function VersionInviteDialog({
   const lastLoadedAt = useRef(0);
 
   const applyVersions = (next: InviteVersion[], wide?: InviteVersion[] | null) => {
-    lastLoadedAt.current = Date.now();
+    lastLoadedAt.current = nowMs();
     setVersions(next);
     if (wide !== undefined) setJobWideVersions(wide);
     // A pick may be any card listed, so it stays valid against the job-wide set.
@@ -446,6 +463,45 @@ export default function VersionInviteDialog({
     }
     setVersionId(id);
   };
+
+  /* JD versions with an assessment (and the job's own one, where New version
+     lives). Two or more: the cards are grouped under their JD version. */
+  const ownJobVer = job?.jobVersionNumber
+    ?? versions.find((v) => v.jobVersion)?.jobVersion
+    ?? jobWideVersions?.find((v) => v.jdId === job?.jdId)?.jobVersion;
+  const jobVerGroups = jobWideVersions
+    ? Array.from(new Set(
+        jobWideVersions.map((v) => v.jobVersion).concat(ownJobVer).filter((n): n is number => typeof n === 'number'),
+      )).sort((a, b) => b - a)
+    : [];
+  const showJobVerPicker = jobVerGroups.length > 1;
+  /* Which JD versions are open — the picked version's own to start. */
+  const [jobVerToggles, setJobVerToggles] = useState<number[] | null>(null);
+  const defaultOpenJobVer = selected?.jobVersion ?? ownJobVer ?? jobVerGroups[0];
+  const expandedJobVers = jobVerToggles ?? (defaultOpenJobVer !== undefined ? [defaultOpenJobVer] : []);
+  const toggleJobVer = (n: number) => setJobVerToggles(
+    expandedJobVers.includes(n) ? expandedJobVers.filter((x) => x !== n) : [...expandedJobVers, n],
+  );
+  /* Each JD version's own details (status, experience, created on / by) —
+     its lineage entry and full JD record, loaded once there are groups. */
+  const jdLineage = useJobVersionLineage();
+  const lineageJdId = showJobVerPicker ? job?.jdId : undefined;
+  const ensureLineage = jdLineage.ensureLoaded;
+  useEffect(() => { if (lineageJdId) ensureLineage(lineageJdId, lineageJdId); }, [lineageJdId, ensureLineage]);
+  const jdDetailsOf = (n: number) => {
+    const entry = lineageJdId ? jdLineage.lineages[lineageJdId]?.find((v) => v.version_number === n) : undefined;
+    const id = entry?.id ?? jobWideVersions?.find((v) => v.jobVersion === n)?.jdId;
+    const detail = id ? jdLineage.versionDetails[id] : undefined;
+    return {
+      status: String(entry?.status || detail?.status || '').toLowerCase(),
+      experience: formatJobVersionExperience(detail as Parameters<typeof formatJobVersionExperience>[0]),
+      createdOn: entry?.created_at || detail?.created_at,
+      createdBy: (detail as { created_by_name?: string } | undefined)?.created_by_name,
+    };
+  };
+  /* One JD version: the cards as before. */
+  const cardsSpanJob = !showJobVerPicker && !jdId && !!jobWideVersions;
+  const cardVersions = cardsSpanJob ? jobWideVersions! : listedVersions(kind, versions);
 
   const blocked = createBlockedReason(versions, perms, kind);
   const returnUrl = job ? `/recruitment/job-details?id=${encodeURIComponent(job.jdId)}` : '/recruitment/job-openings';
@@ -615,6 +671,7 @@ export default function VersionInviteDialog({
     setPickedVersionId(undefined);
     setVersions([]);
     setJobWideVersions(null);
+    setJobVerToggles(null);
     setVersionId(null);
     setLoaded(false);
     setStep(null);
@@ -1369,11 +1426,86 @@ export default function VersionInviteDialog({
                     ) : <h4 className="tf-row-title">Select {label.singular.toLowerCase()} version</h4>}
                     {!error && <VersionUsage kind={kind} used={versions.length} />}
                   </div>
+                  {showJobVerPicker && !error ? (
+                    /* More than one JD version: each JD version is a group that
+                       opens onto its own assessment version cards. One pick
+                       across them all. */
+                    <div className="space-y-3">
+                      {jobVerGroups.map((n) => {
+                        const own = n === ownJobVer;
+                        const cards = jobWideVersions!.filter((v) => v.jobVersion === n);
+                        const open = expandedJobVers.includes(n);
+                        const hasPick = cards.some((v) => v.id === versionId);
+                        const sent = cards.reduce((sum, v) => sum + (v.invitations || 0), 0);
+                        const jd = jdDetailsOf(n);
+                        const jdStatusLabel = JD_STATUS[jd.status]?.label;
+                        return (
+                          <div
+                            key={n}
+                            className={`rounded-xl border bg-white dark:bg-slate-900 ${hasPick ? 'border-brand-blue/40' : 'border-gray-200 dark:border-slate-700'}`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => toggleJobVer(n)}
+                              aria-expanded={open}
+                              className="w-full flex flex-wrap items-center gap-2 px-3 sm:px-4 py-3 text-left rounded-xl hover:bg-brand-blue/[0.03]"
+                            >
+                              <ChevronDown className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${open ? '' : '-rotate-90'}`} aria-hidden="true" />
+                              <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">JD Version</span>
+                              <VersionPill kind="job" version={n} />
+                              {n === jobVerGroups[0] && (
+                                <span className="shrink-0 px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">Latest</span>
+                              )}
+                              {hasPick && (
+                                <span className="shrink-0 inline-flex items-center gap-1 text-2xs font-semibold px-2 py-0.5 rounded-md text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20">
+                                  <Check className="w-3 h-3" aria-hidden="true" />Selected
+                                </span>
+                              )}
+                              {jdStatusLabel && (
+                                <span className={`shrink-0 inline-flex text-2xs font-semibold px-2 py-0.5 rounded-md ring-1 ${JD_STATUS[jd.status].pill}`}>{jdStatusLabel}</span>
+                              )}
+                              <span className="ml-auto tf-meta whitespace-nowrap">
+                                {plural(cards.length, 'assessment version')} · {sent.toLocaleString()} sent
+                              </span>
+                              {/* The JD version's own details. */}
+                              <span className="basis-full pl-6 flex flex-wrap items-center gap-x-4 gap-y-1 tf-meta">
+                                <span className="inline-flex items-center gap-1"><Briefcase className="w-3.5 h-3.5" aria-hidden="true" />Experience: <span className="font-medium text-gray-700 dark:text-slate-200">{jd.experience || '—'}</span></span>
+                                <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" aria-hidden="true" />Created on: <span className="font-medium text-gray-700 dark:text-slate-200">{jd.createdOn ? formatIST(jd.createdOn) : '—'}</span></span>
+                                <span className="inline-flex items-center gap-1 min-w-0"><User className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />Created by: <span className="font-medium text-gray-700 dark:text-slate-200 truncate">{jd.createdBy || '—'}</span></span>
+                              </span>
+                            </button>
+                            {open && (
+                              <div className="border-t border-gray-100 dark:border-slate-700/60 px-3 sm:px-4 py-3">
+                                <VersionList
+                                  kind={kind}
+                                  versions={cards}
+                                  allVersions={own ? versions : cards}
+                                  loading={false}
+                                  error={null}
+                                  onRetry={() => void reload()}
+                                  selectedId={versionId}
+                                  onSelect={pickVersion}
+                                  createBlocked={blocked}
+                                  creating={creating}
+                                  onCreate={handleCreate}
+                                  perms={perms}
+                                  busyId={busyId}
+                                  onAction={handleAction}
+                                  hideDuplicate={hideDuplicate}
+                                  hideCreate={!own}
+                                />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
                   <VersionList
                     kind={kind}
-                    versions={jobWideVersions ?? listedVersions(kind, versions)}
+                    versions={cardVersions}
                     allVersions={versions}
-                    spansJobVersions={!!jobWideVersions}
+                    spansJobVersions={cardsSpanJob}
                     loading={loading && !loaded}
                     error={error}
                     onRetry={() => void reload()}
@@ -1387,6 +1519,7 @@ export default function VersionInviteDialog({
                     onAction={handleAction}
                     hideDuplicate={hideDuplicate}
                   />
+                  )}
                 </div>
               </div>
             ) : current === 'candidates' ? null : current === 'review' && !perms.canInvite ? (

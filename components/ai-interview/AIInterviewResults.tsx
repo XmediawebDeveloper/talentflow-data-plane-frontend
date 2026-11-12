@@ -5,6 +5,7 @@ import { StickyBulkBar } from '@/components/ui/sticky-bulk-bar';
 import { Fragment, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { FilterChipsPanelLine, type FilterChip } from '@/components/ui/filter-chips';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import { TableSkeleton } from '@/components/ui/skeleton';
@@ -1087,6 +1088,43 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             onToggleOrder={() => { setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc')); setCurrentPage(1); }}
           />
         );
+        /* Active filter tags — one per filter `countFilters` counts (the
+           score range and the completion-date range are one tag each; Result
+           is the toolbar's own dropdown, not counted, so no tag). Job Version
+           only standalone and Status only embedded, as the count has them. */
+        const formatChipDate = (v: string) => {
+          const d = new Date(`${v}T00:00:00`);
+          return Number.isNaN(d.getTime())
+            ? v
+            : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        };
+        const cf = search.filters;
+        const activeFilterChips: FilterChip[] = ([
+          portaled && cf.status !== DEFAULT_RESULT_STATUS && {
+            key: 'status', label: 'Status',
+            value: RESULT_STATUS_OPTIONS.find((o) => o.value === cf.status)?.label ?? cf.status,
+            onRemove: () => search.setFilter('status', DEFAULT_RESULT_STATUS),
+          },
+          (cf.scoreMin || cf.scoreMax) && {
+            key: 'score', label: 'Score Range',
+            value: cf.scoreMin && cf.scoreMax ? `${cf.scoreMin}% – ${cf.scoreMax}%`
+              : cf.scoreMin ? `from ${cf.scoreMin}%` : `up to ${cf.scoreMax}%`,
+            onRemove: () => search.setFilters({ ...cf, scoreMin: '', scoreMax: '' }),
+          },
+          (cf.dateFrom || cf.dateTo) && {
+            key: 'completed', label: 'Completed',
+            value: cf.dateFrom && cf.dateTo ? `${formatChipDate(cf.dateFrom)} – ${formatChipDate(cf.dateTo)}`
+              : cf.dateFrom ? `from ${formatChipDate(cf.dateFrom)}` : `until ${formatChipDate(cf.dateTo)}`,
+            onRemove: () => search.setFilters({ ...cf, dateFrom: '', dateTo: '' }),
+          },
+          !portaled && cf.jobVersion && { key: 'jobVersion', label: 'Job Version', value: `V${cf.jobVersion}`, onRemove: () => search.setFilter('jobVersion', '') },
+          cf.interviewVersion && { key: 'interviewVersion', label: 'Interview Version', value: `V${cf.interviewVersion}`, onRemove: () => search.setFilter('interviewVersion', '') },
+          cf.inviteSource && {
+            key: 'inviteSource', label: 'Source',
+            value: INVITE_SOURCE_FILTER_OPTIONS.find((o) => o.value === cf.inviteSource)?.label ?? cf.inviteSource,
+            onRemove: () => search.setFilter('inviteSource', ''),
+          },
+        ] as (FilterChip | false | '')[]).filter(Boolean) as FilterChip[];
         const toolbarBlock = (
         /* Standalone, phones (globals.css, `.tf-jobs-toolbar`): the Job Openings
            list's lines — search · filter icon, Result, Invite, Columns · Export,
@@ -1143,9 +1181,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
-          /* Reset — standalone only; Job Details has none (the Scored
-             Resumes-style panel there carries no clear control either). */
-          onClearFilters={portaled ? undefined : search.reset}
+          /* Reset — on every view, Job Details included (the Job Openings
+             reference): search + every filter back to the defaults. */
+          onClearFilters={search.reset}
           compactButtons={portaled}
           /* Standalone: the Job Openings (JD) page's two-row toolbar. Row 1
              (this ListToolbar): Search → Result → More Filters → Customize
@@ -1190,6 +1228,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
              Match reference's gap) so it doesn't sit flush on the tab card's
              bottom edge — the Job Details toolbar slot has no bottom padding. */
           className={portaled ? undefined : 'mb-0'}
+          /* Active filter tags: hover popup on More Filters (lg+). */
+          filterChips={activeFilterChips}
         >
           {/* Customize Columns / Export — standalone only as buttons;
               embedded in Job Details they are items in the Actions pill. */}
@@ -1435,6 +1475,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
           </div>
 
+          {/* Active filter tags — the panel's last line (phones / tablets). */}
+          <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
         {/* Standalone: the Job Openings (JD) page's panel — a divider and a
@@ -1529,6 +1571,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                 />
               </div>
             </div>
+            <FilterChipsPanelLine chips={activeFilterChips} />
           </div>
         )}
 
@@ -1633,13 +1676,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             )}
             {/* Status pills — as the Job Openings page's All Jobs /
                 Published / Draft … Same state the dropdown drove. */}
-            <div className="tf-jobs-status-tabs contents">
+            <div className="tf-jobs-status-tabs contents" role="tablist" aria-label="Result status">
             {RESULT_STATUS_OPTIONS.map((opt) => (
               <button
                 key={opt.value}
                 type="button"
                 onClick={() => search.setFilter('status', opt.value)}
-                aria-pressed={statusFilter === opt.value}
+                role="tab"
+                aria-selected={statusFilter === opt.value}
                 className={tabPill(statusFilter === opt.value)}
               >
                 {opt.label}
@@ -1738,9 +1782,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       label={session.candidate_name || 'candidate'}
                       selectionActive={selected.size > 0}
                     />
-                    {/* pl-6 keeps the corner select seal off the avatar — it shows on
+                    {/* pl-7 keeps the corner select seal off the avatar — it shows on
                         touch, on hover, and on every card once anything is selected. */}
-                    <div className="flex items-start gap-2.5 pl-6">
+                    <div className="flex items-start gap-2.5 pl-7">
                       <div className="min-w-0 flex-1">
                         <p className="font-medium text-gray-900 truncate">
                           {showName(session.candidate_name) || 'Unknown'}

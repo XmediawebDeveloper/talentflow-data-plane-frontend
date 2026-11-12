@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { cn } from './utils';
+import { FilterChipsPanelLine, type FilterChip } from './filter-chips';
 
 /**
  * The advanced-filter panel that opens under `ListToolbar`, extracted verbatim
@@ -45,9 +46,12 @@ export interface ListFilterPanelProps {
    */
   footer?: React.ReactNode;
   className?: string;
+  /** Active filter tags, drawn as the panel's last line on phones / tablets only
+   *  (laptop / desktop see them by hovering More Filters). */
+  chips?: FilterChip[];
 }
 
-export default function ListFilterPanel({ children, footer, className }: ListFilterPanelProps) {
+export default function ListFilterPanel({ children, footer, className, chips }: ListFilterPanelProps) {
   return (
     <div
       className={cn(
@@ -64,6 +68,8 @@ export default function ListFilterPanel({ children, footer, className }: ListFil
           {footer}
         </div>
       )}
+
+      {chips && <FilterChipsPanelLine chips={chips} />}
     </div>
   );
 }

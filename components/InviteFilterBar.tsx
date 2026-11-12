@@ -6,6 +6,7 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import { DateField } from '@/components/ui/date-field';
 import FilterSelect from '@/components/ui/filter-select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 
 export interface InviteFilterState {
   search: string;
@@ -50,6 +51,14 @@ interface InviteFilterBarProps {
    *  up width (to 5.25rem, their text truncating) before the line overflows. */
   compact?: boolean;
 }
+
+/* Active-filter tag dates: "01 Nov 2026". */
+const chipDate = (v: string) => {
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00` : v);
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+};
 
 /* compact: "1 Nov – 10 Nov" for the dates button. */
 const shortDate = (iso: string) => {
@@ -139,6 +148,33 @@ export default function InviteFilterBar({
     filters.dateFrom !== '' ||
     filters.dateTo !== '' ||
     extraSelects.some((select) => select.value !== '');
+
+  /* One tag per active filter (search excepted — it shows in its own box):
+     Status, each extra dropdown, and the invite date range as one tag. */
+  const activeFilterChips: FilterChip[] = [
+    filters.status !== 'all' && {
+      key: 'status',
+      label: 'Status',
+      value: statusOptions.find((o) => o.value === filters.status)?.label ?? filters.status,
+      onRemove: () => onChange({ ...filters, status: 'all' }),
+    },
+    ...extraSelects
+      .filter((select) => select.value !== '')
+      .map((select) => ({
+        key: select.key,
+        label: select.ariaLabel,
+        value: select.options.find((o) => o.value === select.value)?.label ?? select.value,
+        onRemove: () => select.onChange(''),
+      })),
+    (filters.dateFrom !== '' || filters.dateTo !== '') && {
+      key: 'invited',
+      label: 'Invited',
+      value: filters.dateFrom && filters.dateTo
+        ? `${chipDate(filters.dateFrom)} – ${chipDate(filters.dateTo)}`
+        : filters.dateFrom ? `From ${chipDate(filters.dateFrom)}` : `Until ${chipDate(filters.dateTo)}`,
+      onRemove: () => onChange({ ...filters, dateFrom: '', dateTo: '' }),
+    },
+  ].filter(Boolean) as FilterChip[];
 
   const handleClear = () => {
     setLocalSearch('');
@@ -271,6 +307,9 @@ export default function InviteFilterBar({
             </button>
           )}
         </div>
+        {activeFilterChips.length > 0 && (
+          <FilterChips className="mt-3" chips={activeFilterChips} />
+        )}
       </div>
     );
   }
@@ -352,6 +391,9 @@ export default function InviteFilterBar({
           Clear Filters
         </button>
       </div>
+      {activeFilterChips.length > 0 && (
+        <FilterChips className="mt-3" chips={activeFilterChips} />
+      )}
     </div>
   );
 }
