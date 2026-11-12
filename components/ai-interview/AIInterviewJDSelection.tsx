@@ -24,6 +24,7 @@ import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import JobEligibilityNote from '@/components/jobs/JobEligibilityNote';
 import { Skeleton } from '@/components/ui/skeleton';
 import { fetchAllRows } from '@/lib/utils/fetchAllRows';
+import { FolderIconIllustration, IconTileIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -663,22 +664,22 @@ export default function AIInterviewJDSelection() {
                     })}
 
                     {lineageJobs.length === 0 && !(loadError === 'jobs' && jds.length === 0) && (
-                      <div className="text-center py-8 sm:py-12 text-gray-500">
-                        <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                        <p className="text-sm sm:text-base">
-                          {availableJobs.length > 0
-                            ? 'No matching job descriptions found'
-                            : allConfigured
-                              ? 'No jobs available for a new AI interview'
-                              : 'No published jobs available'}
-                        </p>
-                        <p className="text-sm mt-1">
-                          {availableJobs.length > 0
-                            ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
-                            : allConfigured
-                              ? 'Every published job already has an AI interview. Publish a new job to create another one.'
-                              : 'Create and publish a Job first to create AI interviews'}
-                        </p>
+                      <IllustratedEmptyState
+                        bordered={false}
+                        illustration={availableJobs.length > 0
+                          ? <IconTileIllustration icon={Search} />
+                          : <FolderIconIllustration icon={Briefcase} badge={allConfigured ? undefined : 'plus'} />}
+                        title={availableJobs.length > 0
+                          ? 'No matching job descriptions found'
+                          : allConfigured
+                            ? 'No jobs available for a new AI interview'
+                            : 'No published jobs available'}
+                        description={availableJobs.length > 0
+                          ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
+                          : allConfigured
+                            ? 'Every published job already has an AI interview. Publish a new job to create another one.'
+                            : 'Create and publish a Job first to create AI interviews.'}
+                      >
                         {availableJobs.length === 0 && (
                           <Button
                             variant="primary"
@@ -695,7 +696,7 @@ export default function AIInterviewJDSelection() {
                             Create New Job
                           </Button>
                         )}
-                      </div>
+                      </IllustratedEmptyState>
                     )}
 
                     {lineageJobs.length > 0 && (

@@ -4,7 +4,7 @@ import { fetchRemainingPages } from '@/lib/utils/fetchPagesParallel';
 import { formatExperienceRange, formatJdExperience } from '@/lib/utils/jobExperience';
 import ChipsReveal from '@/components/ui/chips-reveal';
 import { handoffContinueLabel, resolveInviteHandoffOrigin, useHandoffCandidateCrumb } from '@/lib/utils/resumeScoringInviteHandoff';
-import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown, RefreshCw, ClipboardList, FileSearch } from 'lucide-react';
 import { SectionHeader, SummaryLocation } from '@/components/ai-interview/ConfigSummary';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,7 @@ import {
 import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 import { isForcedNavigation } from '@/lib/utils/forcedNavigation';
 import { ASSESSMENT_JOB_LOCK_MESSAGE, isJobVersionLocked } from '@/lib/utils/assessmentJobLock';
+import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -4281,22 +4282,23 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                 )}
                 {filteredAvailableJobs.length === 0 && !isLoadingMoreJobs && !(jobsLoadError === 'jobs' && availableJobs.length === 0) && (
-                  <div className="text-center py-8 sm:py-12 text-gray-500">
-                    <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm sm:text-base">
-                      {availableJobs.length > 0
-                        ? 'No matching job descriptions found'
-                        : hasAnyPublishedVersion
-                          ? 'No jobs available for a new assessment'
-                          : 'No published jobs available'}
-                    </p>
-                    <p className="text-sm mt-1">
-                      {availableJobs.length > 0
-                        ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
-                        : hasAnyPublishedVersion
-                          ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
-                          : 'Create and publish a Job first to create assessments'}
-                    </p>
+                  <IllustratedEmptyState
+                    bordered={false}
+                    illustration={<FolderIconIllustration
+                      icon={availableJobs.length > 0 ? FileSearch : Briefcase}
+                      badge={availableJobs.length === 0 && !hasAnyPublishedVersion ? 'plus' : undefined}
+                    />}
+                    title={availableJobs.length > 0
+                      ? 'No matching job descriptions found'
+                      : hasAnyPublishedVersion
+                        ? 'No jobs available for a new assessment'
+                        : 'No published jobs available'}
+                    description={availableJobs.length > 0
+                      ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
+                      : hasAnyPublishedVersion
+                        ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
+                        : 'Create and publish a Job first to create assessments.'}
+                  >
                     {availableJobs.length === 0 && (
                       <Button
                         variant="primary"
@@ -4306,13 +4308,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         }}
                         aria-disabled={!canCreateJd}
                         title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
-                        className={`mt-4 mx-auto ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        className={`mx-auto ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
                         icon={<Plus className="w-4 h-4" />}
                       >
                         Create New Job
                       </Button>
                     )}
-                  </div>
+                  </IllustratedEmptyState>
                 )}
 
                 {/* Pagination — the shared control, so the page sizes, the

@@ -20,6 +20,7 @@ import ExportFormatModal from '@/components/ExportFormatModal';
 import { exportRows, type ExportFileFormat } from '@/lib/utils/exportUtils';
 import ListViewToggle, { type ListDisplayMode } from '@/components/ui/list-view-toggle';
 import GridCardSelect, { gridCardSelectedClass } from '@/components/ui/grid-card-select';
+import { FolderIconIllustration } from '@/components/ui/illustrated-empty-state';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -541,6 +542,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal, disp
               entityLabel="activity"
               emptyTitle="No activity yet"
               emptyDescription="AI interview and candidate events appear here as they happen."
+              illustration={<FolderIconIllustration icon={Activity} />}
               onReset={search.reset}
             />
           ) : (
