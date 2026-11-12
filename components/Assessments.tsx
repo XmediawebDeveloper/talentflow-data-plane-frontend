@@ -7496,11 +7496,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             tables sit straight on the page with their own borders — no outer
             box around them. Settings is a form, not a list, so it alone keeps
             the card. */}
-        {/* min-height: keeps a short list (a few rows, an empty result) at
-            least a screen tall. A tab click scrolls the toolbar card to the
-            top; a list that loaded shorter than its skeleton shrank the page
-            under that scroll and the browser snapped back to the stat cards. */}
-        <div className={activeTab === 'settings' ? 'tf-card-soft' : 'min-h-[calc(100dvh-11rem)]'}>
+        {/* No min-height: the list is as tall as its rows, like Job Openings,
+            so one or two rows don't leave a screen of empty space below. */}
+        <div className={activeTab === 'settings' ? 'tf-card-soft' : ''}>
           {/* Assessment List */}
           <div className={activeTab === 'settings' ? 'p-3 sm:p-6' : ''}>
 
@@ -7765,7 +7763,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {/* No title-strip skeleton either — the loaded card has
                           no title strip to stand in for. */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           {/* Same floor as the loaded table below, so the rows
                               do not shift sideways when the skeleton swaps
                               out. */}
@@ -7901,7 +7899,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       ) : (
                       <>
                       <div className={`${DESKTOP_TABLE_ONLY} tf-card overflow-hidden`}>
-                        <div className="min-h-[320px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
+                        <div className="max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
                         {/* 1500 -> 1720 for the two version columns, then
                             1720 -> 1830 for Assessment Version, then
                             1830 -> 1930 for Job ID. The shell
@@ -8732,7 +8730,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
                       {/* Invitations card */}
                       <div className="tf-card overflow-hidden">
-                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                        <div className="overflow-auto tf-table-shell">
                           <table className="w-full table-auto">
                             <thead className="[&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
@@ -9051,7 +9049,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           )
                         ) : (
                         <>
-                        <div className={`${DESKTOP_TABLE_ONLY} min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
+                        <div className={`${DESKTOP_TABLE_ONLY} max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell`}>
                           {/* 1200 -> 1400 for the two score columns. The shell
                               already scrolls sideways, so this only moves where
                               that scroll starts; leaving it at 1200 would have

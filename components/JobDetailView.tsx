@@ -6053,7 +6053,7 @@ function AIMatchTabContent({
       {/* Table / Grid */}
       <div className="tf-card overflow-hidden">
         {displayMode === 'grid' ? (
-          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto p-4">
+          <div className="max-h-[calc(100dvh-20rem)] overflow-auto p-4">
             {filteredCandidates.length === 0 ? (
               <div className="px-4 py-12 text-center tf-body-muted">
                 No candidates match the current filters.
@@ -6173,7 +6173,7 @@ function AIMatchTabContent({
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */
         <>
-        <div className="hidden lg:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
+        <div className="hidden lg:block max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           {/* With no rows the width floor and the header come off — see
               `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
               1450px, which put the message off the side of the shell behind a

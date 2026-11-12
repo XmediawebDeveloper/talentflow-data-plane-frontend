@@ -3712,14 +3712,11 @@ export default function AIInterview() {
             wrapper kept for that box, so the rows line up with the toolbar
             card above. Settings is a form, not a list, so it alone keeps the
             card.
-            The min-height keeps a short list (a few Archived rows, an empty
-            result) at least a screen tall: a tab click scrolls the toolbar card
-            to the top, and when the loaded list came in shorter than the
-            loading skeleton the page shrank under that scroll and the browser
-            snapped back up to the stat cards. */}
+            No min-height: the list is as tall as its rows, like Job Openings,
+            so a short list doesn't leave a screen of empty space below. */}
         <div className={activeTab === 'settings'
           ? 'tf-card-soft'
-          : '[&>div]:p-0 min-h-[calc(100dvh-11rem)]'}>
+          : '[&>div]:p-0'}>
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job

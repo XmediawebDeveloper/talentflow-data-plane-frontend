@@ -1534,7 +1534,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
-                          className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/20 hover:bg-white hover:ring-brand-blue/40 transition-colors"
+                          className="tf-badge flex-shrink-0 gap-1.5 bg-white/70 text-brand-blue ring-1 ring-brand-blue/20 hover:bg-white hover:ring-brand-blue/40 transition-colors"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           View
