@@ -1311,6 +1311,9 @@ export default function UserManagement() {
   // Name / email edits vs the saved user — drives the in-form notice, the
   // Save button label and the "what will change" list in the code popup.
   const editingSavedUser = editingUser ? users.find(u => u.id.toString() === editingUser.id.toString()) : undefined;
+  // Invited but never signed in: name / email changes save without a code
+  // (the old email is told the invite moved; the new one gets the invite).
+  const neverSignedIn = !!editingSavedUser && !editingSavedUser.last_login;
   const identityChanges: { field: string; from: string; to: string }[] = [];
   if (editingUser && editingSavedUser) {
     if ((editingUser.name || '').trim() !== (editingSavedUser.name || '').trim()) {
@@ -1521,7 +1524,10 @@ export default function UserManagement() {
       });
 
       closeIdentityOtp();
-      toast.success('User updated successfully');
+      const inviteMovedTo = neverSignedIn && editingSavedUser
+        && (editingUser.email || '').trim().toLowerCase() !== (editingSavedUser.email || '').trim().toLowerCase()
+        ? editingUser.email : null;
+      toast.success(inviteMovedTo ? `User updated. Invitation sent to ${inviteMovedTo}.` : 'User updated successfully');
 
       if (Array.isArray(updatedUserData.dependency_notices)) {
         updatedUserData.dependency_notices.forEach((notice: string) => {
@@ -2291,7 +2297,7 @@ export default function UserManagement() {
           }
           actions={[
             {
-              label: identityChanges.length > 0 ? 'Send code & Save' : 'Save Changes',
+              label: identityChanges.length > 0 && !neverSignedIn ? 'Send code & Save' : 'Save Changes',
               onClick: () => handleUpdateUser(),
               locked: !editSelectedRoleId,
               title: !editSelectedRoleId ? 'Choose a role' : undefined,
@@ -2332,7 +2338,27 @@ export default function UserManagement() {
                     placeholder="name@company.com"
                   />
                 </div>
-                {identityChanges.length > 0 ? (
+                {identityChanges.length > 0 && neverSignedIn ? (
+                  <div className="flex gap-2.5 rounded-xl border border-brand-blue/20 bg-brand-blue/[0.05] p-3">
+                    <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                    <div className="space-y-1 text-xs leading-relaxed text-gray-700 dark:text-slate-300">
+                      <p className="font-semibold text-gray-900 dark:text-slate-50">
+                        This user hasn&apos;t signed in yet, so no code is needed
+                      </p>
+                      <p>
+                        {identityChanges.some(c => c.field === 'Email') ? (
+                          <>
+                            When you save, <span className="font-semibold break-all">{editingSavedUser?.email}</span> is told the
+                            invitation moved, and a new invitation goes to{' '}
+                            <span className="font-semibold break-all">{editingUser.email}</span>. Same user, same role.
+                          </>
+                        ) : (
+                          'The change is saved straight away.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ) : identityChanges.length > 0 ? (
                   <div className="flex gap-2.5 rounded-xl border border-brand-orange/30 bg-brand-orange/[0.06] p-3">
                     <Info className="mt-0.5 h-4 w-4 shrink-0 text-brand-orange" />
                     <div className="space-y-1 text-xs leading-relaxed text-gray-700 dark:text-slate-300">
@@ -2349,7 +2375,9 @@ export default function UserManagement() {
                 ) : (
                   <p className="flex items-start gap-1.5 tf-meta">
                     <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                    Changing the name or email needs a verification code sent to the user&apos;s current email.
+                    {neverSignedIn
+                      ? 'This user hasn’t signed in yet: you can fix the name or email without a code.'
+                      : <>Changing the name or email needs a verification code sent to the user&apos;s current email.</>}
                   </p>
                 )}
               </>
