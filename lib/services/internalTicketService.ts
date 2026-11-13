@@ -23,6 +23,15 @@ export interface InternalTicketResponseItem {
   created_at: string;
 }
 
+export interface InternalTicketAttachment {
+  id: string;
+  file_name: string;
+  file_size?: string | null;
+  file_url?: string | null;
+  uploaded_by_name?: string | null;
+  created_at?: string | null;
+}
+
 export interface InternalTicket {
   id: string;
   ticket_number: string;
@@ -36,6 +45,49 @@ export interface InternalTicket {
   created_at: string;
   updated_at: string;
   responses: InternalTicketResponseItem[];
+  /** Set once the admin forwarded the ticket to platform support. */
+  forwarding?: InternalTicketForwarding | null;
+  attachments?: InternalTicketAttachment[];
+}
+
+/** Platform support teams a Team Support Ticket can be forwarded to (backend: ForwardTeam). */
+export type ForwardTeam =
+  | 'technical'
+  | 'billing'
+  | 'account'
+  | 'recruitment'
+  | 'assessment'
+  | 'product'
+  | 'general';
+
+export const FORWARD_TEAMS: { value: ForwardTeam; label: string; hint: string }[] = [
+  { value: 'technical', label: 'Technical Support', hint: 'Errors, bugs, something not loading or working' },
+  { value: 'billing', label: 'Billing & Subscription', hint: 'Invoices, payments, plans, units' },
+  { value: 'account', label: 'Account & Access', hint: 'Sign-in, SSO, roles you cannot fix yourself' },
+  { value: 'recruitment', label: 'Jobs & Candidates', hint: 'Job postings, resumes, candidate data' },
+  { value: 'assessment', label: 'Assessments & Interviews', hint: 'Assessments, AI interviews, scoring' },
+  { value: 'product', label: 'Product & Feature Requests', hint: 'Ideas and missing features' },
+  { value: 'general', label: 'General Support', hint: 'Anything else' },
+];
+
+export function forwardTeamLabel(team?: string | null): string {
+  return FORWARD_TEAMS.find(t => t.value === team)?.label || 'Platform Support';
+}
+
+export interface InternalTicketForwarding {
+  support_ticket_id?: string | null;
+  support_ticket_number?: string | null;
+  team?: ForwardTeam | string | null;
+  note?: string | null;
+  forwarded_by?: UserInfo | null;
+  forwarded_at?: string | null;
+}
+
+export interface ForwardInternalTicketRequest {
+  team: ForwardTeam;
+  note?: string;
+  /** Support-ticket priority (adds urgent); defaults to the ticket's priority. */
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
 
 export type InternalTicketCategory =
@@ -205,6 +257,25 @@ export const internalTicketService = {
     return response.data;
   },
 
+  /**
+   * Attach files to a ticket (requester or admin). Max 5 per upload — see lib/supportAttachments.ts.
+   * On a forwarded ticket the files also reach My Support Tickets and the Control Plane.
+   */
+  async uploadAttachments(ticketId: string, files: File[]): Promise<InternalTicket> {
+    const form = new FormData();
+    files.forEach(f => form.append('files', f));
+    const response = await api.post<InternalTicket>(`${API_BASE}/${ticketId}/attachments`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  },
+
+  /** Download an attachment (served through the API, so fetched as a blob). */
+  async downloadAttachment(ticketId: string, attachmentId: string): Promise<Blob> {
+    const response = await api.get(`${API_BASE}/${ticketId}/attachments/${attachmentId}/download`, { responseType: 'blob' });
+    return response.data as Blob;
+  },
+
   // ==========================================================================
   // ADMIN ENDPOINTS (for tenant_admin only)
   // ==========================================================================
@@ -249,6 +320,16 @@ export const internalTicketService = {
   async resolveTicket(ticketId: string): Promise<InternalTicket> {
     const response = await api.post<InternalTicket>(`${API_BASE}/${ticketId}/resolve`);
     triggerNotificationRefresh(); // Trigger for user to see ticket resolved
+    return response.data;
+  },
+
+  /**
+   * [ADMIN] Forward a ticket to platform support. Creates a linked ticket in
+   * My Support Tickets and the Control Plane; the ticket stays in this list.
+   */
+  async forwardTicket(ticketId: string, data: ForwardInternalTicketRequest): Promise<InternalTicket> {
+    const response = await api.post<InternalTicket>(`${API_BASE}/${ticketId}/forward`, data);
+    triggerNotificationRefresh(); // Requester sees the forward
     return response.data;
   },
 
