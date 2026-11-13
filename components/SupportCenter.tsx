@@ -4090,7 +4090,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       </button>
                     )}
 
-                    {(t.status === 'open' || t.status === 'in-progress') && (
+                    {/* Forwarded: platform support (admin) owns it now, so offer to move there instead of resolving here. */}
+                    {t.forwarding && (t.status === 'open' || t.status === 'in-progress') && (
+                      <button
+                        onClick={() => t.forwarding?.support_ticket_id
+                          ? openForwardedSupportTicket(t.forwarding.support_ticket_id)
+                          : toast.info('The forwarded ticket is still syncing — try again in a moment.')}
+                        disabled={busy}
+                        className={`${actionBtn} bg-brand-blue text-white shadow-sm shadow-brand-blue/25 hover:bg-brand-blue-2`}
+                      >
+                        <Forward className="h-4 w-4 flex-shrink-0" />
+                        Move to Admin
+                      </button>
+                    )}
+
+                    {!t.forwarding && (t.status === 'open' || t.status === 'in-progress') && (
                       <button
                         onClick={() => handleResolveInternalTicket(t.id)}
                         disabled={busy}

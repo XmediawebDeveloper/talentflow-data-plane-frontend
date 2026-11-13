@@ -1051,7 +1051,17 @@ export default function InternalTicketAdmin() {
                       </button>
                     )}
 
-                    {selectedTicket.status === 'open' || selectedTicket.status === 'in-progress' ? (
+                    {selectedTicket.forwarding && (selectedTicket.status === 'open' || selectedTicket.status === 'in-progress') && (
+                      <button
+                        onClick={() => router.push('/support-tickets')}
+                        className="w-full px-4 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors text-sm text-left flex items-center gap-2"
+                      >
+                        <Forward className="w-4 h-4" />
+                        Move to Admin
+                      </button>
+                    )}
+
+                    {!selectedTicket.forwarding && (selectedTicket.status === 'open' || selectedTicket.status === 'in-progress') ? (
                       <button
                         onClick={() => handleResolveTicket(selectedTicket.id)}
                         disabled={actionLoading === selectedTicket.id}
