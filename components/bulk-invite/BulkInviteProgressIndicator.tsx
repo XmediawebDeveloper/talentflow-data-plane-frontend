@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  AlertTriangle, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Maximize2, Minus, Pause,
+  AlertTriangle, Ban, CheckCircle2, ChevronRight, Clock, ClipboardList, Hourglass, Info, Loader2, Maximize2, Minus, Pause,
   RotateCcw, Send, SkipForward, Video, X, XCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -64,6 +64,7 @@ const HINT = {
   processing: 'Being sent right now.',
   sent: 'The invitation reached the candidate’s mail server.',
   skipped: 'Left out on purpose — e.g. already invited to this version, or no email. Nothing to do.',
+  cancelled: 'Stopped by a cancel before it went out — Send again sends it now.',
   failed: 'Could not be delivered — open it to see why, then send again or edit.',
 };
 
@@ -151,12 +152,8 @@ export default function BulkInviteProgressIndicator() {
   /* Close (✕ / Esc): back to the icon while something is unfinished; once
      everything has finished the widget goes away and the finished batches
      are cleared (the finished toast still opens their results). */
-  /* Minimized after everything finished: the icon stays (it normally goes
-     away once nothing is left to send) until Close or the next send. */
-  const [keepIcon, setKeepIcon] = useState(false);
   const closeWidget = () => {
     if (hasUnfinished) { setWidget('icon'); return; }
-    setKeepIcon(false);
     dismiss(shown.map((j) => j.job_id));
     setWidget('hidden');
   };
@@ -197,7 +194,8 @@ export default function BulkInviteProgressIndicator() {
       const sent = finished.reduce((n, j) => n + j.sent, 0);
       const skipped = finished.reduce((n, j) => n + j.skipped, 0);
       const failed = finished.reduce((n, j) => n + j.failed, 0);
-      const outcome = `${sent} sent${skipped ? ` · ${skipped} skipped` : ''}${failed ? ` · ${failed} failed` : ''}`;
+      const cancelledN = finished.reduce((n, j) => n + (j.cancelled ?? 0), 0);
+      const outcome = `${sent} sent${skipped ? ` · ${skipped} skipped` : ''}${cancelledN ? ` · ${cancelledN} cancelled` : ''}${failed ? ` · ${failed} failed` : ''}`;
       const clean = !failed && finished.every((j) => j.status === 'done');
       const show = clean ? toast.success : toast.warning;
       if (finished.length === 1) {
@@ -229,18 +227,13 @@ export default function BulkInviteProgressIndicator() {
     />
   ) : null;
   // All finished and the mini popup closed: no icon left on the page.
-  const iconVisible = !(shown.length === 0 || widget === 'hidden' || (!miniOpen && !hasUnfinished && !keepIcon));
+  /* The icon stays until the user presses ✕ Close (widget → 'hidden') —
+     it no longer goes away on its own when everything has finished. */
+  const iconVisible = !(shown.length === 0 || widget === 'hidden');
   useEffect(() => { setIconShown(iconVisible); }, [iconVisible, setIconShown]);
-  /* Nothing is cleared on its own: finished batches stay in the list (next
-     to new sends) until the user presses ✕ Close — after that, the next send
-     shows only itself. A new send only drops the "kept after finish" icon
-     state, so the icon again goes away once everything has finished. */
-  const wasUnfinished = useRef(hasUnfinished);
-  useEffect(() => {
-    const hadUnfinished = wasUnfinished.current;
-    wasUnfinished.current = hasUnfinished;
-    if (!hadUnfinished && hasUnfinished) setKeepIcon(false);
-  }, [hasUnfinished]);
+  /* Nothing is cleared or hidden on its own: finished batches stay in the
+     list (next to new sends) and the icon stays, until the user presses
+     ✕ Close — after that, the next send shows only itself. */
   useEffect(() => () => setIconShown(false), [setIconShown]);
   if (!iconVisible) {
     return <>{results}{cancelDialog}</>;
@@ -312,9 +305,11 @@ export default function BulkInviteProgressIndicator() {
     { key: 'processing', label: 'Sending', n: sum(processingOf, scoped), icon: <Loader2 className={`w-3.5 h-3.5 ${sum(processingOf, scoped) > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue', hint: HINT.processing },
     { key: 'sent', label: 'Sent', n: sum((j) => j.sent, scoped), icon: <CheckCircle2 className="w-3.5 h-3.5" />, tone: 'text-success', hint: HINT.sent },
     { key: 'skipped', label: 'Skipped', n: sum((j) => j.skipped, scoped), icon: <SkipForward className="w-3.5 h-3.5" />, tone: 'text-gray-500 dark:text-slate-400', hint: HINT.skipped },
+    { key: 'cancelled', label: 'Cancelled', n: sum((j) => j.cancelled ?? 0, scoped), icon: <Ban className="w-3.5 h-3.5" />, tone: 'text-warning-strong', hint: HINT.cancelled },
     { key: 'failed', label: 'Failed', n: failedAll, icon: <XCircle className="w-3.5 h-3.5" />, tone: 'text-destructive', hint: HINT.failed },
   ];
   const side = 'right-3 sm:right-6';
+  const boxes = totals.filter((r) => r.key !== 'cancelled' || r.n > 0);
   const openTab = (j: TrackedBulkInvite, tab: BulkInviteResultsTab) => setOpenResultsFor(j.job_id, tab);
 
   /* A clickable count: opens that send's results on that tab. */
@@ -423,6 +418,7 @@ export default function BulkInviteProgressIndicator() {
           {act.length > 0 && <span className="text-gray-600 dark:text-slate-300" title={HINT.queue}>Queue {sum(queuedOf, items)}</span>}
           <span className="text-success" title={HINT.sent}>Sent {sum((x) => x.sent, items)}</span>
           {skipped > 0 && <span className="text-gray-500 dark:text-slate-400" title={HINT.skipped}>Skipped {skipped}</span>}
+          {sum((x) => x.cancelled ?? 0, items) > 0 && <span className="text-warning-strong" title={HINT.cancelled}>Cancelled {sum((x) => x.cancelled ?? 0, items)}</span>}
           {failed > 0 && <span className="text-destructive font-medium" title={HINT.failed}>Failed {failed}</span>}
         </p>
         {isOpen && (
@@ -497,6 +493,7 @@ export default function BulkInviteProgressIndicator() {
           {isActive && processing > 0 && <span className="text-brand-blue" title={HINT.processing}>Sending now {processing}</span>}
           {countLink(j, 'sent', 'Sent', j.sent, 'text-success', HINT.sent)}
           {j.skipped > 0 && countLink(j, 'skipped', 'Skipped', j.skipped, 'text-gray-500 dark:text-slate-400', HINT.skipped)}
+          {(j.cancelled ?? 0) > 0 && countLink(j, 'cancelled', 'Cancelled', j.cancelled ?? 0, 'text-warning-strong', HINT.cancelled)}
           {j.failed > 0 && countLink(j, 'failed', 'Failed', j.failed, 'text-destructive font-medium', HINT.failed)}
           {isActive && left && <span className="text-gray-500 dark:text-slate-400">· {left}</span>}
         </p>
@@ -590,7 +587,7 @@ export default function BulkInviteProgressIndicator() {
                 </Button>
               ) : (
                 <>
-                  <Button variant="secondary" size="sm" onClick={() => { setKeepIcon(true); setWidget('icon'); }} className="w-7 h-7 !px-0" aria-label="Minimize" title="Minimize — keep the icon to look at these sends again">
+                  <Button variant="secondary" size="sm" onClick={() => setWidget('icon')} className="w-7 h-7 !px-0" aria-label="Minimize" title="Minimize — keep the icon to look at these sends again">
                     <Minus className="w-3.5 h-3.5" />
                   </Button>
                   <Button variant="secondary" size="sm" onClick={closeWidget} className="w-7 h-7 !px-0" aria-label="Close" title="Close — everything has finished">
@@ -620,8 +617,9 @@ export default function BulkInviteProgressIndicator() {
               )}
             </div>
             )}
-            <ul className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
-              {totals.map((r) => (
+            {/* Cancelled gets its own box only once something was cancelled. */}
+            <ul className={`grid grid-cols-3 ${boxes.length > 5 ? 'sm:grid-cols-6' : 'sm:grid-cols-5'} gap-1.5`}>
+              {boxes.map((r) => (
                 <li key={r.key} title={r.hint} className="min-w-0 flex flex-col gap-0.5 rounded-lg border border-gray-100 dark:border-slate-700/60 px-2 py-1.5 cursor-help">
                   <span className={`flex items-center gap-1 min-w-0 w-full text-2xs font-medium ${r.tone}`}>
                     <span className="shrink-0">{r.icon}</span>
@@ -750,6 +748,7 @@ export default function BulkInviteProgressIndicator() {
                           {gRunning > 0 && <span className="text-gray-600 dark:text-slate-300">Queue {sum(queuedOf, g.items)}</span>}
                           <span className="text-success">Sent {sum((j) => j.sent, g.items)}</span>
                           {sum((j) => j.skipped, g.items) > 0 && <span className="text-gray-500 dark:text-slate-400">Skipped {sum((j) => j.skipped, g.items)}</span>}
+                          {sum((j) => j.cancelled ?? 0, g.items) > 0 && <span className="text-warning-strong">Cancelled {sum((j) => j.cancelled ?? 0, g.items)}</span>}
                           {gFailed > 0 && <span className="text-destructive font-medium">Failed {gFailed}</span>}
                         </p>
                       </>

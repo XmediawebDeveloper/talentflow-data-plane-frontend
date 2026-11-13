@@ -66,7 +66,7 @@ export default function BulkInviteResultsDialog({
       open
       onCancel={onClose}
       cancelLabel="Close"
-      size="lg"
+      size="xl"
       tone="plain"
       icon={<Send className="w-4 h-4 text-brand-blue" />}
       title={job.mode === 'resend' ? `${kindLabel} — new links` : `${kindLabel} invitations`}

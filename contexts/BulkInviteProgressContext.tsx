@@ -48,7 +48,7 @@ type TrackMeta = Pick<TrackedBulkInvite, 'jdTitle' | 'jdCode' | 'jobVersion' | '
 export type BulkInviteWidgetView = 'hidden' | 'icon' | 'mini';
 
 /** Which tab the results popup opens on. */
-export type BulkInviteResultsTab = 'all' | 'sent' | 'skipped' | 'failed' | 'remaining';
+export type BulkInviteResultsTab = 'all' | 'sent' | 'skipped' | 'cancelled' | 'failed' | 'remaining';
 
 interface BulkInviteProgressContextType {
   jobs: TrackedBulkInvite[];
