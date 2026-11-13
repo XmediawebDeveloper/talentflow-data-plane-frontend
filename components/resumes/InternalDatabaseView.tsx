@@ -800,7 +800,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
   };
 
   // Handle actual apply action from modal - using async Celery scoring
-  const handleApply = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[]) => {
+  const handleApply = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[], resumeVersions?: (number | undefined)[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setShowApplyToJobModal(false);
@@ -811,15 +811,19 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
     const selectedJob = jobRecords?.[0] || jobs.find(j => j.id === jobId);
     // A picked older version has its own id: name it from the candidate it came from.
     const names: Record<string, string> = {};
+    const versions: Record<string, number> = {};
     resumeIds.forEach((id, i) => {
       const resume = rowById(id) || rowById(sourceResumeIds?.[i] ?? '');
       names[id] = resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown';
+      const version = resumeVersions?.[i];
+      if (version) versions[id] = version;
     });
     // What will happen (scored / skipped / units) is shown before anything starts.
     setScoringRequest({
       job: { id: jobId, title: selectedJob?.title || 'Job', jobCode: selectedJob?.job_id, version: selectedJob?.versionNumber },
       resumeIds,
       names,
+      versions,
     });
   };
 
@@ -829,7 +833,11 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
       // Start async bulk scoring via Celery
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      const resumeItems = resumeIds.map(id => ({ resumeId: id, candidateName: names[id] || 'Unknown' }));
+      const resumeItems = resumeIds.map(id => ({
+        resumeId: id,
+        candidateName: names[id] || 'Unknown',
+        resumeVersion: scoringRequest?.versions?.[id],
+      }));
 
       // Clear selection and follow the run here: its progress popup opens on
       // this page, and Minimize leaves the recruiter on Resume Database.

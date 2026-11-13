@@ -2451,7 +2451,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   };
 
   // Handle applying resumes to selected jobs (scoring) - using async Celery
-  const handleApplyToJobSubmit = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[]) => {
+  const handleApplyToJobSubmit = (resumeIds: string[], jobIds: string[], jobRecords?: Job[], sourceResumeIds?: string[], resumeVersions?: (number | undefined)[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
@@ -2463,15 +2463,19 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     const selectedJob = jobRecords?.[0] || publishedJobs.find(j => j.id === jobId);
     // A picked older version has its own id: name it from the candidate it came from.
     const names: Record<string, string> = {};
+    const versions: Record<string, number> = {};
     resumeIds.forEach((id, i) => {
       const resume: any = resumes.find(r => r.id === id) || resumes.find(r => r.id === sourceResumeIds?.[i]);
       names[id] = resume?.candidateName || resume?.candidate_name || resume?.name || 'Unknown';
+      const version = resumeVersions?.[i];
+      if (version) versions[id] = version;
     });
     // What will happen (scored / skipped / units) is shown before anything starts.
     setScoringRequest({
       job: { id: jobId, title: selectedJob?.title || 'Job', jobCode: selectedJob?.job_id, version: selectedJob?.versionNumber },
       resumeIds,
       names,
+      versions,
     });
   };
 
@@ -2481,7 +2485,11 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       // Start async bulk scoring via Celery (resumeIds already have correct version IDs)
       const response = await scoringService.startBulkScoringAsync(jobId, resumeIds);
 
-      const resumeItems = resumeIds.map(id => ({ resumeId: id, candidateName: names[id] || 'Unknown' }));
+      const resumeItems = resumeIds.map(id => ({
+        resumeId: id,
+        candidateName: names[id] || 'Unknown',
+        resumeVersion: scoringRequest?.versions?.[id],
+      }));
 
       // Clear selection and follow the run here: its progress popup opens on
       // this page, and Minimize leaves the recruiter on Resume Database.

@@ -1233,6 +1233,7 @@ Best regards`);
   const scoringModalItems: ModalProgressItem[] = (scoringRun?.items ?? []).map(item => ({
     id: item.id,
     resumeId: item.resumeId,
+    resumeVersion: item.resumeVersion,
     candidateName: item.candidateName,
     jobTitle: item.jobTitle,
     jobId: item.jobId,
@@ -1246,7 +1247,7 @@ Best regards`);
   }));
 
   // Handle applying resume to selected job (scoring) - using async Celery
-  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[]) => {
+  const handleApplyToJobSubmit = async (resumeIds: string[], jobIds: string[], jobRecords?: Job[], _sourceResumeIds?: string[], resumeVersions?: (number | undefined)[]) => {
     if (jobIds.length === 0 || resumeIds.length === 0) return;
 
     setIsApplyToJobModalOpen(false);
@@ -1256,6 +1257,10 @@ Best regards`);
     // The AI Talent Match flow picks the version inside the dialog, so its
     // pick (resumeIds[0]) wins; elsewhere the pre-dialog version picker does.
     const resumeIdToScore = (aiMatchScoringJob ? resumeIds[0] : selectedVersionForApply) || resumeId;
+    // The scored version's own number, for the progress popup's Resume Version.
+    const resumeVersionToScore = (aiMatchScoringJob ? resumeVersions?.[0] : undefined)
+      ?? resume?.versions?.find(v => v.id === resumeIdToScore)?.version
+      ?? undefined;
     const selectedJob = jobRecords?.[0] || publishedJobs.find(job => job.id === jobId);
     const fallbackJobTitle = selectedJob?.title || 'Selected Job';
     const candidateName = getCandidateName();
@@ -1285,7 +1290,7 @@ Best regards`);
         batchId: response.batch_id,
         jobId: responseJobId,
         jobTitle: response.jd_title || fallbackJobTitle,
-        items: [{ resumeId: resumeIdToScore, candidateName }],
+        items: [{ resumeId: resumeIdToScore, candidateName, resumeVersion: resumeVersionToScore }],
         returnUrl: `/recruitment/job-details?id=${encodeURIComponent(responseJobId)}&tab=scored-resumes`,
       });
       setScoringBatchId(response.batch_id);

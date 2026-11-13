@@ -116,6 +116,7 @@ export default function GlobalScoringProgressIndicator() {
     job.items.map(item => ({
       id: item.id,
       resumeId: item.resumeId,
+      resumeVersion: item.resumeVersion,
       candidateName: item.candidateName,
       jobTitle: item.jobTitle,
       jobId: item.jobId,

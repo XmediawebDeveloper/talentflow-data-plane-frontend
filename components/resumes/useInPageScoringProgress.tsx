@@ -37,6 +37,7 @@ export function useInPageScoringProgress(source: 'My Resumes' | 'Internal DB') {
   const items: ModalProgressItem[] = (run?.items ?? []).map(item => ({
     id: item.id,
     resumeId: item.resumeId,
+    resumeVersion: item.resumeVersion,
     candidateName: item.candidateName,
     jobTitle: item.jobTitle,
     jobId: item.jobId,
@@ -53,7 +54,7 @@ export function useInPageScoringProgress(source: 'My Resumes' | 'Internal DB') {
     batchId: string;
     jobId: string;
     jobTitle: string;
-    items: Array<{ resumeId: string; candidateName: string }>;
+    items: Array<{ resumeId: string; candidateName: string; resumeVersion?: number }>;
     jobCode?: string;
     jobVersion?: number;
   }) => {

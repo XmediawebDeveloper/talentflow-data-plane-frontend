@@ -68,6 +68,7 @@ const flattenFolders = (list: FolderType[]): FolderType[] => {
 // Progress item interface (internal)
 interface ProgressItem {
   resumeId: string;
+  resumeVersion?: number;
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
@@ -600,7 +601,7 @@ export default function SelectSourceModal({
   };
 
   // Submit for scoring with progress tracking
-  const handleSubmitForScoring = async (reviewedIds?: string[]) => {
+  const handleSubmitForScoring = async (reviewedIds?: string[], reviewedVersions?: (number | undefined)[]) => {
     // From the review step: the resumes still ticked, each on its chosen version.
     const idsToScore = reviewedIds ?? selectedResumes;
     if (idsToScore.length === 0) return;
@@ -644,18 +645,22 @@ export default function SelectSourceModal({
       // Use async Celery-based bulk scoring (same as Resume Scoring module)
       const response = await scoringService.startBulkScoringAsync(jobId, resumesToScore);
 
-      // Build resume items for progress display
+      // Build resume items for progress display. The version is the one picked
+      // in the review step (parallel to `reviewedIds`), else the row's own.
       const resumeItems = resumesToScore.map(resumeId => {
         const resume = resumes.find(r => r.id === resumeId);
+        const reviewedIndex = reviewedIds ? reviewedIds.indexOf(resumeId) : -1;
         return {
           resumeId,
           candidateName: resume?.candidate_name || 'Unknown',
+          resumeVersion: (reviewedIndex >= 0 ? reviewedVersions?.[reviewedIndex] : undefined) ?? resume?.version,
         };
       });
 
       // Initialize progress items and show modal
       const initialItems: ProgressItem[] = resumeItems.map(item => ({
         resumeId: item.resumeId,
+        resumeVersion: item.resumeVersion,
         candidateName: item.candidateName,
         status: 'queued' as const,
       }));
@@ -667,6 +672,7 @@ export default function SelectSourceModal({
       const contextItems = resumeItems.map(item => ({
         id: `${jobId}-${item.resumeId}`,
         resumeId: item.resumeId,
+        resumeVersion: item.resumeVersion,
         candidateName: item.candidateName,
         jobTitle: jobTitle,
         jobId: jobId,
@@ -1373,6 +1379,7 @@ export default function SelectSourceModal({
           progressData={progressItems.map((item): ScoringProgressItem => ({
             id: item.resumeId,
             resumeId: item.resumeId,
+            resumeVersion: item.resumeVersion,
             candidateName: item.candidateName,
             jobTitle: jobTitle,
             jobId: jobId,
@@ -1454,9 +1461,9 @@ export default function SelectSourceModal({
             versionNumber: jobVersion ?? undefined,
           } as SharedJob}
           onClose={() => setShowScoreReview(false)}
-          onApply={(resumeIds) => {
+          onApply={(resumeIds, _jobIds, _jobs, _sourceIds, resumeVersions) => {
             setShowScoreReview(false);
-            void handleSubmitForScoring(resumeIds);
+            void handleSubmitForScoring(resumeIds, resumeVersions);
           }}
         />
       )}
