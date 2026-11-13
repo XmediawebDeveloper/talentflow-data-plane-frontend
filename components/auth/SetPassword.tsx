@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Briefcase, Lock, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
+import { Briefcase, Lock, Mail, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { authService, getLoginUrl } from '@/lib/services/authService';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
@@ -20,6 +20,9 @@ export default function SetPassword() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  // Whose account this is — several invited users can sign in from one
+  // browser, and the card alone gives no hint which one is being activated.
+  const [accountEmail, setAccountEmail] = useState('');
 
   const confirmTouched = confirmPassword.length > 0;
   const passwordsMatch = newPassword === confirmPassword;
@@ -31,7 +34,15 @@ export default function SetPassword() {
     const token = localStorage.getItem('accessToken');
     if (!token) {
       router.replace(getLoginUrl());
+      return;
     }
+    // /auth/me answers with the temp-password session (AuthProvider reads
+    // must_reset_password from it). A failure only hides the email line.
+    let cancelled = false;
+    authService.getCurrentUser()
+      .then((me) => { if (!cancelled && me?.email) setAccountEmail(me.email); })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [router]);
 
   useEffect(() => {
@@ -94,9 +105,19 @@ export default function SetPassword() {
         {/* Card */}
         <div style={{ background: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: '16px', boxShadow: isDark ? '0 4px 24px rgba(0,0,0,0.3)' : '0 4px 24px rgba(0,0,0,0.08)', padding: isMobile ? '24px' : '40px', border: isDark ? '1px solid var(--raw-374151)' : undefined }}>
           <h1 style={{ fontSize: '22px', fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginBottom: '8px' }}>Set your password</h1>
-          <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: '14px', marginBottom: '28px', lineHeight: '1.5' }}>
+          <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: '14px', marginBottom: accountEmail ? '16px' : '28px', lineHeight: '1.5' }}>
             You were invited to TalentFlow. Please set a permanent password to activate your account.
           </p>
+
+          {accountEmail && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isDark ? 'var(--raw-374151)' : 'var(--raw-f8fafc)', border: `1px solid ${isDark ? 'var(--raw-4b5563)' : 'var(--raw-e5e7eb)'}`, borderRadius: '8px', padding: '10px 12px', marginBottom: '24px', minWidth: 0 }}>
+              <Mail size={16} color="var(--raw-6366f1)" style={{ flexShrink: 0 }} />
+              <span style={{ fontSize: '13px', color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', flexShrink: 0 }}>Account</span>
+              <span title={accountEmail} style={{ fontSize: '14px', fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
+                {accountEmail}
+              </span>
+            </div>
+          )}
 
           {error && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`, borderRadius: '8px', padding: '12px 14px', marginBottom: '20px' }}>
