@@ -36,6 +36,22 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
     }
   }, [apply]);
 
+  /** Cancel one waiting candidate — no confirm, Send again undoes it. */
+  const cancelItem = useCallback(async (job: BulkInviteJob, itemId: string, label?: string) => {
+    setBusy(`cancel-item:${itemId}`);
+    try {
+      const { job: fresh } = await bulkInviteService.cancelItem(job.job_id, itemId);
+      apply(fresh);
+      toast.success(`${label || 'Candidate'} cancelled — you can still send it later`);
+      return fresh;
+    } catch (err) {
+      toast.error((err as Error)?.message || 'Could not cancel this candidate.');
+      return null;
+    } finally {
+      setBusy(null);
+    }
+  }, [apply]);
+
   const resume = useCallback(async (job: BulkInviteJob) => {
     setBusy(`resume:${job.job_id}`);
     try {
@@ -92,6 +108,7 @@ export function useBulkInviteActions(onChange?: (job: BulkInviteJob) => void) {
   return {
     busy,
     retry,
+    cancelItem,
     resume,
     askCancel: (job: BulkInviteJob) => setConfirmCancel(job),
     cancelDialog,

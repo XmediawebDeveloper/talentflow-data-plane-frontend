@@ -401,7 +401,7 @@ interface PendingScoringData {
 interface BatchProgressItem {
   resumeId: string;
   candidateName: string;
-  status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'cancelled' | 'already_scored';
   score?: number;
   /** 0-10 Overall Rating — what the progress table's Score column prints. */
   overallRating10?: number;
@@ -414,6 +414,8 @@ interface BatchProgressItem {
 }
 
 interface BatchProgress {
+  /** The Celery batch — the progress popup's Cancel / Retry act on it. */
+  batchId?: string;
   jobId: string;
   jobTitle: string;
   total: number;
@@ -859,6 +861,8 @@ export default function ResumeScoringPage({
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
+  /* The scoring batch behind the progress popup (Cancel / Retry act on it). */
+  const [progressBatchId, setProgressBatchId] = useState<string | undefined>(undefined);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
   /* The "View Progress" popup on a job row in View by Job spans the job's
@@ -893,6 +897,8 @@ export default function ResumeScoringPage({
       // correctly instead of silently falling through to 'Queued' forever.
       status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
+        : item.status === 'cancelled'
+        ? 'Cancelled' as const
         : normalizeScoringStatus(item.status) === 'completed'
         ? 'Scored successfully' as const
         : normalizeScoringStatus(item.status) === 'failed'
@@ -1878,6 +1884,8 @@ export default function ResumeScoringPage({
         source: source,
         status: item.status === 'already_scored'
           ? 'Already Scored - Skipped' as const
+          : item.status === 'cancelled'
+          ? 'Cancelled' as const
           : normalizeScoringStatus(item.status) === 'completed'
           ? 'Scored successfully' as const
           : normalizeScoringStatus(item.status) === 'failed'
@@ -1934,6 +1942,7 @@ export default function ResumeScoringPage({
         console.log(`[ResumeScoringPage] Dispatching ${resumeIds.length} resume(s) to Celery`);
         const batch = await scoringService.startBulkScoringAsync(jobId, resumeIds);
         const batchId = batch.batch_id;
+        setProgressBatchId(batchId);
         console.log(`[ResumeScoringPage] Batch created: ${batchId}`);
 
         // Map resumeId → array index for O(1) status updates
@@ -2055,9 +2064,10 @@ export default function ResumeScoringPage({
     // Check if this update shows completion
     // already_scored items count toward total but not toward completed/failed from backend
     const alreadyScoredCount = (batchProgress.items || []).filter(i => i.status === 'already_scored').length;
+    const cancelledCount = (batchProgress.items || []).filter(i => i.status === 'cancelled').length;
     const isComplete = batchProgress.queued === 0 &&
                        batchProgress.processing === 0 &&
-                       (batchProgress.completed + batchProgress.failed + alreadyScoredCount) === batchProgress.total &&
+                       (batchProgress.completed + batchProgress.failed + cancelledCount + alreadyScoredCount) === batchProgress.total &&
                        batchProgress.total > 0;
 
     // Mark job as complete to prevent future updates
@@ -2092,6 +2102,8 @@ export default function ResumeScoringPage({
       source: batchSource,
       status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
+        : item.status === 'cancelled'
+        ? 'Cancelled' as const
         : normalizeScoringStatus(item.status) === 'completed'
         ? 'Scored successfully' as const
         : normalizeScoringStatus(item.status) === 'failed'
@@ -3175,6 +3187,7 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            batchId={batchProgress?.batchId ?? progressBatchId}
             // View / a settled row: the scoring result in place, not a new tab.
             onViewResult={openProgressResult}
             onClose={() => {
@@ -5194,6 +5207,7 @@ export default function ResumeScoringPage({
         {showProgressModal && (
           <BulkScoringProgressModal
             progressData={progressData}
+            batchId={batchProgress?.batchId ?? progressBatchId}
             // View / a settled row: the scoring result in place, not a new tab.
             onViewResult={openProgressResult}
             onClose={() => {
@@ -6048,6 +6062,7 @@ export default function ResumeScoringPage({
       {showProgressModal && (
         <BulkScoringProgressModal
           progressData={progressData}
+          batchId={batchProgress?.batchId ?? progressBatchId}
           // View / a settled row: the scoring result in place, not a new tab.
           onViewResult={openProgressResult}
           onClose={() => {

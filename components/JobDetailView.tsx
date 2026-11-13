@@ -2364,7 +2364,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         jobId: job.id,
         source: 'Internal DB' as const,
       }));
-      startScoringJob(batchId, job.title, initialItems, returnUrl);
+      startScoringJob(batchId, job.title, initialItems, returnUrl, { batchId });
 
       toast.success(`Scoring started for ${resumeIds.length} candidate(s).`);
       setActiveTab('scored-resumes');
@@ -2378,7 +2378,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           items.forEach((item: any) => {
             const itemId = `${batchId}-${item.resume_id}`;
             const itemStatus = normalizeScoringStatus(item.status);
-            if (itemStatus === 'completed') {
+            if (item.status === 'cancelled') {
+              updateItemStatus(batchId, itemId, 'Cancelled', {
+                errorReason: item.error_message || 'Cancelled before scoring started',
+              });
+            } else if (itemStatus === 'completed') {
               updateItemStatus(batchId, itemId, 'Scored successfully', {
                 score: item.overall_score,
                 scoredDateTime: new Date().toISOString(),

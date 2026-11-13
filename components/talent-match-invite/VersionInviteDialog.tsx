@@ -341,6 +341,21 @@ export default function VersionInviteDialog({
   const bodyRef = useRef<HTMLDivElement | null>(null);
   /* Phones scroll the whole popup in the steps, not just the body. */
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  /* This is a hand-rolled overlay (not a Radix Dialog), so nothing locked the
+     page behind it: a wheel over the picker table that reached the end of the
+     table / dialog body chained on and scrolled the page. Lock the page while
+     the dialog is mounted; restore whatever was there before. */
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prev = { html: html.style.overflow, body: body.style.overflow };
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prev.html;
+      body.style.overflow = prev.body;
+    };
+  }, []);
   /* Assessment View / Edit and the AI interview preview, over this popup. */
   const [viewing, setViewing] = useState<AssessmentResponse | null>(null);
   const [editing, setEditing] = useState<AssessmentResponse | null>(null);
@@ -1355,7 +1370,7 @@ export default function VersionInviteDialog({
           )}
 
           <div className={`flex-1 min-h-0 flex ${inSteps ? 'max-sm:flex-none max-sm:block' : ''}`}>
-          <div ref={bodyRef} className={`flex-1 min-w-0 overflow-y-auto p-4 sm:p-6 ${inSteps ? 'bg-slate-50/70 dark:bg-slate-950/30 max-sm:overflow-visible' : ''}`}>
+          <div ref={bodyRef} className={`flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain p-4 sm:p-6 ${inSteps ? 'bg-slate-50/70 dark:bg-slate-950/30 max-sm:overflow-visible' : ''}`}>
             {alerts.length > 0 && (
               <div className="mb-4 space-y-2">
                 {alerts.map((al) => (
