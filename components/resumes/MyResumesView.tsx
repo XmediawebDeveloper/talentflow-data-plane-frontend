@@ -6,7 +6,7 @@ import { Plus, Upload, Loader2, Search, History, X, AlertCircle, ChevronRight, C
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
-import DeleteResumeDialog from '@/components/resumes/DeleteResumeDialog';
+import DeleteResumeDialog, { type DeleteResumeVersionTarget } from '@/components/resumes/DeleteResumeDialog';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import SkillsList from '@/components/ui/SkillsList';
 import { getDisplaySkills } from '@/lib/utils/resumeSkills';
@@ -1822,9 +1822,20 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     setDeleteResumeConfirm({ isOpen: true, ids, names });
   };
 
-  const confirmDeleteResumes = async () => {
+  const confirmDeleteResumes = async (version?: DeleteResumeVersionTarget) => {
     const { ids } = deleteResumeConfirm;
     setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] });
+    /* One version of a multi-version resume: the row stays (another version
+       becomes the latest) — the RESUMES_CHANGED refetch redraws it. */
+    if (version) {
+      try {
+        await resumeService.delete(version.id, { onlyThisVersion: true });
+        toast.success(`Version ${version.version} deleted`);
+      } catch {
+        toast.error(`Couldn't delete version ${version.version}. Please try again.`);
+      }
+      return;
+    }
     // Where they were, so their folders can be decremented. Read before the
     // rows leave state.
     const deletedFrom = ids
@@ -4289,6 +4300,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
       <DeleteResumeDialog
         open={deleteResumeConfirm.isOpen}
         names={deleteResumeConfirm.names}
+        resumeId={deleteResumeConfirm.ids.length === 1 ? deleteResumeConfirm.ids[0] : undefined}
         onCancel={() => setDeleteResumeConfirm({ isOpen: false, ids: [], names: [] })}
         onConfirm={confirmDeleteResumes}
       />
