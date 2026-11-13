@@ -312,6 +312,7 @@ function HeaderBody({ onLogout, user, tenant, onOpenTour, onOpenShortcuts, onOpe
       if (onTeamChatRef.current) return;
       fetchChatUnread();
       toast.info(notification.title || 'New message', {
+        id: notification.id ? `chat-${notification.id}` : undefined,
         description: notification.message,
         duration: 6000,
         action: notification.action_url

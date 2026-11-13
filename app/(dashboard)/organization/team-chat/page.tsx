@@ -1053,7 +1053,7 @@ export default function TeamChatPage() {
           <span className="relative shrink-0">
             <NameAvatar name={dm.name} fallback={dm.email} userId={dm.user_id} size="sm" />
             {dm.is_online && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" />
             )}
           </span>
         ) : (
@@ -1261,7 +1261,7 @@ export default function TeamChatPage() {
                     <span className="relative shrink-0">
                       <NameAvatar name={partner.name} fallback={partner.email} userId={partner.user_id} size="md" />
                       {partner.is_online && (
-                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" />
                       )}
                     </span>
                   ) : (
@@ -1283,7 +1283,7 @@ export default function TeamChatPage() {
                       {selectedChannel.type === 'channel'
                         ? `${selectedChannel.is_private ? 'Private · ' : ''}${selectedChannel.member_count} members · ${onlineMembersCount} online`
                         : partner?.is_online
-                          ? 'Online'
+                          ? <span className="font-medium text-green-600 dark:text-green-400">Online</span>
                           : 'Offline'}
                     </p>
                   </div>
@@ -1880,7 +1880,7 @@ export default function TeamChatPage() {
                     <NameAvatar name={member.name} fallback={member.email} userId={member.user_id} size="md" />
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
-                        member.is_online ? 'bg-brand-teal' : 'bg-gray-300'
+                        member.is_online ? 'bg-green-500' : 'bg-gray-300'
                       }`}
                     />
                   </span>
