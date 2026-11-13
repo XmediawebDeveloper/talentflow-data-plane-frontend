@@ -195,6 +195,9 @@ export default function SetPassword() {
             </button>
           </form>
 
+          {/* Only once /auth/me has confirmed the signed-in account: "Not you?"
+              answers the email shown above, and means nothing without it. */}
+          {accountEmail && (
           <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '13px', color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Not you?</span>
             <button
@@ -207,6 +210,7 @@ export default function SetPassword() {
               {isSigningOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
+          )}
         </div>
       </div>
     </div>
