@@ -478,18 +478,30 @@ export const assessmentListRepresentative = (
  *
  * Deliberately narrower than "has no selectable representative": a lineage
  * whose every live version is simply already taken returns `null` here.
+ *
+ * A job with ONLY ONE version that is already taken (`hasAssessment`) is
+ * hidden too: there is nothing left to build and no history to read (JD-354
+ * v1 Disabled + assessed → no card). With more than one version the grey card
+ * stays whether or not its versions are taken.
  */
-export const inactiveAssessmentRepresentative = (bucket: Job[]): Job | null => {
+export const inactiveAssessmentRepresentative = (
+  bucket: Job[],
+  hasAssessment: (version: Job) => boolean = () => false,
+): Job | null => {
   const latestNonDraft = bucket.find(version => version.status !== 'Draft');
   const status = String(latestNonDraft?.status);
-  return latestNonDraft && (status === 'Archived' || status === 'Disabled') ? latestNonDraft : null;
+  if (!latestNonDraft || (status !== 'Archived' && status !== 'Disabled')) return null;
+  if (bucket.length === 1 && hasAssessment(latestNonDraft)) return null;
+  return latestNonDraft;
 };
 
 /**
- * The Create Assessment job list: one row per job, each on its newest
- * published version — even when that version already has an assessment (the
- * card then can't be picked, and View Versions offers the free one). Jobs
- * with no published version free of an assessment are dropped.
+ * The Create Assessment / Create AI Interview job list: one row per job, each
+ * on its newest Published / Republished version that does NOT already have an
+ * assessment (or AI interview) — so the main card is always a version the
+ * recruiter can build against. JD-329 v4 taken → the card switches to v3; v4
+ * Disabled / Archived with v3 published and free → v3. Jobs with no published
+ * version free of one are dropped. `newerVersionsNote` explains the switch.
  *
  * Pass the FULL, unfiltered version list. The status test runs per version
  * INSIDE each lineage, so filtering by status upstream would remove the very
@@ -508,11 +520,54 @@ export const buildAssessmentJobList = (
 ): Job[] => {
   const reps: Job[] = [];
   groupByLineage(allVersions).forEach(bucket => {
-    if (!assessmentListRepresentative(bucket, hasAssessment)) return;
-    const latestPublished = bucket.find(isSelectableVersion);
-    if (latestPublished) reps.push(latestPublished);
+    const rep = assessmentListRepresentative(bucket, hasAssessment);
+    if (rep) reps.push(rep);
   });
   return reps;
+};
+
+const versionList = (versions: Job[]) => versions.map(v => `v${v.versionNumber ?? 1}`).join(', ');
+
+/**
+ * Why a picker card is NOT on its job's newest version — e.g. "v4 already has
+ * an assessment — showing v3". Lists the newer non-draft versions of the
+ * card's lineage the list skipped, grouped by reason (already built against,
+ * or their status: Disabled / Archived / …). `null` when the card is on the
+ * newest non-draft version, so nothing is shown.
+ *
+ * `noun` is what "built against" means on the calling picker, with its
+ * article: "an assessment" / "an AI interview".
+ */
+export const newerVersionsNote = (
+  card: Job,
+  allVersions: Job[],
+  isTaken: (version: Job) => boolean,
+  noun: string,
+): string | null => {
+  const key = lineageKey(card);
+  const cardVersion = card.versionNumber ?? 1;
+  const newer = allVersions
+    .filter(v => lineageKey(v) === key && v.id !== card.id && (v.versionNumber ?? 1) > cardVersion)
+    .filter(v => String(v.status || '').toLowerCase() !== 'draft')
+    .sort(byLatestVersion);
+  if (newer.length === 0) return null;
+
+  const taken = newer.filter(v => isSelectableVersion(v) && isTaken(v));
+  const byStatus = new Map<string, Job[]>();
+  newer
+    .filter(v => !isSelectableVersion(v))
+    .forEach(v => {
+      const status = String(v.status || 'unavailable').toLowerCase();
+      byStatus.set(status, [...(byStatus.get(status) ?? []), v]);
+    });
+
+  const parts: string[] = [];
+  if (taken.length) parts.push(`${versionList(taken)} already ${taken.length > 1 ? 'have' : 'has'} ${noun}`);
+  byStatus.forEach((versions, status) => {
+    parts.push(`${versionList(versions)} ${versions.length > 1 ? 'are' : 'is'} ${status}`);
+  });
+  if (parts.length === 0) return null;
+  return `${parts.join(' · ')} — showing v${cardVersion}`;
 };
 
 /**
@@ -534,6 +589,11 @@ export const needsVersionPicker = (
   isTaken: (version: Job) => boolean,
 ): boolean => {
   const key = lineageKey(card);
+  /* A job with no version besides the card's (JD-354 v1 only) has nothing to
+     pick or read in a history — even a Disabled / Archived card, whose
+     buildable set is empty and would otherwise fall through to `true`. */
+  const hasOtherVersion = allVersions.some(version => lineageKey(version) === key && version.id !== card.id);
+  if (!hasOtherVersion) return false;
   const buildable = new Set(
     allVersions
       .filter(version => lineageKey(version) === key && isSelectableVersion(version) && !isTaken(version))
