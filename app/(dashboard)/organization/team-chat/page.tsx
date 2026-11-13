@@ -1,7 +1,7 @@
 'use client';
 
 import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
-import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, Fragment } from 'react';
 import {
   Search,
   Hash,
@@ -60,7 +60,8 @@ export default function TeamChatPage() {
   const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
   const dialog = useGlobalDialog();
-  const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'direct'>('all');
+  // Direct first — it's where most conversations happen.
+  const [activeTab, setActiveTab] = useState<'all' | 'channels' | 'direct'>('direct');
   const [channels, setChannels] = useState<Channel[]>([]);
   const [directMessages, setDirectMessages] = useState<Channel[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<Channel | null>(null);
@@ -74,6 +75,11 @@ export default function TeamChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [totalUnread, setTotalUnread] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  // Keep the header's chat badge in step (once the list has loaded — the
+  // initial 0 isn't a real count).
+  useEffect(() => {
+    if (!isLoading) window.dispatchEvent(new CustomEvent('chatUnreadChanged', { detail: totalUnread }));
+  }, [totalUnread, isLoading]);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [showMembersSidebar, setShowMembersSidebar] = useState(true);
   const [showEmojiPicker, setShowEmojiPicker] = useState<string | null>(null);
@@ -172,6 +178,56 @@ export default function TeamChatPage() {
     }
   };
 
+  /* Delete: "Delete for everyone" (own messages, within 24 hours of sending —
+     the text goes for all and an image is deleted from storage) or "Delete
+     for me" (any message, any time — only your view). One popup for a single
+     message (its 🗑) or a selection (header 🗑 while selecting). */
+  const DELETE_FOR_EVERYONE_MS = 24 * 60 * 60 * 1000;
+  const [deleteTargets, setDeleteTargets] = useState<Message[] | null>(null);
+  const [deletingScope, setDeletingScope] = useState<'everyone' | 'me' | null>(null);
+  const canDeleteForEveryone = (m: Message) =>
+    m.user_id === currentUser?.id &&
+    !m.is_deleted &&
+    Date.now() - new Date(m.created_at).getTime() < DELETE_FOR_EVERYONE_MS;
+  const handleDeleteMessage = (message: Message) => {
+    setActiveMessageId(null);
+    setShowEmojiPicker(null);
+    setDeleteTargets([message]);
+  };
+  const handleDeleteSelected = () => {
+    const selected = messages.filter((m) => selectedMessageIds.has(m.id));
+    if (selected.length > 0) setDeleteTargets(selected);
+  };
+  const performDelete = async (scope: 'everyone' | 'me') => {
+    if (!deleteTargets || deletingScope) return;
+    const targets = deleteTargets;
+    setDeletingScope(scope);
+    try {
+      const results = await Promise.allSettled(targets.map((m) => chatService.deleteMessage(m.id, scope)));
+      const done = new Set(targets.filter((_, i) => results[i].status === 'fulfilled').map((m) => m.id));
+      if (done.size > 0) {
+        setMessages((prev) =>
+          scope === 'me'
+            ? prev.filter((m) => !done.has(m.id))
+            : prev.map((m) => (done.has(m.id) ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m)),
+        );
+        setSelectedMessageIds((prev) => {
+          const next = new Set([...prev].filter((id) => !done.has(id)));
+          return next.size === prev.size ? prev : next;
+        });
+        const noun = done.size === 1 ? 'Message' : `${done.size} messages`;
+        toast.success(`${noun} deleted${scope === 'me' ? ' for you' : ' for everyone'}`);
+      }
+      const firstError = results.find((r): r is PromiseRejectedResult => r.status === 'rejected');
+      if (firstError) {
+        toast.error(friendlyErrorMessage(firstError.reason, "Couldn't delete message. Please try again."));
+      }
+      setDeleteTargets(null);
+    } finally {
+      setDeletingScope(null);
+    }
+  };
+
   const handleCopyMessage = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.content ?? '');
@@ -263,21 +319,59 @@ export default function TeamChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Scroll to the bottom only when a new message arrives (or a conversation
-  // opens) — not when an existing one changes (reaction, pin, edit).
-  // Waits for the skeleton to go: the list (and its end marker) isn't rendered
-  // while messages load, so scrolling then did nothing and a conversation
-  // opened at its oldest messages. Opening jumps; new messages glide.
+  /* A conversation always opens at its newest message; older ones are a
+     scroll up. Scrolls the message pane itself (not scrollIntoView, which
+     also moved the page) and before paint, so it never shows the top first.
+     `stickToBottomRef` says the reader is at the bottom: while it holds, the
+     pane stays pinned there as content grows (images loading pushed the last
+     message out of view). Scrolling up to read history releases it, so a new
+     message from someone else doesn't yank the reader away — their own
+     message always brings them back down. */
+  const messagesPaneRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
   const jumpToEndRef = useRef(true);
-  useEffect(() => {
+  const scrollPaneToEnd = (smooth = false) => {
+    const pane = messagesPaneRef.current;
+    if (!pane) return;
+    if (smooth) pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
+    else pane.scrollTop = pane.scrollHeight;
+  };
+  const handleMessagesScroll = () => {
+    const pane = messagesPaneRef.current;
+    if (!pane) return;
+    stickToBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
+  };
+  useLayoutEffect(() => {
     if (isLoadingMessages) return;
-    const lastId = messages[messages.length - 1]?.id;
-    if (lastId === lastMessageIdRef.current) return;
-    lastMessageIdRef.current = lastId;
-    messagesEndRef.current?.scrollIntoView({ behavior: jumpToEndRef.current ? 'auto' : 'smooth' });
-    jumpToEndRef.current = false;
+    const last = messages[messages.length - 1];
+    if (jumpToEndRef.current) {
+      // Opening a conversation: straight to the newest message.
+      if (!last) return;
+      jumpToEndRef.current = false;
+      lastMessageIdRef.current = last.id;
+      stickToBottomRef.current = true;
+      scrollPaneToEnd();
+      return;
+    }
+    if (!last || last.id === lastMessageIdRef.current) return;
+    lastMessageIdRef.current = last.id;
+    if (stickToBottomRef.current || last.user_id === currentUser?.id) {
+      stickToBottomRef.current = true;
+      scrollPaneToEnd(true);
+    }
   }, [messages, isLoadingMessages]);
+  // Keep the bottom in view while the list grows under the reader (images,
+  // link previews and the like finishing their layout after the first paint).
+  useEffect(() => {
+    const content = messagesEndRef.current?.parentElement;
+    if (!content || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollPaneToEnd();
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [isLoadingMessages, selectedChannel?.id]);
 
   useEffect(() => {
     if (selectedChannel) {
@@ -351,7 +445,7 @@ export default function TeamChatPage() {
           if (data.message_id) {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === data.message_id ? { ...m, is_deleted: true, content: '[Message deleted]' } : m
+                m.id === data.message_id ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m
               )
             );
           }
@@ -465,8 +559,11 @@ export default function TeamChatPage() {
         }
       }
 
-      if ((selectFirst || !selectedChannel) && response.channels.length > 0) {
-        setSelectedChannel(response.channels[0]);
+      // Open the most recent conversation (the server lists them newest
+      // first), a direct one ahead of a channel — Direct is the default tab.
+      if (selectFirst || !selectedChannel) {
+        const first = response.direct_messages[0] ?? response.channels[0];
+        if (first) setSelectedChannel(first);
       }
     } catch (error: any) {
       console.error('Error fetching channels:', error);
@@ -546,6 +643,32 @@ export default function TeamChatPage() {
       await fetchChannels({ initial: false, selectFirst: true });
     } catch (e: any) {
       toast.error(friendlyErrorMessage(e, "Couldn't delete channel. Please try again."));
+    }
+  };
+
+  // "Delete chat" on a direct conversation — for this user only; the other
+  // person keeps the history and a new message brings the chat back.
+  const handleDeleteDirectChat = async () => {
+    if (!selectedChannel || selectedChannel.type !== 'direct') return;
+    setShowHeaderMenu(false);
+    const ok = await dialog.confirm({
+      title: 'Delete Chat',
+      message: 'Delete this chat and all its messages?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Chat',
+      item: { label: 'CHAT WITH', name: selectedChannel.name },
+      warningNote: 'The messages are removed for you only. The other person still sees them, and the chat comes back if either of you sends a new message.',
+    });
+    if (!ok) return;
+    try {
+      await chatService.clearDirectChat(selectedChannel.id);
+      toast.success('Chat deleted');
+      delete draftsRef.current[selectedChannel.id];
+      setSelectedChannel(null);
+      setMessages([]);
+      await fetchChannels({ initial: false, selectFirst: true });
+    } catch (e: any) {
+      toast.error(friendlyErrorMessage(e, "Couldn't delete chat. Please try again."));
     }
   };
 
@@ -694,6 +817,7 @@ export default function TeamChatPage() {
       if (selectedChannelIdRef.current === channelId) {
         setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
       }
+      bumpConversation(channelId, newMessage);
     } catch (error) {
       console.error('Error sending message:', error);
       toast.error('Failed to send message');
@@ -705,6 +829,19 @@ export default function TeamChatPage() {
       setIsSending(false);
       if (selectedChannelIdRef.current === channelId) inputRef.current?.focus();
     }
+  };
+
+  // My own message moves its conversation to the top of the list (the socket
+  // only tells the others).
+  const bumpConversation = (channelId: string, msg: Message) => {
+    const bump = (list: Channel[]) =>
+      list.map((c) =>
+        c.id === channelId
+          ? { ...c, last_message: msg.content, last_message_by: msg.user_name, last_message_at: msg.created_at }
+          : c,
+      );
+    setChannels(bump);
+    setDirectMessages(bump);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -739,6 +876,7 @@ export default function TeamChatPage() {
       if (selectedChannelIdRef.current === channelId) {
         setMessages((prev) => (prev.some((m) => m.id === newMessage.id) ? prev : [...prev, newMessage]));
       }
+      bumpConversation(channelId, newMessage);
     } catch (error: any) {
       console.error('Error uploading attachment:', error);
       toast.error(friendlyErrorMessage(error, "Couldn't upload image. Please try again."));
@@ -880,7 +1018,10 @@ export default function TeamChatPage() {
         member_ids: [userId],
       });
 
-      toast.success(`Started conversation with ${userName}`);
+      // The server hands back the existing chat with this person, if any.
+      if (!directMessages.some((dm) => dm.id === channel.id)) {
+        toast.success(`Started conversation with ${userName}`);
+      }
       setShowNewDMModal(false);
 
       await fetchChannels({ initial: false });
@@ -907,13 +1048,17 @@ export default function TeamChatPage() {
     );
   };
 
-  const filteredChannels = channels.filter((channel) =>
-    channel.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Most recent conversation first; one with no messages yet sorts by when it was made.
+  const byRecent = (a: Channel, b: Channel) =>
+    (b.last_message_at || b.created_at || '').localeCompare(a.last_message_at || a.created_at || '');
 
-  const filteredDMs = directMessages.filter((dm) =>
-    dm.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredChannels = channels
+    .filter((channel) => channel.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort(byRecent);
+
+  const filteredDMs = directMessages
+    .filter((dm) => dm.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    .sort(byRecent);
 
   const onlineMembersCount = selectedChannel?.members?.filter((m) => m.is_online).length || 0;
   const isMuted = selectedChannel ? mutedChannels.has(selectedChannel.id) : false;
@@ -959,7 +1104,7 @@ export default function TeamChatPage() {
   const sortedMembers = [...(selectedChannel?.members ?? [])].sort(
     (a, b) => Number(b.is_online) - Number(a.is_online) || a.name.localeCompare(b.name),
   );
-  const tabIndex = activeTab === 'all' ? 0 : activeTab === 'channels' ? 1 : 2;
+  const tabIndex = activeTab === 'direct' ? 0 : activeTab === 'channels' ? 1 : 2;
   const typingNames = Object.values(typingUsers);
 
   const iconButtonClass = (active: boolean) =>
@@ -996,7 +1141,7 @@ export default function TeamChatPage() {
           <span className="relative shrink-0">
             <NameAvatar name={dm.name} fallback={dm.email} userId={dm.user_id} size="sm" />
             {dm.is_online && (
-              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
+              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" />
             )}
           </span>
         ) : (
@@ -1064,7 +1209,8 @@ export default function TeamChatPage() {
     <div className="flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:h-[calc(100dvh-4.5rem)] [@media(max-height:500px)]:flex-none">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
-        <div className="tf-card-soft relative flex flex-1 min-h-0 overflow-hidden">
+        {/* The tab panel (organization/layout.tsx) frames it — no card of its own. */}
+        <div className="relative flex flex-1 min-h-0 overflow-hidden bg-white dark:bg-slate-900">
 
         {/* ── Conversations ──
             Below lg: a drawer that slides over the conversation from the left
@@ -1120,7 +1266,7 @@ export default function TeamChatPage() {
                 style={{ transform: `translateX(${tabIndex * 100}%)` }}
                 className="absolute bottom-1 left-1 top-1 w-[calc((100%-0.5rem)/3)] rounded-md bg-white shadow-sm shadow-brand-blue/15 ring-1 ring-brand-blue/10 transition-transform duration-300 ease-out dark:bg-slate-800"
               />
-              {(['all', 'channels', 'direct'] as const).map((tab) => (
+              {(['direct', 'channels', 'all'] as const).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -1138,22 +1284,8 @@ export default function TeamChatPage() {
           </div>
 
           <div className="flex-1 overflow-y-auto p-2">
-            {(activeTab === 'all' || activeTab === 'channels') && (
-              <div className="mb-2">
-                {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
-                {filteredChannels.length === 0 ? (
-                  <div className="px-3 py-4 text-center">
-                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
-                    <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">{filteredChannels.map(renderConversationRow)}</div>
-                )}
-              </div>
-            )}
-
             {(activeTab === 'all' || activeTab === 'direct') && (
-              <div>
+              <div className="mb-2">
                 {groupHeader('Direct messages', openNewDMModal, true, 'New direct message')}
                 {filteredDMs.length === 0 ? (
                   <div className="px-3 py-4 text-center">
@@ -1162,6 +1294,20 @@ export default function TeamChatPage() {
                   </div>
                 ) : (
                   <div className="space-y-0.5">{filteredDMs.map(renderConversationRow)}</div>
+                )}
+              </div>
+            )}
+
+            {(activeTab === 'all' || activeTab === 'channels') && (
+              <div>
+                {groupHeader('Channels', openCreateModal, permissions.can_create_channel, 'Create channel', 'You do not have permission to create channels')}
+                {filteredChannels.length === 0 ? (
+                  <div className="px-3 py-4 text-center">
+                    {!searchQuery && <MessageSquareText className="mx-auto mb-1.5 h-7 w-7 text-[#7FB0FF]" strokeWidth={1.75} />}
+                    <p className="tf-hint">{searchQuery ? 'No channels match your search' : 'No channels yet'}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">{filteredChannels.map(renderConversationRow)}</div>
                 )}
               </div>
             )}
@@ -1204,7 +1350,7 @@ export default function TeamChatPage() {
                     <span className="relative shrink-0">
                       <NameAvatar name={partner.name} fallback={partner.email} userId={partner.user_id} size="md" />
                       {partner.is_online && (
-                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-brand-teal ring-2 ring-white dark:ring-slate-900" />
+                        <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-white dark:ring-slate-900" />
                       )}
                     </span>
                   ) : (
@@ -1226,7 +1372,7 @@ export default function TeamChatPage() {
                       {selectedChannel.type === 'channel'
                         ? `${selectedChannel.is_private ? 'Private · ' : ''}${selectedChannel.member_count} members · ${onlineMembersCount} online`
                         : partner?.is_online
-                          ? 'Online'
+                          ? <span className="font-medium text-green-600 dark:text-green-400">Online</span>
                           : 'Offline'}
                     </p>
                   </div>
@@ -1243,6 +1389,18 @@ export default function TeamChatPage() {
                       title="Clear selection (Esc)"
                     >
                       {selectedMessageIds.size} <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                  {/* Delete the selected messages */}
+                  {isSelecting && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteSelected}
+                      className={`${iconButtonClass(false)} hover:text-destructive`}
+                      aria-label={`Delete ${selectedMessageIds.size} selected`}
+                      title={`Delete selected (${selectedMessageIds.size})`}
+                    >
+                      <Trash2 className="h-4 w-4" />
                     </button>
                   )}
                   {/* Refresh this chat */}
@@ -1399,6 +1557,18 @@ export default function TeamChatPage() {
                               </button>
                             </>
                           )}
+                          {selectedChannel.type === 'direct' && (
+                            <>
+                              <div className="my-1 h-px bg-gray-100 dark:bg-slate-700/60" />
+                              <button
+                                type="button"
+                                onClick={handleDeleteDirectChat}
+                                className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive-subtle"
+                              >
+                                <Trash2 className="h-4 w-4" /> Delete chat
+                              </button>
+                            </>
+                          )}
                         </div>
                       </>
                     )}
@@ -1414,7 +1584,11 @@ export default function TeamChatPage() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
+              <div
+                ref={messagesPaneRef}
+                onScroll={handleMessagesScroll}
+                className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30"
+              >
                 {isLoadingMessages ? (
                   <div className="flex flex-col gap-4">
                     {/* Mirrors the message list: received (avatar + bubble, left)
@@ -1469,6 +1643,74 @@ export default function TeamChatPage() {
                                 ? 'bg-brand-blue text-white'
                                 : 'bg-white text-gray-900 ring-1 ring-gray-200 dark:bg-slate-800 dark:text-slate-100 dark:ring-slate-700'
                             }`;
+                      const actionButtons = (
+                                    <div
+                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
+                                        isSender ? 'order-first flex-row-reverse' : ''
+                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
+                                    >
+                                      {!message.is_deleted && (<>
+                                      <div className="relative">
+                                        <button
+                                          type="button"
+                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Add reaction"
+                                          title="Add reaction"
+                                        >
+                                          <Smile className="h-3.5 w-3.5" />
+                                        </button>
+                                        {showEmojiPicker === message.id && (
+                                          <>
+                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
+                                            <div
+                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
+                                                isSender ? 'right-0' : 'left-0'
+                                              }`}
+                                            >
+                                              {quickEmojis.map((emoji) => (
+                                                <button
+                                                  key={emoji}
+                                                  type="button"
+                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
+                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
+                                                >
+                                                  {emoji}
+                                                </button>
+                                              ))}
+                                            </div>
+                                          </>
+                                        )}
+                                      </div>
+                                      {!isImage && message.content && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleCopyMessage(message)}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
+                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
+                                          }`}
+                                          aria-label="Copy message"
+                                          title="Copy"
+                                        >
+                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
+                                      </>)}
+                                      {/* Delete for me / for everyone (also clears a "deleted" placeholder). */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteMessage(message)}
+                                        className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
+                                        aria-label="Delete message"
+                                        title="Delete"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                      );
+
                       return (
                         <Fragment key={message.id}>
                           {showDateSeparator && (
@@ -1488,7 +1730,14 @@ export default function TeamChatPage() {
                               <div className="w-9 shrink-0" aria-hidden />
                             ))}
 
-                            <div className={`flex max-w-[80%] flex-col sm:max-w-[65%] ${isSender ? 'items-end' : 'items-start'}`}>
+                            <div className={`relative flex max-w-[80%] flex-col sm:max-w-[65%] ${isSender ? 'items-end' : 'items-start'}`}>
+                              {/* No time row under this one: its actions float beside the
+                                  bubble on hover (mouse only — touch taps or long-presses). */}
+                              {!showMeta && (
+                                <div className={`absolute top-1/2 z-[5] -translate-y-1/2 [@media(hover:none)]:hidden ${isSender ? 'right-full mr-1' : 'left-full ml-1'}`}>
+                                  {actionButtons}
+                                </div>
+                              )}
                               {groupStart && !isSender && (
                                 <span className="mb-1 px-1 tf-caption">
                                   {message.user_name}
@@ -1572,64 +1821,10 @@ export default function TeamChatPage() {
                                     </span>
                                   )}
 
-                                  {/* React + Copy — on the inner side of the time (after it for
-                                      received, before it for sent, so the time stays flush with the
-                                      bubble); on hover/focus, always on touch screens or once tapped. */}
-                                  {!message.is_deleted && (
-                                    <div
-                                      className={`flex items-center gap-0.5 transition-opacity group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100 ${
-                                        isSender ? 'order-first flex-row-reverse' : ''
-                                      } ${actionsOpen ? 'opacity-100' : 'opacity-0'}`}
-                                    >
-                                      <div className="relative">
-                                        <button
-                                          type="button"
-                                          onClick={() => setShowEmojiPicker(showEmojiPicker === message.id ? null : message.id)}
-                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            showEmojiPicker === message.id ? 'text-brand-blue' : 'text-gray-400'
-                                          }`}
-                                          aria-label="Add reaction"
-                                          title="Add reaction"
-                                        >
-                                          <Smile className="h-3.5 w-3.5" />
-                                        </button>
-                                        {showEmojiPicker === message.id && (
-                                          <>
-                                            <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
-                                            <div
-                                              className={`absolute bottom-full z-10 mb-1 flex gap-0.5 rounded-xl border border-gray-200 bg-white p-1 shadow-lg sm:p-1.5 dark:border-slate-700 dark:bg-slate-900 ${
-                                                isSender ? 'right-0' : 'left-0'
-                                              }`}
-                                            >
-                                              {quickEmojis.map((emoji) => (
-                                                <button
-                                                  key={emoji}
-                                                  type="button"
-                                                  onClick={() => { handleAddReaction(message.id, emoji); setShowEmojiPicker(null); }}
-                                                  className="rounded-md p-1 text-base max-sm:text-sm transition-transform hover:scale-110 hover:bg-brand-blue/[0.06] sm:p-1.5 sm:text-lg"
-                                                >
-                                                  {emoji}
-                                                </button>
-                                              ))}
-                                            </div>
-                                          </>
-                                        )}
-                                      </div>
-                                      {!isImage && message.content && (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleCopyMessage(message)}
-                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full transition-colors hover:bg-white hover:text-brand-blue dark:hover:bg-slate-800 ${
-                                            copiedMessageId === message.id ? 'text-success' : 'text-gray-400'
-                                          }`}
-                                          aria-label="Copy message"
-                                          title="Copy"
-                                        >
-                                          {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
+                                  {/* React + Copy + Delete — on the inner side of the time (after
+                                      it for received, before it for sent, so the time stays flush with
+                                      the bubble); on hover/focus, always on touch screens or once tapped. */}
+                                  {actionButtons}
                                 </div>
                               )}
                             </div>
@@ -1811,7 +2006,7 @@ export default function TeamChatPage() {
                     <NameAvatar name={member.name} fallback={member.email} userId={member.user_id} size="md" />
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
-                        member.is_online ? 'bg-brand-teal' : 'bg-gray-300'
+                        member.is_online ? 'bg-green-500' : 'bg-gray-300'
                       }`}
                     />
                   </span>
@@ -1830,6 +2025,64 @@ export default function TeamChatPage() {
         </div>
 
         {/* Create Channel Modal */}
+        {deleteTargets && (() => {
+          const count = deleteTargets.length;
+          const forEveryone = deleteTargets.every(canDeleteForEveryone);
+          const allMine = deleteTargets.every((m) => m.user_id === currentUser?.id);
+          const hasImage = deleteTargets.some((m) => m.message_type === 'file' && !m.is_deleted);
+          const what = count > 1 ? `${count} messages` : hasImage ? 'image' : 'message';
+          return (
+            <AppModal
+              open
+              onCancel={() => { if (!deletingScope) setDeleteTargets(null); }}
+              cancelDisabled={!!deletingScope}
+              size="sm"
+              icon={<Trash2 />}
+              title={`Delete ${what}?`}
+              /* Standard footer row (Cancel + actions, equal widths). Three
+                 equal buttons need a little more than the small popup's width
+                 for "Delete for everyone" to fit on one line. */
+              widthClassName={forEveryone ? 'sm:max-w-[620px]' : undefined}
+              actions={[
+                {
+                  label: deletingScope === 'me' ? 'Deleting…' : 'Delete for me',
+                  onClick: () => performDelete('me'),
+                  variant: forEveryone ? 'secondary' : 'destructive',
+                  disabled: !!deletingScope,
+                  loading: deletingScope === 'me',
+                },
+                ...(forEveryone
+                  ? [{
+                      label: deletingScope === 'everyone' ? 'Deleting…' : 'Delete for everyone',
+                      onClick: () => performDelete('everyone'),
+                      variant: 'destructive' as const,
+                      disabled: !!deletingScope,
+                      loading: deletingScope === 'everyone',
+                    }]
+                  : []),
+              ]}
+            >
+              <div className="space-y-2 tf-body text-gray-600 dark:text-slate-300">
+                {forEveryone ? (
+                  <p>
+                    <strong>Delete for everyone</strong> removes it for all members of this chat
+                    {hasImage ? ', and the image is permanently deleted from storage' : ''}.{' '}
+                    <strong>Delete for me</strong> removes it only from your view.
+                  </p>
+                ) : allMine ? (
+                  <p>
+                    Delete for everyone is only available for 24 hours after sending. You can still
+                    remove it from your view; others in the chat will keep seeing it.
+                  </p>
+                ) : (
+                  <p>It will be removed from your view only. Others in the chat will keep seeing it.</p>
+                )}
+                <p className="tf-hint">This can&apos;t be undone.</p>
+              </div>
+            </AppModal>
+          );
+        })()}
+
         <AppModal
           open={showCreateModal}
           onCancel={() => setShowCreateModal(false)}

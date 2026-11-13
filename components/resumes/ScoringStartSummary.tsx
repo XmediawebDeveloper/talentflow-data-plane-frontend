@@ -17,6 +17,8 @@ export interface ScoringStartRequest {
   resumeIds: string[];
   /** Candidate name per id, for the skipped lists. */
   names: Record<string, string>;
+  /** Resume version number per id, for the progress popup's Resume Version. */
+  versions?: Record<string, number>;
 }
 
 interface ScoringStartSummaryProps {

@@ -5,6 +5,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 export interface ScoringProgressItem {
   id: string;
   resumeId: string;
+  /** Which version of the resume this run scores — the one the recruiter picked. */
+  resumeVersion?: number;
   candidateName: string;
   jobTitle: string;
   jobId: string;

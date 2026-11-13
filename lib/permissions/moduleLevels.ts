@@ -82,7 +82,7 @@ const MODULE_COPY: Record<string, { name: string; group: ModuleGroup; always?: b
   ai_talent_match: { name: 'AI Talent Match', group: 'Hiring', about: 'Find the best-matching candidates for a job from all company resumes, and work with the ones it finds', can: { view: 'See AI Talent Match results', full: 'Run AI Talent Match and open, score, invite and export the resumes it finds' } },
   assessments: { name: 'Assessments', group: 'Hiring', about: 'Create assessments and invite candidates to take them', can: { view: 'See assessments and candidate results', full: 'Create, edit, invite candidates, share, download reports, export, and use the HR Question Bank' } },
   ai_interviews: { name: 'AI Interviews', group: 'Hiring', about: 'Set up AI interviews and invite candidates', can: { view: 'See AI interviews, results and recordings', full: 'Create, edit, publish, invite candidates, archive, delete, export and download reports' } },
-  // My Resumes view comes with this area or Shared Database (set by the
+  // My Resumes view comes with this area only (set by the
   // server, 2026-11-12); this area adds uploading and managing them.
   my_resumes: { name: 'Resume Upload', group: 'Candidates', about: 'Upload resumes and manage them in My Resumes', can: { view: 'See their own resumes in My Resumes', full: 'Upload, share, archive and delete resumes in My Resumes' } },
   internal_database: { name: 'Shared Database', group: 'Candidates', about: "Everyone's uploaded resumes in one place. Only people with Access can see it", can: { view: 'Browse and use resumes uploaded by anyone in the company', full: "Also share, archive and delete anyone's resumes" } },
@@ -104,7 +104,7 @@ const MODULE_ORDER = [
 ];
 
 /** Codes the role editor never switches: the always-on ones, plus My Resumes
- *  view, which the server sets from Resume Upload / Shared Database. */
+ *  view, which the server sets from Resume Upload. */
 export const ALWAYS_ON = new Set<string>([...ALWAYS_ON_PERMISSION_CODES, ...SERVER_SET_PERMISSION_CODES]);
 
 const sectionOfCode = (code: string): CustomPermissionCategory | undefined =>
