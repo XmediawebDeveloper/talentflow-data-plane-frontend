@@ -252,18 +252,12 @@ export default function TeamManagementPage() {
     let isMounted = true;
 
     const initializePage = async () => {
-      // Mirrors routeAccess.ts's rule for this prefix (canViewTeams OR
-      // canCreateTeams) — a create-only user must not be let in by the
-      // route guard/menu and then bounced back out by this re-check.
-      const hasAccess =
-        isTenantAdmin ||
-        hasPermission('canViewTeams') ||
-        hasPermission('canCreateTeams') ||
-        hasPermission('canManageUsers');
+      // Mirrors routeAccess.ts and the backend (/teams needs the owner or
+      // View Teams). No access → Chat, quietly; the Teams tab is greyed out.
+      const hasAccess = isTenantAdmin || hasPermission('canViewTeams');
 
       if (!hasAccess) {
-        toast.error('You do not have permission to access Teams');
-        router.push('/dashboard');
+        router.replace('/organization/team-chat');
         return;
       }
 
