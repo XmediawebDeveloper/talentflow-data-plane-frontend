@@ -1209,7 +1209,8 @@ export default function TeamChatPage() {
     <div className="flex flex-1 min-h-0 flex-col [@media(max-height:500px)]:h-[calc(100dvh-4.5rem)] [@media(max-height:500px)]:flex-none">
         {/* One chat window — conversations | conversation | members — split by
             dividers instead of three floating cards. */}
-        <div className="tf-card-soft relative flex flex-1 min-h-0 overflow-hidden">
+        {/* The tab panel (organization/layout.tsx) frames it — no card of its own. */}
+        <div className="relative flex flex-1 min-h-0 overflow-hidden bg-white dark:bg-slate-900">
 
         {/* ── Conversations ──
             Below lg: a drawer that slides over the conversation from the left

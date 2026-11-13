@@ -3,9 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Briefcase, Lock, Mail, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles } from 'lucide-react';
+import { Briefcase, Lock, Mail, Eye, EyeOff, CheckCircle, AlertCircle, ArrowRight, Sparkles, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 import { authService, getLoginUrl } from '@/lib/services/authService';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { ensureTokenCookies } from '@/lib/utils/tokenRecovery';
 
 export default function SetPassword() {
@@ -23,6 +24,18 @@ export default function SetPassword() {
   // Whose account this is — several invited users can sign in from one
   // browser, and the card alone gives no hint which one is being activated.
   const [accountEmail, setAccountEmail] = useState('');
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const { logout } = useAuth();
+
+  // Wrong account, or not now: leave without activating. The reset flag goes
+  // first — logout() does not clear it, and a leftover flag would bounce the
+  // next sign-in on this browser straight back to this page.
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    localStorage.removeItem('pending_password_reset');
+    await logout(); // records the logout, clears the session, hard-navigates to login
+  };
 
   const confirmTouched = confirmPassword.length > 0;
   const passwordsMatch = newPassword === confirmPassword;
@@ -181,6 +194,19 @@ export default function SetPassword() {
               {!isLoading && <ArrowRight size={16} />}
             </button>
           </form>
+
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Not you?</span>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              disabled={isSigningOut || isLoading}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'none', border: 'none', padding: '4px 6px', borderRadius: '6px', fontSize: '13px', fontWeight: 600, color: isDark ? 'var(--raw-a5b4fc)' : 'var(--raw-6366f1)', cursor: isSigningOut || isLoading ? 'not-allowed' : 'pointer', opacity: isSigningOut || isLoading ? 0.6 : 1 }}
+            >
+              <LogOut size={14} />
+              {isSigningOut ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -72,7 +72,11 @@ export default function OrganizationLayout({ children }: { children: React.React
 
           {/* The active tab's panel — joins the tab bar's baseline on desktop
               (-mt-5 cancels the tab bar's mb-5). */}
-          <div className={`rounded-xl border border-gray-200 bg-slate-100 sm:p-5 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 dark:bg-slate-800/50 p-4 ${fill}`}>
+          {/* Chat: no grey inset — the chat window IS the panel, edge to edge
+              and down to the bottom (the panel's border frames it). */}
+          <div className={`rounded-xl border border-gray-200 lg:-mt-5 lg:rounded-t-none lg:border-t-0 dark:border-slate-700 ${
+            isChat ? 'overflow-hidden bg-white p-0 dark:bg-slate-900' : 'bg-slate-100 p-4 sm:p-5 dark:bg-slate-800/50'
+          } ${fill}`}>
             {/* Keyed by route so the fade replays on every tab switch. Opacity
                 only — a transform here would re-anchor the pages' fixed-position
                 popups to this box while it animates. */}
