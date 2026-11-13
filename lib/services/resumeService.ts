@@ -817,9 +817,12 @@ export const resumeService = {
   /**
    * Delete resume
    */
-  async delete(id: string): Promise<void> {
+  async delete(id: string, opts?: { onlyThisVersion?: boolean }): Promise<void> {
     try {
-      await api.delete(`/resumes/${id}`);
+      // onlyThisVersion: just this version, even the latest (the newest
+      // remaining one becomes the latest). Without it, deleting the latest
+      // version removes every version of the candidate.
+      await api.delete(`/resumes/${id}`, opts?.onlyThisVersion ? { params: { only_this_version: true } } : undefined);
       dispatchUnitsConsumed();
       dispatchResumesChanged();
     } catch (error) {
