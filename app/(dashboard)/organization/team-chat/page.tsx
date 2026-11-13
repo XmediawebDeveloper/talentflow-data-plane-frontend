@@ -178,6 +178,35 @@ export default function TeamChatPage() {
     }
   };
 
+  // Delete one of my own messages, for everyone ("This message was deleted"
+  // stays in its place; the text and any image are removed).
+  const handleDeleteMessage = async (message: Message) => {
+    setActiveMessageId(null);
+    const isImageMessage = message.message_type === 'file';
+    const ok = await dialog.confirm({
+      title: 'Delete Message',
+      message: `Delete this ${isImageMessage ? 'image' : 'message'} for everyone?\nThis action cannot be undone.`,
+      variant: 'delete',
+      confirmText: 'Delete',
+    });
+    if (!ok) return;
+    try {
+      await chatService.deleteMessage(message.id);
+      setMessages((prev) =>
+        prev.map((m) => (m.id === message.id ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m)),
+      );
+      setSelectedMessageIds((prev) => {
+        if (!prev.has(message.id)) return prev;
+        const next = new Set(prev);
+        next.delete(message.id);
+        return next;
+      });
+      toast.success('Message deleted');
+    } catch (e: any) {
+      toast.error(friendlyErrorMessage(e, "Couldn't delete message. Please try again."));
+    }
+  };
+
   const handleCopyMessage = async (message: Message) => {
     try {
       await navigator.clipboard.writeText(message.content ?? '');
@@ -395,7 +424,7 @@ export default function TeamChatPage() {
           if (data.message_id) {
             setMessages((prev) =>
               prev.map((m) =>
-                m.id === data.message_id ? { ...m, is_deleted: true, content: '[Message deleted]' } : m
+                m.id === data.message_id ? { ...m, is_deleted: true, content: '', metadata: null, is_pinned: false } : m
               )
             );
           }
@@ -1737,6 +1766,17 @@ export default function TeamChatPage() {
                                           title="Copy"
                                         >
                                           {copiedMessageId === message.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                        </button>
+                                      )}
+                                      {isSender && (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteMessage(message)}
+                                          className="inline-flex h-6 w-6 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-white hover:text-destructive dark:hover:bg-slate-800"
+                                          aria-label="Delete message"
+                                          title="Delete"
+                                        >
+                                          <Trash2 className="h-3.5 w-3.5" />
                                         </button>
                                       )}
                                     </div>
