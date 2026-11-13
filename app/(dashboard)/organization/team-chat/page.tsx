@@ -1,7 +1,7 @@
 'use client';
 
 import TeamChatSkeleton from '@/components/organization/TeamChatSkeleton';
-import { useState, useRef, useEffect, useCallback, Fragment } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, Fragment } from 'react';
 import {
   Search,
   Hash,
@@ -269,21 +269,59 @@ export default function TeamChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
-  // Scroll to the bottom only when a new message arrives (or a conversation
-  // opens) — not when an existing one changes (reaction, pin, edit).
-  // Waits for the skeleton to go: the list (and its end marker) isn't rendered
-  // while messages load, so scrolling then did nothing and a conversation
-  // opened at its oldest messages. Opening jumps; new messages glide.
+  /* A conversation always opens at its newest message; older ones are a
+     scroll up. Scrolls the message pane itself (not scrollIntoView, which
+     also moved the page) and before paint, so it never shows the top first.
+     `stickToBottomRef` says the reader is at the bottom: while it holds, the
+     pane stays pinned there as content grows (images loading pushed the last
+     message out of view). Scrolling up to read history releases it, so a new
+     message from someone else doesn't yank the reader away — their own
+     message always brings them back down. */
+  const messagesPaneRef = useRef<HTMLDivElement>(null);
+  const stickToBottomRef = useRef(true);
   const lastMessageIdRef = useRef<string | undefined>(undefined);
   const jumpToEndRef = useRef(true);
-  useEffect(() => {
+  const scrollPaneToEnd = (smooth = false) => {
+    const pane = messagesPaneRef.current;
+    if (!pane) return;
+    if (smooth) pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
+    else pane.scrollTop = pane.scrollHeight;
+  };
+  const handleMessagesScroll = () => {
+    const pane = messagesPaneRef.current;
+    if (!pane) return;
+    stickToBottomRef.current = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 80;
+  };
+  useLayoutEffect(() => {
     if (isLoadingMessages) return;
-    const lastId = messages[messages.length - 1]?.id;
-    if (lastId === lastMessageIdRef.current) return;
-    lastMessageIdRef.current = lastId;
-    messagesEndRef.current?.scrollIntoView({ behavior: jumpToEndRef.current ? 'auto' : 'smooth' });
-    jumpToEndRef.current = false;
+    const last = messages[messages.length - 1];
+    if (jumpToEndRef.current) {
+      // Opening a conversation: straight to the newest message.
+      if (!last) return;
+      jumpToEndRef.current = false;
+      lastMessageIdRef.current = last.id;
+      stickToBottomRef.current = true;
+      scrollPaneToEnd();
+      return;
+    }
+    if (!last || last.id === lastMessageIdRef.current) return;
+    lastMessageIdRef.current = last.id;
+    if (stickToBottomRef.current || last.user_id === currentUser?.id) {
+      stickToBottomRef.current = true;
+      scrollPaneToEnd(true);
+    }
   }, [messages, isLoadingMessages]);
+  // Keep the bottom in view while the list grows under the reader (images,
+  // link previews and the like finishing their layout after the first paint).
+  useEffect(() => {
+    const content = messagesEndRef.current?.parentElement;
+    if (!content || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (stickToBottomRef.current) scrollPaneToEnd();
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [isLoadingMessages, selectedChannel?.id]);
 
   useEffect(() => {
     if (selectedChannel) {
@@ -1483,7 +1521,11 @@ export default function TeamChatPage() {
                 </div>
               )}
 
-              <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30">
+              <div
+                ref={messagesPaneRef}
+                onScroll={handleMessagesScroll}
+                className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50/60 px-3 py-4 sm:px-5 dark:bg-slate-950/30"
+              >
                 {isLoadingMessages ? (
                   <div className="flex flex-col gap-4">
                     {/* Mirrors the message list: received (avatar + bubble, left)

@@ -81,7 +81,10 @@ export const ROUTE_RULES: RouteRule[] = [
   // ORGANIZATION
   { prefix: '/organization/team-chat', allowAll: true },
   { prefix: '/organization/internal-tickets', allowAll: true },
-  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
+  // Same rule as the Teams page, its tab and the Dashboard Teams tile: User
+  // Management also opens it. Without canManageUsers here, a user who had only
+  // that was sent to Teams by the tile and straight back to the Dashboard.
+  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams', 'canManageUsers'] },
   { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
   { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
   // Owner only; the tab (OrganizationTabs.tsx) and page (UsageHistory.tsx) say the same.
