@@ -29,7 +29,7 @@ export function trackScoringBatch(
     batchId: string;
     jobId: string;
     jobTitle: string;
-    items: Array<{ resumeId: string; candidateName: string }>;
+    items: Array<{ resumeId: string; candidateName: string; resumeVersion?: number }>;
     returnUrl?: string;
     /** Which pool the resumes came from, as the popup labels it. */
     source?: 'Internal DB' | 'My Resumes';
@@ -44,6 +44,7 @@ export function trackScoringBatch(
     items.map(item => ({
       id: `${batchId}-${item.resumeId}`,
       resumeId: item.resumeId,
+      resumeVersion: item.resumeVersion,
       candidateName: item.candidateName,
       jobTitle,
       jobId,

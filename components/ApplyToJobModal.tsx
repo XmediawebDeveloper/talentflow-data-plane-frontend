@@ -41,6 +41,9 @@ interface ApplyToJobModalProps {
     /** Parallel to `resumeIds`: the candidate's own resume id each submitted
      *  id came from (they differ when an older version was picked). */
     sourceResumeIds?: string[],
+    /** Parallel to `resumeIds`: the version number each submitted id is
+     *  (the picked one, else the resume's own); undefined when unknown. */
+    resumeVersions?: (number | undefined)[],
   ) => void;
   mode?: 'apply' | 'assessment' | 'scoring' | 'match';
   title?: string; // New: Custom title
@@ -173,7 +176,13 @@ export default function ApplyToJobModal({
 
       // Simulate API call
       setTimeout(() => {
-        onApply(resumeIds, [picked.id], [picked], includedResumes.map(r => r.id));
+        onApply(
+          resumeIds,
+          [picked.id],
+          [picked],
+          includedResumes.map(r => r.id),
+          includedResumes.map(r => versionChoice[r.id]?.number ?? r.version),
+        );
         setIsApplying(false);
       }, 800);
     }
