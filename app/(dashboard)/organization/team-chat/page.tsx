@@ -2038,24 +2038,41 @@ export default function TeamChatPage() {
               size="sm"
               icon={<Trash2 />}
               title={`Delete ${what}?`}
-              actions={[
-                {
-                  label: deletingScope === 'me' ? 'Deleting…' : 'Delete for me',
-                  onClick: () => performDelete('me'),
-                  variant: forEveryone ? 'secondary' : 'destructive',
-                  disabled: !!deletingScope,
-                  loading: deletingScope === 'me',
-                },
-                ...(forEveryone
-                  ? [{
-                      label: deletingScope === 'everyone' ? 'Deleting…' : 'Delete for everyone',
-                      onClick: () => performDelete('everyone'),
-                      variant: 'destructive' as const,
-                      disabled: !!deletingScope,
-                      loading: deletingScope === 'everyone',
-                    }]
-                  : []),
-              ]}
+              /* Stacked, full-width choices: three equal buttons side by side
+                 don't fit a small popup ("Delete for everyone" overflowed). */
+              footer={
+                <div className="flex w-full flex-col gap-2">
+                  {forEveryone && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => performDelete('everyone')}
+                      disabled={!!deletingScope}
+                    >
+                      {deletingScope === 'everyone' ? 'Deleting…' : 'Delete for everyone'}
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant={forEveryone ? 'secondary' : 'destructive'}
+                    className="w-full"
+                    onClick={() => performDelete('me')}
+                    disabled={!!deletingScope}
+                  >
+                    {deletingScope === 'me' ? 'Deleting…' : 'Delete for me'}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => setDeleteTargets(null)}
+                    disabled={!!deletingScope}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              }
             >
               <div className="space-y-2 tf-body text-gray-600 dark:text-slate-300">
                 {forEveryone ? (
