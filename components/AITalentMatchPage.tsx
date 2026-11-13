@@ -89,6 +89,7 @@ import { usePagedList } from '@/lib/hooks/usePagedList';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { FolderIconIllustration, IllustratedEmptyState } from '@/components/ui/illustrated-empty-state';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
@@ -2961,6 +2962,8 @@ export default function AITalentMatchPage({
         jobId={scoreDetailView.jdId}
         /* Invite -> Create / Send for this score's job — Job Details' popup. */
         onOpenInviteDialog={(kind, candidates) => openCreateSend(kind, scoreDetailView.jdId, candidates, scoreDetailView.jobTitle)}
+        /* View Resume as an eye on the resume version badge. */
+        viewResumeOnVersionBadge
         onBack={close}
         // Version dropdown: that version's score for this job, in place.
         onSelectScore={(scoreId) => {
@@ -5392,7 +5395,7 @@ export default function AITalentMatchPage({
               </>
             ) : (
               <>
-                <div className="hidden lg:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+                <div className="hidden lg:block max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
                   <table className="w-full min-w-[1600px] table-auto">
                     <thead className="sticky top-0 z-10">
                       <tr>
@@ -8481,7 +8484,7 @@ export default function AITalentMatchPage({
              as on the JD details AI Talent Match tab (no card inside a card). */
           <div className="tf-card-soft overflow-hidden max-lg:overflow-visible max-lg:rounded-none max-lg:border-0 max-lg:bg-transparent max-lg:shadow-none max-lg:ring-0 max-lg:dark:bg-transparent">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
+            <div className={`${resultsDisplayMode === 'grid' ? 'hidden' : 'hidden lg:block'} max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell`}>
             <table className="w-full" style={{ minWidth: 260 + visibleResultColumnCount * 110 }}>
               <thead className="sticky top-0 z-10 [&_th]:bg-white dark:[&_th]:bg-slate-900 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
@@ -8683,10 +8686,12 @@ export default function AITalentMatchPage({
                     </td>
                     )}
                     {isResultColumnVisible('resumeVersion') && (
-                    <td className="tf-td text-center">
-                      <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
-                        v{candidate.resumeVersion || 1}
-                      </span>
+                    <td className="tf-td text-center" onClick={(e) => e.stopPropagation()}>
+                      {/* The resume version with View Resume joined as an eye. */}
+                      <VersionEyeBadge
+                        label={`v${candidate.resumeVersion || 1}`}
+                        onView={candidate.resumeId ? () => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' }) : undefined}
+                      />
                     </td>
                     )}
                     {isResultColumnVisible('attachments') && (

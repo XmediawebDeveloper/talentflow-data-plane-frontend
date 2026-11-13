@@ -6885,6 +6885,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             saveAiMessage();
             // Notify backend: audio finished playing — start silence clock from now.
             // Sent twice via sendPlaybackComplete to survive a single dropped frame.
+            // The audio_end wall-clock estimate is only a stand-in for THIS signal
+            // (avatar never loads); once the real end fires it is redundant and
+            // used to send a second pair ~1-2.5s later (4 playback_complete per
+            // question, staging 2026-11-12).
+            if (playbackCompleteSignalRef.current) { clearTimeout(playbackCompleteSignalRef.current); playbackCompleteSignalRef.current = null; }
             sendPlaybackComplete();
             // Disconnect if interview is closing (Q15 done) or server sent interview_ended
             if (shouldDisconnectAfterAudioRef.current || isClosingRef.current) {

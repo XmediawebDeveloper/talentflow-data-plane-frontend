@@ -30,6 +30,7 @@ import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { MobileRecordCard, MobileStatChip, type MobileStatTone } from '@/components/ui/mobile-record-card';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import FilterSelect from '@/components/ui/filter-select';
 import { ResumeArchivedBadge } from '@/components/ui/resume-archived-badge';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -1761,11 +1762,13 @@ Best regards`);
     }
     if (col.id === 'version') {
       const ver = resume.version || resume.resumeVersion || 1;
+      // The resume version with View Resume joined to it (when there is a file to show).
       return (
-        <td key={col.id} className="tf-td whitespace-nowrap text-center">
-          <span className="tf-badge border bg-blue-50 text-blue-700 border-blue-200">
-            v{ver}
-          </span>
+        <td key={col.id} className="tf-td whitespace-nowrap text-center" onClick={(e) => e.stopPropagation()}>
+          <VersionEyeBadge
+            label={`v${ver}`}
+            onView={resume.resumeId ? () => setViewResumeCandidate(resume) : undefined}
+          />
         </td>
       );
     }
@@ -2471,6 +2474,8 @@ Best regards`);
               variant="primary"
               size="sm"
               onClick={() => { if (scoreResumesDisabled) return; onScoreResumes(); }}
+              /* Phones: shares the Sort line, half and half (globals.css, data-tb-primary). */
+              data-tb-primary=""
               aria-disabled={!!scoreResumesDisabled}
               title={scoreResumesDisabled ? (scoreResumesDisabledReason ?? 'You do not have permission to score resumes') : undefined}
               icon={<ClipboardList className="w-4 h-4" />}
@@ -2905,7 +2910,10 @@ Best regards`);
                       )}
                       <span className="inline-flex items-center gap-1">
                         Resume
-                        <span className="tf-badge text-2xs border bg-gray-50 text-gray-700 border-gray-200">v{resume.version || resume.resumeVersion || 1}</span>
+                        <VersionEyeBadge
+                          label={`v${resume.version || resume.resumeVersion || 1}`}
+                          onView={resume.resumeId ? () => setViewResumeCandidate(resume) : undefined}
+                        />
                       </span>
                     </div>
                   )}

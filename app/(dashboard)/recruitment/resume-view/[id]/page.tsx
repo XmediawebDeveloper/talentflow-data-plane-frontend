@@ -221,6 +221,7 @@ import { toScoredResumeDetail } from '@/lib/utils/scoredResumeDetail';
 import JobInviteDialogHost, { type InviteDialogJob, type InviteDialogRequest } from '@/components/talent-match-invite/JobInviteDialogHost';
 import { mapJDToJob, formatJobActionMessage } from '@/lib/utils/jobOpeningDisplay';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
+import VersionEyeBadge from '@/components/ui/version-eye-badge';
 import { canDownloadResume, DOWNLOAD_BLOCKED_MESSAGE } from '@/lib/permissions/resumeDownload';
 import { useInviteDialog } from '@/components/talent-match-invite/InviteDialogProvider';
 import type { InviteCandidate } from '@/components/talent-match-invite/inviteVersions';
@@ -554,6 +555,10 @@ export default function ResumeViewPage() {
   const [showInviteMenu, setShowInviteMenu] = useState(false);
   /* File Properties drawer — slides in from the right. */
   const [showFileProperties, setShowFileProperties] = useState(false);
+  /* Resume Details (the resume's sections) | Candidate Activity. */
+  const [detailsTab, setDetailsTab] = useState<'resume' | 'activity'>('resume');
+  /* Candidate Activity's record count, for its tab title ("Candidate Activity (3)"). */
+  const [activityTotal, setActivityTotal] = useState<number | null>(null);
   useEffect(() => {
     if (!showFileProperties) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowFileProperties(false); };
@@ -1483,7 +1488,7 @@ Best regards`);
                   <NameAvatar name={asText(resume.name)} fallback={email} size="xl" />
 
                   <div className="min-w-0 flex-1 max-sm:contents">
-                    {/* Below sm the Source / View chips drop under the name so the
+                    {/* Below sm the Source chip drops under the name so the
                         name keeps the full row width instead of collapsing to a
                         sliver on a phone; sm+ keeps them beside the name. */}
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
@@ -1492,6 +1497,14 @@ Best regards`);
                           <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight break-words sm:truncate">
                             {name}
                           </h2>
+                          {/* The current version with View Resume joined to it as
+                              an eye, right of the name — the candidate page's
+                              version badge. */}
+                          <VersionEyeBadge
+                            label={`Version ${Math.max(resume.versionCount || 1, ...(resume.versions ?? []).map(v => v.version || 1))}`}
+                            onView={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
+                            size="md"
+                          />
                           {/* Same badge the Resume Database list uses (ResumeTable.tsx)
                               — this is the one place the detail page was missing it,
                               so an archived resume could be opened with no indication
@@ -1534,7 +1547,7 @@ Best regards`);
                         <button
                           type="button"
                           onClick={() => handleVersionPreview(resumeId, resume?.name || 'Resume')}
-                          className="flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/70 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/20 hover:bg-white hover:ring-brand-blue/40 transition-colors"
+                          className="tf-badge flex-shrink-0 gap-1.5 bg-white/70 text-brand-blue ring-1 ring-brand-blue/20 hover:bg-white hover:ring-brand-blue/40 transition-colors"
                         >
                           <Eye className="w-3.5 h-3.5" />
                           View
@@ -1793,6 +1806,49 @@ Best regards`);
             );
           })()}
 
+          {/* Two tabs under the header — Resume Details (every section of the
+              resume, Version History included) and Candidate Activity — in
+              the candidate page's folder-tab style. Both panels stay mounted
+              so switching keeps their scroll and loaded data. */}
+          <div>
+          <div className="bg-gray-50 rounded-t-xl border-x-2 border-t-2 border-gray-200">
+            <div
+              role="tablist"
+              aria-label="Resume sections"
+              className="flex items-end gap-1 w-0 min-w-full px-3 sm:px-6 pt-2 overflow-x-auto overscroll-x-contain scrollbar-auto-hide scrollbar-light shadow-[inset_0_-1px_0_var(--color-gray-200)]"
+            >
+              {([
+                { id: 'resume', label: 'Resume Details' },
+                { id: 'activity', label: activityTotal !== null ? `Candidate Activity (${activityTotal})` : 'Candidate Activity' },
+              ] as const).map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  id={`resume-tab-${tab.id}`}
+                  aria-controls={`resume-tabpanel-${tab.id}`}
+                  aria-selected={detailsTab === tab.id}
+                  onClick={() => setDetailsTab(tab.id)}
+                  // Both states carry the same borders (transparent when idle)
+                  // so switching tabs never shifts the row by a pixel.
+                  className={`shrink-0 px-3 sm:px-6 py-2.5 sm:py-3 text-sm transition-colors rounded-t-lg whitespace-nowrap cursor-pointer border-x border-t-2 ${
+                    detailsTab === tab.id
+                      ? 'font-semibold text-brand-blue bg-white border-x-gray-200 border-t-brand-blue'
+                      : 'font-medium text-gray-600 border-transparent hover:text-gray-900 hover:bg-white/70'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-3 sm:p-5 lg:p-6">
+          <div
+            role="tabpanel"
+            id="resume-tabpanel-resume"
+            aria-labelledby="resume-tab-resume"
+            hidden={detailsTab !== 'resume'}
+          >
           {/* Resume details — greyed out and inert for a resume whose email
               belongs to an existing team member, so Previous/Next (and a
               direct open) can't land on a fully-usable view of one just
@@ -2424,13 +2480,21 @@ Best regards`);
             </div>
           )}
           </div>
+          </div>
 
-          {/* Candidate Activity — the page's last section: scores, AI Talent
-              Match, AI Assessment and AI Interview history for this
-              candidate, gated per module. Its header's file icon opens the
-              File Properties drawer. */}
+          {/* Candidate Activity — the second tab: scores, AI Talent Match,
+              AI Assessment and AI Interview history for this candidate,
+              gated per module. Its header's file icon opens the File
+              Properties drawer. */}
+          <div
+            role="tabpanel"
+            id="resume-tabpanel-activity"
+            aria-labelledby="resume-tab-activity"
+            hidden={detailsTab !== 'activity'}
+          >
           <CandidateActivityCard
             resumeId={resumeId}
+            onTotalChange={setActivityTotal}
             // This page's own trail, so a result opened from the card keeps
             // "Dashboard › Resume Database › My Resumes › <candidate>".
             trail={[
@@ -2451,6 +2515,9 @@ Best regards`);
               </button>
             }
           />
+          </div>
+          </div>
+          </div>
 
         </div>
       </div>
